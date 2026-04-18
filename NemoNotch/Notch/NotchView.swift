@@ -22,7 +22,7 @@ struct NotchView: View {
         if claudeService.activeSession?.status == .working { return true }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
-            if minutes >= 0, minutes < 60 { return true }
+            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { return true }
         }
         return false
     }
@@ -31,7 +31,7 @@ struct NotchView: View {
         switch coordinator.status {
         case .closed:
             let extraWidth: CGFloat = hasActiveBadge ? NotchConstants.badgePadding * 2 : 0
-            return CGSize(width: hardwareNotchSize.width - 4 + extraWidth, height: hardwareNotchSize.height)
+            return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth, height: hardwareNotchSize.height)
         case .opened:
             return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
@@ -58,8 +58,8 @@ struct NotchView: View {
             if coordinator.status == .opened {
                 openedContent
                     .zIndex(1)
-                    .transition(.scale.combined(with: .opacity).combined(with: .offset(y: -130)))
-                    .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration).delay(0.157), value: coordinator.status)
+                    .transition(.scale.combined(with: .opacity).combined(with: .offset(y: -NotchConstants.openTransitionOffset)))
+                    .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration).delay(NotchConstants.openContentDelay), value: coordinator.status)
             }
         }
         .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
@@ -138,6 +138,6 @@ struct NotchView: View {
                 .opacity(hasActiveBadge ? 1 : 0)
         }
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
-        .animation(.easeInOut(duration: 0.3), value: notificationService.badges.isEmpty)
+        .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: notificationService.badges.isEmpty)
     }
 }
