@@ -6,6 +6,7 @@ struct NotchView: View {
     let mediaService: MediaService
     let calendarService: CalendarService
     let claudeService: ClaudeCodeService
+    let notificationService: NotificationService
 
     private var screen: NSScreen { NSScreen.main! }
     private var hasNotch: Bool { screen.hasNotch }
@@ -15,12 +16,25 @@ struct NotchView: View {
     private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
+    private let badgePadding: CGFloat = 36
+
+    private var hasActiveBadge: Bool {
+        if mediaService.playbackState.isPlaying { return true }
+        if claudeService.activeSession?.status == .working { return true }
+        if let next = calendarService.nextEvent, !next.isPast {
+            let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
+            if minutes >= 0, minutes < 60 { return true }
+        }
+        return false
+    }
+
     private var notchSize: CGSize {
         switch coordinator.status {
         case .closed:
-            CGSize(width: hardwareNotchSize.width - 4, height: hardwareNotchSize.height - 4)
+            let extraWidth: CGFloat = hasActiveBadge ? badgePadding * 2 : 0
+            return CGSize(width: hardwareNotchSize.width - 4 + extraWidth, height: hardwareNotchSize.height)
         case .opened:
-            CGSize(width: 500, height: 260)
+            return CGSize(width: 500, height: 260)
         }
     }
 
@@ -62,6 +76,7 @@ struct NotchView: View {
             cornerRadius: notchCornerRadius,
             spacing: 16
         )
+        .animation(.spring(duration: 0.35, bounce: 0.15), value: hasActiveBadge)
     }
 
     private var openedContent: some View {
@@ -107,14 +122,13 @@ struct NotchView: View {
                 coordinator.notchOpen(tab: tab)
             }
         )
+        let spread: CGFloat = hasActiveBadge ? 14 : 0
         return ZStack {
             badge.leftIcon
-                .position(x: notchLeftEdge - 14, y: hardwareNotchSize.height / 2)
+                .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
             badge.rightIcon
-                .position(x: notchRightEdge + 14, y: hardwareNotchSize.height / 2)
+                .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
         }
-        .animation(.easeInOut(duration: 0.3), value: mediaService.playbackState.isPlaying)
-        .animation(.easeInOut(duration: 0.3), value: claudeService.activeSession?.status == .working)
-        .animation(.easeInOut(duration: 0.3), value: calendarService.nextEvent != nil)
+        .animation(.spring(duration: 0.35, bounce: 0.15), value: spread)
     }
 }

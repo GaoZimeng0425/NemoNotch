@@ -75,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private(set) var calendarService: CalendarService?
     private(set) var claudeCodeService: ClaudeCodeService?
     private(set) var launcherService: LauncherService?
+    private(set) var notificationService: NotificationService?
     private var hotkeyService: HotkeyService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -95,11 +96,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.claudeCodeService = claude
         self.launcherService = launcher
 
+        let notification = NotificationService(monitoredApps: settings.monitoredApps)
+        self.notificationService = notification
+
         let notchCoordinator = NotchCoordinator(
             mediaService: media,
             calendarService: calendar,
             claudeCodeService: claude,
             launcherService: launcher,
+            notificationService: notification,
             appSettings: settings
         )
         self.coordinator = notchCoordinator
@@ -115,11 +120,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if settingsWindow == nil,
            let settings = appSettings,
            let claude = claudeCodeService,
-           let launcher = launcherService {
+           let launcher = launcherService,
+           let notification = notificationService {
             let view = SettingsView(
                 appSettings: settings,
                 claudeCodeService: claude,
-                launcherService: launcher
+                launcherService: launcher,
+                notificationService: notification
             )
             let window = SettingsWindow(settingsView: view)
             window.delegate = self

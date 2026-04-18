@@ -23,6 +23,7 @@ final class NotchCoordinator {
     let calendarService: CalendarService
     let claudeCodeService: ClaudeCodeService
     let launcherService: LauncherService
+    let notificationService: NotificationService
     let appSettings: AppSettings
 
     // Tracks the application that was frontmost before the notch opened, so we can
@@ -57,12 +58,14 @@ final class NotchCoordinator {
         calendarService: CalendarService,
         claudeCodeService: ClaudeCodeService,
         launcherService: LauncherService,
+        notificationService: NotificationService,
         appSettings: AppSettings
     ) {
         self.mediaService = mediaService
         self.calendarService = calendarService
         self.claudeCodeService = claudeCodeService
         self.launcherService = launcherService
+        self.notificationService = notificationService
         self.appSettings = appSettings
 
         let screen = NSScreen.main!
@@ -78,7 +81,8 @@ final class NotchCoordinator {
             enabledTabs: appSettings.enabledTabs,
             mediaService: mediaService,
             calendarService: calendarService,
-            claudeService: claudeCodeService
+            claudeService: claudeCodeService,
+            notificationService: notificationService
         )
         let hosting = NSHostingController(rootView: wrapper)
         hosting.view.frame = screen.frame
