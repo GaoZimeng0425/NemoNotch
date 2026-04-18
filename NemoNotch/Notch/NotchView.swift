@@ -13,7 +13,10 @@ struct NotchView: View {
         case .closed:
             CGSize(width: hardwareNotchSize.width - 4, height: hardwareNotchSize.height - 4)
         case .popping:
-            CGSize(width: hardwareNotchSize.width, height: hardwareNotchSize.height + 4)
+            CGSize(
+                width: max(hardwareNotchSize.width, CGFloat(enabledTabs.count) * 44 + CGFloat(max(enabledTabs.count - 1, 0)) * 14 + 20),
+                height: hardwareNotchSize.height + 44
+            )
         case .opened:
             CGSize(width: 500, height: 260)
         }
@@ -33,7 +36,7 @@ struct NotchView: View {
                 .zIndex(0)
 
             if coordinator.status == .popping {
-                poppingButtons
+                poppingContent
                     .zIndex(1)
                     .transition(.opacity)
             }
@@ -59,6 +62,14 @@ struct NotchView: View {
         )
     }
 
+    private var poppingContent: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: hardwareNotchSize.height + 8)
+            poppingButtons
+        }
+        .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
+    }
+
     private var poppingButtons: some View {
         HStack(spacing: 14) {
             ForEach(sortedTabs) { tab in
@@ -76,7 +87,6 @@ struct NotchView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.top, hardwareNotchSize.height + 8)
     }
 
     private var openedContent: some View {
