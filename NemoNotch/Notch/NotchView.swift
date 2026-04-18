@@ -18,11 +18,6 @@ struct NotchView: View {
         switch coordinator.status {
         case .closed:
             CGSize(width: hardwareNotchSize.width - 4, height: hardwareNotchSize.height - 4)
-        case .popping:
-            CGSize(
-                width: max(hardwareNotchSize.width, CGFloat(enabledTabs.count) * 44 + CGFloat(max(enabledTabs.count - 1, 0)) * 14 + 20),
-                height: hardwareNotchSize.height + 44
-            )
         case .opened:
             CGSize(width: 500, height: 260)
         }
@@ -31,7 +26,6 @@ struct NotchView: View {
     private var notchCornerRadius: CGFloat {
         switch coordinator.status {
         case .closed: 8
-        case .popping: 10
         case .opened: 24
         }
     }
@@ -40,12 +34,6 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             notchShape
                 .zIndex(0)
-
-            if coordinator.status == .popping {
-                poppingContent
-                    .zIndex(1)
-                    .transition(.opacity)
-            }
 
             if coordinator.status == .closed {
                 compactBadges
@@ -73,33 +61,6 @@ struct NotchView: View {
             cornerRadius: notchCornerRadius,
             spacing: 16
         )
-    }
-
-    private var poppingContent: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: hardwareNotchSize.height + 8)
-            poppingButtons
-        }
-        .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
-    }
-
-    private var poppingButtons: some View {
-        HStack(spacing: 14) {
-            ForEach(sortedTabs) { tab in
-                Button {
-                    coordinator.notchOpen(tab: tab)
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 14, weight: .medium))
-                        Text(tab.title)
-                            .font(.system(size: 8))
-                    }
-                    .foregroundStyle(.white.opacity(0.9))
-                }
-                .buttonStyle(.plain)
-            }
-        }
     }
 
     private var openedContent: some View {

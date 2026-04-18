@@ -6,6 +6,7 @@ final class ClaudeCodeService {
     var activeSession: ClaudeState?
     var isHookInstalled = false
     var serverRunning = false
+    var serverPort: UInt16 = 0
 
     let hookServer = HookServer()
 
@@ -15,17 +16,21 @@ final class ClaudeCodeService {
         hookServer.onEventReceived = { [weak self] event in
             self?.handleEvent(event)
         }
+        hookServer.onReady = { [weak self] port in
+            guard let self else { return }
+            self.serverRunning = true
+            self.serverPort = port
+            // Install or update hooks now that we know the actual port the server bound to.
+            // This handles the race where port 49200 is taken and we fall back to 49201+.
+            try? HookInstaller.install(port: port)
+            self.isHookInstalled = HookInstaller.isInstalled()
+        }
         isHookInstalled = HookInstaller.isInstalled()
     }
 
     func startServer() {
         do {
             try hookServer.start()
-            serverRunning = true
-            if !isHookInstalled {
-                try? HookInstaller.install(port: hookServer.port)
-                isHookInstalled = HookInstaller.isInstalled()
-            }
         } catch {
             print("[NemoNotch] Failed to start hook server: \(error)")
         }
@@ -33,7 +38,8 @@ final class ClaudeCodeService {
 
     func installHooks() {
         do {
-            try HookInstaller.install(port: hookServer.port)
+            let port = serverPort > 0 ? serverPort : hookServer.port
+            try HookInstaller.install(port: port)
             isHookInstalled = true
         } catch {
             print("[NemoNotch] Failed to install hooks: \(error)")
@@ -55,45 +61,56 @@ final class ClaudeCodeService {
         let eventName = event.hookEventName
         let now = Date()
 
-        switch eventName {
-        case "SessionStart":
-            sessions[sessionId] = ClaudeState(sessionId: sessionId)
-            updateActiveSession()
-
-        case "PreToolUse":
+        func ensureSession() {
             if sessions[sessionId] == nil {
                 sessions[sessionId] = ClaudeState(sessionId: sessionId)
             }
+        }
+
+        switch eventName {
+        case "SessionStart":
+            sessions[sessionId] = ClaudeState(sessionId: sessionId)
+
+        case "UserPromptSubmit":
+            ensureSession()
+            sessions[sessionId]?.status = .working
+            sessions[sessionId]?.lastEventTime = now
+
+        case "PreToolUse":
+            ensureSession()
             sessions[sessionId]?.status = .working
             sessions[sessionId]?.currentTool = event.toolName
             sessions[sessionId]?.lastEventTime = now
-            updateActiveSession()
 
-        case "PostToolUse", "Notification":
-            if sessions[sessionId] != nil {
-                sessions[sessionId]?.lastEventTime = now
-                if sessions[sessionId]?.status == .working {
-                    sessions[sessionId]?.status = .idle
-                    sessions[sessionId]?.currentTool = nil
-                }
-            }
-            updateActiveSession()
+        case "PostToolUse":
+            // Tool finished, but Claude is still processing the result.
+            // Keep status as .working — only Stop/SessionEnd flips to idle.
+            ensureSession()
+            sessions[sessionId]?.status = .working
+            sessions[sessionId]?.currentTool = nil
+            sessions[sessionId]?.lastEventTime = now
 
-        case "Stop", "SessionEnd":
+        case "Notification":
+            // Notification is a side-channel (permission prompts, idle alerts).
+            // It does NOT mean Claude is idle — keep current status untouched.
+            ensureSession()
+            sessions[sessionId]?.lastEventTime = now
+
+        case "Stop":
             if sessions[sessionId] != nil {
                 sessions[sessionId]?.status = .idle
                 sessions[sessionId]?.currentTool = nil
                 sessions[sessionId]?.lastEventTime = now
             }
-            if eventName == "SessionEnd" {
-                sessions.removeValue(forKey: sessionId)
-            }
-            updateActiveSession()
+
+        case "SessionEnd":
+            sessions.removeValue(forKey: sessionId)
 
         default:
             break
         }
 
+        updateActiveSession()
         scheduleTimeoutCleanup()
     }
 

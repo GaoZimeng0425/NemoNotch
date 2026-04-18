@@ -43,8 +43,27 @@ struct ClaudeTab: View {
             Text("无活跃会话")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.4))
+            serverStatus
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var serverStatus: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(claudeService.serverRunning ? Color.green : Color.orange)
+                .frame(width: 6, height: 6)
+            if claudeService.serverRunning {
+                Text("监听端口 \(claudeService.serverPort)")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.35))
+            } else {
+                Text("Hook 服务未启动")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+        }
+        .padding(.top, 4)
     }
 
     private var sessionList: some View {

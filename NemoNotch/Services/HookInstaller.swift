@@ -13,9 +13,10 @@ enum HookInstaller {
         "SessionStart",
         "SessionEnd",
         "Notification",
+        "UserPromptSubmit",
     ]
 
-    private static let scriptVersion = "# version: 1"
+    private static let scriptVersion = "# version: 2"
 
     static var currentPort: UInt16 {
         UInt16(UserDefaults.standard.integer(forKey: "hookServerPort"))

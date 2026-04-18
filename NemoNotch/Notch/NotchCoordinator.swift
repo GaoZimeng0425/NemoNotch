@@ -4,7 +4,6 @@ import SwiftUI
 final class NotchCoordinator {
     enum Status {
         case closed
-        case popping
         case opened
     }
 
@@ -26,6 +25,12 @@ final class NotchCoordinator {
     let launcherService: LauncherService
     let appSettings: AppSettings
 
+    // Tracks the application that was frontmost before the notch opened, so we can
+    // restore focus on close (SwiftUI button taps inside the panel can incidentally
+    // activate NemoNotch and demote the previous app).
+    private var previousApp: NSRunningApplication?
+    private static let ourBundleIdentifier = Bundle.main.bundleIdentifier
+
     private var deviceNotchRect: NSRect {
         let screen = NSScreen.main!
         return NSRect(
@@ -39,7 +44,6 @@ final class NotchCoordinator {
     var contentSize: NSSize {
         switch status {
         case .closed: notchSize
-        case .popping: NSSize(width: max(notchSize.width + 20, CGFloat(appSettings.enabledTabs.count) * 56 + 20), height: notchSize.height + 52)
         case .opened: NSSize(width: openedWidth, height: openedHeight)
         }
     }
@@ -93,18 +97,11 @@ final class NotchCoordinator {
         )
 
         setupEventMonitoring()
-        setupDefocusHandling()
-    }
-
-    func notchPop() {
-        guard status == .closed else { return }
-        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        withAnimation(.interactiveSpring(duration: 0.314)) {
-            status = .popping
-        }
     }
 
     func notchOpen(tab: Tab? = nil) {
+        guard status == .closed else { return }
+        captureFrontmostApp()
         if let tab { selectedTab = tab }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
         withAnimation(.interactiveSpring(duration: 0.314)) {
@@ -115,6 +112,32 @@ final class NotchCoordinator {
     func notchClose() {
         withAnimation(.spring(duration: 0.236)) {
             status = .closed
+        }
+        // Pattern from Peninsula: explicitly resign key so the previously frontmost
+        // app's window can become key again. Combined with the previousApp restore
+        // for the case where SwiftUI button taps incidentally activated NemoNotch.
+        if window.isKeyWindow {
+            window.resignKey()
+        }
+        restorePreviousApp()
+    }
+
+    private func captureFrontmostApp() {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        if frontmost?.bundleIdentifier != Self.ourBundleIdentifier {
+            previousApp = frontmost
+        }
+    }
+
+    private func restorePreviousApp() {
+        guard let app = previousApp else { return }
+        previousApp = nil
+        // Only re-activate if NemoNotch (or no app) ended up frontmost as a side
+        // effect of interacting with the panel; never steal focus from a real switch.
+        let currentFront = NSWorkspace.shared.frontmostApplication
+        let currentID = currentFront?.bundleIdentifier
+        if currentFront == nil || currentID == Self.ourBundleIdentifier {
+            app.activate()
         }
     }
 
@@ -144,8 +167,8 @@ final class NotchCoordinator {
 
         switch status {
         case .closed:
-            if isInHitbox { notchPop() }
-        case .popping, .opened:
+            if isInHitbox { notchOpen() }
+        case .opened:
             let contentRect = NSRect(
                 x: screenFrame.midX - contentSize.width / 2,
                 y: screenFrame.maxY - contentSize.height,
@@ -161,24 +184,17 @@ final class NotchCoordinator {
     private func handleMouseDown() {
         let location = NSEvent.mouseLocation
         if status == .closed && NSMouseInRect(location, hitboxRect, false) {
-            notchPop()
+            notchOpen()
         }
-    }
-
-    private func setupDefocusHandling() {
-        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            guard let self else { return }
-            guard self.status != .closed else { return }
-            let location = event.locationInWindow
-            let screenPoint = NSEvent.mouseLocation
+        if status == .opened {
             let contentRect = NSRect(
-                x: self.screenFrame.midX - self.contentSize.width / 2,
-                y: self.screenFrame.maxY - self.contentSize.height,
-                width: self.contentSize.width,
-                height: self.contentSize.height
+                x: screenFrame.midX - contentSize.width / 2,
+                y: screenFrame.maxY - contentSize.height,
+                width: contentSize.width,
+                height: contentSize.height
             )
-            if !NSMouseInRect(screenPoint, contentRect.insetBy(dx: -10, dy: -10), false) {
-                self.notchClose()
+            if !NSMouseInRect(location, contentRect.insetBy(dx: -10, dy: -10), false) {
+                notchClose()
             }
         }
     }

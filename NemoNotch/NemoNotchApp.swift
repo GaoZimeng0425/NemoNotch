@@ -29,7 +29,7 @@ struct MenuContent: View {
 
     var body: some View {
         Button("展开 Notch") {
-            coordinator?.notchPop()
+            coordinator?.notchOpen()
         }
 
         Divider()
@@ -123,8 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ⌥⌘N — toggle notch
         hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
             switch coordinator.status {
-            case .closed: coordinator.notchPop()
-            case .popping, .opened: coordinator.notchClose()
+            case .closed: coordinator.notchOpen()
+            case .opened: coordinator.notchClose()
             }
         }
 

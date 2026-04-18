@@ -7,11 +7,7 @@ struct CalendarTab: View {
     var body: some View {
         switch calendarService.authorizationStatus {
         case .fullAccess, .authorized:
-            if calendarService.todayEvents.isEmpty {
-                emptyState
-            } else {
-                eventList
-            }
+            calendarContent
         case .notDetermined:
             permissionRequest
         default:
@@ -19,16 +15,31 @@ struct CalendarTab: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "calendar.badge.checkmark")
-                .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
-            Text("今日无日程")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.4))
+    private var calendarContent: some View {
+        VStack(spacing: 0) {
+            monthHeader
+            DateStripView(
+                dates: calendarService.dateRange,
+                selectedDate: calendarService.selectedDate,
+                hasEvents: { calendarService.hasEvents(on: $0) },
+                onSelect: { calendarService.selectedDate = $0 }
+            )
+            .padding(.vertical, 4)
+
+            Divider()
+                .background(.white.opacity(0.1))
+                .padding(.vertical, 4)
+
+            eventListSection
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var monthHeader: some View {
+        Text(calendarService.selectedMonthLabel)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
     }
 
     private var permissionRequest: some View {
@@ -55,7 +66,7 @@ struct CalendarTab: View {
 
     private var permissionDenied: some View {
         VStack(spacing: 10) {
-            Image(systemName: "calendar.badge.xmark")
+            Image(systemName: "calendar.badge.exclamationmark")
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("日历访问被拒绝")
@@ -75,34 +86,34 @@ struct CalendarTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var eventList: some View {
-        VStack(spacing: 0) {
-            if let next = calendarService.nextEvent {
-                nextEventHeader(next)
-            }
-
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(calendarService.todayEvents) { event in
-                        eventRow(event)
+    private var eventListSection: some View {
+        let events = calendarService.eventsForSelectedDate
+        return Group {
+            if events.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(events) { event in
+                            eventRow(event)
+                        }
                     }
+                    .padding(.horizontal, 4)
                 }
-                .padding(.horizontal, 4)
             }
         }
     }
 
-    private func nextEventHeader(_ event: CalendarEvent) -> some View {
-        VStack(spacing: 4) {
-            Text(timeUntil(event))
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
-            Text(event.title)
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.6))
-                .lineLimit(1)
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "calendar.badge.checkmark")
+                .font(.system(size: 28))
+                .foregroundStyle(.white.opacity(0.3))
+            Text("该日无日程")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.4))
         }
-        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func eventRow(_ event: CalendarEvent) -> some View {

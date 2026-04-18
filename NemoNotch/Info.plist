@@ -4,5 +4,7 @@
 <dict>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。</string>
 </dict>
 </plist>

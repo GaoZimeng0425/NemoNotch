@@ -1,6 +1,6 @@
 # macOS 开发学习项目集合
 
-共 47 个 macOS/iOS 相关项目，按功能分类如下。
+所有项目位于 `/Users/gaozimeng/Learn/macOS` 目录下。共 47 个 macOS/iOS 相关项目，按功能分类如下。
 
 ## AI / ChatGPT 客户端
 

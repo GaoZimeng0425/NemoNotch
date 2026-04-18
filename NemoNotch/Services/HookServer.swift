@@ -9,6 +9,7 @@ final class HookServer {
     private var stopped = false
 
     var onEventReceived: ((HookEvent) -> Void)?
+    var onReady: ((UInt16) -> Void)?
 
     private static let maxPortAttempts: UInt16 = 10
 
@@ -33,6 +34,7 @@ final class HookServer {
                 case .ready:
                     self.isRunning = true
                     print("[NemoNotch] Hook server listening on port \(self.port)")
+                    self.onReady?(self.port)
                 case .failed(let error):
                     self.isRunning = false
                     self.listener?.cancel()

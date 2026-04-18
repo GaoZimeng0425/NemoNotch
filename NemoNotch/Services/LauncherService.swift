@@ -15,7 +15,11 @@ final class LauncherService {
         self.settings = settings
         self.apps = settings.launcherApps
         self.filteredApps = settings.launcherApps
-        loadIcons()
+    }
+
+    func icon(for app: AppItem) -> NSImage? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else { return nil }
+        return NSWorkspace.shared.icon(forFile: url.path)
     }
 
     func launchApp(at index: Int) {
@@ -27,11 +31,10 @@ final class LauncherService {
     func addApp(bundleIdentifier: String) {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else { return }
         let name = url.deletingPathExtension().lastPathComponent
-        let app = AppItem(id: bundleIdentifier, name: name, bundleIdentifier: bundleIdentifier, iconData: nil)
+        let app = AppItem(id: bundleIdentifier, name: name, bundleIdentifier: bundleIdentifier)
         if !apps.contains(app) {
             apps.append(app)
             settings.launcherApps = apps
-            loadIcon(for: app)
             filterApps()
         }
     }
@@ -48,24 +51,6 @@ final class LauncherService {
             filteredApps = apps
         } else {
             filteredApps = apps.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
-    }
-
-    private func loadIcons() {
-        for i in apps.indices {
-            loadIcon(for: apps[i])
-        }
-    }
-
-    private func loadIcon(for app: AppItem) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else { return }
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
-        if let tiffData = icon.tiffRepresentation {
-            if let idx = apps.firstIndex(where: { $0.bundleIdentifier == app.bundleIdentifier }) {
-                apps[idx].iconData = tiffData
-                settings.launcherApps = apps
-                filterApps()
-            }
         }
     }
 }

@@ -65,8 +65,8 @@ struct SettingsView: View {
             List {
                 ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
                     HStack {
-                        if let data = app.iconData, let nsImage = NSImage(data: data) {
-                            Image(nsImage: nsImage)
+                        if let image = launcherService.icon(for: app) {
+                            Image(nsImage: image)
                                 .resizable()
                                 .frame(width: 24, height: 24)
                         }

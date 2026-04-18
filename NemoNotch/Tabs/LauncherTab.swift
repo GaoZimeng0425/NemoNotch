@@ -52,21 +52,19 @@ struct LauncherTab: View {
             onLaunch()
         } label: {
             VStack(spacing: 4) {
-                Group {
-                    if let data = app.iconData, let nsImage = NSImage(data: data) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                    } else {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(.white.opacity(0.1))
-                            .overlay {
-                                Image(systemName: "app")
-                                    .foregroundStyle(.white.opacity(0.3))
-                            }
-                    }
+                if let image = launcherService.icon(for: app) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: 36, height: 36)
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.white.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                        .overlay {
+                            Image(systemName: "app")
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
                 }
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 Text(app.name)
                     .font(.system(size: 10))
