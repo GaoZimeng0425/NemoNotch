@@ -96,13 +96,13 @@ struct NotchView: View {
     private var tabContent: some View {
         switch coordinator.selectedTab {
         case .media:
-            MediaTab(mediaService: coordinator.mediaService)
+            MediaTab()
         case .calendar:
-            CalendarTab(calendarService: coordinator.calendarService)
+            CalendarTab()
         case .claude:
-            ClaudeTab(claudeService: coordinator.claudeCodeService)
+            ClaudeTab()
         case .launcher:
-            LauncherTab(launcherService: coordinator.launcherService) {
+            LauncherTab {
                 coordinator.notchClose()
             }
         }

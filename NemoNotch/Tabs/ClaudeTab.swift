@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ClaudeTab: View {
-    let claudeService: ClaudeCodeService
+    @Environment(ClaudeCodeService.self) var claudeService
 
     var body: some View {
         if !claudeService.isHookInstalled {

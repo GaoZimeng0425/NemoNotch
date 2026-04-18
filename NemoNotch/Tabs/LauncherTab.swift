@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LauncherTab: View {
-    let launcherService: LauncherService
+    @Environment(LauncherService.self) var launcherService
     let onLaunch: () -> Void
 
     private let columns = [
