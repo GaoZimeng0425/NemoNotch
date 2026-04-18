@@ -2,10 +2,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
-    let appSettings: AppSettings
-    let claudeCodeService: ClaudeCodeService
-    let launcherService: LauncherService
-    let notificationService: NotificationService
+    @Environment(AppSettings.self) var appSettings
+    @Environment(ClaudeCodeService.self) var claudeCodeService
+    @Environment(LauncherService.self) var launcherService
+    @Environment(NotificationService.self) var notificationService
 
     @State private var selectedTab = 0
 

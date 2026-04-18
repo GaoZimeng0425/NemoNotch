@@ -66,7 +66,7 @@ struct MenuContent: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private var settingsWindow: SettingsWindow?
+    private var settingsWindow: NSWindow?
     static var shared = AppDelegate()
 
     private(set) var coordinator: NotchCoordinator?
@@ -122,13 +122,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
            let claude = claudeCodeService,
            let launcher = launcherService,
            let notification = notificationService {
-            let view = SettingsView(
-                appSettings: settings,
-                claudeCodeService: claude,
-                launcherService: launcher,
-                notificationService: notification
-            )
-            let window = SettingsWindow(settingsView: view)
+            let view = SettingsView()
+                .environment(settings)
+                .environment(claude)
+                .environment(launcher)
+                .environment(notification)
+            let window = SettingsWindow(rootView: view)
             window.delegate = self
             settingsWindow = window
         }
