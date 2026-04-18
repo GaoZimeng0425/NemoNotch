@@ -96,7 +96,7 @@ struct CompactBadge: View {
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.8))
                         }
-                    case .claude(_):
+                    case .claude(_, _):
                         if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
                            let nsImage = NSImage(contentsOf: url) {
                             Image(nsImage: nsImage)
@@ -134,7 +134,7 @@ struct CompactBadge: View {
                             .modifier(PulseModifier(isActive: true))
                     case .media:
                         Image(systemName: "play.fill")
-                    case .claude(let status):
+                    case .claude(let status, _):
                         Image(systemName: status == .working ? "gearshape.fill" : "exclamationmark.circle.fill")
                             .modifier(PulseModifier(isActive: status == .working))
                     case .calendar:
@@ -155,7 +155,7 @@ struct CompactBadge: View {
         switch badge {
         case .notification: return .media  // fallback, won't be called
         case .media: return .media
-        case .claude: return .claude
+        case .claude(_, _): return .claude
         case .calendar: return .calendar
         }
     }
@@ -164,8 +164,28 @@ struct CompactBadge: View {
         switch badge {
         case .notification: return .red
         case .media: return .white
-        case .claude(let status): return claudeColor(status)
+        case .claude(let status, _): return claudeColor(status)
         case .calendar: return .white
         }
+    }
+
+    private func toolIcon(_ tool: String?) -> String {
+        guard let tool else { return "gearshape.fill" }
+        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" {
+            return "doc.text.magnifyingglass"
+        }
+        if tool.hasPrefix("Write") || tool == "Edit" {
+            return "pencil"
+        }
+        if tool == "Bash" {
+            return "terminal"
+        }
+        if tool == "Agent" {
+            return "person.wave.2"
+        }
+        if tool.hasPrefix("Web") {
+            return "globe"
+        }
+        return "gearshape.fill"
     }
 }
