@@ -12,6 +12,7 @@ struct NotchView: View {
     private var hardwareNotchSize: NSSize { coordinator.notchSize }
 
     private var notchCenterX: CGFloat { screen.frame.midX }
+    private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
     private var notchSize: CGSize {
@@ -98,7 +99,7 @@ struct NotchView: View {
     }
 
     private var compactBadges: some View {
-        CompactBadge(
+        let badge = CompactBadge(
             mediaService: mediaService,
             calendarService: calendarService,
             claudeService: claudeService,
@@ -106,11 +107,14 @@ struct NotchView: View {
                 coordinator.notchOpen(tab: tab)
             }
         )
-        .position(
-            x: notchRightEdge + 60,
-            y: hardwareNotchSize.height / 2
-        )
+        return ZStack {
+            badge.leftIcon
+                .position(x: notchLeftEdge - 14, y: hardwareNotchSize.height / 2)
+            badge.rightIcon
+                .position(x: notchRightEdge + 14, y: hardwareNotchSize.height / 2)
+        }
         .animation(.easeInOut(duration: 0.3), value: mediaService.playbackState.isPlaying)
         .animation(.easeInOut(duration: 0.3), value: claudeService.activeSession?.status == .working)
+        .animation(.easeInOut(duration: 0.3), value: calendarService.nextEvent != nil)
     }
 }

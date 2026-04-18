@@ -12,7 +12,7 @@ class NotchWindow: NSPanel {
         isFloatingPanel = true
         isOpaque = false
         alphaValue = 1
-        level = .mainMenu + 3
+        level = .statusBar + 8
         backgroundColor = .clear
         hasShadow = false
         isMovable = false
@@ -25,4 +25,11 @@ class NotchWindow: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+final class PassThroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let view = super.hitTest(point)
+        return view === self ? nil : view
+    }
 }

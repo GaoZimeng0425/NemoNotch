@@ -12,6 +12,7 @@ final class SettingsWindow: NSWindow {
 
         title = "NemoNotch 偏好设置"
         isReleasedWhenClosed = false
+        hasShadow = false
         center()
 
         let hosting = NSHostingController(rootView: settingsView.frame(width: 450, height: 400))

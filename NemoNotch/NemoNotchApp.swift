@@ -8,7 +8,11 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(coordinator: appDelegate.coordinator, claudeCodeService: appDelegate.claudeCodeService)
+            MenuContent(
+                coordinator: appDelegate.coordinator,
+                claudeCodeService: appDelegate.claudeCodeService,
+                onOpenSettings: { appDelegate.showSettings() }
+            )
         } label: {
             Image(systemName: appDelegate.claudeCodeService?.isHookInstalled == true
                 ? "menubar.rectangle.fill"
@@ -26,6 +30,7 @@ struct NemoNotchApp: App {
 struct MenuContent: View {
     let coordinator: NotchCoordinator?
     let claudeCodeService: ClaudeCodeService?
+    let onOpenSettings: () -> Void
 
     var body: some View {
         Button("展开 Notch") {
@@ -47,7 +52,7 @@ struct MenuContent: View {
         Divider()
 
         Button("偏好设置...") {
-            (NSApp.delegate as? AppDelegate)?.showSettings()
+            onOpenSettings()
         }
 
         Button("关于 NemoNotch") {
@@ -60,7 +65,7 @@ struct MenuContent: View {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: SettingsWindow?
     static var shared = AppDelegate()
 
@@ -102,12 +107,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupHotkeys(coordinator: notchCoordinator, settings: settings)
     }
 
+    @MainActor
     func showSettings() {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        if let window = settingsWindow {
-            window.makeKeyAndOrderFront(nil)
-        } else if let settings = appSettings, let claude = claudeCodeService, let launcher = launcherService {
+
+        if settingsWindow == nil,
+           let settings = appSettings,
+           let claude = claudeCodeService,
+           let launcher = launcherService {
             let view = SettingsView(
                 appSettings: settings,
                 claudeCodeService: claude,
@@ -115,8 +123,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             let window = SettingsWindow(settingsView: view)
             window.delegate = self
-            self.settingsWindow = window
-            window.makeKeyAndOrderFront(nil)
+            settingsWindow = window
+        }
+
+        settingsWindow?.center()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window === settingsWindow {
+            settingsWindow = nil
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 

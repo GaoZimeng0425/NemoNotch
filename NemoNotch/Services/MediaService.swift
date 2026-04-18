@@ -70,6 +70,10 @@ final class MediaService {
                 return
             }
 
+            // No media from CLI — if already idle, skip MediaRemote to avoid
+            // "Could not find the specified now playing client" console spam.
+            guard !self.playbackState.isEmpty else { return }
+
             self.remote.getNowPlayingInfo { [weak self] info in
                 guard let self else { return }
                 self.applyInfo(info)

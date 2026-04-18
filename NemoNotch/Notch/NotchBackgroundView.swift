@@ -10,10 +10,12 @@ struct NotchBackgroundView: View {
     var body: some View {
         if hasNotch {
             notchedShape
+                .drawingGroup()
         } else {
             Capsule()
                 .fill(.black)
-                .shadow(color: .black.opacity(showShadow ? 0.4 : 0), radius: 12, y: 4)
+                .shadow(color: .black.opacity(showShadow ? 0.4 : 0), radius: 6, y: 2)
+                .drawingGroup()
         }
     }
 
@@ -30,8 +32,8 @@ struct NotchBackgroundView: View {
                 height: notchSize.height
             )
             .shadow(
-                color: .black.opacity(showShadow ? 1 : 0),
-                radius: 16
+                color: .black.opacity(showShadow ? 0.6 : 0),
+                radius: 8
             )
     }
 

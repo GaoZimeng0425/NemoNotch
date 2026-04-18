@@ -6,64 +6,55 @@ struct CompactBadge: View {
     let claudeService: ClaudeCodeService
     let onTap: (Tab) -> Void
 
+    private var activeBadge: (tab: Tab, appIcon: String, statusIcon: String, isPulsing: Bool)? {
+        if claudeService.activeSession?.status == .working {
+            return (.claude, "cpu", "gearshape.fill", true)
+        }
+        if mediaService.playbackState.isPlaying {
+            return (.media, "music.note", "play.fill", false)
+        }
+        if let next = calendarService.nextEvent, !next.isPast {
+            let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
+            if minutes >= 0, minutes < 60 {
+                return (.calendar, "calendar", "clock.fill", false)
+            }
+        }
+        return nil
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            if claudeService.activeSession?.status == .working {
-                badgeButton(tab: .claude) {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 6, height: 6)
-                            .modifier(PulseModifier(isActive: true))
-                        Text(truncate(claudeService.activeSession?.currentTool ?? "working", limit: 12))
-                            .font(.system(size: 10))
-                    }
-                }
-            }
+        HStack(spacing: 0) {
+            leftIcon
+            rightIcon
+        }
+    }
 
-            if mediaService.playbackState.isPlaying {
-                badgeButton(tab: .media) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 9))
-                        Text(truncate(mediaService.playbackState.title, limit: 10))
-                            .font(.system(size: 10))
-                    }
+    var leftIcon: some View {
+        Group {
+            if let badge = activeBadge {
+                Button { onTap(badge.tab) } label: {
+                    Image(systemName: badge.appIcon)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 18, height: 18)
                 }
-            }
-
-            if let next = calendarService.nextEvent, !next.isPast {
-                let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
-                if minutes >= 0 && minutes < 60 {
-                    badgeButton(tab: .calendar) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 9))
-                            Text("\(minutes)分钟后")
-                                .font(.system(size: 10))
-                        }
-                    }
-                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private func badgeButton(tab: Tab, @ViewBuilder content: () -> some View) -> some View {
-        Button {
-            onTap(tab)
-        } label: {
-            content()
-                .foregroundStyle(.white)
+    var rightIcon: some View {
+        Group {
+            if let badge = activeBadge {
+                Button { onTap(badge.tab) } label: {
+                    Image(systemName: badge.statusIcon)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .modifier(PulseModifier(isActive: badge.isPulsing))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(.black.opacity(0.6))
-        .clipShape(Capsule())
-    }
-
-    private func truncate(_ text: String, limit: Int) -> String {
-        if text.count <= limit { return text }
-        return String(text.prefix(limit)) + "…"
     }
 }

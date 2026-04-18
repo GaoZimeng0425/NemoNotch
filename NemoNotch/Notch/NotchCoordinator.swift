@@ -86,7 +86,11 @@ final class NotchCoordinator {
         hosting.view.layer?.backgroundColor = .clear
         self.hostingController = hosting
 
-        window.contentView = hosting.view
+        let passThrough = PassThroughView(frame: screen.frame)
+        passThrough.wantsLayer = true
+        passThrough.layer?.backgroundColor = .clear
+        passThrough.addSubview(hosting.view)
+        window.contentView = passThrough
         window.orderFrontRegardless()
 
         NotificationCenter.default.addObserver(
