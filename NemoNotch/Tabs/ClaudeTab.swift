@@ -90,21 +90,121 @@ struct ClaudeTab: View {
 
     private func sessionRow(_ session: ClaudeState) -> some View {
         HStack(spacing: 8) {
-            statusDot(session.status)
+            Image(systemName: toolIcon(session.currentTool))
+                .font(.system(size: 11))
+                .foregroundStyle(toolColor(session.currentTool))
+                .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(statusLabel(session))
-                    .font(.system(size: 12, weight: session.status == .working ? .medium : .regular))
-                    .foregroundStyle(session.status == .working ? .white : .white.opacity(0.6))
-                    .lineLimit(1)
-                Text(timeAgo(session.lastEventTime))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.4))
+                HStack(spacing: 6) {
+                    Text(projectName(session))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    if let event = session.lastEventName {
+                        eventTag(event)
+                    }
+                    if session.status == .working, let tool = session.currentTool {
+                        Text(tool)
+                            .font(.system(size: 10))
+                            .foregroundStyle(toolColor(tool))
+                            .lineLimit(1)
+                    }
+                }
+                if let msg = session.lastMessage, !msg.isEmpty {
+                    Text(msg)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(2)
+                }
+                if let cwd = session.cwd {
+                    Text(cwd)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .lineLimit(1)
+                }
+                HStack(spacing: 8) {
+                    Text(formatTime(session.sessionStart))
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.3))
+                    Text(durationLabel(session))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text(timeAgo(session.lastEventTime))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
             }
 
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+    }
+
+    private func eventTag(_ event: String) -> some View {
+        let (label, color) = eventTagStyle(event)
+        return Text(label)
+            .font(.system(size: 8, weight: .medium, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.7))
+            .clipShape(Capsule())
+    }
+
+    private func eventTagStyle(_ event: String) -> (String, Color) {
+        switch event {
+        case "PreToolUse": return ("PreToolUse", .orange)
+        case "PostToolUse": return ("PostToolUse", .blue)
+        case "Stop": return ("Stop", .green)
+        case "Notification": return ("Notification", .yellow)
+        case "UserPromptSubmit": return ("Prompt", .purple)
+        case "SessionStart": return ("Start", .cyan)
+        default: return (event, .gray)
+        }
+    }
+
+    private func toolColor(_ tool: String?) -> Color {
+        guard let tool else { return .gray }
+        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
+        if tool.hasPrefix("Write") || tool == "Edit" { return .red }
+        if tool == "Bash" { return .green }
+        if tool == "Agent" { return .purple }
+        if tool.hasPrefix("Web") { return .teal }
+        return .orange
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+
+    private func toolIcon(_ tool: String?) -> String {
+        guard let tool else { return "gearshape.fill" }
+        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" {
+            return "doc.text.magnifyingglass"
+        }
+        if tool.hasPrefix("Write") || tool == "Edit" {
+            return "pencil"
+        }
+        if tool == "Bash" { return "terminal" }
+        if tool == "Agent" { return "person.wave.2" }
+        if tool.hasPrefix("Web") { return "globe" }
+        return "gearshape.fill"
+    }
+
+    private func projectName(_ session: ClaudeState) -> String {
+        if let folder = session.projectFolder { return folder }
+        return "Session \(session.id.prefix(8))"
+    }
+
+    private func durationLabel(_ session: ClaudeState) -> String {
+        let interval = Date().timeIntervalSince(session.sessionStart)
+        let minutes = Int(interval / 60)
+        if minutes < 1 { return "< 1 分钟" }
+        if minutes < 60 { return "\(minutes) 分钟" }
+        return "\(minutes / 60)h \(minutes % 60)m"
     }
 
     private func statusDot(_ status: ClaudeStatus) -> some View {
@@ -152,5 +252,13 @@ struct PulseModifier: ViewModifier {
                 isActive ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default,
                 value: isActive
             )
+    }
+}
+
+struct GlowPulseModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .opacity(0.6)
+            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: true)
     }
 }

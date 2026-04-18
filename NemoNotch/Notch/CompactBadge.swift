@@ -11,7 +11,7 @@ struct CompactBadge: View {
     private enum BadgeInfo {
         case notification(String)  // bundleID
         case media
-        case claude(ClaudeStatus, String?)  // status, currentTool
+        case claude(ClaudeStatus, String?, Bool)  // status, currentTool, isPreToolUse
         case calendar
     }
 
@@ -22,7 +22,7 @@ struct CompactBadge: View {
         }
         // 2. Claude Code
         if let session = claudeService.activeSession, session.status != .idle {
-            return .claude(session.status, session.currentTool)
+            return .claude(session.status, session.currentTool, session.isPreToolUse)
         }
         // 3. Media
         if mediaService.playbackState.isPlaying {
@@ -44,6 +44,17 @@ struct CompactBadge: View {
         case .waiting: return .yellow
         case .idle: return .green
         }
+    }
+
+    private func claudeToolColor(_ status: ClaudeStatus, tool: String?) -> Color {
+        if status == .waiting { return .yellow }
+        guard let tool else { return .orange }
+        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
+        if tool.hasPrefix("Write") || tool == "Edit" { return .red }
+        if tool == "Bash" { return .green }
+        if tool == "Agent" { return .purple }
+        if tool.hasPrefix("Web") { return .teal }
+        return .orange
     }
 
     var body: some View {
@@ -96,7 +107,7 @@ struct CompactBadge: View {
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.8))
                         }
-                    case .claude(_, _):
+                    case .claude(_, _, _):
                         if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
                            let nsImage = NSImage(contentsOf: url) {
                             Image(nsImage: nsImage)
@@ -134,9 +145,17 @@ struct CompactBadge: View {
                             .modifier(PulseModifier(isActive: true))
                     case .media:
                         Image(systemName: "play.fill")
-                    case .claude(let status, _):
-                        Image(systemName: status == .working ? "gearshape.fill" : "exclamationmark.circle.fill")
+                    case .claude(let status, let tool, let isPre):
+                        Image(systemName: toolIcon(tool))
                             .modifier(PulseModifier(isActive: status == .working))
+                            .overlay {
+                                if isPre {
+                                    Circle()
+                                        .stroke(toolColor(tool), lineWidth: 1.5)
+                                        .frame(width: 16, height: 16)
+                                        .modifier(GlowPulseModifier())
+                                }
+                            }
                     case .calendar:
                         Image(systemName: "clock.fill")
                     }
@@ -155,7 +174,7 @@ struct CompactBadge: View {
         switch badge {
         case .notification: return .media  // fallback, won't be called
         case .media: return .media
-        case .claude(_, _): return .claude
+        case .claude(_, _, _): return .claude
         case .calendar: return .calendar
         }
     }
@@ -164,7 +183,7 @@ struct CompactBadge: View {
         switch badge {
         case .notification: return .red
         case .media: return .white
-        case .claude(let status, _): return claudeColor(status)
+        case .claude(let status, let tool, _): return claudeToolColor(status, tool: tool)
         case .calendar: return .white
         }
     }
@@ -187,5 +206,15 @@ struct CompactBadge: View {
             return "globe"
         }
         return "gearshape.fill"
+    }
+
+    private func toolColor(_ tool: String?) -> Color {
+        guard let tool else { return .orange }
+        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
+        if tool.hasPrefix("Write") || tool == "Edit" { return .red }
+        if tool == "Bash" { return .green }
+        if tool == "Agent" { return .purple }
+        if tool.hasPrefix("Web") { return .teal }
+        return .orange
     }
 }

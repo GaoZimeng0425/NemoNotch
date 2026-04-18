@@ -134,8 +134,10 @@ struct NotchView: View {
         return ZStack {
             badge.leftIcon
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
+                .opacity(hasActiveBadge ? 1 : 0)
             badge.rightIcon
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
+                .opacity(hasActiveBadge ? 1 : 0)
         }
         .animation(.spring(duration: 0.35, bounce: 0.15), value: spread)
         .animation(.easeInOut(duration: 0.3), value: notificationService.badges.isEmpty)

@@ -67,39 +67,50 @@ final class ClaudeCodeService {
             }
         }
 
+        func updateContext() {
+            if let cwd = event.cwd { sessions[sessionId]?.cwd = cwd }
+            if let msg = event.message, !msg.isEmpty { sessions[sessionId]?.lastMessage = msg }
+            sessions[sessionId]?.lastEventName = eventName
+        }
+
         switch eventName {
         case "SessionStart":
             sessions[sessionId] = ClaudeState(sessionId: sessionId)
+            updateContext()
 
         case "UserPromptSubmit":
             ensureSession()
             sessions[sessionId]?.status = .working
+            updateContext()
             sessions[sessionId]?.lastEventTime = now
 
         case "PreToolUse":
             ensureSession()
             sessions[sessionId]?.status = .working
             sessions[sessionId]?.currentTool = event.toolName
+            sessions[sessionId]?.isPreToolUse = true
+            updateContext()
             sessions[sessionId]?.lastEventTime = now
 
         case "PostToolUse":
-            // Tool finished, but Claude is still processing the result.
-            // Keep status as .working — only Stop/SessionEnd flips to idle.
             ensureSession()
             sessions[sessionId]?.status = .working
             sessions[sessionId]?.currentTool = nil
+            sessions[sessionId]?.isPreToolUse = false
+            updateContext()
             sessions[sessionId]?.lastEventTime = now
 
         case "Notification":
-            // Notification is a side-channel (permission prompts, idle alerts).
-            // It does NOT mean Claude is idle — keep current status untouched.
             ensureSession()
+            sessions[sessionId]?.status = .waiting
+            updateContext()
             sessions[sessionId]?.lastEventTime = now
 
         case "Stop":
             if sessions[sessionId] != nil {
                 sessions[sessionId]?.status = .idle
                 sessions[sessionId]?.currentTool = nil
+                updateContext()
                 sessions[sessionId]?.lastEventTime = now
             }
 

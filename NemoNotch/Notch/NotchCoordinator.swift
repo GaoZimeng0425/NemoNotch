@@ -110,7 +110,15 @@ final class NotchCoordinator {
     func notchOpen(tab: Tab? = nil) {
         guard status == .closed else { return }
         captureFrontmostApp()
-        if let tab { selectedTab = tab }
+        if let tab {
+            selectedTab = tab
+        } else {
+            if claudeCodeService.activeSession?.status == .working {
+                selectedTab = .claude
+            } else if mediaService.playbackState.isPlaying {
+                selectedTab = .media
+            }
+        }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
         withAnimation(.interactiveSpring(duration: 0.314)) {
             status = .opened
