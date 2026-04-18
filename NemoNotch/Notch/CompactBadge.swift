@@ -46,16 +46,6 @@ struct CompactBadge: View {
         }
     }
 
-    private func claudeToolColor(_ status: ClaudeStatus, tool: String?) -> Color {
-        if status == .waiting { return .yellow }
-        guard let tool else { return .orange }
-        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
-        if tool.hasPrefix("Write") || tool == "Edit" { return .red }
-        if tool == "Bash" { return .green }
-        if tool == "Agent" { return .purple }
-        if tool.hasPrefix("Web") { return .teal }
-        return .orange
-    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -146,12 +136,12 @@ struct CompactBadge: View {
                     case .media:
                         Image(systemName: "play.fill")
                     case .claude(let status, let tool, let isPre):
-                        Image(systemName: toolIcon(tool))
+                        Image(systemName: ToolStyle.icon(tool))
                             .modifier(PulseModifier(isActive: status == .working))
                             .overlay {
                                 if isPre {
                                     Circle()
-                                        .stroke(toolColor(tool), lineWidth: 1.5)
+                                        .stroke(ToolStyle.color(tool), lineWidth: 1.5)
                                         .frame(width: 16, height: 16)
                                         .modifier(GlowPulseModifier())
                                 }
@@ -183,38 +173,9 @@ struct CompactBadge: View {
         switch badge {
         case .notification: return .red
         case .media: return .white
-        case .claude(let status, let tool, _): return claudeToolColor(status, tool: tool)
+        case .claude(_, let tool, _): return ToolStyle.color(tool)
         case .calendar: return .white
         }
     }
 
-    private func toolIcon(_ tool: String?) -> String {
-        guard let tool else { return "gearshape.fill" }
-        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" {
-            return "doc.text.magnifyingglass"
-        }
-        if tool.hasPrefix("Write") || tool == "Edit" {
-            return "pencil"
-        }
-        if tool == "Bash" {
-            return "terminal"
-        }
-        if tool == "Agent" {
-            return "person.wave.2"
-        }
-        if tool.hasPrefix("Web") {
-            return "globe"
-        }
-        return "gearshape.fill"
-    }
-
-    private func toolColor(_ tool: String?) -> Color {
-        guard let tool else { return .orange }
-        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
-        if tool.hasPrefix("Write") || tool == "Edit" { return .red }
-        if tool == "Bash" { return .green }
-        if tool == "Agent" { return .purple }
-        if tool.hasPrefix("Web") { return .teal }
-        return .orange
-    }
 }
