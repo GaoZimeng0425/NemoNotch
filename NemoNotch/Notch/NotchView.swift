@@ -19,6 +19,7 @@ struct NotchView: View {
     private let badgePadding: CGFloat = 36
 
     private var hasActiveBadge: Bool {
+        if !notificationService.badges.isEmpty { return true }
         if mediaService.playbackState.isPlaying { return true }
         if claudeService.activeSession?.status == .working { return true }
         if let next = calendarService.nextEvent, !next.isPast {
@@ -118,8 +119,15 @@ struct NotchView: View {
             mediaService: mediaService,
             calendarService: calendarService,
             claudeService: claudeService,
+            notificationService: notificationService,
             onTap: { tab in
                 coordinator.notchOpen(tab: tab)
+            },
+            onOpenApp: { bundleID in
+                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                    let config = NSWorkspace.OpenConfiguration()
+                    NSWorkspace.shared.openApplication(at: url, configuration: config)
+                }
             }
         )
         let spread: CGFloat = hasActiveBadge ? 14 : 0
@@ -130,5 +138,6 @@ struct NotchView: View {
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
         }
         .animation(.spring(duration: 0.35, bounce: 0.15), value: spread)
+        .animation(.easeInOut(duration: 0.3), value: notificationService.badges.isEmpty)
     }
 }
