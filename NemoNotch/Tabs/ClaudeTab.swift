@@ -93,16 +93,10 @@ struct ClaudeTab: View {
             statusDot(session.status)
 
             VStack(alignment: .leading, spacing: 2) {
-                if let tool = session.currentTool {
-                    Text(tool)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                } else {
-                    Text("空闲")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
+                Text(statusLabel(session))
+                    .font(.system(size: 12, weight: session.status == .working ? .medium : .regular))
+                    .foregroundStyle(session.status == .working ? .white : .white.opacity(0.6))
+                    .lineLimit(1)
                 Text(timeAgo(session.lastEventTime))
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.4))
@@ -125,6 +119,17 @@ struct ClaudeTab: View {
         case .idle: .gray
         case .working: .green
         case .waiting: .yellow
+        }
+    }
+
+    private func statusLabel(_ session: ClaudeState) -> String {
+        switch session.status {
+        case .working:
+            return session.currentTool ?? "思考中…"
+        case .waiting:
+            return "等待中"
+        case .idle:
+            return "空闲"
         }
     }
 

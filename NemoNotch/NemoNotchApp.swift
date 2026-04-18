@@ -51,6 +51,7 @@ struct MenuContent: View {
         }
 
         Button("关于 NemoNotch") {
+            NSApp.activate(ignoringOtherApps: true)
             NSApp.orderFrontStandardAboutPanel(nil)
         }
         Button("退出 NemoNotch") {
@@ -102,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showSettings() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         if let window = settingsWindow {
             window.makeKeyAndOrderFront(nil)
         } else if let settings = appSettings, let claude = claudeCodeService, let launcher = launcherService {
@@ -111,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 launcherService: launcher
             )
             let window = SettingsWindow(settingsView: view)
+            window.delegate = self
             self.settingsWindow = window
             window.makeKeyAndOrderFront(nil)
         }
