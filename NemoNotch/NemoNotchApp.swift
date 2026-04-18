@@ -1,32 +1,25 @@
-//
-//  NemoNotchApp.swift
-//  NemoNotch
-//
-//  Created by GaoZimeng on 2026/4/18.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct NemoNotchApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra {
+            Button("退出 NemoNotch") {
+                NSApplication.shared.terminate(nil)
+            }
+        } label: {
+            Image(systemName: "menubar.rectangle")
         }
-        .modelContainer(sharedModelContainer)
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var coordinator: NotchCoordinator?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        coordinator = NotchCoordinator()
     }
 }
