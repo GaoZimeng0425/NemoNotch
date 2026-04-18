@@ -16,8 +16,6 @@ struct NotchView: View {
     private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
-    private let badgePadding: CGFloat = 36
-
     private var hasActiveBadge: Bool {
         if !notificationService.badges.isEmpty { return true }
         if mediaService.playbackState.isPlaying { return true }
@@ -32,17 +30,17 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch coordinator.status {
         case .closed:
-            let extraWidth: CGFloat = hasActiveBadge ? badgePadding * 2 : 0
+            let extraWidth: CGFloat = hasActiveBadge ? NotchConstants.badgePadding * 2 : 0
             return CGSize(width: hardwareNotchSize.width - 4 + extraWidth, height: hardwareNotchSize.height)
         case .opened:
-            return CGSize(width: 500, height: 260)
+            return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
     }
 
     private var notchCornerRadius: CGFloat {
         switch coordinator.status {
-        case .closed: 8
-        case .opened: 24
+        case .closed: NotchConstants.cornerRadiusClosed
+        case .opened: NotchConstants.cornerRadiusOpened
         }
     }
 
@@ -61,10 +59,10 @@ struct NotchView: View {
                 openedContent
                     .zIndex(1)
                     .transition(.scale.combined(with: .opacity).combined(with: .offset(y: -130)))
-                    .animation(.interactiveSpring(duration: 0.314).delay(0.157), value: coordinator.status)
+                    .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration).delay(0.157), value: coordinator.status)
             }
         }
-        .animation(.interactiveSpring(duration: 0.314), value: coordinator.status)
+        .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
@@ -75,22 +73,22 @@ struct NotchView: View {
             notchSize: notchSize,
             hasNotch: hasNotch,
             cornerRadius: notchCornerRadius,
-            spacing: 16
+            spacing: NotchConstants.notchBackgroundSpacing
         )
-        .animation(.spring(duration: 0.35, bounce: 0.15), value: hasActiveBadge)
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: hasActiveBadge)
     }
 
     private var openedContent: some View {
         VStack(spacing: 0) {
             TabBarView(coordinator: coordinator, enabledTabs: enabledTabs)
-                .padding(.top, hardwareNotchSize.height + 10)
+                .padding(.top, hardwareNotchSize.height + NotchConstants.tabBarTopPadding)
 
             tabContent
-                .padding(.top, 8)
+                .padding(.top, NotchConstants.tabContentTopPadding)
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
         .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
     }
 
@@ -130,7 +128,7 @@ struct NotchView: View {
                 }
             }
         )
-        let spread: CGFloat = hasActiveBadge ? 14 : 0
+        let spread: CGFloat = hasActiveBadge ? NotchConstants.badgeSpread : 0
         return ZStack {
             badge.leftIcon
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
@@ -139,7 +137,7 @@ struct NotchView: View {
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
                 .opacity(hasActiveBadge ? 1 : 0)
         }
-        .animation(.spring(duration: 0.35, bounce: 0.15), value: spread)
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
         .animation(.easeInOut(duration: 0.3), value: notificationService.badges.isEmpty)
     }
 }

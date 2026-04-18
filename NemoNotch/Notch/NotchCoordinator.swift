@@ -15,9 +15,9 @@ final class NotchCoordinator {
 
     private(set) var notchSize: NSSize
     private(set) var screenFrame: NSRect
-    private let hitboxPadding: CGFloat = 10
-    private let openedWidth: CGFloat = 500
-    private let openedHeight: CGFloat = 260
+    private let hitboxPadding: CGFloat = NotchConstants.hitboxPadding
+    private let openedWidth: CGFloat = NotchConstants.openedWidth
+    private let openedHeight: CGFloat = NotchConstants.openedHeight
 
     let mediaService: MediaService
     let calendarService: CalendarService
@@ -71,8 +71,8 @@ final class NotchCoordinator {
         let screen = NSScreen.main!
         self.screenFrame = screen.frame
         self.notchSize = screen.hasNotch
-            ? (screen.notchSize ?? NSSize(width: 200, height: 32))
-            : NSSize(width: 200, height: 32)
+            ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
+            : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
 
         self.window = NotchWindow(rect: screen.frame)
 
@@ -120,13 +120,13 @@ final class NotchCoordinator {
             }
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        withAnimation(.interactiveSpring(duration: 0.314)) {
+        withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
             status = .opened
         }
     }
 
     func notchClose() {
-        withAnimation(.spring(duration: 0.236)) {
+        withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
         }
         // Pattern from Peninsula: explicitly resign key so the previously frontmost
@@ -161,8 +161,8 @@ final class NotchCoordinator {
         let screen = NSScreen.main!
         screenFrame = screen.frame
         notchSize = screen.hasNotch
-            ? (screen.notchSize ?? NSSize(width: 200, height: 32))
-            : NSSize(width: 200, height: 32)
+            ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
+            : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
         window.setFrame(screen.frame, display: true)
         hostingController?.view.frame = screen.frame
     }
@@ -191,7 +191,7 @@ final class NotchCoordinator {
                 width: contentSize.width,
                 height: contentSize.height
             )
-            if !NSMouseInRect(location, contentRect.insetBy(dx: -20, dy: -20), false) {
+            if !NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false) {
                 notchClose()
             }
         }
@@ -209,7 +209,7 @@ final class NotchCoordinator {
                 width: contentSize.width,
                 height: contentSize.height
             )
-            if !NSMouseInRect(location, contentRect.insetBy(dx: -10, dy: -10), false) {
+            if !NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false) {
                 notchClose()
             }
         }
