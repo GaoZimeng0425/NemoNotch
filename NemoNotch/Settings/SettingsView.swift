@@ -54,7 +54,7 @@ struct SettingsView: View {
                     get: { appSettings.defaultTab },
                     set: { appSettings.defaultTab = $0 }
                 )) {
-                    ForEach(Array(appSettings.enabledTabs).sorted { Tab.allCases.firstIndex(of: $0)! < Tab.allCases.firstIndex(of: $1)! }) { tab in
+                    ForEach(Tab.sorted(appSettings.enabledTabs)) { tab in
                         Text(tab.title).tag(tab)
                     }
                 }

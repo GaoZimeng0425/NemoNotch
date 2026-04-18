@@ -109,7 +109,7 @@ struct NotchView: View {
     }
 
     private var sortedTabs: [Tab] {
-        enabledTabs.sorted { Tab.allCases.firstIndex(of: $0)! < Tab.allCases.firstIndex(of: $1)! }
+        Tab.sorted(enabledTabs)
     }
 
     private var compactBadges: some View {

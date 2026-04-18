@@ -26,3 +26,9 @@ enum Tab: String, CaseIterable, Identifiable {
         }
     }
 }
+
+extension Tab {
+    static func sorted(_ tabs: Set<Tab>) -> [Tab] {
+        tabs.sorted { allCases.firstIndex(of: $0)! < allCases.firstIndex(of: $1)! }
+    }
+}
