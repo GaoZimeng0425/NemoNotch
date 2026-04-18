@@ -10,7 +10,6 @@ struct NemoNotchApp: App {
         MenuBarExtra {
             MenuContent(
                 coordinator: appDelegate.coordinator,
-                claudeCodeService: appDelegate.claudeCodeService,
                 onOpenSettings: { appDelegate.showSettings() }
             )
         } label: {
@@ -18,18 +17,18 @@ struct NemoNotchApp: App {
                 ? "menubar.rectangle.fill"
                 : "menubar.rectangle")
         }
+        .environment(appDelegate.claudeCodeService!)
     }
 
     init() {
-        // Wire up AppDelegate reference for use in MenuBarExtra
         let delegate = AppDelegate.shared
         _appDelegateRef = State(initialValue: delegate)
     }
 }
 
 struct MenuContent: View {
+    @Environment(ClaudeCodeService.self) var claudeCodeService
     let coordinator: NotchCoordinator?
-    let claudeCodeService: ClaudeCodeService?
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -39,13 +38,11 @@ struct MenuContent: View {
 
         Divider()
 
-        if let cc = claudeCodeService {
-            if cc.isHookInstalled {
-                Text("Claude Code Hooks: 已安装 ✓")
-            } else {
-                Button("安装 Claude Code Hooks...") {
-                    cc.installHooks()
-                }
+        if claudeCodeService.isHookInstalled {
+            Text("Claude Code Hooks: 已安装 ✓")
+        } else {
+            Button("安装 Claude Code Hooks...") {
+                claudeCodeService.installHooks()
             }
         }
 
@@ -70,12 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     static var shared = AppDelegate()
 
     private(set) var coordinator: NotchCoordinator?
-    private(set) var appSettings: AppSettings?
-    private(set) var mediaService: MediaService?
-    private(set) var calendarService: CalendarService?
+    private var appSettings: AppSettings?
+    private var mediaService: MediaService?
+    private var calendarService: CalendarService?
     private(set) var claudeCodeService: ClaudeCodeService?
-    private(set) var launcherService: LauncherService?
-    private(set) var notificationService: NotificationService?
+    private var launcherService: LauncherService?
+    private var notificationService: NotificationService?
     private var hotkeyService: HotkeyService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -99,14 +96,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let notification = NotificationService(monitoredApps: settings.monitoredApps)
         self.notificationService = notification
 
-        let notchCoordinator = NotchCoordinator(
-            mediaService: media,
-            calendarService: calendar,
-            claudeCodeService: claude,
-            launcherService: launcher,
-            notificationService: notification,
-            appSettings: settings
-        )
+        let notchCoordinator = NotchCoordinator { [weak self] coordinator in
+            AnyView(
+                NotchView()
+                    .environment(coordinator)
+                    .environment(settings)
+                    .environment(media)
+                    .environment(calendar)
+                    .environment(claude)
+                    .environment(launcher)
+                    .environment(notification)
+            )
+        }
+        notchCoordinator.autoSelectTab = { [weak self] in
+            guard let self else { return nil }
+            if self.claudeCodeService?.activeSession?.status == .working { return .claude }
+            if self.mediaService?.playbackState.isPlaying == true { return .media }
+            return nil
+        }
         self.coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator, settings: settings)
@@ -147,7 +154,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let hotkeys = HotkeyService()
         self.hotkeyService = hotkeys
 
-        // ⌥⌘N — toggle notch
         hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
             switch coordinator.status {
             case .closed: coordinator.notchOpen()
@@ -155,10 +161,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
 
-        // ⌥⌘1..4 — open specific tab
-        let tabs = settings.enabledTabs.sorted { Tab.allCases.firstIndex(of: $0)! < Tab.allCases.firstIndex(of: $1)! }
+        let tabs = Tab.sorted(settings.enabledTabs)
         for (i, tab) in tabs.enumerated() {
-            let keyCode = UInt32(18 + i) // 18='1', 19='2', etc.
+            let keyCode = UInt32(18 + i)
             hotkeys.register(keyCode: keyCode, modifiers: UInt32(optionKey | cmdKey)) {
                 coordinator.notchOpen(tab: tab)
             }

@@ -9,26 +9,14 @@ final class NotchCoordinator {
 
     var status: Status = .closed
     var selectedTab: Tab = .media
+    var autoSelectTab: (() -> Tab?)?
 
     let window: NotchWindow
     private var hostingController: NSHostingController<AnyView>?
 
     private(set) var notchSize: NSSize
     private(set) var screenFrame: NSRect
-    private let hitboxPadding: CGFloat = NotchConstants.hitboxPadding
-    private let openedWidth: CGFloat = NotchConstants.openedWidth
-    private let openedHeight: CGFloat = NotchConstants.openedHeight
 
-    let mediaService: MediaService
-    let calendarService: CalendarService
-    let claudeCodeService: ClaudeCodeService
-    let launcherService: LauncherService
-    let notificationService: NotificationService
-    let appSettings: AppSettings
-
-    // Tracks the application that was frontmost before the notch opened, so we can
-    // restore focus on close (SwiftUI button taps inside the panel can incidentally
-    // activate NemoNotch and demote the previous app).
     private var previousApp: NSRunningApplication?
     private static let ourBundleIdentifier = Bundle.main.bundleIdentifier
 
@@ -45,29 +33,15 @@ final class NotchCoordinator {
     var contentSize: NSSize {
         switch status {
         case .closed: notchSize
-        case .opened: NSSize(width: openedWidth, height: openedHeight)
+        case .opened: NSSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
     }
 
     private var hitboxRect: NSRect {
-        deviceNotchRect.insetBy(dx: -hitboxPadding, dy: -hitboxPadding)
+        deviceNotchRect.insetBy(dx: -NotchConstants.hitboxPadding, dy: -NotchConstants.hitboxPadding)
     }
 
-    init(
-        mediaService: MediaService,
-        calendarService: CalendarService,
-        claudeCodeService: ClaudeCodeService,
-        launcherService: LauncherService,
-        notificationService: NotificationService,
-        appSettings: AppSettings
-    ) {
-        self.mediaService = mediaService
-        self.calendarService = calendarService
-        self.claudeCodeService = claudeCodeService
-        self.launcherService = launcherService
-        self.notificationService = notificationService
-        self.appSettings = appSettings
-
+    init(content: (NotchCoordinator) -> AnyView) {
         let screen = NSScreen.main!
         self.screenFrame = screen.frame
         self.notchSize = screen.hasNotch
@@ -76,15 +50,7 @@ final class NotchCoordinator {
 
         self.window = NotchWindow(rect: screen.frame)
 
-        let wrapper = NotchView()
-            .environment(self)
-            .environment(appSettings)
-            .environment(mediaService)
-            .environment(calendarService)
-            .environment(claudeCodeService)
-            .environment(launcherService)
-            .environment(notificationService)
-        let hosting = NSHostingController(rootView: AnyView(wrapper))
+        let hosting = NSHostingController(rootView: content(self))
         hosting.view.frame = screen.frame
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = .clear
@@ -112,12 +78,8 @@ final class NotchCoordinator {
         captureFrontmostApp()
         if let tab {
             selectedTab = tab
-        } else {
-            if claudeCodeService.activeSession?.status == .working {
-                selectedTab = .claude
-            } else if mediaService.playbackState.isPlaying {
-                selectedTab = .media
-            }
+        } else if let auto = autoSelectTab?() {
+            selectedTab = auto
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
         withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
@@ -129,9 +91,6 @@ final class NotchCoordinator {
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
         }
-        // Pattern from Peninsula: explicitly resign key so the previously frontmost
-        // app's window can become key again. Combined with the previousApp restore
-        // for the case where SwiftUI button taps incidentally activated NemoNotch.
         if window.isKeyWindow {
             window.resignKey()
         }
@@ -148,8 +107,6 @@ final class NotchCoordinator {
     private func restorePreviousApp() {
         guard let app = previousApp else { return }
         previousApp = nil
-        // Only re-activate if NemoNotch (or no app) ended up frontmost as a side
-        // effect of interacting with the panel; never steal focus from a real switch.
         let currentFront = NSWorkspace.shared.frontmostApplication
         let currentID = currentFront?.bundleIdentifier
         if currentFront == nil || currentID == Self.ourBundleIdentifier {
