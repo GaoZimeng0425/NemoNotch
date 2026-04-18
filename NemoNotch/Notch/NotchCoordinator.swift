@@ -11,7 +11,7 @@ final class NotchCoordinator {
     var selectedTab: Tab = .media
 
     let window: NotchWindow
-    private var hostingController: NSHostingController<NotchView>?
+    private var hostingController: NSHostingController<AnyView>?
 
     private(set) var notchSize: NSSize
     private(set) var screenFrame: NSRect
@@ -84,7 +84,13 @@ final class NotchCoordinator {
             claudeService: claudeCodeService,
             notificationService: notificationService
         )
-        let hosting = NSHostingController(rootView: wrapper)
+            .environment(mediaService)
+            .environment(calendarService)
+            .environment(claudeCodeService)
+            .environment(launcherService)
+            .environment(notificationService)
+            .environment(appSettings)
+        let hosting = NSHostingController(rootView: AnyView(wrapper))
         hosting.view.frame = screen.frame
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = .clear
