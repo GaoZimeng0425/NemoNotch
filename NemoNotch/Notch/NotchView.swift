@@ -82,7 +82,7 @@ struct NotchView: View {
 
     private var openedContent: some View {
         VStack(spacing: 0) {
-            TabBarView(coordinator: coordinator, enabledTabs: enabledTabs)
+            TabBarView()
                 .padding(.top, hardwareNotchSize.height + NotchConstants.tabBarTopPadding)
 
             tabContent
