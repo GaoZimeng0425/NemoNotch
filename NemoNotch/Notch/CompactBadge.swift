@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct CompactBadge: View {
-    let mediaService: MediaService
-    let calendarService: CalendarService
-    let claudeService: ClaudeCodeService
-    let notificationService: NotificationService
+    @Environment(MediaService.self) var mediaService
+    @Environment(CalendarService.self) var calendarService
+    @Environment(ClaudeCodeService.self) var claudeService
+    @Environment(NotificationService.self) var notificationService
     let onTap: (Tab) -> Void
     let onOpenApp: (String) -> Void
 

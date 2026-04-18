@@ -114,10 +114,6 @@ struct NotchView: View {
 
     private var compactBadges: some View {
         let badge = CompactBadge(
-            mediaService: mediaService,
-            calendarService: calendarService,
-            claudeService: claudeService,
-            notificationService: notificationService,
             onTap: { tab in
                 coordinator.notchOpen(tab: tab)
             },
