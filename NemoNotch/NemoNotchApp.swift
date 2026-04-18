@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let notification = NotificationService(monitoredApps: settings.monitoredApps)
         self.notificationService = notification
 
-        let notchCoordinator = NotchCoordinator { [weak self] coordinator in
+        let notchCoordinator = NotchCoordinator { coordinator in
             AnyView(
                 NotchView()
                     .environment(coordinator)

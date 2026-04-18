@@ -110,10 +110,6 @@ struct NotchView: View {
         }
     }
 
-    private var sortedTabs: [Tab] {
-        Tab.sorted(enabledTabs)
-    }
-
     private var compactBadges: some View {
         let badge = CompactBadge(
             onTap: { tab in
