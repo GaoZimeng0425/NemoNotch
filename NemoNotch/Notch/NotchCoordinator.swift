@@ -20,6 +20,12 @@ final class NotchCoordinator {
     private let openedWidth: CGFloat = 500
     private let openedHeight: CGFloat = 260
 
+    let mediaService: MediaService
+    let calendarService: CalendarService
+    let claudeCodeService: ClaudeCodeService
+    let launcherService: LauncherService
+    let appSettings: AppSettings
+
     private var deviceNotchRect: NSRect {
         let screen = NSScreen.main!
         return NSRect(
@@ -33,7 +39,7 @@ final class NotchCoordinator {
     var contentSize: NSSize {
         switch status {
         case .closed: notchSize
-        case .popping: NSSize(width: max(notchSize.width + 20, CGFloat(Tab.allCases.count) * 56 + 20), height: notchSize.height + 52)
+        case .popping: NSSize(width: max(notchSize.width + 20, CGFloat(appSettings.enabledTabs.count) * 56 + 20), height: notchSize.height + 52)
         case .opened: NSSize(width: openedWidth, height: openedHeight)
         }
     }
@@ -42,7 +48,19 @@ final class NotchCoordinator {
         deviceNotchRect.insetBy(dx: -hitboxPadding, dy: -hitboxPadding)
     }
 
-    init() {
+    init(
+        mediaService: MediaService,
+        calendarService: CalendarService,
+        claudeCodeService: ClaudeCodeService,
+        launcherService: LauncherService,
+        appSettings: AppSettings
+    ) {
+        self.mediaService = mediaService
+        self.calendarService = calendarService
+        self.claudeCodeService = claudeCodeService
+        self.launcherService = launcherService
+        self.appSettings = appSettings
+
         let screen = NSScreen.main!
         self.screenFrame = screen.frame
         self.notchSize = screen.hasNotch
@@ -51,7 +69,13 @@ final class NotchCoordinator {
 
         self.window = NotchWindow(rect: screen.frame)
 
-        let wrapper = NotchView(coordinator: self, enabledTabs: Set(Tab.allCases))
+        let wrapper = NotchView(
+            coordinator: self,
+            enabledTabs: appSettings.enabledTabs,
+            mediaService: mediaService,
+            calendarService: calendarService,
+            claudeService: claudeCodeService
+        )
         let hosting = NSHostingController(rootView: wrapper)
         hosting.view.frame = screen.frame
         hosting.view.wantsLayer = true
@@ -69,6 +93,7 @@ final class NotchCoordinator {
         )
 
         setupEventMonitoring()
+        setupDefocusHandling()
     }
 
     func notchPop() {
@@ -137,6 +162,24 @@ final class NotchCoordinator {
         let location = NSEvent.mouseLocation
         if status == .closed && NSMouseInRect(location, hitboxRect, false) {
             notchPop()
+        }
+    }
+
+    private func setupDefocusHandling() {
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self else { return }
+            guard self.status != .closed else { return }
+            let location = event.locationInWindow
+            let screenPoint = NSEvent.mouseLocation
+            let contentRect = NSRect(
+                x: self.screenFrame.midX - self.contentSize.width / 2,
+                y: self.screenFrame.maxY - self.contentSize.height,
+                width: self.contentSize.width,
+                height: self.contentSize.height
+            )
+            if !NSMouseInRect(screenPoint, contentRect.insetBy(dx: -10, dy: -10), false) {
+                self.notchClose()
+            }
         }
     }
 }

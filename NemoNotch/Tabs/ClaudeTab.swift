@@ -118,7 +118,7 @@ struct ClaudeTab: View {
     }
 }
 
-private struct PulseModifier: ViewModifier {
+struct PulseModifier: ViewModifier {
     let isActive: Bool
 
     func body(content: Content) -> some View {
