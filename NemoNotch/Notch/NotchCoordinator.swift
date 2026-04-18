@@ -76,20 +76,14 @@ final class NotchCoordinator {
 
         self.window = NotchWindow(rect: screen.frame)
 
-        let wrapper = NotchView(
-            coordinator: self,
-            enabledTabs: appSettings.enabledTabs,
-            mediaService: mediaService,
-            calendarService: calendarService,
-            claudeService: claudeCodeService,
-            notificationService: notificationService
-        )
+        let wrapper = NotchView()
+            .environment(self)
+            .environment(appSettings)
             .environment(mediaService)
             .environment(calendarService)
             .environment(claudeCodeService)
             .environment(launcherService)
             .environment(notificationService)
-            .environment(appSettings)
         let hosting = NSHostingController(rootView: AnyView(wrapper))
         hosting.view.frame = screen.frame
         hosting.view.wantsLayer = true

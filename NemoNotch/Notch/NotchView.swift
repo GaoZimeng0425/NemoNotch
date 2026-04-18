@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct NotchView: View {
-    let coordinator: NotchCoordinator
-    let enabledTabs: Set<Tab>
-    let mediaService: MediaService
-    let calendarService: CalendarService
-    let claudeService: ClaudeCodeService
-    let notificationService: NotificationService
+    @Environment(NotchCoordinator.self) var coordinator
+    @Environment(AppSettings.self) var appSettings
+    @Environment(MediaService.self) var mediaService
+    @Environment(CalendarService.self) var calendarService
+    @Environment(ClaudeCodeService.self) var claudeService
+    @Environment(NotificationService.self) var notificationService
+
+    private var enabledTabs: Set<Tab> { appSettings.enabledTabs }
 
     private var screen: NSScreen { NSScreen.main! }
     private var hasNotch: Bool { screen.hasNotch }
