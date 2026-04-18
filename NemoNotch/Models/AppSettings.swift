@@ -21,6 +21,10 @@ final class AppSettings {
         }
     }
 
+    var monitoredApps: [String] {
+        didSet { UserDefaults.standard.set(monitoredApps, forKey: "monitoredApps") }
+    }
+
     init() {
         let storedTab = UserDefaults.standard.string(forKey: "defaultTab").flatMap { Tab(rawValue: $0) }
         self.defaultTab = storedTab ?? .media
@@ -35,6 +39,8 @@ final class AppSettings {
         } else {
             self.launcherApps = Self.defaultApps
         }
+
+        self.monitoredApps = UserDefaults.standard.stringArray(forKey: "monitoredApps") ?? []
     }
 
     private static let defaultApps: [AppItem] = [
