@@ -8,6 +8,7 @@ final class OpenClawService {
     var isInstalled = false
 
     private var webSocketTask: URLSessionWebSocketTask?
+    private var urlSession: URLSession?
     private var reconnectTimer: Timer?
     private var ttlTimer: Timer?
     private let gatewayURL: URL
@@ -63,6 +64,7 @@ final class OpenClawService {
         disconnect()
 
         let session = URLSession(configuration: .default)
+        urlSession = session
         webSocketTask = session.webSocketTask(with: gatewayURL)
         webSocketTask?.resume()
 
