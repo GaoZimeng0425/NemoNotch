@@ -62,13 +62,8 @@ final class OpenClawService {
         guard isInstalled else { return }
         disconnect()
 
-        var request = URLRequest(url: gatewayURL)
-        if let token {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
         let session = URLSession(configuration: .default)
-        webSocketTask = session.webSocketTask(with: request)
+        webSocketTask = session.webSocketTask(with: gatewayURL)
         webSocketTask?.resume()
 
         receiveMessage()
