@@ -43,15 +43,17 @@ enum AgentState: String, Codable {
 struct AgentInfo: Identifiable {
     let id: String
     var name: String
+    var emoji: String
     var state: AgentState
     var currentTool: String?
     var lastMessage: String?
     var workspace: String?
     var lastEventTime: Date
 
-    init(id: String, name: String = "Agent", state: AgentState = .idle) {
+    init(id: String, name: String = "Agent", emoji: String = "🦞", state: AgentState = .idle) {
         self.id = id
         self.name = name
+        self.emoji = emoji
         self.state = state
         self.lastEventTime = Date()
     }

@@ -19,7 +19,7 @@ struct CompactBadge: View {
         case notification(String)  // bundleID
         case media
         case claude(ClaudeStatus, String?, Bool)  // status, currentTool, isPreToolUse
-        case openclaw(AgentState, String?)  // state, currentTool
+        case openclaw(AgentState, String, String)  // state, emoji, name
         case calendar
     }
 
@@ -28,13 +28,13 @@ struct CompactBadge: View {
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             return .notification(top.bundleID)
         }
-        // 2. Claude Code
+        // 2. OpenClaw
+        if let agent = openClawService.activeAgent {
+            return .openclaw(agent.state, agent.emoji, agent.name)
+        }
+        // 3. Claude Code
         if let session = claudeService.activeSession, session.status != .idle {
             return .claude(session.status, session.currentTool, session.isPreToolUse)
-        }
-        // 2.5 OpenClaw
-        if let agent = openClawService.activeAgent {
-            return .openclaw(agent.state, agent.currentTool)
         }
         // 3. Media
         if mediaService.playbackState.isPlaying {
@@ -74,10 +74,9 @@ struct CompactBadge: View {
                         leftMediaIcon
                     case .claude(_, _, _) where side == .left:
                         leftClaudeIcon
-                    case .openclaw(_, _) where side == .left:
-                        Image(systemName: "ladybug")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
+                    case .openclaw where side == .left:
+                        Text("🦞")
+                            .font(.system(size: 11))
                     case .calendar where side == .left:
                         Image(systemName: "calendar")
                             .font(.system(size: 10, weight: .medium))
@@ -85,10 +84,13 @@ struct CompactBadge: View {
                     case .notification where side == .right:
                         Image(systemName: "bell.fill")
                             .modifier(PulseModifier(isActive: true))
+                            .foregroundStyle(.red.opacity(0.9))
                     case .media where side == .right:
                         Image(systemName: "play.fill")
+                            .foregroundStyle(.white.opacity(0.9))
                     case .claude(let status, let tool, let isPre) where side == .right:
                         Image(systemName: ToolStyle.icon(tool))
+                            .foregroundStyle(ToolStyle.color(tool).opacity(0.9))
                             .modifier(PulseModifier(isActive: status == .working))
                             .overlay {
                                 if isPre {
@@ -98,21 +100,19 @@ struct CompactBadge: View {
                                         .modifier(GlowPulseModifier())
                                 }
                             }
-                    case .openclaw(let state, let tool) where side == .right:
-                        Image(systemName: tool != nil ? "wrench.and.screwdriver" : "ladybug")
+                    case .openclaw(let state, let emoji, _) where side == .right:
+                        Text(emoji)
+                            .font(.system(size: 10))
                             .modifier(PulseModifier(isActive: state == .working || state == .toolCalling))
                     case .calendar where side == .right:
                         Image(systemName: "clock.fill")
+                            .foregroundStyle(.white.opacity(0.9))
                     default:
                         EmptyView()
                     }
                 }
-                .foregroundStyle(
-                    badgeColor(badge).opacity(0.9)
-                )
                 .frame(width: side == .left ? 16 : 18, height: side == .left ? 16 : 18)
                 .buttonStyle(.plain)
-                .font(side == .right ? .system(size: 9) : nil)
             }
         }
     }
@@ -175,7 +175,7 @@ struct CompactBadge: View {
         case .notification: return .media  // fallback, won't be called
         case .media: return .media
         case .claude(_, _, _): return .claude
-        case .openclaw(_, _): return .openclaw
+        case .openclaw(_, _, _): return .openclaw
         case .calendar: return .calendar
         }
     }
@@ -185,7 +185,7 @@ struct CompactBadge: View {
         case .notification: return .red
         case .media: return .white
         case .claude(_, let tool, _): return ToolStyle.color(tool)
-        case .openclaw(let state, _): return state == .error ? .red : .orange
+        case .openclaw(let state, _, _): return state == .error ? .red : .orange
         case .calendar: return .white
         }
     }

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 @Observable
@@ -13,6 +14,12 @@ final class OpenClawService {
     private var ttlTimer: Timer?
     private let gatewayURL: URL
     private let token: String?
+    private var pendingConnectId: String?
+    private var agentProfiles: [String: (name: String, emoji: String)] = [:]
+
+    // Ed25519 device identity
+    private let signingKey: Curve25519.Signing.PrivateKey
+    private let deviceId: String
 
     init() {
         let configPath = NSString(string: "~/.openclaw/openclaw.json").expandingTildeInPath
@@ -22,6 +29,9 @@ final class OpenClawService {
             self.gatewayURL = URL(string: "ws://127.0.0.1:18789/gateway-ws")!
             self.token = nil
             self.isInstalled = false
+            // dummy values for init
+            self.signingKey = Curve25519.Signing.PrivateKey()
+            self.deviceId = ""
             return
         }
 
@@ -33,6 +43,92 @@ final class OpenClawService {
         self.token = Self.resolveEnvVar(rawToken)
         self.gatewayURL = URL(string: "ws://127.0.0.1:\(port)/gateway-ws")!
         self.isInstalled = true
+
+        // Load or generate device identity
+        let (key, id) = Self.loadOrCreateDeviceIdentity()
+        self.signingKey = key
+        self.deviceId = id
+
+        // Load agent profiles from config + IDENTITY.md
+        if let agentsConfig = json["agents"] as? [String: Any],
+           let list = agentsConfig["list"] as? [[String: Any]] {
+            for agent in list {
+                let agentId = agent["id"] as? String ?? ""
+                let displayName = agent["name"] as? String ?? agentId
+                let workspace = agent["workspace"] as? String ?? ""
+                let emoji = Self.parseEmojiFromIdentity(workspace: workspace)
+                agentProfiles[agentId] = (name: displayName, emoji: emoji)
+            }
+        }
+
+        print("[OpenClaw] Installed: port=\(port), hasToken=\(token != nil), deviceId=\(id.prefix(8))...")
+    }
+
+    // MARK: - Device Identity
+
+    private static func loadOrCreateDeviceIdentity() -> (Curve25519.Signing.PrivateKey, String) {
+        let keychainKey = "ai.openclaw.nemonotch.device-key"
+
+        // Try to load existing key from Keychain
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainKey,
+            kSecReturnData as String: true,
+        ]
+        var result: AnyObject?
+        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+           let keyData = result as? Data,
+           let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: keyData) {
+            let pubKeyData = key.publicKey.rawRepresentation
+            let fingerprint = SHA256.hash(data: pubKeyData)
+            let deviceId = fingerprint.compactMap { String(format: "%02x", $0) }.joined()
+            return (key, deviceId)
+        }
+
+        // Generate new key
+        let key = Curve25519.Signing.PrivateKey()
+        let pubKeyData = key.publicKey.rawRepresentation
+        let fingerprint = SHA256.hash(data: pubKeyData)
+        let deviceId = fingerprint.compactMap { String(format: "%02x", $0) }.joined()
+
+        // Save to Keychain
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainKey,
+            kSecValueData as String: key.rawRepresentation,
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+
+        return (key, deviceId)
+    }
+
+    private static func parseEmojiFromIdentity(workspace: String) -> String {
+        let identityPath = (workspace as NSString).appendingPathComponent("IDENTITY.md")
+        guard let content = try? String(contentsOfFile: identityPath, encoding: .utf8) else { return "🦞" }
+        for line in content.components(separatedBy: "\n") {
+            guard line.localizedCaseInsensitiveContains("emoji") else { continue }
+            // "- **Emoji:** 🔥" → strip markdown and label, extract emoji
+            let cleaned = line
+                .replacingOccurrences(of: "**", with: "")
+                .replacingOccurrences(of: "Emoji:", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            // Find first emoji character (Unicode scalar with emoji property)
+            for scalar in cleaned.unicodeScalars {
+                if scalar.properties.isEmoji && !scalar.properties.isEmojiPresentation {
+                    continue // skip emoji modifiers
+                }
+                if scalar.properties.isEmojiPresentation || scalar.properties.isEmoji {
+                    return String(scalar)
+                }
+            }
+            // Fallback: first non-whitespace, non-punctuation, non-letter/digit
+            if let ch = cleaned.first(where: { !$0.isWhitespace && !$0.isLetter && !$0.isNumber && $0 != "-" && $0 != "*" }) {
+                return String(ch)
+            }
+        }
+        return "🦞"
     }
 
     // MARK: - Env Var Resolution
@@ -60,12 +156,19 @@ final class OpenClawService {
     // MARK: - Connection
 
     func connect() {
-        guard isInstalled else { return }
+        guard isInstalled else {
+            print("[OpenClaw] Not installed, skipping connect")
+            return
+        }
         disconnect()
 
+        print("[OpenClaw] Connecting to \(gatewayURL)...")
         let session = URLSession(configuration: .default)
         urlSession = session
-        webSocketTask = session.webSocketTask(with: gatewayURL)
+
+        var request = URLRequest(url: gatewayURL)
+        request.setValue("http://127.0.0.1:\(gatewayURL.port ?? 18789)", forHTTPHeaderField: "Origin")
+        webSocketTask = session.webSocketTask(with: request)
         webSocketTask?.resume()
 
         receiveMessage()
@@ -116,18 +219,21 @@ final class OpenClawService {
 
     private func handleEvent(_ json: [String: Any]) {
         let event = json["event"] as? String ?? ""
+        print("[OpenClaw] Event: \(event)")
 
         switch event {
         case "connect.challenge":
             handleChallenge(json)
         case "agent":
             handleAgentEvent(json)
+        case "chat":
+            handleChatEvent(json)
         case "health":
             gatewayOnline = true
         case "heartbeat":
             gatewayOnline = true
         default:
-            break
+            print("[OpenClaw] Unknown event: \(event), keys: \(json.keys)")
         }
     }
 
@@ -137,7 +243,24 @@ final class OpenClawService {
         guard let payload = json["payload"] as? [String: Any],
               let nonce = payload["nonce"] as? String else { return }
 
+        print("[OpenClaw] Challenge received, nonce=\(nonce)")
         let requestId = UUID().uuidString.lowercased()
+        pendingConnectId = requestId
+
+        let signedAt = Int(Date().timeIntervalSince1970 * 1000)
+        let clientId = "openclaw-control-ui"
+        let clientMode = "ui"
+        let role = "operator"
+        let scopes = "operator.admin,operator.read"
+
+        // Sign: v2|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce
+        let signPayload = "v2|\(deviceId)|\(clientId)|\(clientMode)|\(role)|\(scopes)|\(signedAt)|\(token ?? "")|\(nonce)"
+        guard let signData = signPayload.data(using: .utf8) else { return }
+        let signature = try? signingKey.signature(for: signData)
+
+        let pubKeyBase64 = signingKey.publicKey.rawRepresentation.base64EncodedString()
+        let sigBase64 = signature?.base64EncodedString() ?? ""
+
         let connectFrame: [String: Any] = [
             "type": "req",
             "id": requestId,
@@ -145,15 +268,23 @@ final class OpenClawService {
             "params": [
                 "minProtocol": 3,
                 "maxProtocol": 3,
-                "role": "observer",
+                "role": role,
                 "client": [
-                    "id": "nemonotch",
-                    "version": "1.0.0",
+                    "id": clientId,
+                    "version": "0.1.0",
                     "platform": "macos",
-                    "mode": "ui"
+                    "mode": clientMode
                 ],
-                "scopes": ["operator.read"],
-                "auth": ["token": token ?? ""]
+                "caps": ["tool-events"],
+                "scopes": ["operator.admin", "operator.read"],
+                "auth": ["token": token ?? ""],
+                "device": [
+                    "id": deviceId,
+                    "publicKey": pubKeyBase64,
+                    "signature": sigBase64,
+                    "signedAt": signedAt,
+                    "nonce": nonce
+                ]
             ]
         ]
 
@@ -163,43 +294,145 @@ final class OpenClawService {
         webSocketTask?.send(.string(jsonString)) { error in
             if let error {
                 print("[OpenClaw] Auth send error: \(error)")
+            } else {
+                print("[OpenClaw] Auth sent with device identity, waiting for response...")
             }
         }
     }
 
     private func handleResponse(_ json: [String: Any]) {
-        let method = json["method"] as? String ?? ""
-        if method == "connect" {
-            let hasError = json["error"] != nil
-            if hasError {
-                print("[OpenClaw] Auth failed: \(json["error"] ?? "unknown")")
-                scheduleReconnect()
-            } else {
+        let id = json["id"] as? String ?? ""
+        let ok = json["ok"] as? Bool ?? false
+        print("[OpenClaw] Response: id=\(id), ok=\(ok)")
+
+        if id == pendingConnectId {
+            pendingConnectId = nil
+            if ok {
+                print("[OpenClaw] Auth successful!")
                 gatewayOnline = true
                 startTTLTimer()
+                // Parse initial snapshot from hello-ok result
+                if let result = json["result"] as? [String: Any] {
+                    print("[OpenClaw] Snapshot keys: \(result.keys)")
+                    if let agents = result["agents"] as? [[String: Any]] {
+                        print("[OpenClaw] Initial agents: \(agents.count)")
+                        for a in agents { handleAgentEvent(["payload": a]) }
+                    }
+                    if let sessions = result["sessions"] as? [[String: Any]] {
+                        print("[OpenClaw] Initial sessions: \(sessions.count)")
+                        for s in sessions { handleAgentEvent(["payload": s]) }
+                    }
+                }
+            } else {
+                print("[OpenClaw] Auth failed: \(json["error"] ?? "unknown")")
+                scheduleReconnect()
+            }
+        }
+    }
+
+    // MARK: - Chat Events
+
+    private var hasLoggedChatPayload = false
+
+    private func handleChatEvent(_ json: [String: Any]) {
+        let payload = json["payload"] as? [String: Any] ?? [:]
+
+        if !hasLoggedChatPayload {
+            hasLoggedChatPayload = true
+            print("[OpenClaw] Chat payload sample: \(payload)")
+        }
+
+        // Find the agent by sessionKey or sender
+        let sessionKey = payload["sessionKey"] as? String ?? ""
+        let role = payload["role"] as? String ?? ""
+
+        // Extract text content
+        let text: String?
+        if let content = payload["content"] as? String {
+            text = content
+        } else if let parts = payload["content"] as? [[String: Any]] {
+            text = parts.compactMap { $0["text"] as? String }.joined(separator: " ")
+        } else if let delta = payload["delta"] as? String {
+            text = delta
+        } else {
+            text = payload["text"] as? String
+        }
+
+        guard let message = text, !message.isEmpty else { return }
+
+        // Update the matching agent's last message
+        let targetKey = sessionKey.isEmpty ? nil : sessionKey
+        if let key = targetKey, agents[key] != nil {
+            agents[key]?.lastMessage = String(message.prefix(120))
+            agents[key]?.lastEventTime = Date()
+        } else {
+            // Try to match by updating the most recent active agent
+            if let activeKey = agents.filter({ $0.value.state != .idle })
+                .sorted(by: { $0.value.lastEventTime > $1.value.lastEventTime }).first?.key {
+                agents[activeKey]?.lastMessage = String(message.prefix(120))
+                agents[activeKey]?.lastEventTime = Date()
             }
         }
     }
 
     // MARK: - Agent Events
 
+    private var agentPayloadLogCount = 0
+
     private func handleAgentEvent(_ json: [String: Any]) {
         let payload = json["payload"] as? [String: Any] ?? json
-        guard let agentId = payload["agentId"] as? String ?? payload["id"] as? String else { return }
-        let rawState = payload["state"] as? String ?? payload["status"] as? String ?? "idle"
-        let state = AgentState.normalize(rawState)
 
-        let name = payload["name"] as? String ?? payload["agentName"] as? String ?? "Agent \(agentId.prefix(4))"
-        let tool = payload["tool"] as? String ?? payload["toolName"] as? String
-        let message = payload["message"] as? String ?? payload["detail"] as? String
-        let workspace = payload["workspace"] as? String ?? payload["cwd"] as? String
+        if agentPayloadLogCount < 5 {
+            agentPayloadLogCount += 1
+            print("[OpenClaw] Agent payload #\(agentPayloadLogCount): \(payload)")
+        }
+
+        // sessionKey format: "agent:<name>:<session>"
+        guard let sessionKey = payload["sessionKey"] as? String else { return }
+        let parts = sessionKey.split(separator: ":", maxSplits: 2)
+        guard parts.count >= 2 else { return }
+        let agentKey = String(parts[1])
+        let agentId = sessionKey
+
+        // Look up profile (emoji, display name)
+        let profile = agentProfiles[agentKey]
+        let displayName = profile?.name ?? agentKey
+        let emoji = profile?.emoji ?? "🦞"
+
+        let data = payload["data"] as? [String: Any] ?? [:]
+        let stream = payload["stream"] as? String ?? ""
+        let phase = data["phase"] as? String ?? ""
+
+        // Determine state from stream + phase
+        let state: AgentState
+        switch phase {
+        case "start":
+            state = .working
+        case "end", "stop", "done":
+            state = .idle
+        case "error":
+            state = .error
+        case "tool_call", "tool_use":
+            state = .toolCalling
+        case "speaking", "chat":
+            state = .speaking
+        default:
+            if stream == "tool" { state = .toolCalling }
+            else if stream == "chat" || stream == "message" { state = .speaking }
+            else { state = .working }
+        }
+
+        let tool = data["tool"] as? String ?? data["toolName"] as? String
+        let message = data["message"] as? String ?? data["detail"] as? String ?? data["text"] as? String
+        let workspace = data["workspace"] as? String ?? data["cwd"] as? String
 
         if agents[agentId] == nil {
-            agents[agentId] = AgentInfo(id: agentId, name: name, state: state)
+            agents[agentId] = AgentInfo(id: agentId, name: displayName, emoji: emoji, state: state)
         }
 
         agents[agentId]?.state = state
-        agents[agentId]?.name = name
+        agents[agentId]?.name = displayName
+        agents[agentId]?.emoji = emoji
         if let tool { agents[agentId]?.currentTool = tool }
         if let message { agents[agentId]?.lastMessage = message }
         if let workspace { agents[agentId]?.workspace = workspace }

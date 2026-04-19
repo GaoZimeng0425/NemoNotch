@@ -113,10 +113,9 @@ struct OpenClawTab: View {
 
     private func agentRow(_ agent: AgentInfo) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: agent.state.icon)
-                .font(.system(size: 11))
-                .foregroundStyle(stateColor(agent.state))
-                .frame(width: 16)
+            Text(agent.emoji)
+                .font(.system(size: 16))
+                .frame(width: 20)
                 .modifier(PulseModifier(isActive: agent.state == .working || agent.state == .toolCalling))
 
             VStack(alignment: .leading, spacing: 2) {
