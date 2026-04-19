@@ -1,10 +1,16 @@
 import SwiftUI
 
 struct CompactBadge: View {
+    enum Side {
+        case left
+        case right
+    }
+
     @Environment(MediaService.self) var mediaService
     @Environment(CalendarService.self) var calendarService
     @Environment(ClaudeCodeService.self) var claudeService
     @Environment(NotificationService.self) var notificationService
+    let side: Side
     let onTap: (Tab) -> Void
     let onOpenApp: (String) -> Void
 
@@ -46,15 +52,7 @@ struct CompactBadge: View {
         }
     }
 
-
     var body: some View {
-        HStack(spacing: 0) {
-            leftIcon
-            rightIcon
-        }
-    }
-
-    var leftIcon: some View {
         Group {
             if let badge = activeBadge {
                 Button {
@@ -64,78 +62,22 @@ struct CompactBadge: View {
                     }
                 } label: {
                     switch badge {
-                    case .notification(let bundleID):
-                        if let item = notificationService.badges[bundleID] {
-                            ZStack(alignment: .bottomTrailing) {
-                                Image(nsImage: item.icon)
-                                    .resizable()
-                                    .frame(width: 16, height: 16)
-                                if item.count > 0 {
-                                    Text("\(item.count)")
-                                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 3)
-                                        .padding(.vertical, 1)
-                                        .background(.red)
-                                        .clipShape(Capsule())
-                                        .frame(width: 12, height: 12)
-                                } else {
-                                    Circle()
-                                        .fill(.red)
-                                        .frame(width: 8, height: 8)
-                                }
-                            }
-                        }
-                    case .media:
-                        if let data = mediaService.playbackState.artworkData,
-                           let nsImage = NSImage(data: data) {
-                            Image(nsImage: nsImage)
-                                .resizable()
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                        } else {
-                            Image(systemName: "music.note")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                    case .claude(_, _, _):
-                        if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
-                           let nsImage = NSImage(contentsOf: url) {
-                            Image(nsImage: nsImage)
-                                .resizable()
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                        } else {
-                            Image(systemName: "cpu")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                    case .calendar:
+                    case .notification(let bundleID) where side == .left:
+                        leftNotificationIcon(for: bundleID)
+                    case .media where side == .left:
+                        leftMediaIcon
+                    case .claude(_, _, _) where side == .left:
+                        leftClaudeIcon
+                    case .calendar where side == .left:
                         Image(systemName: "calendar")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.white.opacity(0.8))
-                    }
-                }
-                .frame(width: 16, height: 16)
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    var rightIcon: some View {
-        Group {
-            if let badge = activeBadge {
-                Button {
-                    switch badge {
-                    case .notification(let bundleID): onOpenApp(bundleID)
-                    default: onTap(tabFor(badge))
-                    }
-                } label: {
-                    switch badge {
-                    case .notification:
+                    case .notification where side == .right:
                         Image(systemName: "bell.fill")
                             .modifier(PulseModifier(isActive: true))
-                    case .media:
+                    case .media where side == .right:
                         Image(systemName: "play.fill")
-                    case .claude(let status, let tool, let isPre):
+                    case .claude(let status, let tool, let isPre) where side == .right:
                         Image(systemName: ToolStyle.icon(tool))
                             .modifier(PulseModifier(isActive: status == .working))
                             .overlay {
@@ -146,17 +88,72 @@ struct CompactBadge: View {
                                         .modifier(GlowPulseModifier())
                                 }
                             }
-                    case .calendar:
+                    case .calendar where side == .right:
                         Image(systemName: "clock.fill")
+                    default:
+                        EmptyView()
                     }
                 }
-                .font(.system(size: 9))
                 .foregroundStyle(
                     badgeColor(badge).opacity(0.9)
                 )
-                .frame(width: 18, height: 18)
+                .frame(width: side == .left ? 16 : 18, height: side == .left ? 16 : 18)
                 .buttonStyle(.plain)
+                .font(side == .right ? .system(size: 9) : nil)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func leftNotificationIcon(for bundleID: String) -> some View {
+        if let item = notificationService.badges[bundleID] {
+            ZStack(alignment: .bottomTrailing) {
+                Image(nsImage: item.icon)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+                if item.count > 0 {
+                    Text("\(item.count)")
+                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(.red)
+                        .clipShape(Capsule())
+                        .frame(width: 12, height: 12)
+                } else {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 8, height: 8)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var leftMediaIcon: some View {
+        if let data = mediaService.playbackState.artworkData,
+           let nsImage = NSImage(data: data) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        } else {
+            Image(systemName: "music.note")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.8))
+        }
+    }
+
+    @ViewBuilder
+    private var leftClaudeIcon: some View {
+        if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
+           let nsImage = NSImage(contentsOf: url) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        } else {
+            Image(systemName: "cpu")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.8))
         }
     }
 

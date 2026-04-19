@@ -111,23 +111,34 @@ struct NotchView: View {
     }
 
     private var compactBadges: some View {
-        let badge = CompactBadge(
-            onTap: { tab in
-                coordinator.notchOpen(tab: tab)
-            },
-            onOpenApp: { bundleID in
-                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                    let config = NSWorkspace.OpenConfiguration()
-                    NSWorkspace.shared.openApplication(at: url, configuration: config)
-                }
-            }
-        )
         let spread: CGFloat = hasActiveBadge ? NotchConstants.badgeSpread : 0
         return ZStack {
-            badge.leftIcon
+            CompactBadge(
+                side: .left,
+                onTap: { tab in
+                    coordinator.notchOpen(tab: tab)
+                },
+                onOpenApp: { bundleID in
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                        let config = NSWorkspace.OpenConfiguration()
+                        NSWorkspace.shared.openApplication(at: url, configuration: config)
+                    }
+                }
+            )
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
                 .opacity(hasActiveBadge ? 1 : 0)
-            badge.rightIcon
+            CompactBadge(
+                side: .right,
+                onTap: { tab in
+                    coordinator.notchOpen(tab: tab)
+                },
+                onOpenApp: { bundleID in
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                        let config = NSWorkspace.OpenConfiguration()
+                        NSWorkspace.shared.openApplication(at: url, configuration: config)
+                    }
+                }
+            )
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
                 .opacity(hasActiveBadge ? 1 : 0)
         }
