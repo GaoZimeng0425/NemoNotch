@@ -7,6 +7,7 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(ClaudeCodeService.self) var claudeService
     @Environment(NotificationService.self) var notificationService
+    @Environment(OpenClawService.self) var openClawService
 
     private var enabledTabs: Set<Tab> { appSettings.enabledTabs }
 
@@ -22,6 +23,7 @@ struct NotchView: View {
         if !notificationService.badges.isEmpty { return true }
         if mediaService.playbackState.isPlaying { return true }
         if claudeService.activeSession?.status == .working { return true }
+        if openClawService.activeAgent != nil { return true }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
             if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { return true }
@@ -103,6 +105,8 @@ struct NotchView: View {
             CalendarTab()
         case .claude:
             ClaudeTab()
+        case .openclaw:
+            OpenClawTab()
         case .launcher:
             LauncherTab {
                 coordinator.notchClose()

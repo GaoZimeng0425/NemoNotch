@@ -10,6 +10,7 @@ struct CompactBadge: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(ClaudeCodeService.self) var claudeService
     @Environment(NotificationService.self) var notificationService
+    @Environment(OpenClawService.self) var openClawService
     let side: Side
     let onTap: (Tab) -> Void
     let onOpenApp: (String) -> Void
@@ -18,6 +19,7 @@ struct CompactBadge: View {
         case notification(String)  // bundleID
         case media
         case claude(ClaudeStatus, String?, Bool)  // status, currentTool, isPreToolUse
+        case openclaw(AgentState, String?)  // state, currentTool
         case calendar
     }
 
@@ -29,6 +31,10 @@ struct CompactBadge: View {
         // 2. Claude Code
         if let session = claudeService.activeSession, session.status != .idle {
             return .claude(session.status, session.currentTool, session.isPreToolUse)
+        }
+        // 2.5 OpenClaw
+        if let agent = openClawService.activeAgent {
+            return .openclaw(agent.state, agent.currentTool)
         }
         // 3. Media
         if mediaService.playbackState.isPlaying {
@@ -68,6 +74,10 @@ struct CompactBadge: View {
                         leftMediaIcon
                     case .claude(_, _, _) where side == .left:
                         leftClaudeIcon
+                    case .openclaw(_, _) where side == .left:
+                        Image(systemName: "ladybug")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
                     case .calendar where side == .left:
                         Image(systemName: "calendar")
                             .font(.system(size: 10, weight: .medium))
@@ -88,6 +98,9 @@ struct CompactBadge: View {
                                         .modifier(GlowPulseModifier())
                                 }
                             }
+                    case .openclaw(let state, let tool) where side == .right:
+                        Image(systemName: tool != nil ? "wrench.and.screwdriver" : "ladybug")
+                            .modifier(PulseModifier(isActive: state == .working || state == .toolCalling))
                     case .calendar where side == .right:
                         Image(systemName: "clock.fill")
                     default:
@@ -162,6 +175,7 @@ struct CompactBadge: View {
         case .notification: return .media  // fallback, won't be called
         case .media: return .media
         case .claude(_, _, _): return .claude
+        case .openclaw(_, _): return .openclaw
         case .calendar: return .calendar
         }
     }
@@ -171,6 +185,7 @@ struct CompactBadge: View {
         case .notification: return .red
         case .media: return .white
         case .claude(_, let tool, _): return ToolStyle.color(tool)
+        case .openclaw(let state, _): return state == .error ? .red : .orange
         case .calendar: return .white
         }
     }

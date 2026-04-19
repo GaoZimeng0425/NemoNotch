@@ -73,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var mediaService: MediaService?
     private var calendarService: CalendarService?
     private(set) var claudeCodeService: ClaudeCodeService?
+    private var openClawService: OpenClawService?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
     private var hotkeyService: HotkeyService?
@@ -88,6 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let launcher = LauncherService(settings: settings)
 
         claude.startServer()
+
+        let openClaw = OpenClawService()
+        openClaw.connect()
+        self.openClawService = openClaw
 
         self.appSettings = settings
         self.mediaService = media
@@ -106,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(media)
                     .environment(calendar)
                     .environment(claude)
+                    .environment(openClaw)
                     .environment(launcher)
                     .environment(notification)
             )
@@ -113,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         notchCoordinator.autoSelectTab = { [weak self] in
             guard let self else { return nil }
             if self.claudeCodeService?.activeSession?.status == .working { return .claude }
+            if self.openClawService?.activeAgent != nil { return .openclaw }
             if self.mediaService?.playbackState.isPlaying == true { return .media }
             return nil
         }
