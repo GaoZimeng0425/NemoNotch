@@ -24,21 +24,21 @@ struct CompactBadge: View {
     }
 
     private var activeBadge: BadgeInfo? {
-        // 1. Notification (highest priority)
+        // 1. Notification (needs attention)
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             return .notification(top.bundleID)
         }
-        // 2. Media
-        if mediaService.playbackState.isPlaying {
-            return .media
-        }
-        // 3. OpenClaw
+        // 2. Active work (OpenClaw agent running)
         if let agent = openClawService.activeAgent {
             return .openclaw(agent.state, agent.emoji, agent.name)
         }
-        // 4. Claude Code
+        // 3. Active work (Claude session running)
         if let session = claudeService.activeSession, session.status != .idle {
             return .claude(session.status, session.currentTool, session.isPreToolUse)
+        }
+        // 4. Passive states
+        if mediaService.playbackState.isPlaying {
+            return .media
         }
         // 5. Calendar
         if let next = calendarService.nextEvent, !next.isPast {
