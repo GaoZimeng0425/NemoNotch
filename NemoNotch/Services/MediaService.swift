@@ -6,6 +6,8 @@ final class MediaService {
     var playbackState = PlaybackState()
 
     private var pollTimer: Timer?
+    private var isUpdatingNowPlaying = false
+    private var needsFollowupUpdate = false
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
 
@@ -62,33 +64,46 @@ final class MediaService {
     }
 
     private func updateNowPlaying() {
+        if isUpdatingNowPlaying {
+            // Coalesce bursts from poll timer + distributed notifications.
+            needsFollowupUpdate = true
+            debugLog("update coalesced while in-flight")
+            return
+        }
+
+        isUpdatingNowPlaying = true
+        debugLog("update started")
         nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
             guard let self else { return }
+            let finish: () -> Void = {
+                self.isUpdatingNowPlaying = false
+                if self.needsFollowupUpdate {
+                    self.needsFollowupUpdate = false
+                    self.debugLog("running queued follow-up update")
+                    self.updateNowPlaying()
+                }
+            }
+
             if let cliInfo {
+                self.debugLog("applied source=cli")
                 self.applyInfo(cliInfo)
+                finish()
                 return
             }
 
-            // No media from CLI — if already idle, skip MediaRemote to avoid
-            // "Could not find the specified now playing client" console spam.
-            guard !self.playbackState.isEmpty else { return }
-
-            self.remote.getNowPlayingInfo { [weak self] info in
+            self.remote.getNowPlayingInfoWithFallback { [weak self] info in
                 guard let self else { return }
+                self.debugLog("applied source=mediaremote-fallback")
                 self.applyInfo(info)
+                finish()
             }
         }
-    }
-
-    private static func isInfoEmptyMetadata(_ info: [String: Any]) -> Bool {
-        let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
-        let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
-        return title.isEmpty && artist.isEmpty
     }
 
     private func applyInfo(_ info: [String: Any]?) {
         guard let info, !info.isEmpty else {
             if !playbackState.isEmpty {
+                debugLog("cleared playback state (empty info)")
                 playbackState = PlaybackState()
             }
             return
@@ -112,6 +127,7 @@ final class MediaService {
 
         if title.isEmpty && artist.isEmpty {
             if !playbackState.isEmpty {
+                debugLog("cleared playback state (empty metadata)")
                 playbackState = PlaybackState()
             }
             return
@@ -126,5 +142,12 @@ final class MediaService {
             isPlaying: isPlaying,
             artworkData: artworkData
         )
+        debugLog("state updated title='\(title)' artist='\(artist)' playing=\(isPlaying)")
+    }
+
+    private func debugLog(_ message: String) {
+        #if DEBUG
+        print("[NemoNotch][Media][Service] \(message)")
+        #endif
     }
 }

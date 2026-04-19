@@ -17,6 +17,8 @@ final class MediaRemote {
     private typealias SendCommandFn = @convention(c) (Int, [AnyHashable: Any]?) -> Bool
     private typealias RegisterFn = @convention(c) (DispatchQueue) -> Void
     private typealias SetCanBeNowPlayingFn = @convention(c) (Bool) -> Void
+    private static let initialDelayMs = 150
+    private static let hardTimeoutMs = 3500
 
     private let getNowPlayingInfoFn: GetNowPlayingInfoFn?
     private let sendCommandFn: SendCommandFn?
@@ -64,15 +66,61 @@ final class MediaRemote {
         }
     }
 
+    /// Follows nowplaying-cli's runtime strategy:
+    /// 1) wait briefly for daemon connection after notification registration
+    /// 2) query legacy callback API
+    /// 3) if empty, fallback to MRNowPlayingController API
+    /// 4) enforce hard timeout to avoid hanging the caller
+    func getNowPlayingInfoWithFallback(completion: @escaping ([String: Any]?) -> Void) {
+        Self.debugLog("start fallback query")
+        var finished = false
+        let finish: ([String: Any]?) -> Void = { info in
+            guard !finished else { return }
+            finished = true
+            completion(info)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.hardTimeoutMs)) {
+            Self.debugLog("source=mediaremote timeout")
+            finish(nil)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.initialDelayMs)) { [weak self] in
+            guard let self else {
+                finish(nil)
+                return
+            }
+            self.getNowPlayingInfo { [weak self] info in
+                guard let self else {
+                    finish(nil)
+                    return
+                }
+                if let info, Self.hasMetadata(info) {
+                    Self.debugLog("source=mediaremote/old-api success")
+                    finish(info)
+                    return
+                }
+                Self.debugLog("source=mediaremote/old-api empty, fallback new-controller")
+                self.queryViaNewControllerAPI { info in
+                    if info != nil {
+                        Self.debugLog("source=mediaremote/new-controller success")
+                    } else {
+                        Self.debugLog("source=mediaremote/new-controller empty")
+                    }
+                    finish(info)
+                }
+            }
+        }
+    }
+
     @discardableResult
     func sendCommand(_ command: Command) -> Bool {
         guard let fn = sendCommandFn else { return false }
         return fn(command.rawValue, nil)
     }
 
-    // MARK: - macOS 15.4+ fallback via MRNowPlayingController
+    // MARK: - macOS 15.4+ via MRNowPlayingController
 
-    private var controller: NSObject?
     private var pollTimer: DispatchSourceTimer?
 
     func queryViaNewControllerAPI(completion: @escaping ([String: Any]?) -> Void) {
@@ -83,62 +131,51 @@ final class MediaRemote {
             return
         }
 
-        if controller == nil {
-            let destSel = NSSelectorFromString("userSelectedDestination")
-            guard destClass.responds(to: destSel),
-                  let dest = destClass.perform(destSel)?.takeUnretainedValue() else {
-                completion(nil)
-                return
-            }
-
-            // class_createInstance creates an uninitialized instance; we then call
-            // the designated init via perform(_:with:) (mirrors ObjC `[[Cls alloc] initWithX:y]`).
-            guard let configInstance = class_createInstance(configClass, 0) as? NSObject else {
-                completion(nil)
-                return
-            }
-            let initConfigSel = NSSelectorFromString("initWithDestination:")
-            guard let configObj = configInstance.perform(initConfigSel, with: dest)?.takeUnretainedValue() as? NSObject else {
-                completion(nil)
-                return
-            }
-            configObj.setValue(false, forKey: "singleShot")
-            configObj.setValue(true, forKey: "requestPlaybackState")
-            configObj.setValue(true, forKey: "requestPlaybackQueue")
-
-            guard let controllerInstance = class_createInstance(controllerClass, 0) as? NSObject else {
-                completion(nil)
-                return
-            }
-            let initCtlSel = NSSelectorFromString("initWithConfiguration:")
-            guard let ctl = controllerInstance.perform(initCtlSel, with: configObj)?.takeUnretainedValue() as? NSObject else {
-                completion(nil)
-                return
-            }
-            ctl.perform(NSSelectorFromString("beginLoadingUpdates"))
-            self.controller = ctl
-        }
-
-        guard let controller = self.controller else {
+        let destSel = NSSelectorFromString("userSelectedDestination")
+        guard destClass.responds(to: destSel),
+              let dest = destClass.perform(destSel)?.takeUnretainedValue() else {
             completion(nil)
             return
         }
 
-        // Poll the controller's `response` property briefly; the daemon updates
-        // it asynchronously after the load begins.
+        guard let configInstance = class_createInstance(configClass, 0) as? NSObject else {
+            completion(nil)
+            return
+        }
+        let initConfigSel = NSSelectorFromString("initWithDestination:")
+        guard let configObj = configInstance.perform(initConfigSel, with: dest)?.takeUnretainedValue() as? NSObject else {
+            completion(nil)
+            return
+        }
+        configObj.setValue(false, forKey: "singleShot")
+        configObj.setValue(true, forKey: "requestPlaybackState")
+        configObj.setValue(true, forKey: "requestPlaybackQueue")
+
+        guard let controllerInstance = class_createInstance(controllerClass, 0) as? NSObject else {
+            completion(nil)
+            return
+        }
+        let initCtlSel = NSSelectorFromString("initWithConfiguration:")
+        guard let ctl = controllerInstance.perform(initCtlSel, with: configObj)?.takeUnretainedValue() as? NSObject else {
+            completion(nil)
+            return
+        }
+        ctl.perform(NSSelectorFromString("beginLoadingUpdates"))
+
         pollTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         var pollCount = 0
-        let maxPolls = 8 // ~800ms total
+        let maxPolls = 25
         timer.schedule(deadline: .now(), repeating: .milliseconds(100))
         timer.setEventHandler { [weak self] in
             pollCount += 1
-            let response = controller.value(forKey: "response") as? NSObject
+            let response = ctl.value(forKey: "response") as? NSObject
             let info = MediaRemote.buildInfoDict(from: response)
             let hasData = info != nil && !(info?.isEmpty ?? true)
             if hasData || pollCount >= maxPolls {
                 timer.cancel()
                 self?.pollTimer = nil
+                ctl.perform(NSSelectorFromString("endLoadingUpdates"))
                 completion(info)
             }
         }
@@ -207,5 +244,17 @@ final class MediaRemote {
         }
 
         return info.isEmpty ? nil : info
+    }
+
+    private static func hasMetadata(_ info: [String: Any]) -> Bool {
+        let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
+        let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
+        return !(title.isEmpty && artist.isEmpty)
+    }
+
+    private static func debugLog(_ message: String) {
+        #if DEBUG
+        print("[NemoNotch][Media][MediaRemote] \(message)")
+        #endif
     }
 }
