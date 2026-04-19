@@ -97,7 +97,7 @@ struct ClaudeTab: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(projectName(session))
+                    Text(session.displayTitle)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -111,7 +111,12 @@ struct ClaudeTab: View {
                             .lineLimit(1)
                     }
                 }
-                if let msg = session.lastMessage, !msg.isEmpty {
+                if let msg = session.lastUserMessage, !msg.isEmpty {
+                    Text(msg)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(2)
+                } else if let msg = session.lastMessage, !msg.isEmpty {
                     Text(msg)
                         .font(.system(size: 10))
                         .foregroundStyle(.white.opacity(0.5))
@@ -168,11 +173,6 @@ struct ClaudeTab: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
-    }
-
-    private func projectName(_ session: ClaudeState) -> String {
-        if let folder = session.projectFolder { return folder }
-        return "Session \(session.id.prefix(8))"
     }
 
     private func durationLabel(_ session: ClaudeState) -> String {

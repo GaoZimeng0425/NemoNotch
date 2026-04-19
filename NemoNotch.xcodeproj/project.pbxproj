@@ -276,6 +276,11 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/NemoNotch",
+					"$(PROJECT_DIR)/NemoNotch/Resources",
+				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.BrightnessApp.NemoNotch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -325,6 +330,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/NemoNotch",
+					"$(PROJECT_DIR)/NemoNotch/Resources",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.BrightnessApp.NemoNotch;

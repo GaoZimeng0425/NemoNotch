@@ -61,6 +61,7 @@ final class NotchCoordinator {
         passThrough.layer?.backgroundColor = .clear
         passThrough.addSubview(hosting.view)
         window.contentView = passThrough
+        window.ignoresMouseEvents = true
         window.orderFrontRegardless()
 
         NotificationCenter.default.addObserver(
@@ -85,12 +86,22 @@ final class NotchCoordinator {
         withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
             status = .opened
         }
+        let openedSize = NSSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
+        let location = NSEvent.mouseLocation
+        let contentRect = NSRect(
+            x: screenFrame.midX - openedSize.width / 2,
+            y: screenFrame.maxY - openedSize.height,
+            width: openedSize.width,
+            height: openedSize.height
+        )
+        window.ignoresMouseEvents = !NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false)
     }
 
     func notchClose() {
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
         }
+        window.ignoresMouseEvents = true
         if window.isKeyWindow {
             window.resignKey()
         }
@@ -140,6 +151,7 @@ final class NotchCoordinator {
 
         switch status {
         case .closed:
+            window.ignoresMouseEvents = !isInHitbox
             if isInHitbox { notchOpen() }
         case .opened:
             let contentRect = NSRect(
@@ -148,7 +160,9 @@ final class NotchCoordinator {
                 width: contentSize.width,
                 height: contentSize.height
             )
-            if !NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false) {
+            let isInContent = NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false)
+            window.ignoresMouseEvents = !isInContent
+            if !isInContent {
                 notchClose()
             }
         }
@@ -166,7 +180,9 @@ final class NotchCoordinator {
                 width: contentSize.width,
                 height: contentSize.height
             )
-            if !NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false) {
+            let isInContent = NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false)
+            window.ignoresMouseEvents = !isInContent
+            if !isInContent {
                 notchClose()
             }
         }

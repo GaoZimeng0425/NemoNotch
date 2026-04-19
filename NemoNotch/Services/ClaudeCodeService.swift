@@ -77,12 +77,14 @@ final class ClaudeCodeService {
         case "SessionStart":
             sessions[sessionId] = ClaudeState(sessionId: sessionId)
             updateContext()
+            loadTranscriptMessages(for: sessionId)
 
         case "UserPromptSubmit":
             ensureSession()
             sessions[sessionId]?.status = .working
             updateContext()
             sessions[sessionId]?.lastEventTime = now
+            loadTranscriptMessages(for: sessionId)
 
         case "PreToolUse":
             ensureSession()
@@ -147,5 +149,73 @@ final class ClaudeCodeService {
             }
         }
         updateActiveSession()
+    }
+
+    // MARK: - Transcript Reading
+
+    private func loadTranscriptMessages(for sessionId: String) {
+        guard let cwd = sessions[sessionId]?.cwd else { return }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let messages = Self.parseTranscriptMessages(sessionId: sessionId, cwd: cwd)
+            guard let self, let messages, !messages.firstUser.isEmpty || !messages.lastUser.isEmpty else { return }
+            DispatchQueue.main.async {
+                guard self.sessions[sessionId] != nil else { return }
+                if !messages.firstUser.isEmpty {
+                    self.sessions[sessionId]?.firstUserMessage = messages.firstUser
+                }
+                if !messages.lastUser.isEmpty {
+                    self.sessions[sessionId]?.lastUserMessage = messages.lastUser
+                }
+            }
+        }
+    }
+
+    private static func claudeProjectsDir(for cwd: String) -> String {
+        let encoded = "-" + cwd.trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(of: "/", with: "-")
+        return NSString(string: "~/.claude/projects/\(encoded)").expandingTildeInPath
+    }
+
+    private struct TranscriptMessages {
+        var firstUser: String = ""
+        var lastUser: String = ""
+    }
+
+    private static func parseTranscriptMessages(sessionId: String, cwd: String) -> TranscriptMessages? {
+        let dir = claudeProjectsDir(for: cwd)
+        let path = "\(dir)/\(sessionId).jsonl"
+        guard let data = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+
+        var result = TranscriptMessages()
+        var foundFirst = false
+
+        for line in data.components(separatedBy: "\n") {
+            guard !line.isEmpty, let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
+            guard obj["type"] as? String == "user", let message = obj["message"] as? [String: Any] else { continue }
+
+            let text = extractText(from: message)
+            guard !text.isEmpty else { continue }
+
+            if !foundFirst {
+                result.firstUser = String(text.prefix(80))
+                foundFirst = true
+            }
+            result.lastUser = String(text.prefix(80))
+        }
+        return result
+    }
+
+    private static func extractText(from message: [String: Any]) -> String {
+        guard let content = message["content"] else { return "" }
+        if let str = content as? String {
+            return str
+        }
+        if let array = content as? [[String: Any]] {
+            for item in array {
+                if item["type"] as? String == "text", let text = item["text"] as? String {
+                    return text
+                }
+            }
+        }
+        return ""
     }
 }
