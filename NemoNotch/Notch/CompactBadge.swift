@@ -28,19 +28,19 @@ struct CompactBadge: View {
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             return .notification(top.bundleID)
         }
-        // 2. OpenClaw
-        if let agent = openClawService.activeAgent {
-            return .openclaw(agent.state, agent.emoji, agent.name)
-        }
-        // 3. Claude Code
-        if let session = claudeService.activeSession, session.status != .idle {
-            return .claude(session.status, session.currentTool, session.isPreToolUse)
-        }
-        // 3. Media
+        // 2. Media
         if mediaService.playbackState.isPlaying {
             return .media
         }
-        // 4. Calendar
+        // 3. OpenClaw
+        if let agent = openClawService.activeAgent {
+            return .openclaw(agent.state, agent.emoji, agent.name)
+        }
+        // 4. Claude Code
+        if let session = claudeService.activeSession, session.status != .idle {
+            return .claude(session.status, session.currentTool, session.isPreToolUse)
+        }
+        // 5. Calendar
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
             if minutes >= 0, minutes < 60 {
