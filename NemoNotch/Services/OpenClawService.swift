@@ -18,7 +18,7 @@ final class OpenClawService {
 
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: configPath)),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            self.gatewayURL = URL(string: "ws://localhost:18789/gateway-ws")!
+            self.gatewayURL = URL(string: "ws://127.0.0.1:18789/gateway-ws")!
             self.token = nil
             self.isInstalled = false
             return
@@ -30,7 +30,7 @@ final class OpenClawService {
         let port = gateway?["port"] as? Int ?? 18789
 
         self.token = Self.resolveEnvVar(rawToken)
-        self.gatewayURL = URL(string: "ws://localhost:\(port)/gateway-ws")!
+        self.gatewayURL = URL(string: "ws://127.0.0.1:\(port)/gateway-ws")!
         self.isInstalled = true
     }
 
@@ -72,7 +72,6 @@ final class OpenClawService {
         webSocketTask?.resume()
 
         receiveMessage()
-        startTTLTimer()
     }
 
     func disconnect() {
@@ -180,6 +179,7 @@ final class OpenClawService {
                 scheduleReconnect()
             } else {
                 gatewayOnline = true
+                startTTLTimer()
             }
         }
     }
