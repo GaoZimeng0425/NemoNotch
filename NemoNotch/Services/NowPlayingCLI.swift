@@ -8,6 +8,7 @@ final class NowPlayingCLI {
         "duration": "kMRMediaRemoteNowPlayingInfoDuration",
         "elapsedTime": "kMRMediaRemoteNowPlayingInfoElapsedTime",
         "playbackRate": "kMRMediaRemoteNowPlayingInfoPlaybackRate",
+        "timestamp": "kMRMediaRemoteNowPlayingInfoTimestamp",
         "artworkData": "kMRMediaRemoteNowPlayingInfoArtworkData",
     ]
 
@@ -353,6 +354,12 @@ final class NowPlayingCLI {
                 mediaInfo[mediaKey] = data
                 continue
             }
+            if cliKey == "timestamp" {
+                if let date = parseTimestamp(value) {
+                    mediaInfo[mediaKey] = date
+                }
+                continue
+            }
             mediaInfo[mediaKey] = value
         }
 
@@ -370,4 +377,37 @@ final class NowPlayingCLI {
         print("[NemoNotch][Media][NowPlayingCLI] \(message)")
         #endif
     }
+
+    private static func parseTimestamp(_ value: Any) -> Date? {
+        if let seconds = value as? TimeInterval {
+            return Date(timeIntervalSince1970: seconds)
+        }
+        if let number = value as? NSNumber {
+            return Date(timeIntervalSince1970: number.doubleValue)
+        }
+        guard let text = value as? String, !text.isEmpty else { return nil }
+
+        // nowplaying-cli helper emits ISO-8601 strings.
+        if let date = ISO8601DateFormatter.full.date(from: text) {
+            return date
+        }
+        if let date = ISO8601DateFormatter.simple.date(from: text) {
+            return date
+        }
+        return nil
+    }
+}
+
+private extension ISO8601DateFormatter {
+    static let full: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static let simple: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 }

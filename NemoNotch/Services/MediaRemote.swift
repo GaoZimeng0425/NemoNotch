@@ -14,6 +14,7 @@ final class MediaRemote {
     }
 
     private typealias GetNowPlayingInfoFn = @convention(c) (DispatchQueue, @escaping ([String: Any]) -> Void) -> Void
+    private typealias GetNowPlayingApplicationPIDFn = @convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void
     private typealias SendCommandFn = @convention(c) (Int, [AnyHashable: Any]?) -> Bool
     private typealias RegisterFn = @convention(c) (DispatchQueue) -> Void
     private typealias SetCanBeNowPlayingFn = @convention(c) (Bool) -> Void
@@ -21,6 +22,7 @@ final class MediaRemote {
     private static let hardTimeoutMs = 3500
 
     private let getNowPlayingInfoFn: GetNowPlayingInfoFn?
+    private let getNowPlayingApplicationPIDFn: GetNowPlayingApplicationPIDFn?
     private let sendCommandFn: SendCommandFn?
     private let registerFn: RegisterFn?
     private let setCanBeNowPlayingFn: SetCanBeNowPlayingFn?
@@ -43,6 +45,7 @@ final class MediaRemote {
         }
 
         self.getNowPlayingInfoFn = loadFn("MRMediaRemoteGetNowPlayingInfo", as: GetNowPlayingInfoFn.self)
+        self.getNowPlayingApplicationPIDFn = loadFn("MRMediaRemoteGetNowPlayingApplicationPID", as: GetNowPlayingApplicationPIDFn.self)
         self.sendCommandFn = loadFn("MRMediaRemoteSendCommand", as: SendCommandFn.self)
         self.registerFn = loadFn("MRMediaRemoteRegisterForNowPlayingNotifications", as: RegisterFn.self)
         self.setCanBeNowPlayingFn = loadFn("MRMediaRemoteSetCanBeNowPlayingApplication", as: SetCanBeNowPlayingFn.self)
@@ -63,6 +66,16 @@ final class MediaRemote {
         }
         fn(.main) { info in
             completion(info)
+        }
+    }
+
+    func getNowPlayingApplicationPID(completion: @escaping (Int32?) -> Void) {
+        guard let fn = getNowPlayingApplicationPIDFn else {
+            completion(nil)
+            return
+        }
+        fn(.main) { pid in
+            completion(pid)
         }
     }
 
@@ -101,13 +114,26 @@ final class MediaRemote {
                     return
                 }
                 Self.debugLog("source=mediaremote/old-api empty, fallback new-controller")
-                self.queryViaNewControllerAPI { info in
-                    if info != nil {
-                        Self.debugLog("source=mediaremote/new-controller success")
-                    } else {
-                        Self.debugLog("source=mediaremote/new-controller empty")
+                self.getNowPlayingApplicationPID { [weak self] pid in
+                    guard let self else {
+                        finish(nil)
+                        return
                     }
-                    finish(info)
+                    let resolvedPID = Int32(pid ?? 0)
+                    guard resolvedPID > 0 else {
+                        Self.debugLog("source=mediaremote skip new-controller (no active client)")
+                        finish(nil)
+                        return
+                    }
+
+                    self.queryViaNewControllerAPI { info in
+                        if info != nil {
+                            Self.debugLog("source=mediaremote/new-controller success")
+                        } else {
+                            Self.debugLog("source=mediaremote/new-controller empty")
+                        }
+                        finish(info)
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ final class MediaService {
     var playbackState = PlaybackState()
 
     private var pollTimer: Timer?
+    private var progressTimer: Timer?
     private var isUpdatingNowPlaying = false
     private var needsFollowupUpdate = false
     private let remote = MediaRemote.shared
@@ -16,6 +17,7 @@ final class MediaService {
         remote.setCanBeNowPlayingApplication(false)
         setupNotifications()
         startPolling()
+        startProgressTick()
         updateNowPlaying()
     }
 
@@ -36,6 +38,7 @@ final class MediaService {
 
     deinit {
         pollTimer?.invalidate()
+        progressTimer?.invalidate()
     }
 
     private func setupNotifications() {
@@ -60,6 +63,20 @@ final class MediaService {
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             self?.updateNowPlaying()
+        }
+    }
+
+    private func startProgressTick() {
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            guard self.playbackState.isPlaying else { return }
+            guard self.playbackState.duration > 0 else { return }
+            guard !self.playbackState.isEmpty else { return }
+
+            let nextPosition = min(self.playbackState.duration, self.playbackState.position + 0.5)
+            if nextPosition > self.playbackState.position {
+                self.playbackState.position = nextPosition
+            }
         }
     }
 
@@ -90,13 +107,10 @@ final class MediaService {
                 finish()
                 return
             }
-
-            self.remote.getNowPlayingInfoWithFallback { [weak self] info in
-                guard let self else { return }
-                self.debugLog("applied source=mediaremote-fallback")
-                self.applyInfo(info)
-                finish()
-            }
+            // Metadata is sourced from bundled CLI helper; MediaRemote metadata
+            // fallback can emit noisy "now playing client" warnings on some systems.
+            self.debugLog("cli returned no info; skip mediaremote metadata fallback")
+            finish()
         }
     }
 
