@@ -120,10 +120,6 @@ struct NotchView: View {
         }
         .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
         .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
-        .clipShape(.rect(
-            bottomLeadingRadius: notchCornerRadius,
-            bottomTrailingRadius: notchCornerRadius
-        ))
     }
 
     private var swipeableContent: some View {
@@ -137,6 +133,7 @@ struct NotchView: View {
             tabContent
         }
         .id(coordinator.selectedTab)
+        .clipped()
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .trailing)),
             removal: .opacity.combined(with: .move(edge: .leading))
