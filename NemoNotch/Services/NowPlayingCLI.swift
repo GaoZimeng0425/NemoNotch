@@ -299,11 +299,22 @@ final class NowPlayingCLI {
         process.standardOutput = stdout
         process.standardError = stderr
 
+        var stdoutData = Data()
+        var stderrData = Data()
+        stdout.fileHandleForReading.readabilityHandler = { handle in
+            stdoutData.append(handle.availableData)
+        }
+        stderr.fileHandleForReading.readabilityHandler = { handle in
+            stderrData.append(handle.availableData)
+        }
+
         let semaphore = DispatchSemaphore(value: 0)
 
         do {
             try process.run()
         } catch {
+            stdout.fileHandleForReading.readabilityHandler = nil
+            stderr.fileHandleForReading.readabilityHandler = nil
             LogService.error("\(sourceTag) failed to run: \(error.localizedDescription)", category: "NowPlayingCLI")
             return nil
         }
@@ -315,6 +326,9 @@ final class NowPlayingCLI {
 
         let timeout = processTimeoutSeconds
         let waitResult = semaphore.wait(timeout: .now() + timeout)
+        stdout.fileHandleForReading.readabilityHandler = nil
+        stderr.fileHandleForReading.readabilityHandler = nil
+
         if waitResult == .timedOut {
             LogService.error("\(sourceTag) timed out after \(timeout)s", category: "NowPlayingCLI")
             process.terminate()
@@ -322,7 +336,6 @@ final class NowPlayingCLI {
             return nil
         }
 
-        let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
         if process.terminationStatus != 0 {
             if let stderrText = String(data: stderrData, encoding: .utf8), !stderrText.isEmpty {
                 LogService.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
@@ -332,7 +345,7 @@ final class NowPlayingCLI {
             return nil
         }
 
-        return stdout.fileHandleForReading.readDataToEndOfFile()
+        return stdoutData
     }
 
     private static func convertToMediaInfo(_ jsonObject: Any) -> [String: Any]? {

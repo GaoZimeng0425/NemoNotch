@@ -230,7 +230,7 @@ final class OpenClawService {
             handleChatEvent(json)
         case "health":
             gatewayOnline = true
-        case "heartbeat":
+        case "heartbeat", "tick":
             gatewayOnline = true
         default:
             LogService.warn("Unknown event: \(event), keys: \(json.keys)", category: "OpenClaw")
