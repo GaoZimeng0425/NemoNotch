@@ -32,8 +32,8 @@ struct NotchBackgroundView: View {
                 height: notchSize.height
             )
             .shadow(
-                color: .black.opacity(showShadow ? 0.6 : 0),
-                radius: 8
+                color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
+                radius: NotchConstants.openedShadowRadius
             )
     }
 

@@ -22,6 +22,7 @@ struct NotchView: View {
     @State private var shownHasActiveBadge: Bool = false
     @State private var hideBadgeTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
+    @State private var contentOpacity: Double = 1
 
     private var hasActiveBadge: Bool {
         if !notificationService.badges.isEmpty { return true }
@@ -60,14 +61,16 @@ struct NotchView: View {
             if coordinator.status == .closed {
                 compactBadges
                     .zIndex(1)
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .scale(scale: 0.5)))
             }
 
             if coordinator.status == .opened {
                 openedContent
                     .zIndex(1)
-                    .transition(.scale.combined(with: .opacity).combined(with: .offset(y: -NotchConstants.openTransitionOffset)))
+                    .opacity(contentOpacity)
+                    .transition(.opacity)
                     .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration).delay(NotchConstants.openContentDelay), value: coordinator.status)
+                    .onAppear { contentOpacity = 1 }
             }
         }
         .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
@@ -125,6 +128,10 @@ struct NotchView: View {
 
         return tabContent
             .id(coordinator.selectedTab)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                removal: .opacity.combined(with: .move(edge: .leading))
+            ))
             .offset(x: dragOffset)
             .gesture(
                 DragGesture(minimumDistance: 30)

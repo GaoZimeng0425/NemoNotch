@@ -27,6 +27,13 @@ enum NotchConstants {
     static let badgeSpringDuration: Double = 0.35
     static let badgeSpringBounce: Double = 0.15
 
+    // Close animation
+    static let closeContentFadeDuration: Double = 0.1
+
+    // Shadow
+    static let openedShadowRadius: CGFloat = 12
+    static let openedShadowOpacity: CGFloat = 0.4
+
     // Hook server
     static let hookBasePort: UInt16 = 49200
     static let hookMaxPortAttempts: UInt16 = 10
