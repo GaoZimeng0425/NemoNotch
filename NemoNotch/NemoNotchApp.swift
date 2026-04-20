@@ -129,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if self.mediaService?.playbackState.isPlaying == true { return .media }
             return nil
         }
+        notchCoordinator.appSettings = settings
         self.coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator, settings: settings)

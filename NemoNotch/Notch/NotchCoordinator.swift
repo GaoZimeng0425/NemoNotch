@@ -9,7 +9,10 @@ final class NotchCoordinator {
 
     var status: Status = .closed
     var selectedTab: Tab = .media
+    private var isContextMenuVisible = false
+    private var contextMenuDelegate: ContextMenuDelegate?
     var autoSelectTab: (() -> Tab?)?
+    var appSettings: AppSettings?
 
     let window: NotchWindow
     private var hostingController: NSHostingController<AnyView>?
@@ -123,6 +126,24 @@ final class NotchCoordinator {
         restorePreviousApp()
     }
 
+    func selectNextTab() {
+        guard let settings = appSettings else { return }
+        let tabs = Tab.sorted(settings.enabledTabs)
+        guard let index = tabs.firstIndex(of: selectedTab), index + 1 < tabs.count else { return }
+        withAnimation(.interactiveSpring(duration: 0.3)) {
+            selectedTab = tabs[index + 1]
+        }
+    }
+
+    func selectPreviousTab() {
+        guard let settings = appSettings else { return }
+        let tabs = Tab.sorted(settings.enabledTabs)
+        guard let index = tabs.firstIndex(of: selectedTab), index > 0 else { return }
+        withAnimation(.interactiveSpring(duration: 0.3)) {
+            selectedTab = tabs[index - 1]
+        }
+    }
+
     private func captureFrontmostApp() {
         let frontmost = NSWorkspace.shared.frontmostApplication
         if frontmost?.bundleIdentifier != Self.ourBundleIdentifier {
@@ -176,6 +197,7 @@ final class NotchCoordinator {
     }
 
     private func handleMouseMove(_ location: NSPoint) {
+        guard !isContextMenuVisible else { return }
         let hitbox = hitboxRect
         let isInHitbox = NSMouseInRect(location, hitbox, false)
 
@@ -234,22 +256,36 @@ final class NotchCoordinator {
         }
         guard isInNotch else { return }
 
+        isContextMenuVisible = true
         let menu = NSMenu()
-        let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
+        let delegate = ContextMenuDelegate(
+            onClose: { [weak self] in self?.isContextMenuVisible = false },
+            onSettings: { AppDelegate.shared.showSettings() },
+            onQuit: { NSApp.terminate(nil) }
+        )
+        contextMenuDelegate = delegate
+        menu.delegate = delegate
+        let settingsItem = NSMenuItem(title: "设置...", action: #selector(ContextMenuDelegate.openSettings), keyEquivalent: ",")
+        settingsItem.target = delegate
         menu.addItem(settingsItem)
         menu.addItem(NSMenuItem.separator())
-        let quitItem = NSMenuItem(title: "退出 NemoNotch", action: #selector(quitApp), keyEquivalent: "q")
-        quitItem.target = self
+        let quitItem = NSMenuItem(title: "退出 NemoNotch", action: #selector(ContextMenuDelegate.quitApp), keyEquivalent: "q")
+        quitItem.target = delegate
         menu.addItem(quitItem)
         menu.popUp(positioning: nil, at: point, in: nil)
     }
+}
 
-    @objc private func openSettings() {
-        AppDelegate.shared.showSettings()
+private final class ContextMenuDelegate: NSObject, NSMenuDelegate {
+    let onClose: () -> Void
+    let onSettings: () -> Void
+    let onQuit: () -> Void
+    init(onClose: @escaping () -> Void, onSettings: @escaping () -> Void, onQuit: @escaping () -> Void) {
+        self.onClose = onClose
+        self.onSettings = onSettings
+        self.onQuit = onQuit
     }
-
-    @objc private func quitApp() {
-        NSApp.terminate(nil)
-    }
+    func menuDidClose(_ menu: NSMenu) { onClose() }
+    @objc func openSettings() { onSettings() }
+    @objc func quitApp() { onQuit() }
 }
