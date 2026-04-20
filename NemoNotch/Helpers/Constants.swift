@@ -14,6 +14,10 @@ enum NotchConstants {
     static let badgePadding: CGFloat = 36
     static let badgeSpread: CGFloat = 14
 
+    // Badge row
+    static let badgeRowHeight: CGFloat = 24
+    static let badgeRowSpacing: CGFloat = 10
+
     // Badge layout
     static let closedWidthInset: CGFloat = 4
     static let upcomingEventThresholdMinutes: Int = 60

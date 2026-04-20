@@ -25,23 +25,58 @@ struct NotchView: View {
     @State private var contentOpacity: Double = 1
     @State private var slideForward: Bool = true
 
-    private var hasActiveBadge: Bool {
-        if !notificationService.badges.isEmpty { return true }
-        if mediaService.playbackState.isPlaying { return true }
-        if claudeService.activeSession?.status == .working { return true }
-        if openClawService.activeAgent != nil { return true }
+    private enum BadgeType: String, CaseIterable, Identifiable {
+        case notification, media, claude, openclaw, calendar
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .notification: "bell.fill"
+            case .media: "play.fill"
+            case .claude: "cpu"
+            case .openclaw: "terminal"
+            case .calendar: "calendar"
+            }
+        }
+        var tab: Tab {
+            switch self {
+            case .notification: .media
+            case .media: .media
+            case .claude: .claude
+            case .openclaw: .openclaw
+            case .calendar: .calendar
+            }
+        }
+    }
+
+    private var activeBadgeTypes: [BadgeType] {
+        var types: [BadgeType] = []
+        if !notificationService.badges.isEmpty { types.append(.notification) }
+        if mediaService.playbackState.isPlaying { types.append(.media) }
+        if claudeService.activeSession?.status == .working { types.append(.claude) }
+        if openClawService.activeAgent != nil { types.append(.openclaw) }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
-            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { return true }
+            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { types.append(.calendar) }
         }
-        return false
+        return types
     }
+
+    private var hasMultipleBadges: Bool { activeBadgeTypes.count >= 2 }
+
+    private var hasActiveBadge: Bool { !activeBadgeTypes.isEmpty }
 
     private var notchSize: CGSize {
         switch coordinator.status {
         case .closed:
-            let extraWidth: CGFloat = shownHasActiveBadge ? NotchConstants.badgePadding * 2 : 0
-            return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth, height: hardwareNotchSize.height)
+            if hasMultipleBadges {
+                let extraHeight: CGFloat = shownHasActiveBadge ? NotchConstants.badgeRowHeight : 0
+                return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset,
+                              height: hardwareNotchSize.height + extraHeight)
+            } else {
+                let extraWidth: CGFloat = shownHasActiveBadge ? NotchConstants.badgePadding * 2 : 0
+                return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
+                              height: hardwareNotchSize.height)
+            }
         case .opened:
             return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
@@ -60,9 +95,16 @@ struct NotchView: View {
                 .zIndex(0)
 
             if coordinator.status == .closed {
-                compactBadges
-                    .zIndex(1)
-                    .transition(.opacity.combined(with: .scale(scale: 0.5)))
+                if hasMultipleBadges {
+                    badgeRow
+                        .zIndex(1)
+                        .opacity(shownHasActiveBadge ? 1 : 0)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                } else {
+                    compactBadges
+                        .zIndex(1)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
+                }
             }
 
             if coordinator.status == .opened {
@@ -187,6 +229,23 @@ struct NotchView: View {
         case .system:
             EmptyView()
         }
+    }
+
+    private var badgeRow: some View {
+        HStack(spacing: NotchConstants.badgeRowSpacing) {
+            ForEach(activeBadgeTypes) { type in
+                Button {
+                    coordinator.notchOpen(tab: type.tab)
+                } label: {
+                    Image(systemName: type.icon)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .position(x: notchCenterX,
+                  y: hardwareNotchSize.height + NotchConstants.badgeRowHeight / 2)
     }
 
     private var compactBadges: some View {
