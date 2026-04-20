@@ -21,6 +21,8 @@ struct NotchView: View {
 
     @State private var shownHasActiveBadge: Bool = false
     @State private var hideBadgeTask: Task<Void, Never>? = nil
+    @State private var displayedBadgeTypes: [BadgeType] = []
+    @State private var badgeTypeUpdateTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
     @State private var contentOpacity: Double = 1
     @State private var slideForward: Bool = true
@@ -61,7 +63,7 @@ struct NotchView: View {
         return types
     }
 
-    private var hasMultipleBadges: Bool { activeBadgeTypes.count >= 2 }
+    private var hasMultipleBadges: Bool { displayedBadgeTypes.count >= 2 }
 
     private var hasActiveBadge: Bool { !activeBadgeTypes.isEmpty }
 
@@ -127,6 +129,24 @@ struct NotchView: View {
                     guard !Task.isCancelled else { return }
                     withAnimation(.easeInOut(duration: NotchConstants.badgeFadeDuration)) {
                         shownHasActiveBadge = false
+                    }
+                }
+            }
+        }
+        .onAppear { displayedBadgeTypes = activeBadgeTypes }
+        .onChange(of: activeBadgeTypes) { oldTypes, newTypes in
+            if newTypes.count > oldTypes.count {
+                badgeTypeUpdateTask?.cancel()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    displayedBadgeTypes = newTypes
+                }
+            } else {
+                badgeTypeUpdateTask?.cancel()
+                badgeTypeUpdateTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        displayedBadgeTypes = newTypes
                     }
                 }
             }
@@ -227,7 +247,7 @@ struct NotchView: View {
     }
 
     private var badgeRow: some View {
-        let secondaryBadges = Array(activeBadgeTypes.dropFirst())
+        let secondaryBadges = Array(displayedBadgeTypes.dropFirst())
         return HStack(spacing: NotchConstants.badgeRowSpacing) {
             ForEach(secondaryBadges) { type in
                 Button {
