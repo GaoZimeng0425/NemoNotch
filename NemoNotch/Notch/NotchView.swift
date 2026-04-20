@@ -126,33 +126,38 @@ struct NotchView: View {
         let tabs = Tab.sorted(appSettings.enabledTabs)
         let currentIndex = tabs.firstIndex(of: coordinator.selectedTab) ?? 0
 
-        return tabContent
-            .id(coordinator.selectedTab)
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                removal: .opacity.combined(with: .move(edge: .leading))
-            ))
-            .offset(x: dragOffset)
-            .gesture(
-                DragGesture(minimumDistance: 30)
-                    .onChanged { value in
-                        let width = value.translation.width
-                        let height = abs(value.translation.height)
-                        guard height < abs(width) else { return }
-                        dragOffset = width
+        return ZStack {
+            Color.clear
+                .contentShape(Rectangle())
+
+            tabContent
+        }
+        .id(coordinator.selectedTab)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .trailing)),
+            removal: .opacity.combined(with: .move(edge: .leading))
+        ))
+        .offset(x: dragOffset)
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onChanged { value in
+                    let width = value.translation.width
+                    let height = abs(value.translation.height)
+                    guard height < abs(width) else { return }
+                    dragOffset = width
+                }
+                .onEnded { value in
+                    let threshold: CGFloat = 80
+                    withAnimation(.interactiveSpring(duration: 0.3)) {
+                        dragOffset = 0
                     }
-                    .onEnded { value in
-                        let threshold: CGFloat = 80
-                        withAnimation(.interactiveSpring(duration: 0.3)) {
-                            dragOffset = 0
-                        }
-                        if value.translation.width < -threshold && currentIndex + 1 < tabs.count {
-                            coordinator.selectNextTab()
-                        } else if value.translation.width > threshold && currentIndex > 0 {
-                            coordinator.selectPreviousTab()
-                        }
+                    if value.translation.width < -threshold && currentIndex + 1 < tabs.count {
+                        coordinator.selectNextTab()
+                    } else if value.translation.width > threshold && currentIndex > 0 {
+                        coordinator.selectPreviousTab()
                     }
-            )
+                }
+        )
     }
 
     @ViewBuilder
