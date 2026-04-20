@@ -51,9 +51,9 @@ struct NotchView: View {
     private var activeBadgeTypes: [BadgeType] {
         var types: [BadgeType] = []
         if !notificationService.badges.isEmpty { types.append(.notification) }
-        if mediaService.playbackState.isPlaying { types.append(.media) }
-        if claudeService.activeSession?.status == .working { types.append(.claude) }
         if openClawService.activeAgent != nil { types.append(.openclaw) }
+        if claudeService.activeSession?.status == .working { types.append(.claude) }
+        if mediaService.playbackState.isPlaying { types.append(.media) }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
             if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { types.append(.calendar) }
@@ -68,15 +68,10 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch coordinator.status {
         case .closed:
-            if hasMultipleBadges {
-                let extraHeight: CGFloat = shownHasActiveBadge ? NotchConstants.badgeRowHeight : 0
-                return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset,
-                              height: hardwareNotchSize.height + extraHeight)
-            } else {
-                let extraWidth: CGFloat = shownHasActiveBadge ? NotchConstants.badgePadding * 2 : 0
-                return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
-                              height: hardwareNotchSize.height)
-            }
+            let extraWidth: CGFloat = shownHasActiveBadge ? NotchConstants.badgePadding * 2 : 0
+            let extraHeight: CGFloat = (hasMultipleBadges && shownHasActiveBadge) ? NotchConstants.badgeRowHeight : 0
+            return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
+                          height: hardwareNotchSize.height + extraHeight)
         case .opened:
             return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
@@ -95,15 +90,15 @@ struct NotchView: View {
                 .zIndex(0)
 
             if coordinator.status == .closed {
+                compactBadges
+                    .zIndex(1)
+                    .transition(.opacity.combined(with: .scale(scale: 0.5)))
+
                 if hasMultipleBadges {
                     badgeRow
                         .zIndex(1)
                         .opacity(shownHasActiveBadge ? 1 : 0)
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                } else {
-                    compactBadges
-                        .zIndex(1)
-                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 }
             }
 
@@ -232,20 +227,77 @@ struct NotchView: View {
     }
 
     private var badgeRow: some View {
-        HStack(spacing: NotchConstants.badgeRowSpacing) {
-            ForEach(activeBadgeTypes) { type in
+        let secondaryBadges = Array(activeBadgeTypes.dropFirst())
+        return HStack(spacing: NotchConstants.badgeRowSpacing) {
+            ForEach(secondaryBadges) { type in
                 Button {
                     coordinator.notchOpen(tab: type.tab)
                 } label: {
-                    Image(systemName: type.icon)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
+                    badgeRowIcon(for: type)
                 }
                 .buttonStyle(.plain)
             }
         }
         .position(x: notchCenterX,
                   y: hardwareNotchSize.height + NotchConstants.badgeRowHeight / 2)
+    }
+
+    @ViewBuilder
+    private func badgeRowIcon(for type: BadgeType) -> some View {
+        switch type {
+        case .notification:
+            if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
+                ZStack(alignment: .bottomTrailing) {
+                    Image(nsImage: top.icon)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                    if top.count > 0 {
+                        Text("\(top.count)")
+                            .font(.system(size: 7, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 2)
+                            .padding(.vertical, 0.5)
+                            .background(.red)
+                            .clipShape(Capsule())
+                    } else {
+                        Circle()
+                            .fill(.red)
+                            .frame(width: 6, height: 6)
+                    }
+                }
+            }
+        case .media:
+            if let data = mediaService.playbackState.artworkData,
+               let nsImage = NSImage(data: data) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: "music.note")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        case .claude:
+            if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
+               let nsImage = NSImage(contentsOf: url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: "cpu")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        case .openclaw:
+            Text("🦞")
+                .font(.system(size: 11))
+        case .calendar:
+            Image(systemName: "calendar")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.8))
+        }
     }
 
     private var compactBadges: some View {
