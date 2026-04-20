@@ -5,6 +5,7 @@ final class EventMonitor {
 
     var onMouseMove: ((NSPoint) -> Void)?
     var onMouseDown: (() -> Void)?
+    var onRightMouseDown: ((NSPoint) -> Void)?
 
     private var monitors: [Any] = []
 
@@ -23,6 +24,11 @@ final class EventMonitor {
                 self?.onMouseDown?()
             }
         }
+        let globalRightDown = NSEvent.addGlobalMonitorForEvents(matching: .rightMouseDown) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.onRightMouseDown?(NSEvent.mouseLocation)
+            }
+        }
         let localMove = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
             MainActor.assumeIsolated {
                 self?.onMouseMove?(NSEvent.mouseLocation)
@@ -35,7 +41,13 @@ final class EventMonitor {
             }
             return event
         }
-        monitors = [globalMove as Any, globalDown as Any, localMove as Any, localDown as Any]
+        let localRightDown = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+            MainActor.assumeIsolated {
+                self?.onRightMouseDown?(NSEvent.mouseLocation)
+            }
+            return event
+        }
+        monitors = [globalMove as Any, globalDown as Any, globalRightDown as Any, localMove as Any, localDown as Any, localRightDown as Any]
     }
 
     func stop() {

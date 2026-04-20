@@ -170,6 +170,9 @@ final class NotchCoordinator {
         monitor.onMouseDown = { [weak self] in
             self?.handleMouseDown()
         }
+        monitor.onRightMouseDown = { [weak self] point in
+            self?.handleRightMouseDown(point)
+        }
     }
 
     private func handleMouseMove(_ location: NSPoint) {
@@ -213,5 +216,40 @@ final class NotchCoordinator {
                 notchClose()
             }
         }
+    }
+
+    private func handleRightMouseDown(_ point: NSPoint) {
+        let isInNotch: Bool
+        switch status {
+        case .closed:
+            isInNotch = NSMouseInRect(point, hitboxRect, false)
+        case .opened:
+            let contentRect = NSRect(
+                x: screenFrame.midX - contentSize.width / 2,
+                y: screenFrame.maxY - contentSize.height,
+                width: contentSize.width,
+                height: contentSize.height
+            )
+            isInNotch = NSMouseInRect(point, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false)
+        }
+        guard isInNotch else { return }
+
+        let menu = NSMenu()
+        let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        menu.addItem(NSMenuItem.separator())
+        let quitItem = NSMenuItem(title: "退出 NemoNotch", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        menu.popUp(positioning: nil, at: point, in: nil)
+    }
+
+    @objc private func openSettings() {
+        AppDelegate.shared.showSettings()
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
     }
 }
