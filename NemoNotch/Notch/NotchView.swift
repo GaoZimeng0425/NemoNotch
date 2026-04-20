@@ -136,7 +136,7 @@ struct NotchView: View {
         case .weather:
             WeatherTab()
         case .system:
-            SystemTab()
+            EmptyView()
         }
     }
 

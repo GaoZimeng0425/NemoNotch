@@ -22,7 +22,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
-        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestAlwaysAuthorization()
         locationManager.startMonitoringSignificantLocationChanges()
 
         timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
