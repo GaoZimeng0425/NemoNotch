@@ -41,6 +41,9 @@ final class NotchCoordinator {
         deviceNotchRect.insetBy(dx: -NotchConstants.hitboxPadding, dy: -NotchConstants.hitboxPadding)
     }
 
+    private static let windowWidth: CGFloat = 700
+    private static let windowHeight: CGFloat = 340
+
     init(content: (NotchCoordinator) -> AnyView) {
         let screen = NSScreen.main!
         self.screenFrame = screen.frame
@@ -48,15 +51,27 @@ final class NotchCoordinator {
             ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
             : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
 
-        self.window = NotchWindow(rect: screen.frame)
+        let sf = screen.frame
+        let wf = NSRect(
+            x: sf.midX - Self.windowWidth / 2,
+            y: sf.maxY - Self.windowHeight,
+            width: Self.windowWidth,
+            height: Self.windowHeight
+        )
+        self.window = NotchWindow(rect: wf)
 
         let hosting = NSHostingController(rootView: content(self))
-        hosting.view.frame = screen.frame
+        hosting.view.frame = NSRect(
+            x: sf.minX - wf.minX,
+            y: sf.minY - wf.minY,
+            width: sf.width,
+            height: sf.height
+        )
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = .clear
         self.hostingController = hosting
 
-        let passThrough = PassThroughView(frame: screen.frame)
+        let passThrough = PassThroughView(frame: NSRect(x: 0, y: 0, width: wf.width, height: wf.height))
         passThrough.wantsLayer = true
         passThrough.layer?.backgroundColor = .clear
         passThrough.addSubview(hosting.view)
@@ -131,8 +146,20 @@ final class NotchCoordinator {
         notchSize = screen.hasNotch
             ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
             : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
-        window.setFrame(screen.frame, display: true)
-        hostingController?.view.frame = screen.frame
+        let sf = screenFrame
+        let wf = NSRect(
+            x: sf.midX - Self.windowWidth / 2,
+            y: sf.maxY - Self.windowHeight,
+            width: Self.windowWidth,
+            height: Self.windowHeight
+        )
+        window.setFrame(wf, display: true)
+        hostingController?.view.frame = NSRect(
+            x: sf.minX - wf.minX,
+            y: sf.minY - wf.minY,
+            width: sf.width,
+            height: sf.height
+        )
     }
 
     private func setupEventMonitoring() {

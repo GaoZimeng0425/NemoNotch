@@ -8,18 +8,17 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            if let cc = appDelegate.claudeCodeService {
-                MenuContent(
-                    coordinator: appDelegate.coordinator,
-                    onOpenSettings: { appDelegate.showSettings() }
-                )
-                .environment(cc)
-            }
+            MenuContent(
+                coordinator: appDelegate.coordinator,
+                onOpenSettings: { appDelegate.showSettings() }
+            )
+            .environment(appDelegate.claudeCodeService ?? ClaudeCodeService())
         } label: {
             Image(systemName: appDelegate.claudeCodeService?.isHookInstalled == true
                 ? "menubar.rectangle.fill"
                 : "menubar.rectangle")
         }
+        .menuBarExtraStyle(.menu)
     }
 
     init() {
