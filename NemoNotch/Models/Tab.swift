@@ -6,6 +6,8 @@ enum Tab: String, CaseIterable, Identifiable {
     case claude
     case openclaw
     case launcher
+    case weather
+    case system
 
     var id: String { rawValue }
 
@@ -16,6 +18,8 @@ enum Tab: String, CaseIterable, Identifiable {
         case .claude: "cpu"
         case .openclaw: "ladybug"
         case .launcher: "square.grid.2x2"
+        case .weather: "cloud.sun.fill"
+        case .system: "gearshape.2"
         }
     }
 
@@ -26,6 +30,8 @@ enum Tab: String, CaseIterable, Identifiable {
         case .claude: "Claude"
         case .openclaw: "OpenClaw"
         case .launcher: "启动器"
+        case .weather: "天气"
+        case .system: "系统"
         }
     }
 }
