@@ -13,7 +13,7 @@ final class HotkeyService {
         nextID += 1
         actionMap[id] = action
 
-        var hotKeyID = EventHotKeyID(signature: FourCharCode(id), id: id)
+        let hotKeyID = EventHotKeyID(signature: FourCharCode(id), id: id)
 
         let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, nil)
         if status == noErr {

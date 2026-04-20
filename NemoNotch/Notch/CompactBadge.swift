@@ -23,9 +23,6 @@ struct CompactBadge: View {
         case calendar
     }
 
-    @State private var shownBadge: BadgeInfo? = nil
-    @State private var hideTask: Task<Void, Never>? = nil
-
     private var activeBadge: BadgeInfo? {
         // 1. Notification (needs attention)
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
@@ -53,6 +50,14 @@ struct CompactBadge: View {
         return nil
     }
 
+    @State private var dismissed = false
+    @State private var hideTask: Task<Void, Never>? = nil
+
+    private var visibleBadge: BadgeInfo? {
+        guard !dismissed else { return nil }
+        return activeBadge
+    }
+
     private func claudeColor(_ status: ClaudeStatus) -> Color {
         switch status {
         case .working: return .orange
@@ -62,8 +67,9 @@ struct CompactBadge: View {
     }
 
     var body: some View {
+        let current = activeBadge
         Group {
-            if let badge = shownBadge {
+            if let badge = visibleBadge {
                 Button {
                     switch badge {
                     case .notification(let bundleID): onOpenApp(bundleID)
@@ -118,18 +124,26 @@ struct CompactBadge: View {
                 .buttonStyle(.plain)
             }
         }
-        .onAppear { shownBadge = activeBadge }
-        .onChange(of: activeBadge) { _, newBadge in
-            if let newBadge {
+        .onAppear {
+            dismissed = current == nil
+        }
+        .onChange(of: current == nil) { _, isNil in
+            if !isNil {
                 hideTask?.cancel()
-                shownBadge = newBadge
-            } else if shownBadge != nil {
+                if dismissed {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        dismissed = false
+                    }
+                }
+            } else if !dismissed {
                 hideTask?.cancel()
+                let prev = visibleBadge
                 hideTask = Task { @MainActor in
                     try? await Task.sleep(for: .seconds(2))
                     guard !Task.isCancelled else { return }
+                    _ = prev
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        shownBadge = nil
+                        dismissed = true
                     }
                 }
             }

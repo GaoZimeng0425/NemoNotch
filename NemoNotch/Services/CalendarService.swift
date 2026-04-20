@@ -78,7 +78,7 @@ final class CalendarService {
         switch authorizationStatus {
         case .notDetermined:
             requestAccess()
-        case .fullAccess, .authorized:
+        case .fullAccess:
             fetchEvents()
         default:
             break
@@ -86,7 +86,7 @@ final class CalendarService {
     }
 
     private func fetchEvents() {
-        guard authorizationStatus == .fullAccess || authorizationStatus == .authorized else { return }
+        guard authorizationStatus == .fullAccess else { return }
 
         let calendar = Calendar.current
         let today = Date()

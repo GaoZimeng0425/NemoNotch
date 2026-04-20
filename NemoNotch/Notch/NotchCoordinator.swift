@@ -51,7 +51,7 @@ final class NotchCoordinator {
         let screen = NSScreen.main!
         self.screenFrame = screen.frame
         self.notchSize = screen.hasNotch
-            ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
+            ? screen.notchSize
             : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
 
         let sf = screen.frame
@@ -165,7 +165,7 @@ final class NotchCoordinator {
         let screen = NSScreen.main!
         screenFrame = screen.frame
         notchSize = screen.hasNotch
-            ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
+            ? screen.notchSize
             : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
         let sf = screenFrame
         let wf = NSRect(

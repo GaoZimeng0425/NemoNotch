@@ -219,7 +219,9 @@ final class OpenClawService {
 
     private func handleEvent(_ json: [String: Any]) {
         let event = json["event"] as? String ?? ""
-        LogService.debug("Event: \(event)", category: "OpenClaw")
+        if event != "agent" && event != "heartbeat" && event != "tick" {
+            LogService.debug("Event: \(event)", category: "OpenClaw")
+        }
 
         switch event {
         case "connect.challenge":

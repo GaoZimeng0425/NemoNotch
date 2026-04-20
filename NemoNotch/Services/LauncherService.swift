@@ -25,7 +25,8 @@ final class LauncherService {
     func launchApp(at index: Int) {
         guard index < filteredApps.count else { return }
         let app = filteredApps[index]
-        NSWorkspace.shared.launchApplication(withBundleIdentifier: app.bundleIdentifier, options: [], additionalEventParamDescriptor: nil, launchIdentifier: nil)
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
     func addApp(bundleIdentifier: String) {
