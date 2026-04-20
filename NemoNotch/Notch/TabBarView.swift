@@ -1,12 +1,12 @@
 import SwiftUI
 
 struct TabBarView: View {
-    @Bindable var coordinator: NotchCoordinator
-    let enabledTabs: Set<Tab>
+    @Environment(NotchCoordinator.self) var coordinator
+    @Environment(AppSettings.self) var appSettings
 
     var body: some View {
         HStack(spacing: 16) {
-            ForEach(Array(enabledTabs.sorted { Tab.allCases.firstIndex(of: $0)! < Tab.allCases.firstIndex(of: $1)! })) { tab in
+            ForEach(Tab.sorted(appSettings.enabledTabs)) { tab in
                 Button {
                     coordinator.selectedTab = tab
                 } label: {

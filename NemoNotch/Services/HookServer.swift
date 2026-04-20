@@ -5,13 +5,13 @@ import Network
 final class HookServer {
     private var listener: NWListener?
     private(set) var isRunning = false
-    private(set) var port: UInt16 = 49200
+    private(set) var port: UInt16 = NotchConstants.hookBasePort
     private var stopped = false
 
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: ((UInt16) -> Void)?
 
-    private static let maxPortAttempts: UInt16 = 10
+    private static let maxPortAttempts: UInt16 = NotchConstants.hookMaxPortAttempts
 
     func start() throws {
         stopped = false
@@ -59,7 +59,7 @@ final class HookServer {
     private func tryNextPort(error: NWError) {
         guard !stopped else { return }
         let nextPort = port + 1
-        let basePort: UInt16 = 49200
+        let basePort: UInt16 = NotchConstants.hookBasePort
         if nextPort < basePort + Self.maxPortAttempts {
             port = nextPort
             try? start()
@@ -156,23 +156,5 @@ final class HookServer {
 
     deinit {
         listener?.cancel()
-    }
-}
-
-struct HookEvent: Codable {
-    let hookEventName: String
-    let sessionId: String?
-    let toolName: String?
-    let message: String?
-    let cwd: String?
-    let source: String?
-
-    enum CodingKeys: String, CodingKey {
-        case hookEventName = "hook_event_name"
-        case sessionId = "session_id"
-        case toolName = "tool_name"
-        case message
-        case cwd
-        case source
     }
 }

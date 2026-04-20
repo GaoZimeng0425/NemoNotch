@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MediaTab: View {
-    let mediaService: MediaService
+    @Environment(MediaService.self) var mediaService
 
     private var state: PlaybackState { mediaService.playbackState }
 

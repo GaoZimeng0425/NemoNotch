@@ -1,12 +1,15 @@
 import SwiftUI
 
 struct NotchView: View {
-    let coordinator: NotchCoordinator
-    let enabledTabs: Set<Tab>
-    let mediaService: MediaService
-    let calendarService: CalendarService
-    let claudeService: ClaudeCodeService
-    let notificationService: NotificationService
+    @Environment(NotchCoordinator.self) var coordinator
+    @Environment(AppSettings.self) var appSettings
+    @Environment(MediaService.self) var mediaService
+    @Environment(CalendarService.self) var calendarService
+    @Environment(ClaudeCodeService.self) var claudeService
+    @Environment(NotificationService.self) var notificationService
+    @Environment(OpenClawService.self) var openClawService
+
+    private var enabledTabs: Set<Tab> { appSettings.enabledTabs }
 
     private var screen: NSScreen { NSScreen.main! }
     private var hasNotch: Bool { screen.hasNotch }
@@ -16,15 +19,14 @@ struct NotchView: View {
     private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
-    private let badgePadding: CGFloat = 36
-
     private var hasActiveBadge: Bool {
         if !notificationService.badges.isEmpty { return true }
         if mediaService.playbackState.isPlaying { return true }
         if claudeService.activeSession?.status == .working { return true }
+        if openClawService.activeAgent != nil { return true }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
-            if minutes >= 0, minutes < 60 { return true }
+            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { return true }
         }
         return false
     }
@@ -32,17 +34,17 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch coordinator.status {
         case .closed:
-            let extraWidth: CGFloat = hasActiveBadge ? badgePadding * 2 : 0
-            return CGSize(width: hardwareNotchSize.width - 4 + extraWidth, height: hardwareNotchSize.height)
+            let extraWidth: CGFloat = hasActiveBadge ? NotchConstants.badgePadding * 2 : 0
+            return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth, height: hardwareNotchSize.height)
         case .opened:
-            return CGSize(width: 500, height: 260)
+            return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
     }
 
     private var notchCornerRadius: CGFloat {
         switch coordinator.status {
-        case .closed: 8
-        case .opened: 24
+        case .closed: NotchConstants.cornerRadiusClosed
+        case .opened: NotchConstants.cornerRadiusOpened
         }
     }
 
@@ -60,11 +62,11 @@ struct NotchView: View {
             if coordinator.status == .opened {
                 openedContent
                     .zIndex(1)
-                    .transition(.scale.combined(with: .opacity).combined(with: .offset(y: -130)))
-                    .animation(.interactiveSpring(duration: 0.314).delay(0.157), value: coordinator.status)
+                    .transition(.scale.combined(with: .opacity).combined(with: .offset(y: -NotchConstants.openTransitionOffset)))
+                    .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration).delay(NotchConstants.openContentDelay), value: coordinator.status)
             }
         }
-        .animation(.interactiveSpring(duration: 0.314), value: coordinator.status)
+        .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
@@ -75,22 +77,22 @@ struct NotchView: View {
             notchSize: notchSize,
             hasNotch: hasNotch,
             cornerRadius: notchCornerRadius,
-            spacing: 16
+            spacing: NotchConstants.notchBackgroundSpacing
         )
-        .animation(.spring(duration: 0.35, bounce: 0.15), value: hasActiveBadge)
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: hasActiveBadge)
     }
 
     private var openedContent: some View {
         VStack(spacing: 0) {
-            TabBarView(coordinator: coordinator, enabledTabs: enabledTabs)
-                .padding(.top, hardwareNotchSize.height + 10)
+            TabBarView()
+                .padding(.top, hardwareNotchSize.height + NotchConstants.tabBarTopPadding)
 
             tabContent
-                .padding(.top, 8)
+                .padding(.top, NotchConstants.tabContentTopPadding)
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
         .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
     }
 
@@ -98,48 +100,53 @@ struct NotchView: View {
     private var tabContent: some View {
         switch coordinator.selectedTab {
         case .media:
-            MediaTab(mediaService: coordinator.mediaService)
+            MediaTab()
         case .calendar:
-            CalendarTab(calendarService: coordinator.calendarService)
+            CalendarTab()
         case .claude:
-            ClaudeTab(claudeService: coordinator.claudeCodeService)
+            ClaudeTab()
+        case .openclaw:
+            OpenClawTab()
         case .launcher:
-            LauncherTab(launcherService: coordinator.launcherService) {
+            LauncherTab {
                 coordinator.notchClose()
             }
         }
     }
 
-    private var sortedTabs: [Tab] {
-        enabledTabs.sorted { Tab.allCases.firstIndex(of: $0)! < Tab.allCases.firstIndex(of: $1)! }
-    }
-
     private var compactBadges: some View {
-        let badge = CompactBadge(
-            mediaService: mediaService,
-            calendarService: calendarService,
-            claudeService: claudeService,
-            notificationService: notificationService,
-            onTap: { tab in
-                coordinator.notchOpen(tab: tab)
-            },
-            onOpenApp: { bundleID in
-                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                    let config = NSWorkspace.OpenConfiguration()
-                    NSWorkspace.shared.openApplication(at: url, configuration: config)
-                }
-            }
-        )
-        let spread: CGFloat = hasActiveBadge ? 14 : 0
+        let spread: CGFloat = hasActiveBadge ? NotchConstants.badgeSpread : 0
         return ZStack {
-            badge.leftIcon
+            CompactBadge(
+                side: .left,
+                onTap: { tab in
+                    coordinator.notchOpen(tab: tab)
+                },
+                onOpenApp: { bundleID in
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                        let config = NSWorkspace.OpenConfiguration()
+                        NSWorkspace.shared.openApplication(at: url, configuration: config)
+                    }
+                }
+            )
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
                 .opacity(hasActiveBadge ? 1 : 0)
-            badge.rightIcon
+            CompactBadge(
+                side: .right,
+                onTap: { tab in
+                    coordinator.notchOpen(tab: tab)
+                },
+                onOpenApp: { bundleID in
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                        let config = NSWorkspace.OpenConfiguration()
+                        NSWorkspace.shared.openApplication(at: url, configuration: config)
+                    }
+                }
+            )
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
                 .opacity(hasActiveBadge ? 1 : 0)
         }
-        .animation(.spring(duration: 0.35, bounce: 0.15), value: spread)
-        .animation(.easeInOut(duration: 0.3), value: notificationService.badges.isEmpty)
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
+        .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: notificationService.badges.isEmpty)
     }
 }

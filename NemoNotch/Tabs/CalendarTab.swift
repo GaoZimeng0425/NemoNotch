@@ -2,7 +2,7 @@ import EventKit
 import SwiftUI
 
 struct CalendarTab: View {
-    let calendarService: CalendarService
+    @Environment(CalendarService.self) var calendarService
 
     var body: some View {
         switch calendarService.authorizationStatus {

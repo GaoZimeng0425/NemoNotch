@@ -9,26 +9,14 @@ final class NotchCoordinator {
 
     var status: Status = .closed
     var selectedTab: Tab = .media
+    var autoSelectTab: (() -> Tab?)?
 
     let window: NotchWindow
-    private var hostingController: NSHostingController<NotchView>?
+    private var hostingController: NSHostingController<AnyView>?
 
     private(set) var notchSize: NSSize
     private(set) var screenFrame: NSRect
-    private let hitboxPadding: CGFloat = 10
-    private let openedWidth: CGFloat = 500
-    private let openedHeight: CGFloat = 260
 
-    let mediaService: MediaService
-    let calendarService: CalendarService
-    let claudeCodeService: ClaudeCodeService
-    let launcherService: LauncherService
-    let notificationService: NotificationService
-    let appSettings: AppSettings
-
-    // Tracks the application that was frontmost before the notch opened, so we can
-    // restore focus on close (SwiftUI button taps inside the panel can incidentally
-    // activate NemoNotch and demote the previous app).
     private var previousApp: NSRunningApplication?
     private static let ourBundleIdentifier = Bundle.main.bundleIdentifier
 
@@ -45,56 +33,50 @@ final class NotchCoordinator {
     var contentSize: NSSize {
         switch status {
         case .closed: notchSize
-        case .opened: NSSize(width: openedWidth, height: openedHeight)
+        case .opened: NSSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
         }
     }
 
     private var hitboxRect: NSRect {
-        deviceNotchRect.insetBy(dx: -hitboxPadding, dy: -hitboxPadding)
+        deviceNotchRect.insetBy(dx: -NotchConstants.hitboxPadding, dy: -NotchConstants.hitboxPadding)
     }
 
-    init(
-        mediaService: MediaService,
-        calendarService: CalendarService,
-        claudeCodeService: ClaudeCodeService,
-        launcherService: LauncherService,
-        notificationService: NotificationService,
-        appSettings: AppSettings
-    ) {
-        self.mediaService = mediaService
-        self.calendarService = calendarService
-        self.claudeCodeService = claudeCodeService
-        self.launcherService = launcherService
-        self.notificationService = notificationService
-        self.appSettings = appSettings
+    private static let windowWidth: CGFloat = 700
+    private static let windowHeight: CGFloat = 340
 
+    init(content: (NotchCoordinator) -> AnyView) {
         let screen = NSScreen.main!
         self.screenFrame = screen.frame
         self.notchSize = screen.hasNotch
-            ? (screen.notchSize ?? NSSize(width: 200, height: 32))
-            : NSSize(width: 200, height: 32)
+            ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
+            : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
 
-        self.window = NotchWindow(rect: screen.frame)
-
-        let wrapper = NotchView(
-            coordinator: self,
-            enabledTabs: appSettings.enabledTabs,
-            mediaService: mediaService,
-            calendarService: calendarService,
-            claudeService: claudeCodeService,
-            notificationService: notificationService
+        let sf = screen.frame
+        let wf = NSRect(
+            x: sf.midX - Self.windowWidth / 2,
+            y: sf.maxY - Self.windowHeight,
+            width: Self.windowWidth,
+            height: Self.windowHeight
         )
-        let hosting = NSHostingController(rootView: wrapper)
-        hosting.view.frame = screen.frame
+        self.window = NotchWindow(rect: wf)
+
+        let hosting = NSHostingController(rootView: content(self))
+        hosting.view.frame = NSRect(
+            x: sf.minX - wf.minX,
+            y: sf.minY - wf.minY,
+            width: sf.width,
+            height: sf.height
+        )
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = .clear
         self.hostingController = hosting
 
-        let passThrough = PassThroughView(frame: screen.frame)
+        let passThrough = PassThroughView(frame: NSRect(x: 0, y: 0, width: wf.width, height: wf.height))
         passThrough.wantsLayer = true
         passThrough.layer?.backgroundColor = .clear
         passThrough.addSubview(hosting.view)
         window.contentView = passThrough
+        window.ignoresMouseEvents = true
         window.orderFrontRegardless()
 
         NotificationCenter.default.addObserver(
@@ -112,26 +94,29 @@ final class NotchCoordinator {
         captureFrontmostApp()
         if let tab {
             selectedTab = tab
-        } else {
-            if claudeCodeService.activeSession?.status == .working {
-                selectedTab = .claude
-            } else if mediaService.playbackState.isPlaying {
-                selectedTab = .media
-            }
+        } else if let auto = autoSelectTab?() {
+            selectedTab = auto
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        withAnimation(.interactiveSpring(duration: 0.314)) {
+        withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
             status = .opened
         }
+        let openedSize = NSSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
+        let location = NSEvent.mouseLocation
+        let contentRect = NSRect(
+            x: screenFrame.midX - openedSize.width / 2,
+            y: screenFrame.maxY - openedSize.height,
+            width: openedSize.width,
+            height: openedSize.height
+        )
+        window.ignoresMouseEvents = !NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false)
     }
 
     func notchClose() {
-        withAnimation(.spring(duration: 0.236)) {
+        withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
         }
-        // Pattern from Peninsula: explicitly resign key so the previously frontmost
-        // app's window can become key again. Combined with the previousApp restore
-        // for the case where SwiftUI button taps incidentally activated NemoNotch.
+        window.ignoresMouseEvents = true
         if window.isKeyWindow {
             window.resignKey()
         }
@@ -148,8 +133,6 @@ final class NotchCoordinator {
     private func restorePreviousApp() {
         guard let app = previousApp else { return }
         previousApp = nil
-        // Only re-activate if NemoNotch (or no app) ended up frontmost as a side
-        // effect of interacting with the panel; never steal focus from a real switch.
         let currentFront = NSWorkspace.shared.frontmostApplication
         let currentID = currentFront?.bundleIdentifier
         if currentFront == nil || currentID == Self.ourBundleIdentifier {
@@ -161,10 +144,22 @@ final class NotchCoordinator {
         let screen = NSScreen.main!
         screenFrame = screen.frame
         notchSize = screen.hasNotch
-            ? (screen.notchSize ?? NSSize(width: 200, height: 32))
-            : NSSize(width: 200, height: 32)
-        window.setFrame(screen.frame, display: true)
-        hostingController?.view.frame = screen.frame
+            ? (screen.notchSize ?? NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight))
+            : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
+        let sf = screenFrame
+        let wf = NSRect(
+            x: sf.midX - Self.windowWidth / 2,
+            y: sf.maxY - Self.windowHeight,
+            width: Self.windowWidth,
+            height: Self.windowHeight
+        )
+        window.setFrame(wf, display: true)
+        hostingController?.view.frame = NSRect(
+            x: sf.minX - wf.minX,
+            y: sf.minY - wf.minY,
+            width: sf.width,
+            height: sf.height
+        )
     }
 
     private func setupEventMonitoring() {
@@ -183,6 +178,7 @@ final class NotchCoordinator {
 
         switch status {
         case .closed:
+            window.ignoresMouseEvents = !isInHitbox
             if isInHitbox { notchOpen() }
         case .opened:
             let contentRect = NSRect(
@@ -191,7 +187,9 @@ final class NotchCoordinator {
                 width: contentSize.width,
                 height: contentSize.height
             )
-            if !NSMouseInRect(location, contentRect.insetBy(dx: -20, dy: -20), false) {
+            let isInContent = NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false)
+            window.ignoresMouseEvents = !isInContent
+            if !isInContent {
                 notchClose()
             }
         }
@@ -209,7 +207,9 @@ final class NotchCoordinator {
                 width: contentSize.width,
                 height: contentSize.height
             )
-            if !NSMouseInRect(location, contentRect.insetBy(dx: -10, dy: -10), false) {
+            let isInContent = NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false)
+            window.ignoresMouseEvents = !isInContent
+            if !isInContent {
                 notchClose()
             }
         }

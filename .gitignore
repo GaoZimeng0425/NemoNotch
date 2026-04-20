@@ -1,2 +1,5 @@
 # cc-telegram
 .cc-telegram/
+
+# Xcode user data
+*.xcuserdatad

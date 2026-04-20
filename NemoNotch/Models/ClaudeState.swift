@@ -16,6 +16,8 @@ struct ClaudeState: Identifiable {
     var isPreToolUse = false
     var sessionStart: Date
     var lastEventTime: Date
+    var firstUserMessage: String?
+    var lastUserMessage: String?
 
     init(sessionId: String) {
         self.id = sessionId
@@ -26,5 +28,12 @@ struct ClaudeState: Identifiable {
     var projectFolder: String? {
         guard let cwd else { return nil }
         return URL(fileURLWithPath: cwd).lastPathComponent
+    }
+
+    /// Display title: first user message, or project folder, or session ID
+    var displayTitle: String {
+        if let msg = firstUserMessage, !msg.isEmpty { return msg }
+        if let folder = projectFolder { return folder }
+        return "Session \(id.prefix(8))"
     }
 }

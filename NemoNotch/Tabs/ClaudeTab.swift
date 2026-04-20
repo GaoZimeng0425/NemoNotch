@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ClaudeTab: View {
-    let claudeService: ClaudeCodeService
+    @Environment(ClaudeCodeService.self) var claudeService
 
     var body: some View {
         if !claudeService.isHookInstalled {
@@ -90,14 +90,14 @@ struct ClaudeTab: View {
 
     private func sessionRow(_ session: ClaudeState) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: toolIcon(session.currentTool))
+            Image(systemName: ToolStyle.icon(session.currentTool))
                 .font(.system(size: 11))
-                .foregroundStyle(toolColor(session.currentTool))
+                .foregroundStyle(ToolStyle.color(session.currentTool))
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(projectName(session))
+                    Text(session.displayTitle)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -107,11 +107,16 @@ struct ClaudeTab: View {
                     if session.status == .working, let tool = session.currentTool {
                         Text(tool)
                             .font(.system(size: 10))
-                            .foregroundStyle(toolColor(tool))
+                            .foregroundStyle(ToolStyle.color(tool))
                             .lineLimit(1)
                     }
                 }
-                if let msg = session.lastMessage, !msg.isEmpty {
+                if let msg = session.lastUserMessage, !msg.isEmpty {
+                    Text(msg)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(2)
+                } else if let msg = session.lastMessage, !msg.isEmpty {
                     Text(msg)
                         .font(.system(size: 10))
                         .foregroundStyle(.white.opacity(0.5))
@@ -164,39 +169,10 @@ struct ClaudeTab: View {
         }
     }
 
-    private func toolColor(_ tool: String?) -> Color {
-        guard let tool else { return .gray }
-        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
-        if tool.hasPrefix("Write") || tool == "Edit" { return .red }
-        if tool == "Bash" { return .green }
-        if tool == "Agent" { return .purple }
-        if tool.hasPrefix("Web") { return .teal }
-        return .orange
-    }
-
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
-    }
-
-    private func toolIcon(_ tool: String?) -> String {
-        guard let tool else { return "gearshape.fill" }
-        if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" {
-            return "doc.text.magnifyingglass"
-        }
-        if tool.hasPrefix("Write") || tool == "Edit" {
-            return "pencil"
-        }
-        if tool == "Bash" { return "terminal" }
-        if tool == "Agent" { return "person.wave.2" }
-        if tool.hasPrefix("Web") { return "globe" }
-        return "gearshape.fill"
-    }
-
-    private func projectName(_ session: ClaudeState) -> String {
-        if let folder = session.projectFolder { return folder }
-        return "Session \(session.id.prefix(8))"
     }
 
     private func durationLabel(_ session: ClaudeState) -> String {
@@ -242,23 +218,3 @@ struct ClaudeTab: View {
     }
 }
 
-struct PulseModifier: ViewModifier {
-    let isActive: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isActive ? 1 : 1)
-            .animation(
-                isActive ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default,
-                value: isActive
-            )
-    }
-}
-
-struct GlowPulseModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .opacity(0.6)
-            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: true)
-    }
-}
