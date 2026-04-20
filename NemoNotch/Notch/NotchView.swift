@@ -133,6 +133,10 @@ struct NotchView: View {
             LauncherTab {
                 coordinator.notchClose()
             }
+        case .weather:
+            WeatherTab()
+        case .system:
+            SystemTab()
         }
     }
 

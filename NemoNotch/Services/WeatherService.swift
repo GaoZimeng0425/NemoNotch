@@ -33,7 +33,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
     deinit { timer?.invalidate() }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+        if manager.authorizationStatus == .authorizedAlways {
             manager.requestLocation()
         }
     }
@@ -84,15 +84,19 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
 
             if let hourly = today["hourly"] as? [[String: Any]] {
                 let currentHour = Calendar.current.component(.hour, from: Date())
-                hourlyForecast = hourly.compactMap { h -> (String, Double, String)? in
+                let allItems: [(String, Double, String)] = hourly.compactMap { h in
                     guard let time = h["time"] as? String,
                           let temp = h["tempC"] as? String else { return nil }
                     let hour = Int(time) ?? 0
-                    let icon = (h["weatherDesc"] as? [[String: String]])?.first?["value"] ?? ""
-                    return (String(format: "%02d:00", hour), Double(temp) ?? 0, icon)
-                }.filter { Int($0.time.prefix(2)) ?? 0 >= currentHour }
-                .prefix(3)
-                .map { $0 }
+                    let descArray = h["weatherDesc"] as? [[String: String]]
+                    let icon = descArray?.first?["value"] ?? ""
+                    let formatted = String(format: "%02d:00", hour)
+                    return (formatted, Double(temp) ?? 0, icon)
+                }
+                hourlyForecast = allItems.filter { item in
+                    let h = Int(item.0.prefix(2)) ?? 0
+                    return h >= currentHour
+                }.prefix(3).map { $0 }
             }
         }
 

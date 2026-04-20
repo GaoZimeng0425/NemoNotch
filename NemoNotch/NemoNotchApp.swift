@@ -76,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
     private var hotkeyService: HotkeyService?
+    private var weatherService: WeatherService?
+    private var systemService: SystemService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -104,6 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let notification = NotificationService(monitoredApps: settings.monitoredApps)
         self.notificationService = notification
 
+        let weather = WeatherService()
+        let system = SystemService()
+        self.weatherService = weather
+        self.systemService = system
+
         let notchCoordinator = NotchCoordinator { coordinator in
             AnyView(
                 NotchView()
@@ -115,6 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(openClaw)
                     .environment(launcher)
                     .environment(notification)
+                    .environment(weather)
+                    .environment(system)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in

@@ -51,10 +51,11 @@ final class SystemService {
         var idle: Double = 0
         let numCores = Int(numCPU)
         for i in 0..<numCores {
-            let user = Double(cpuInfo[i * CPU_STATE_MAX + CPU_STATE_USER])
-            let system = Double(cpuInfo[i * CPU_STATE_MAX + CPU_STATE_SYSTEM])
-            let nice = Double(cpuInfo[i * CPU_STATE_MAX + CPU_STATE_NICE])
-            let idleVal = Double(cpuInfo[i * CPU_STATE_MAX + CPU_STATE_IDLE])
+            let idx = Int32(i) * Int32(CPU_STATE_MAX)
+            let user = Double(cpuInfo[Int(idx + Int32(CPU_STATE_USER))])
+            let system = Double(cpuInfo[Int(idx + Int32(CPU_STATE_SYSTEM))])
+            let nice = Double(cpuInfo[Int(idx + Int32(CPU_STATE_NICE))])
+            let idleVal = Double(cpuInfo[Int(idx + Int32(CPU_STATE_IDLE))])
             total += user + system + nice + idleVal
             idle += idleVal
         }
@@ -72,17 +73,17 @@ final class SystemService {
         if cpuHistory.count > maxHistory { cpuHistory.removeFirst() }
 
         // Clean up
-        let size = numCPUInfo * MemoryLayout<integer_t>.size
-        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo), vm_size_t(size))
+        let size = vm_size_t(numCPUInfo) * vm_size_t(MemoryLayout<integer_t>.size)
+        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo), size)
     }
 
     private func updateMemory() {
-        var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
-        let result = withUnsafeMutablePointer(to: &stats) { ptr in
-            host_statistics64(mach_host_self(), HOST_VM_INFO64, ptr, &count)
-        }
+        let statsPtr = UnsafeMutablePointer<vm_statistics64>.allocate(capacity: 1)
+        defer { statsPtr.deallocate() }
+        let result = host_statistics64(mach_host_self(), HOST_VM_INFO64, UnsafeMutableRawPointer(statsPtr).bindMemory(to: integer_t.self, capacity: Int(count)), &count)
         guard result == KERN_SUCCESS else { return }
+        let stats = statsPtr.pointee
 
         let pageSize = UInt64(vm_kernel_page_size)
         memoryTotal = UInt64(ProcessInfo.processInfo.physicalMemory)
