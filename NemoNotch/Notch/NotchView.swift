@@ -21,6 +21,7 @@ struct NotchView: View {
 
     @State private var shownHasActiveBadge: Bool = false
     @State private var hideBadgeTask: Task<Void, Never>? = nil
+    @State private var dragOffset: CGFloat = 0
 
     private var hasActiveBadge: Bool {
         if !notificationService.badges.isEmpty { return true }
@@ -109,13 +110,42 @@ struct NotchView: View {
             TabBarView()
                 .padding(.top, hardwareNotchSize.height + NotchConstants.tabBarTopPadding)
 
-            tabContent
+            swipeableContent
                 .padding(.top, NotchConstants.tabContentTopPadding)
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
         .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
+    }
+
+    private var swipeableContent: some View {
+        let tabs = Tab.sorted(appSettings.enabledTabs)
+        let currentIndex = tabs.firstIndex(of: coordinator.selectedTab) ?? 0
+
+        return tabContent
+            .id(coordinator.selectedTab)
+            .offset(x: dragOffset)
+            .gesture(
+                DragGesture(minimumDistance: 30)
+                    .onChanged { value in
+                        let width = value.translation.width
+                        let height = abs(value.translation.height)
+                        guard height < abs(width) else { return }
+                        dragOffset = width
+                    }
+                    .onEnded { value in
+                        let threshold: CGFloat = 80
+                        withAnimation(.interactiveSpring(duration: 0.3)) {
+                            dragOffset = 0
+                        }
+                        if value.translation.width < -threshold && currentIndex + 1 < tabs.count {
+                            coordinator.selectNextTab()
+                        } else if value.translation.width > threshold && currentIndex > 0 {
+                            coordinator.selectPreviousTab()
+                        }
+                    }
+            )
     }
 
     @ViewBuilder
