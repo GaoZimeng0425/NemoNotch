@@ -1,6 +1,8 @@
 import Foundation
+import os
 
 final class NowPlayingCLI {
+    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "NowPlayingCLI")
     private static let infoKeyMapping: [String: String] = [
         "title": "kMRMediaRemoteNowPlayingInfoTitle",
         "artist": "kMRMediaRemoteNowPlayingInfoArtist",
@@ -56,7 +58,6 @@ final class NowPlayingCLI {
 
         if resolved.isEmpty { resolved = [.unavailable] }
         helpers = resolved
-        Self.debugLog("helper chain: \(helpers.map(\.debugDescription).joined(separator: " -> "))")
     }
 
     func fetchNowPlayingInfo(completion: @escaping ([String: Any]?) -> Void) {
@@ -67,7 +68,6 @@ final class NowPlayingCLI {
 
     private func fetchUsingHelpers(from index: Int, completion: @escaping ([String: Any]?) -> Void) {
         guard index < helpers.count else {
-            Self.debugLog("all helper strategies failed")
             DispatchQueue.main.async { completion(nil) }
             return
         }
@@ -80,16 +80,13 @@ final class NowPlayingCLI {
         switch helper {
         case .bundled(let script, let gzPath):
             guard let dylib = Self.extractDylib(gzPath: gzPath) else {
-                Self.debugLog("bundled helper extract failed, fallback next")
                 next()
                 return
             }
             runPerl(script: script, dylib: dylib) { info in
                 if let info {
-                    Self.debugLog("source=cli/bundled-helper success")
                     completion(info)
                 } else {
-                    Self.debugLog("source=cli/bundled-helper empty, fallback next")
                     next()
                 }
             }
@@ -97,10 +94,8 @@ final class NowPlayingCLI {
         case .systemDylib(let script, let dylib):
             runPerl(script: script, dylib: dylib) { info in
                 if let info {
-                    Self.debugLog("source=cli/system-dylib success")
                     completion(info)
                 } else {
-                    Self.debugLog("source=cli/system-dylib empty, fallback next")
                     next()
                 }
             }
@@ -108,16 +103,13 @@ final class NowPlayingCLI {
         case .external(let path):
             runExternal(path: path) { info in
                 if let info {
-                    Self.debugLog("source=cli/external success")
                     completion(info)
                 } else {
-                    Self.debugLog("source=cli/external empty, fallback next")
                     next()
                 }
             }
 
         case .unavailable:
-            Self.debugLog("no CLI helper available")
             DispatchQueue.main.async { completion(nil) }
         }
     }
@@ -187,7 +179,7 @@ final class NowPlayingCLI {
 
         let stderr = Pipe()
         guard let outputHandle = FileHandle(forWritingAtPath: tempDest) else {
-            debugLog("bundled extract failed to create temp output")
+            Self.logger.error("bundled extract failed to create temp output")
             return nil
         }
         process.standardOutput = outputHandle
@@ -198,7 +190,7 @@ final class NowPlayingCLI {
         do {
             try process.run()
         } catch {
-            debugLog("bundled extract failed to run gunzip: \(error.localizedDescription)")
+            Self.logger.error("bundled extract failed to run gunzip: \(error.localizedDescription)")
             try? outputHandle.close()
             try? FileManager.default.removeItem(atPath: tempDest)
             return nil
@@ -212,7 +204,7 @@ final class NowPlayingCLI {
         let waitResult = semaphore.wait(timeout: .now() + extractionTimeoutSeconds)
         try? outputHandle.close()
         if waitResult == .timedOut {
-            debugLog("bundled extract timed out after \(extractionTimeoutSeconds)s, terminating gunzip")
+            Self.logger.error("bundled extract timed out after \(extractionTimeoutSeconds)s")
             process.terminate()
             _ = semaphore.wait(timeout: .now() + 1)
             try? FileManager.default.removeItem(atPath: tempDest)
@@ -222,9 +214,9 @@ final class NowPlayingCLI {
         guard process.terminationStatus == 0 else {
             if let stderrText = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
                !stderrText.isEmpty {
-                debugLog("bundled extract exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))")
+                Self.logger.error("bundled extract exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))")
             } else {
-                debugLog("bundled extract exit=\(process.terminationStatus)")
+                Self.logger.error("bundled extract exit=\(process.terminationStatus)")
             }
             try? FileManager.default.removeItem(atPath: tempDest)
             return nil
@@ -234,7 +226,7 @@ final class NowPlayingCLI {
             let attrs = try FileManager.default.attributesOfItem(atPath: tempDest)
             let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
             guard size > 0 else {
-                debugLog("bundled extract produced empty output")
+                Self.logger.error("bundled extract produced empty output")
                 try? FileManager.default.removeItem(atPath: tempDest)
                 return nil
             }
@@ -314,7 +306,7 @@ final class NowPlayingCLI {
         do {
             try process.run()
         } catch {
-            Self.debugLog("\(sourceTag) failed to run: \(error.localizedDescription)")
+            Self.logger.error("\(sourceTag) failed to run: \(error.localizedDescription)")
             return nil
         }
 
@@ -323,9 +315,10 @@ final class NowPlayingCLI {
             semaphore.signal()
         }
 
-        let waitResult = semaphore.wait(timeout: .now() + processTimeoutSeconds)
+        let timeout = processTimeoutSeconds
+        let waitResult = semaphore.wait(timeout: .now() + timeout)
         if waitResult == .timedOut {
-            Self.debugLog("\(sourceTag) timed out after \(processTimeoutSeconds)s, terminating")
+            Self.logger.error("\(sourceTag) timed out after \(timeout)s")
             process.terminate()
             _ = semaphore.wait(timeout: .now() + 1)
             return nil
@@ -334,9 +327,9 @@ final class NowPlayingCLI {
         let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
         if process.terminationStatus != 0 {
             if let stderrText = String(data: stderrData, encoding: .utf8), !stderrText.isEmpty {
-                Self.debugLog("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))")
+                Self.logger.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))")
             } else {
-                Self.debugLog("\(sourceTag) exit=\(process.terminationStatus)")
+                Self.logger.error("\(sourceTag) exit=\(process.terminationStatus)")
             }
             return nil
         }
@@ -370,12 +363,6 @@ final class NowPlayingCLI {
         }
 
         return mediaInfo
-    }
-
-    private static func debugLog(_ message: String) {
-        #if DEBUG
-        print("[NemoNotch][Media][NowPlayingCLI] \(message)")
-        #endif
     }
 
     private static func parseTimestamp(_ value: Any) -> Date? {

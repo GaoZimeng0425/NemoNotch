@@ -332,19 +332,61 @@ final class OpenClawService {
 
     // MARK: - Chat Events
 
-    private var hasLoggedChatPayload = false
+    private var chatPayloadLogCount = 0
 
     private func handleChatEvent(_ json: [String: Any]) {
         let payload = json["payload"] as? [String: Any] ?? [:]
 
-        if !hasLoggedChatPayload {
-            hasLoggedChatPayload = true
-            print("[OpenClaw] Chat payload sample: \(payload)")
+        if chatPayloadLogCount < 20 {
+            chatPayloadLogCount += 1
+            print("[OpenClaw] Chat payload #\(chatPayloadLogCount): \(payload)")
         }
 
         // Find the agent by sessionKey or sender
         let sessionKey = payload["sessionKey"] as? String ?? ""
         let role = payload["role"] as? String ?? ""
+
+        // Detect tool use from content blocks
+        if let parts = payload["content"] as? [[String: Any]] {
+            let toolNames = parts.compactMap { block -> String? in
+                let type = block["type"] as? String ?? ""
+                if type == "tool_use" || type == "tool_call" {
+                    return block["name"] as? String ?? "tool"
+                }
+                return nil
+            }
+            if !toolNames.isEmpty {
+                let key = sessionKey.isEmpty ? nil : sessionKey
+                let targetKey = key ?? agents.filter({ $0.value.state != .idle })
+                    .sorted(by: { $0.value.lastEventTime > $1.value.lastEventTime }).first?.key
+                if let targetKey, agents[targetKey] != nil {
+                    agents[targetKey]?.state = .toolCalling
+                    agents[targetKey]?.currentTool = toolNames.first
+                    agents[targetKey]?.lastEventTime = Date()
+                    updateActiveAgent()
+                }
+                print("[OpenClaw] Detected tool call via chat: \(toolNames) for \(targetKey ?? "unknown")")
+                return
+            }
+        }
+
+        // Also check top-level tool fields
+        if let toolName = payload["tool"] as? String ?? payload["toolName"] as? String ?? payload["name"] as? String {
+            let roleLC = role.lowercased()
+            if roleLC.contains("tool") || roleLC.contains("assistant") {
+                let key = sessionKey.isEmpty ? nil : sessionKey
+                let targetKey = key ?? agents.filter({ $0.value.state != .idle })
+                    .sorted(by: { $0.value.lastEventTime > $1.value.lastEventTime }).first?.key
+                if let targetKey, agents[targetKey] != nil {
+                    agents[targetKey]?.state = .toolCalling
+                    agents[targetKey]?.currentTool = toolName
+                    agents[targetKey]?.lastEventTime = Date()
+                    updateActiveAgent()
+                }
+                print("[OpenClaw] Detected tool call via field: \(toolName) role=\(role) for \(targetKey ?? "unknown")")
+                return
+            }
+        }
 
         // Extract text content
         let text: String?
@@ -378,13 +420,23 @@ final class OpenClawService {
     // MARK: - Agent Events
 
     private var agentPayloadLogCount = 0
+    private var agentNonLifecycleLogCount = 0
 
     private func handleAgentEvent(_ json: [String: Any]) {
         let payload = json["payload"] as? [String: Any] ?? json
 
-        if agentPayloadLogCount < 5 {
-            agentPayloadLogCount += 1
-            print("[OpenClaw] Agent payload #\(agentPayloadLogCount): \(payload)")
+        let stream = payload["stream"] as? String ?? ""
+        let data = payload["data"] as? [String: Any] ?? [:]
+        let phase = data["phase"] as? String ?? ""
+
+        agentPayloadLogCount += 1
+        if agentPayloadLogCount <= 5 || stream != "lifecycle" {
+            if agentNonLifecycleLogCount < 30 && stream != "lifecycle" {
+                agentNonLifecycleLogCount += 1
+                print("[OpenClaw] Agent payload (non-lifecycle) #\(agentNonLifecycleLogCount): stream=\(stream) phase=\(phase) keys=\(payload.keys) dataKeys=\(data.keys) payload=\(payload)")
+            } else if agentPayloadLogCount <= 5 {
+                print("[OpenClaw] Agent payload #\(agentPayloadLogCount): \(payload)")
+            }
         }
 
         // sessionKey format: "agent:<name>:<session>"
@@ -399,31 +451,42 @@ final class OpenClawService {
         let displayName = profile?.name ?? agentKey
         let emoji = profile?.emoji ?? "🦞"
 
-        let data = payload["data"] as? [String: Any] ?? [:]
-        let stream = payload["stream"] as? String ?? ""
-        let phase = data["phase"] as? String ?? ""
-
-        // Determine state from stream + phase
+        // Determine state from stream + phase (already extracted above for logging)
+        let kind = data["kind"] as? String ?? ""
         let state: AgentState
-        switch phase {
-        case "start":
-            state = .working
-        case "end", "stop", "done":
-            state = .idle
-        case "error":
-            state = .error
-        case "tool_call", "tool_use":
-            state = .toolCalling
-        case "speaking", "chat":
+        if stream == "item" && kind == "tool" {
+            // Tool call item events: stream=item, kind=tool, phase=start|end
+            switch phase {
+            case "start": state = .toolCalling
+            case "end":
+                // Tool completed — keep speaking if assistant is still streaming,
+                // otherwise stay working (lifecycle will set idle when run ends)
+                state = agents[agentId]?.state == .speaking ? .speaking : .working
+            default: state = .toolCalling
+            }
+        } else if stream == "lifecycle" {
+            switch phase {
+            case "start": state = .working
+            case "end", "stop", "done": state = .idle
+            case "error": state = .error
+            default: state = .working
+            }
+        } else if stream == "assistant" {
             state = .speaking
-        default:
-            if stream == "tool" { state = .toolCalling }
-            else if stream == "chat" || stream == "message" { state = .speaking }
-            else { state = .working }
+        } else {
+            switch phase {
+            case "tool_call", "tool_use": state = .toolCalling
+            case "speaking", "chat": state = .speaking
+            case "error": state = .error
+            default:
+                if stream == "tool" { state = .toolCalling }
+                else if stream == "chat" || stream == "message" { state = .speaking }
+                else { state = .working }
+            }
         }
 
-        let tool = data["tool"] as? String ?? data["toolName"] as? String
-        let message = data["message"] as? String ?? data["detail"] as? String ?? data["text"] as? String
+        let tool = data["name"] as? String ?? data["tool"] as? String ?? data["toolName"] as? String
+        let message = data["title"] as? String ?? data["message"] as? String ?? data["detail"] as? String ?? data["text"] as? String
         let workspace = data["workspace"] as? String ?? data["cwd"] as? String
 
         if agents[agentId] == nil {

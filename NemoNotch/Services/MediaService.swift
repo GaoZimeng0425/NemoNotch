@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 
 @Observable
 final class MediaService {
@@ -11,6 +12,7 @@ final class MediaService {
     private var needsFollowupUpdate = false
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
+    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "MediaService")
 
     init() {
         remote.registerForNotifications()
@@ -82,34 +84,26 @@ final class MediaService {
 
     private func updateNowPlaying() {
         if isUpdatingNowPlaying {
-            // Coalesce bursts from poll timer + distributed notifications.
             needsFollowupUpdate = true
-            debugLog("update coalesced while in-flight")
             return
         }
 
         isUpdatingNowPlaying = true
-        debugLog("update started")
         nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
             guard let self else { return }
             let finish: () -> Void = {
                 self.isUpdatingNowPlaying = false
                 if self.needsFollowupUpdate {
                     self.needsFollowupUpdate = false
-                    self.debugLog("running queued follow-up update")
                     self.updateNowPlaying()
                 }
             }
 
             if let cliInfo {
-                self.debugLog("applied source=cli")
                 self.applyInfo(cliInfo)
                 finish()
                 return
             }
-            // Metadata is sourced from bundled CLI helper; MediaRemote metadata
-            // fallback can emit noisy "now playing client" warnings on some systems.
-            self.debugLog("cli returned no info; skip mediaremote metadata fallback")
             finish()
         }
     }
@@ -117,7 +111,6 @@ final class MediaService {
     private func applyInfo(_ info: [String: Any]?) {
         guard let info, !info.isEmpty else {
             if !playbackState.isEmpty {
-                debugLog("cleared playback state (empty info)")
                 playbackState = PlaybackState()
             }
             return
@@ -141,7 +134,6 @@ final class MediaService {
 
         if title.isEmpty && artist.isEmpty {
             if !playbackState.isEmpty {
-                debugLog("cleared playback state (empty metadata)")
                 playbackState = PlaybackState()
             }
             return
@@ -156,12 +148,5 @@ final class MediaService {
             isPlaying: isPlaying,
             artworkData: artworkData
         )
-        debugLog("state updated title='\(title)' artist='\(artist)' playing=\(isPlaying)")
-    }
-
-    private func debugLog(_ message: String) {
-        #if DEBUG
-        print("[NemoNotch][Media][Service] \(message)")
-        #endif
     }
 }

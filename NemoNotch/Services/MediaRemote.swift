@@ -1,5 +1,6 @@
 import Foundation
 import ObjectiveC.runtime
+import os
 
 final class MediaRemote {
     static let shared = MediaRemote()
@@ -20,6 +21,7 @@ final class MediaRemote {
     private typealias SetCanBeNowPlayingFn = @convention(c) (Bool) -> Void
     private static let initialDelayMs = 150
     private static let hardTimeoutMs = 3500
+    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "MediaRemote")
 
     private let getNowPlayingInfoFn: GetNowPlayingInfoFn?
     private let getNowPlayingApplicationPIDFn: GetNowPlayingApplicationPIDFn?
@@ -31,7 +33,7 @@ final class MediaRemote {
         let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
         let handle = dlopen(frameworkPath, RTLD_NOW | RTLD_GLOBAL)
         if handle == nil {
-            print("[NemoNotch] dlopen MediaRemote failed: \(String(cString: dlerror()))")
+            Self.logger.error("dlopen MediaRemote failed: \(String(cString: dlerror()))")
         }
 
         let bundleURL = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/MediaRemote.framework")
@@ -85,7 +87,6 @@ final class MediaRemote {
     /// 3) if empty, fallback to MRNowPlayingController API
     /// 4) enforce hard timeout to avoid hanging the caller
     func getNowPlayingInfoWithFallback(completion: @escaping ([String: Any]?) -> Void) {
-        Self.debugLog("start fallback query")
         var finished = false
         let finish: ([String: Any]?) -> Void = { info in
             guard !finished else { return }
@@ -94,7 +95,6 @@ final class MediaRemote {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.hardTimeoutMs)) {
-            Self.debugLog("source=mediaremote timeout")
             finish(nil)
         }
 
@@ -109,11 +109,9 @@ final class MediaRemote {
                     return
                 }
                 if let info, Self.hasMetadata(info) {
-                    Self.debugLog("source=mediaremote/old-api success")
                     finish(info)
                     return
                 }
-                Self.debugLog("source=mediaremote/old-api empty, fallback new-controller")
                 self.getNowPlayingApplicationPID { [weak self] pid in
                     guard let self else {
                         finish(nil)
@@ -121,17 +119,11 @@ final class MediaRemote {
                     }
                     let resolvedPID = Int32(pid ?? 0)
                     guard resolvedPID > 0 else {
-                        Self.debugLog("source=mediaremote skip new-controller (no active client)")
                         finish(nil)
                         return
                     }
 
                     self.queryViaNewControllerAPI { info in
-                        if info != nil {
-                            Self.debugLog("source=mediaremote/new-controller success")
-                        } else {
-                            Self.debugLog("source=mediaremote/new-controller empty")
-                        }
                         finish(info)
                     }
                 }
@@ -276,11 +268,5 @@ final class MediaRemote {
         let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
         let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
         return !(title.isEmpty && artist.isEmpty)
-    }
-
-    private static func debugLog(_ message: String) {
-        #if DEBUG
-        print("[NemoNotch][Media][MediaRemote] \(message)")
-        #endif
     }
 }
