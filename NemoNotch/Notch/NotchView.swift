@@ -19,6 +19,9 @@ struct NotchView: View {
     private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
+    @State private var shownHasActiveBadge: Bool = false
+    @State private var hideBadgeTask: Task<Void, Never>? = nil
+
     private var hasActiveBadge: Bool {
         if !notificationService.badges.isEmpty { return true }
         if mediaService.playbackState.isPlaying { return true }
@@ -34,7 +37,7 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch coordinator.status {
         case .closed:
-            let extraWidth: CGFloat = hasActiveBadge ? NotchConstants.badgePadding * 2 : 0
+            let extraWidth: CGFloat = shownHasActiveBadge ? NotchConstants.badgePadding * 2 : 0
             return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth, height: hardwareNotchSize.height)
         case .opened:
             return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
@@ -67,6 +70,24 @@ struct NotchView: View {
             }
         }
         .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
+        .onAppear { shownHasActiveBadge = hasActiveBadge }
+        .onChange(of: hasActiveBadge) { _, newValue in
+            if newValue {
+                hideBadgeTask?.cancel()
+                withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
+                    shownHasActiveBadge = true
+                }
+            } else {
+                hideBadgeTask?.cancel()
+                hideBadgeTask = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeInOut(duration: NotchConstants.badgeFadeDuration)) {
+                        shownHasActiveBadge = false
+                    }
+                }
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
@@ -79,7 +100,7 @@ struct NotchView: View {
             cornerRadius: notchCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing
         )
-        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: hasActiveBadge)
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
     }
 
     private var openedContent: some View {
@@ -115,7 +136,7 @@ struct NotchView: View {
     }
 
     private var compactBadges: some View {
-        let spread: CGFloat = hasActiveBadge ? NotchConstants.badgeSpread : 0
+        let spread: CGFloat = shownHasActiveBadge ? NotchConstants.badgeSpread : 0
         return ZStack {
             CompactBadge(
                 side: .left,
@@ -130,7 +151,7 @@ struct NotchView: View {
                 }
             )
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
-                .opacity(hasActiveBadge ? 1 : 0)
+                .opacity(shownHasActiveBadge ? 1 : 0)
             CompactBadge(
                 side: .right,
                 onTap: { tab in
@@ -144,7 +165,7 @@ struct NotchView: View {
                 }
             )
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
-                .opacity(hasActiveBadge ? 1 : 0)
+                .opacity(shownHasActiveBadge ? 1 : 0)
         }
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
         .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: notificationService.badges.isEmpty)

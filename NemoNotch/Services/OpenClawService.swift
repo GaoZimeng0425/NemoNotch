@@ -332,15 +332,8 @@ final class OpenClawService {
 
     // MARK: - Chat Events
 
-    private var chatPayloadLogCount = 0
-
     private func handleChatEvent(_ json: [String: Any]) {
         let payload = json["payload"] as? [String: Any] ?? [:]
-
-        if chatPayloadLogCount < 20 {
-            chatPayloadLogCount += 1
-            print("[OpenClaw] Chat payload #\(chatPayloadLogCount): \(payload)")
-        }
 
         // Find the agent by sessionKey or sender
         let sessionKey = payload["sessionKey"] as? String ?? ""
@@ -365,7 +358,6 @@ final class OpenClawService {
                     agents[targetKey]?.lastEventTime = Date()
                     updateActiveAgent()
                 }
-                print("[OpenClaw] Detected tool call via chat: \(toolNames) for \(targetKey ?? "unknown")")
                 return
             }
         }
@@ -383,7 +375,6 @@ final class OpenClawService {
                     agents[targetKey]?.lastEventTime = Date()
                     updateActiveAgent()
                 }
-                print("[OpenClaw] Detected tool call via field: \(toolName) role=\(role) for \(targetKey ?? "unknown")")
                 return
             }
         }
@@ -419,25 +410,12 @@ final class OpenClawService {
 
     // MARK: - Agent Events
 
-    private var agentPayloadLogCount = 0
-    private var agentNonLifecycleLogCount = 0
-
     private func handleAgentEvent(_ json: [String: Any]) {
         let payload = json["payload"] as? [String: Any] ?? json
 
         let stream = payload["stream"] as? String ?? ""
         let data = payload["data"] as? [String: Any] ?? [:]
         let phase = data["phase"] as? String ?? ""
-
-        agentPayloadLogCount += 1
-        if agentPayloadLogCount <= 5 || stream != "lifecycle" {
-            if agentNonLifecycleLogCount < 30 && stream != "lifecycle" {
-                agentNonLifecycleLogCount += 1
-                print("[OpenClaw] Agent payload (non-lifecycle) #\(agentNonLifecycleLogCount): stream=\(stream) phase=\(phase) keys=\(payload.keys) dataKeys=\(data.keys) payload=\(payload)")
-            } else if agentPayloadLogCount <= 5 {
-                print("[OpenClaw] Agent payload #\(agentPayloadLogCount): \(payload)")
-            }
-        }
 
         // sessionKey format: "agent:<name>:<session>"
         guard let sessionKey = payload["sessionKey"] as? String else { return }

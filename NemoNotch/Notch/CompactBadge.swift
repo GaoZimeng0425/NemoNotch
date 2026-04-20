@@ -15,13 +15,16 @@ struct CompactBadge: View {
     let onTap: (Tab) -> Void
     let onOpenApp: (String) -> Void
 
-    private enum BadgeInfo {
+    private enum BadgeInfo: Equatable {
         case notification(String)  // bundleID
         case media
         case claude(ClaudeStatus, String?, Bool)  // status, currentTool, isPreToolUse
         case openclaw(AgentState, String, String)  // state, emoji, name
         case calendar
     }
+
+    @State private var shownBadge: BadgeInfo? = nil
+    @State private var hideTask: Task<Void, Never>? = nil
 
     private var activeBadge: BadgeInfo? {
         // 1. Notification (needs attention)
@@ -60,7 +63,7 @@ struct CompactBadge: View {
 
     var body: some View {
         Group {
-            if let badge = activeBadge {
+            if let badge = shownBadge {
                 Button {
                     switch badge {
                     case .notification(let bundleID): onOpenApp(bundleID)
@@ -113,6 +116,22 @@ struct CompactBadge: View {
                 }
                 .frame(width: side == .left ? 16 : 18, height: side == .left ? 16 : 18)
                 .buttonStyle(.plain)
+            }
+        }
+        .onAppear { shownBadge = activeBadge }
+        .onChange(of: activeBadge) { _, newBadge in
+            if let newBadge {
+                hideTask?.cancel()
+                shownBadge = newBadge
+            } else if shownBadge != nil {
+                hideTask?.cancel()
+                hideTask = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        shownBadge = nil
+                    }
+                }
             }
         }
     }
