@@ -23,6 +23,7 @@ struct NotchView: View {
     @State private var hideBadgeTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
     @State private var contentOpacity: Double = 1
+    @State private var slideForward: Bool = true
 
     private var hasActiveBadge: Bool {
         if !notificationService.badges.isEmpty { return true }
@@ -135,8 +136,8 @@ struct NotchView: View {
         .id(coordinator.selectedTab)
         .clipped()
         .transition(.asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .trailing)),
-            removal: .opacity.combined(with: .move(edge: .leading))
+            insertion: .opacity.combined(with: .move(edge: slideForward ? .trailing : .leading)),
+            removal: .opacity.combined(with: .move(edge: slideForward ? .leading : .trailing))
         ))
         .offset(x: dragOffset)
         .gesture(
@@ -153,8 +154,10 @@ struct NotchView: View {
                         dragOffset = 0
                     }
                     if value.translation.width < -threshold && currentIndex + 1 < tabs.count {
+                        slideForward = true
                         coordinator.selectNextTab()
                     } else if value.translation.width > threshold && currentIndex > 0 {
+                        slideForward = false
                         coordinator.selectPreviousTab()
                     }
                 }
