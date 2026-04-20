@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		45192C792F95E3EC00C7BB09 /* CocoaLumberjack in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022F9363C40037E18E /* CocoaLumberjack */; };
+		45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022F9363C40037E18E /* CocoaLumberjackSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,7 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				45192C792F95E3EC00C7BB09 /* CocoaLumberjack in Frameworks */,
+				45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,7 +70,7 @@
 			);
 			name = NemoNotch;
 			packageProductDependencies = (
-				AA0000022F9363C40037E18E /* CocoaLumberjack */,
+				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
 			);
 			productName = NemoNotch;
 			productReference = 45DDDF802F9363C40037E18E /* NemoNotch.app */;
@@ -399,7 +399,7 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		AA0000022F9363C40037E18E /* CocoaLumberjack */ = {
+		AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
 			productName = CocoaLumberjackSwift;

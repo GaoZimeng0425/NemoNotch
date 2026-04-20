@@ -120,7 +120,7 @@ struct NotchView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
-        .frame(width: notchSize.width + notchCornerRadius * 2, height: notchSize.height)
+        .frame(width: notchSize.width, height: notchSize.height)
         .clipShape(.rect(
             bottomLeadingRadius: notchCornerRadius,
             bottomTrailingRadius: notchCornerRadius
