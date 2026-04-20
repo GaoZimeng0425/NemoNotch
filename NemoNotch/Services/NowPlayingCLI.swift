@@ -294,18 +294,20 @@ final class NowPlayingCLI {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
 
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
 
         var stdoutData = Data()
         var stderrData = Data()
-        stdout.fileHandleForReading.readabilityHandler = { handle in
-            stdoutData.append(handle.availableData)
+        let readQueue = DispatchQueue(label: "NemoNotch.pipe-read", qos: .utility)
+
+        readQueue.async {
+            stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         }
-        stderr.fileHandleForReading.readabilityHandler = { handle in
-            stderrData.append(handle.availableData)
+        readQueue.async {
+            stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
         }
 
         let semaphore = DispatchSemaphore(value: 0)
@@ -313,8 +315,6 @@ final class NowPlayingCLI {
         do {
             try process.run()
         } catch {
-            stdout.fileHandleForReading.readabilityHandler = nil
-            stderr.fileHandleForReading.readabilityHandler = nil
             LogService.error("\(sourceTag) failed to run: \(error.localizedDescription)", category: "NowPlayingCLI")
             return nil
         }
@@ -326,8 +326,6 @@ final class NowPlayingCLI {
 
         let timeout = processTimeoutSeconds
         let waitResult = semaphore.wait(timeout: .now() + timeout)
-        stdout.fileHandleForReading.readabilityHandler = nil
-        stderr.fileHandleForReading.readabilityHandler = nil
 
         if waitResult == .timedOut {
             LogService.error("\(sourceTag) timed out after \(timeout)s", category: "NowPlayingCLI")

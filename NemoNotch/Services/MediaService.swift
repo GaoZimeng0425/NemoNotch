@@ -87,23 +87,26 @@ final class MediaService {
         }
 
         isUpdatingNowPlaying = true
-        nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
-            guard let self else { return }
-            let finish: () -> Void = {
-                self.isUpdatingNowPlaying = false
-                if self.needsFollowupUpdate {
-                    self.needsFollowupUpdate = false
-                    self.updateNowPlaying()
-                }
-            }
 
-            if let cliInfo {
-                self.applyInfo(cliInfo)
-                finish()
-                return
+        let finish: () -> Void = { [weak self] in
+            self?.isUpdatingNowPlaying = false
+            if self?.needsFollowupUpdate == true {
+                self?.needsFollowupUpdate = false
+                self?.updateNowPlaying()
             }
+        }
+
+        nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
+            guard let self else { finish(); return }
+            self.applyInfo(cliInfo)
             finish()
         }
+    }
+
+    private static func hasMetadata(_ info: [String: Any]) -> Bool {
+        let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
+        let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
+        return !(title.isEmpty && artist.isEmpty)
     }
 
     private func applyInfo(_ info: [String: Any]?) {

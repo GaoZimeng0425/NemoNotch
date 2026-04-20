@@ -73,6 +73,7 @@ struct NotchView: View {
         .onAppear { shownHasActiveBadge = hasActiveBadge }
         .onChange(of: hasActiveBadge) { _, newValue in
             if newValue {
+                LogService.debug("badge appeared: notifications=\(!notificationService.badges.isEmpty) media=\(mediaService.playbackState.isPlaying) claude=\(claudeService.activeSession?.status == .working) openclaw=\(openClawService.activeAgent != nil) calendar=\(calendarService.nextEvent != nil)", category: "NotchView")
                 hideBadgeTask?.cancel()
                 withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
                     shownHasActiveBadge = true

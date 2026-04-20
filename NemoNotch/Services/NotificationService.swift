@@ -103,6 +103,11 @@ final class NotificationService {
             updatedBadges[bundleID] = BadgeItem(bundleID: bundleID, count: count, icon: icon)
         }
 
+        if !updatedBadges.isEmpty {
+            for (id, item) in updatedBadges {
+                LogService.debug("badge: \(id) count=\(item.count) iconSize=\(item.icon.size)", category: "NotificationService")
+            }
+        }
         badges = updatedBadges
     }
 
