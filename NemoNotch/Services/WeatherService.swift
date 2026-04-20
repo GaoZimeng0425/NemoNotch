@@ -23,6 +23,9 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
         locationManager.requestAlwaysAuthorization()
+
+        // Immediately fetch by IP as fallback
+        fetchWeather()
         locationManager.startMonitoringSignificantLocationChanges()
 
         timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
