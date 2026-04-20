@@ -61,7 +61,7 @@ final class OpenClawService {
             }
         }
 
-        print("[OpenClaw] Installed: port=\(port), hasToken=\(token != nil), deviceId=\(id.prefix(8))...")
+        LogService.info("Installed: port=\(port), hasToken=\(token != nil), deviceId=\(id.prefix(8))...", category: "OpenClaw")
     }
 
     // MARK: - Device Identity
@@ -157,12 +157,12 @@ final class OpenClawService {
 
     func connect() {
         guard isInstalled else {
-            print("[OpenClaw] Not installed, skipping connect")
+            LogService.warn("Not installed, skipping connect", category: "OpenClaw")
             return
         }
         disconnect()
 
-        print("[OpenClaw] Connecting to \(gatewayURL)...")
+        LogService.info("Connecting to \(gatewayURL)...", category: "OpenClaw")
         let session = URLSession(configuration: .default)
         urlSession = session
 
@@ -194,7 +194,7 @@ final class OpenClawService {
                 self.handleMessage(message)
                 self.receiveMessage()
             case .failure(let error):
-                print("[OpenClaw] WebSocket error: \(error)")
+                LogService.error("WebSocket error: \(error)", category: "OpenClaw")
                 self.scheduleReconnect()
             }
         }
@@ -219,7 +219,7 @@ final class OpenClawService {
 
     private func handleEvent(_ json: [String: Any]) {
         let event = json["event"] as? String ?? ""
-        print("[OpenClaw] Event: \(event)")
+        LogService.debug("Event: \(event)", category: "OpenClaw")
 
         switch event {
         case "connect.challenge":
@@ -233,7 +233,7 @@ final class OpenClawService {
         case "heartbeat":
             gatewayOnline = true
         default:
-            print("[OpenClaw] Unknown event: \(event), keys: \(json.keys)")
+            LogService.warn("Unknown event: \(event), keys: \(json.keys)", category: "OpenClaw")
         }
     }
 
@@ -243,7 +243,7 @@ final class OpenClawService {
         guard let payload = json["payload"] as? [String: Any],
               let nonce = payload["nonce"] as? String else { return }
 
-        print("[OpenClaw] Challenge received, nonce=\(nonce)")
+        LogService.debug("Challenge received, nonce=\(nonce)", category: "OpenClaw")
         let requestId = UUID().uuidString.lowercased()
         pendingConnectId = requestId
 
@@ -293,9 +293,9 @@ final class OpenClawService {
 
         webSocketTask?.send(.string(jsonString)) { error in
             if let error {
-                print("[OpenClaw] Auth send error: \(error)")
+                LogService.error("Auth send error: \(error)", category: "OpenClaw")
             } else {
-                print("[OpenClaw] Auth sent with device identity, waiting for response...")
+                LogService.info("Auth sent with device identity, waiting for response...", category: "OpenClaw")
             }
         }
     }
@@ -303,28 +303,28 @@ final class OpenClawService {
     private func handleResponse(_ json: [String: Any]) {
         let id = json["id"] as? String ?? ""
         let ok = json["ok"] as? Bool ?? false
-        print("[OpenClaw] Response: id=\(id), ok=\(ok)")
+        LogService.debug("Response: id=\(id), ok=\(ok)", category: "OpenClaw")
 
         if id == pendingConnectId {
             pendingConnectId = nil
             if ok {
-                print("[OpenClaw] Auth successful!")
+                LogService.info("Auth successful!", category: "OpenClaw")
                 gatewayOnline = true
                 startTTLTimer()
                 // Parse initial snapshot from hello-ok result
                 if let result = json["result"] as? [String: Any] {
-                    print("[OpenClaw] Snapshot keys: \(result.keys)")
+                    LogService.debug("Snapshot keys: \(result.keys)", category: "OpenClaw")
                     if let agents = result["agents"] as? [[String: Any]] {
-                        print("[OpenClaw] Initial agents: \(agents.count)")
+                        LogService.info("Initial agents: \(agents.count)", category: "OpenClaw")
                         for a in agents { handleAgentEvent(["payload": a]) }
                     }
                     if let sessions = result["sessions"] as? [[String: Any]] {
-                        print("[OpenClaw] Initial sessions: \(sessions.count)")
+                        LogService.info("Initial sessions: \(sessions.count)", category: "OpenClaw")
                         for s in sessions { handleAgentEvent(["payload": s]) }
                     }
                 }
             } else {
-                print("[OpenClaw] Auth failed: \(json["error"] ?? "unknown")")
+                LogService.error("Auth failed: \(json["error"] ?? "unknown")", category: "OpenClaw")
                 scheduleReconnect()
             }
         }

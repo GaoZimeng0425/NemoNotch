@@ -1,6 +1,5 @@
 import Foundation
 import ObjectiveC.runtime
-import os
 
 final class MediaRemote {
     static let shared = MediaRemote()
@@ -21,7 +20,6 @@ final class MediaRemote {
     private typealias SetCanBeNowPlayingFn = @convention(c) (Bool) -> Void
     private static let initialDelayMs = 150
     private static let hardTimeoutMs = 3500
-    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "MediaRemote")
 
     private let getNowPlayingInfoFn: GetNowPlayingInfoFn?
     private let getNowPlayingApplicationPIDFn: GetNowPlayingApplicationPIDFn?
@@ -33,7 +31,7 @@ final class MediaRemote {
         let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
         let handle = dlopen(frameworkPath, RTLD_NOW | RTLD_GLOBAL)
         if handle == nil {
-            Self.logger.error("dlopen MediaRemote failed: \(String(cString: dlerror()))")
+            LogService.error("dlopen MediaRemote failed: \(String(cString: dlerror()))", category: "MediaRemote")
         }
 
         let bundleURL = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/MediaRemote.framework")

@@ -3,3 +3,6 @@
 
 # Xcode user data
 *.xcuserdatad
+
+# Logs
+logs/

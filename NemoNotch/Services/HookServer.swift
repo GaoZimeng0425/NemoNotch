@@ -1,10 +1,8 @@
 import Foundation
 import Network
-import os
 
 @Observable
 final class HookServer {
-    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "HookServer")
     private var listener: NWListener?
     private(set) var isRunning = false
     private(set) var port: UInt16 = NotchConstants.hookBasePort
@@ -35,7 +33,7 @@ final class HookServer {
                 switch state {
                 case .ready:
                     self.isRunning = true
-                    Self.logger.info("Hook server listening on port \(self.port)")
+                    LogService.info("Hook server listening on port \(self.port)", category: "HookServer")
                     self.onReady?(self.port)
                 case .failed(let error):
                     self.isRunning = false

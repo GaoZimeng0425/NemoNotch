@@ -81,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
 
+        _ = LogService.shared
+
         let settings = AppSettings()
         let media = MediaService()
         let calendar = CalendarService()

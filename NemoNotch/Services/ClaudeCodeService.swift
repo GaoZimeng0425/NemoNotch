@@ -1,9 +1,7 @@
 import Foundation
-import os
 
 @Observable
 final class ClaudeCodeService {
-    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "ClaudeCodeService")
     var sessions: [String: ClaudeState] = [:]
     var activeSession: ClaudeState?
     var isHookInstalled = false
@@ -34,7 +32,7 @@ final class ClaudeCodeService {
         do {
             try hookServer.start()
         } catch {
-            Self.logger.error("Failed to start hook server: \(error)")
+            LogService.error("Failed to start hook server: \(error)", category: "ClaudeCode")
         }
     }
 
@@ -44,7 +42,7 @@ final class ClaudeCodeService {
             try HookInstaller.install(port: port)
             isHookInstalled = true
         } catch {
-            Self.logger.error("Failed to install hooks: \(error)")
+            LogService.error("Failed to install hooks: \(error)", category: "ClaudeCode")
         }
     }
 
@@ -53,7 +51,7 @@ final class ClaudeCodeService {
             try HookInstaller.uninstall()
             isHookInstalled = false
         } catch {
-            Self.logger.error("Failed to uninstall hooks: \(error)")
+            LogService.error("Failed to uninstall hooks: \(error)", category: "ClaudeCode")
         }
     }
 

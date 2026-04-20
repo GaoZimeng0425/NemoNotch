@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import os
 
 @Observable
 final class MediaService {
@@ -12,7 +11,6 @@ final class MediaService {
     private var needsFollowupUpdate = false
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
-    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "MediaService")
 
     init() {
         remote.registerForNotifications()

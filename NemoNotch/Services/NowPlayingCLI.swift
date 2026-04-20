@@ -1,8 +1,6 @@
 import Foundation
-import os
 
 final class NowPlayingCLI {
-    private static let logger = Logger(subsystem: "com.gaozimeng.NemoNotch", category: "NowPlayingCLI")
     private static let infoKeyMapping: [String: String] = [
         "title": "kMRMediaRemoteNowPlayingInfoTitle",
         "artist": "kMRMediaRemoteNowPlayingInfoArtist",
@@ -179,7 +177,7 @@ final class NowPlayingCLI {
 
         let stderr = Pipe()
         guard let outputHandle = FileHandle(forWritingAtPath: tempDest) else {
-            Self.logger.error("bundled extract failed to create temp output")
+            LogService.error("bundled extract failed to create temp output", category: "NowPlayingCLI")
             return nil
         }
         process.standardOutput = outputHandle
@@ -190,7 +188,7 @@ final class NowPlayingCLI {
         do {
             try process.run()
         } catch {
-            Self.logger.error("bundled extract failed to run gunzip: \(error.localizedDescription)")
+            LogService.error("bundled extract failed to run gunzip: \(error.localizedDescription)", category: "NowPlayingCLI")
             try? outputHandle.close()
             try? FileManager.default.removeItem(atPath: tempDest)
             return nil
@@ -204,7 +202,7 @@ final class NowPlayingCLI {
         let waitResult = semaphore.wait(timeout: .now() + extractionTimeoutSeconds)
         try? outputHandle.close()
         if waitResult == .timedOut {
-            Self.logger.error("bundled extract timed out after \(extractionTimeoutSeconds)s")
+            LogService.error("bundled extract timed out after \(extractionTimeoutSeconds)s", category: "NowPlayingCLI")
             process.terminate()
             _ = semaphore.wait(timeout: .now() + 1)
             try? FileManager.default.removeItem(atPath: tempDest)
@@ -214,9 +212,9 @@ final class NowPlayingCLI {
         guard process.terminationStatus == 0 else {
             if let stderrText = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
                !stderrText.isEmpty {
-                Self.logger.error("bundled extract exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))")
+                LogService.error("bundled extract exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
             } else {
-                Self.logger.error("bundled extract exit=\(process.terminationStatus)")
+                LogService.error("bundled extract exit=\(process.terminationStatus)", category: "NowPlayingCLI")
             }
             try? FileManager.default.removeItem(atPath: tempDest)
             return nil
@@ -226,7 +224,7 @@ final class NowPlayingCLI {
             let attrs = try FileManager.default.attributesOfItem(atPath: tempDest)
             let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
             guard size > 0 else {
-                Self.logger.error("bundled extract produced empty output")
+                LogService.error("bundled extract produced empty output", category: "NowPlayingCLI")
                 try? FileManager.default.removeItem(atPath: tempDest)
                 return nil
             }
@@ -306,7 +304,7 @@ final class NowPlayingCLI {
         do {
             try process.run()
         } catch {
-            Self.logger.error("\(sourceTag) failed to run: \(error.localizedDescription)")
+            LogService.error("\(sourceTag) failed to run: \(error.localizedDescription)", category: "NowPlayingCLI")
             return nil
         }
 
@@ -318,7 +316,7 @@ final class NowPlayingCLI {
         let timeout = processTimeoutSeconds
         let waitResult = semaphore.wait(timeout: .now() + timeout)
         if waitResult == .timedOut {
-            Self.logger.error("\(sourceTag) timed out after \(timeout)s")
+            LogService.error("\(sourceTag) timed out after \(timeout)s", category: "NowPlayingCLI")
             process.terminate()
             _ = semaphore.wait(timeout: .now() + 1)
             return nil
@@ -327,9 +325,9 @@ final class NowPlayingCLI {
         let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
         if process.terminationStatus != 0 {
             if let stderrText = String(data: stderrData, encoding: .utf8), !stderrText.isEmpty {
-                Self.logger.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))")
+                LogService.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
             } else {
-                Self.logger.error("\(sourceTag) exit=\(process.terminationStatus)")
+                LogService.error("\(sourceTag) exit=\(process.terminationStatus)", category: "NowPlayingCLI")
             }
             return nil
         }

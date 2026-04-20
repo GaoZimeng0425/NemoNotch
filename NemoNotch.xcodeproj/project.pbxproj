@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		45192C792F95E3EC00C7BB09 /* CocoaLumberjack in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022F9363C40037E18E /* CocoaLumberjack */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		45DDDF802F9363C40037E18E /* NemoNotch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NemoNotch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				45192C792F95E3EC00C7BB09 /* CocoaLumberjack in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = NemoNotch;
 			packageProductDependencies = (
+				AA0000022F9363C40037E18E /* CocoaLumberjack */,
 			);
 			productName = NemoNotch;
 			productReference = 45DDDF802F9363C40037E18E /* NemoNotch.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 45DDDF772F9363C40037E18E;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45DDDF812F9363C40037E18E /* Products */;
 			projectDirPath = "";
@@ -377,6 +386,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/CocoaLumberjack/CocoaLumberjack.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.8.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA0000022F9363C40037E18E /* CocoaLumberjack */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
+			productName = CocoaLumberjackSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 45DDDF782F9363C40037E18E /* Project object */;
 }
