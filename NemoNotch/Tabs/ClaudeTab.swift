@@ -126,16 +126,20 @@ struct ClaudeTab: View {
 
             Spacer(minLength: 0)
 
-            Circle()
-                .fill(dotColor(session.status))
-                .frame(width: 6, height: 6)
-                .modifier(PulseModifier(isActive: session.status == .working))
+            if let ctx = approvalContext(for: session) {
+                approvalButtons(for: session, ctx: ctx)
+            } else {
+                Circle()
+                    .fill(dotColor(session.status))
+                    .frame(width: 6, height: 6)
+                    .modifier(PulseModifier(isActive: session.status == .working))
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.06))
+                .fill(approvalContext(for: session) != nil ? .orange.opacity(0.08) : .white.opacity(0.06))
         )
     }
 
@@ -177,5 +181,64 @@ struct ClaudeTab: View {
         let minutes = Int(interval / 60)
         if minutes < 60 { return "\(minutes) 分钟前" }
         return "\(minutes / 60) 小时前"
+    }
+
+    private func approvalContext(for session: ClaudeState) -> PermissionContext? {
+        if case .waitingForApproval(let ctx) = session.phase { return ctx }
+        return nil
+    }
+
+    private func approvalButtons(for session: ClaudeState, ctx: PermissionContext) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 4) {
+                Text(ctx.toolName)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.orange.opacity(0.9))
+                if !ctx.displayInput.isEmpty {
+                    Text(ctx.displayInput)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .lineLimit(1)
+                }
+            }
+
+            HStack(spacing: 4) {
+                if ctx.isInteractiveTool {
+                    Text("需要输入")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.white.opacity(0.08))
+                        .clipShape(Capsule())
+                } else {
+                    Button {
+                        claudeService.respondToPermission(sessionId: session.id, approved: false)
+                    } label: {
+                        Text("拒绝")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(.white.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        claudeService.respondToPermission(sessionId: session.id, approved: true)
+                    } label: {
+                        Text("允许")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(.white.opacity(0.9))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }

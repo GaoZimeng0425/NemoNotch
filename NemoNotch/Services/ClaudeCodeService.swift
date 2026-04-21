@@ -123,7 +123,7 @@ final class ClaudeCodeService {
         case "PermissionRequest":
             ensureSession()
             let ctx = PermissionContext(
-                toolUseId: event.toolName ?? "unknown",
+                toolUseId: event.toolUseId ?? event.toolName ?? "unknown",
                 toolName: event.toolName ?? "unknown",
                 toolInput: event.message,
                 receivedAt: now
@@ -131,7 +131,7 @@ final class ClaudeCodeService {
             sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .waitingForApproval(ctx)) ?? .waitingForApproval(ctx)
             updateContext()
             sessions[sessionId]?.lastEventTime = now
-            LogService.info("Permission request: \(ctx.toolName) for session \(sessionId.prefix(8))", category: "ClaudeCode")
+            LogService.info("Permission request: \(ctx.toolName) (\(ctx.toolUseId)) for session \(sessionId.prefix(8))", category: "ClaudeCode")
 
         case "Stop":
             if sessions[sessionId] != nil {
@@ -144,6 +144,7 @@ final class ClaudeCodeService {
             }
 
         case "SessionEnd":
+            hookServer.cancelPendingPermissions(sessionId: sessionId)
             watcherManager.stopWatching(sessionId: sessionId)
             sessions.removeValue(forKey: sessionId)
 

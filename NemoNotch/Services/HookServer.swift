@@ -135,12 +135,13 @@ final class HookServer {
             return
         }
 
-        responseWaiters[sessionId] = { [weak self] response in
+        let waitKey = sessionId + ":" + (event.toolUseId ?? UUID().uuidString)
+        responseWaiters[waitKey] = { [weak self] response in
             self?.sendResponse(fd: fd, response: response)
         }
 
         socketQueue.asyncAfter(deadline: .now() + 120) { [weak self] in
-            if let waiter = self?.responseWaiters.removeValue(forKey: sessionId) {
+            if let waiter = self?.responseWaiters.removeValue(forKey: waitKey) {
                 waiter(#"{"decision":"deny","reason":"timeout"}"#)
             }
         }
@@ -149,8 +150,19 @@ final class HookServer {
     func respondToPermission(sessionId: String, approved: Bool) {
         let response = #"{"decision":"\#(approved ? "allow" : "deny")"}"#
         socketQueue.async { [weak self] in
-            if let waiter = self?.responseWaiters.removeValue(forKey: sessionId) {
-                waiter(response)
+            guard let self else { return }
+            if let key = self.responseWaiters.keys.first(where: { $0.hasPrefix(sessionId + ":") }) {
+                self.responseWaiters.removeValue(forKey: key)?(response)
+            }
+        }
+    }
+
+    func cancelPendingPermissions(sessionId: String) {
+        socketQueue.async { [weak self] in
+            guard let self else { return }
+            let matching = self.responseWaiters.keys.filter { $0.hasPrefix(sessionId + ":") }
+            for key in matching {
+                self.responseWaiters.removeValue(forKey: key)?(#"{"decision":"deny","reason":"session ended"}"#)
             }
         }
     }

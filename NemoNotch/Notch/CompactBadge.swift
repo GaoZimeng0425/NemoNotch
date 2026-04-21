@@ -102,17 +102,29 @@ struct CompactBadge: View {
                         Image(systemName: "play.fill")
                             .foregroundStyle(.white.opacity(0.9))
                     case .claude(let status, let tool, let isPre) where side == .right:
-                        Image(systemName: ToolStyle.icon(tool))
-                            .foregroundStyle(ToolStyle.color(tool).opacity(0.9))
-                            .modifier(PulseModifier(isActive: status == .working))
-                            .overlay {
-                                if isPre {
-                                    Circle()
-                                        .stroke(ToolStyle.color(tool), lineWidth: 1.5)
-                                        .frame(width: 16, height: 16)
-                                        .modifier(GlowPulseModifier())
+                        if status == .waiting && claudeService.activeSession?.phase.isWaitingForApproval == true {
+                            Circle()
+                                .fill(Color.orange.opacity(0.3))
+                                .frame(width: 16, height: 16)
+                                .overlay {
+                                    Image(systemName: "exclamationmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(.orange)
                                 }
-                            }
+                                .modifier(PulseModifier(isActive: true))
+                        } else {
+                            Image(systemName: ToolStyle.icon(tool))
+                                .foregroundStyle(ToolStyle.color(tool).opacity(0.9))
+                                .modifier(PulseModifier(isActive: status == .working))
+                                .overlay {
+                                    if isPre {
+                                        Circle()
+                                            .stroke(ToolStyle.color(tool), lineWidth: 1.5)
+                                            .frame(width: 16, height: 16)
+                                            .modifier(GlowPulseModifier())
+                                    }
+                                }
+                        }
                     case .openclaw(let state, let emoji, _) where side == .right:
                         Text(emoji)
                             .font(.system(size: 10))

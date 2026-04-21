@@ -18,7 +18,7 @@ enum HookInstaller {
         "PermissionRequest",
     ]
 
-    private static let scriptVersion = "# version: 3"
+    private static let scriptVersion = "# version: 4"
 
     static func isInstalled() -> Bool {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: claudeSettingsPath)),
@@ -118,7 +118,11 @@ enum HookInstaller {
         SOCKET="\(socketPath)"
         [ -S "$SOCKET" ] || exit 0
         INPUT=$(cat 2>/dev/null || echo '{}')
-        echo "$INPUT" | nc -U -w 1 "$SOCKET" 2>/dev/null || true
+        if echo "$INPUT" | grep -q '"PermissionRequest"'; then
+            echo "$INPUT" | nc -U -w 120 "$SOCKET" 2>/dev/null
+        else
+            echo "$INPUT" | nc -U -w 1 "$SOCKET" 2>/dev/null || true
+        fi
         exit 0
         """
 
