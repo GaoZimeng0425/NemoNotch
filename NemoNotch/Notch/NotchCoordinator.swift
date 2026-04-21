@@ -256,7 +256,7 @@ final class NotchCoordinator {
         let menu = NSMenu()
         let delegate = ContextMenuDelegate(
             onClose: { [weak self] in self?.isContextMenuVisible = false },
-            onSettings: { AppDelegate.shared.showSettings() },
+            onSettings: { @MainActor in AppDelegate.shared.showSettings() },
             onQuit: { NSApp.terminate(nil) }
         )
         contextMenuDelegate = delegate
