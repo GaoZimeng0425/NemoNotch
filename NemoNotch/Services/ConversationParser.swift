@@ -153,11 +153,15 @@ enum ConversationParser {
         return ""
     }
 
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     private static func parseTimestamp(_ json: [String: Any]) -> Date? {
         guard let ts = json["timestamp"] as? String else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: ts)
+        return isoFormatter.date(from: ts)
     }
 
     private static let interruptPatterns = [

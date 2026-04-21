@@ -181,29 +181,31 @@ final class ClaudeCodeService {
         guard let filePath = ConversationParser.conversationPath(sessionId: sessionId, cwd: cwd) else { return }
 
         let offset = sessions[sessionId]?.lastParsedOffset ?? 0
-        let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.sessions[sessionId] != nil else { return }
+            DispatchQueue.main.async {
+                guard let self, self.sessions[sessionId] != nil else { return }
 
-            if result.cleared {
-                self.sessions[sessionId]?.messages = []
-            }
-            self.sessions[sessionId]?.messages.append(contentsOf: result.messages)
-            self.sessions[sessionId]?.lastParsedOffset = result.newOffset
-            self.sessions[sessionId]?.inputTokens += result.inputTokens
-            self.sessions[sessionId]?.outputTokens += result.outputTokens
+                if result.cleared {
+                    self.sessions[sessionId]?.messages = []
+                }
+                self.sessions[sessionId]?.messages.append(contentsOf: result.messages)
+                self.sessions[sessionId]?.lastParsedOffset = result.newOffset
+                self.sessions[sessionId]?.inputTokens += result.inputTokens
+                self.sessions[sessionId]?.outputTokens += result.outputTokens
 
-            let userMessages = result.messages.filter { $0.role == .user }
-            if let first = userMessages.first, self.sessions[sessionId]?.firstUserMessage == nil {
-                self.sessions[sessionId]?.firstUserMessage = String(first.content.prefix(80))
-            }
-            if let last = userMessages.last {
-                self.sessions[sessionId]?.lastUserMessage = String(last.content.prefix(80))
-            }
+                let userMessages = result.messages.filter { $0.role == .user }
+                if let first = userMessages.first, self.sessions[sessionId]?.firstUserMessage == nil {
+                    self.sessions[sessionId]?.firstUserMessage = String(first.content.prefix(80))
+                }
+                if let last = userMessages.last {
+                    self.sessions[sessionId]?.lastUserMessage = String(last.content.prefix(80))
+                }
 
-            if result.interrupted {
-                self.handleInterrupt(sessionId: sessionId)
+                if result.interrupted {
+                    self.handleInterrupt(sessionId: sessionId)
+                }
             }
         }
     }

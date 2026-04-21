@@ -118,7 +118,7 @@ enum HookInstaller {
         SOCKET="\(socketPath)"
         [ -S "$SOCKET" ] || exit 0
         INPUT=$(cat 2>/dev/null || echo '{}')
-        echo "$INPUT" | nc -U -q 0 "$SOCKET" 2>/dev/null || true
+        echo "$INPUT" | nc -U -w 1 "$SOCKET" 2>/dev/null || true
         exit 0
         """
 
