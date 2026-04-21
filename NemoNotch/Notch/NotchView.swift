@@ -327,17 +327,7 @@ struct NotchView: View {
                     .foregroundStyle(.white.opacity(0.8))
             }
         case .claude:
-            if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
-               let nsImage = NSImage(contentsOf: url) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .frame(width: 16, height: 16)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            } else {
-                Image(systemName: "cpu")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.8))
-            }
+            ClaudeCrabIcon(size: 14)
         case .openclaw:
             Text("🦞")
                 .font(.system(size: 11))

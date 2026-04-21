@@ -18,9 +18,7 @@ struct ClaudeTab: View {
 
     private var installPrompt: some View {
         VStack(spacing: 10) {
-            Image(systemName: "cpu")
-                .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
+            ClaudeCrabIcon(size: 28)
             Text("Claude Code Hooks 未安装")
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
@@ -40,9 +38,7 @@ struct ClaudeTab: View {
 
     private var idleState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "cpu")
-                .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
+            ClaudeCrabIcon(size: 28)
             Text("无活跃会话")
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
