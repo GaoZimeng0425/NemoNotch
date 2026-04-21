@@ -1,0 +1,44 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build archive
+        run: |
+          xcodebuild archive \
+            -project NemoNotch.xcodeproj \
+            -scheme NemoNotch \
+            -configuration Release \
+            -archivePath build/NemoNotch.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export .app
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/NemoNotch.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Create DMG
+        run: |
+          hdiutil create -volname NemoNotch \
+            -srcfolder build/export/NemoNotch.app \
+            -ov -format UDZO \
+            build/NemoNotch.dmg
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/NemoNotch.dmg
+          generate_release_notes: true
