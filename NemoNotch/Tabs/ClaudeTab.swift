@@ -2,12 +2,15 @@ import SwiftUI
 
 struct ClaudeTab: View {
     @Environment(ClaudeCodeService.self) var claudeService
+    @State private var selectedSessionId: String?
 
     var body: some View {
         if !claudeService.isHookInstalled {
             installPrompt
         } else if claudeService.sessions.isEmpty {
             idleState
+        } else if let sessionId = selectedSessionId, let session = claudeService.sessions[sessionId] {
+            chatDetail(session: session)
         } else {
             sessionList
         }
@@ -71,70 +74,179 @@ struct ClaudeTab: View {
         .padding(.horizontal, 4)
     }
 
-    private func sessionRow(_ session: ClaudeState) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(ToolStyle.color(session.currentTool).opacity(0.2))
-                .frame(width: 24, height: 24)
-                .overlay {
-                    Image(systemName: ToolStyle.icon(session.currentTool))
-                        .font(.system(size: 10))
-                        .foregroundStyle(ToolStyle.color(session.currentTool))
+    private func chatDetail(session: ClaudeState) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    selectedSessionId = nil
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
+                .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(session.displayTitle)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    if let event = session.lastEventName {
-                        eventTag(event)
-                    }
-                    if session.status == .working, let tool = session.currentTool {
-                        Text(tool)
-                            .font(.system(size: 10))
-                            .foregroundStyle(ToolStyle.color(tool))
-                            .lineLimit(1)
-                    }
-                }
-                if let msg = session.lastUserMessage, !msg.isEmpty {
-                    Text(msg)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .lineLimit(2)
-                } else if let msg = session.lastMessage, !msg.isEmpty {
-                    Text(msg)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .lineLimit(2)
-                }
-                HStack(spacing: 6) {
-                    if let cwd = session.cwd {
-                        Text(URL(fileURLWithPath: cwd).lastPathComponent)
-                            .lineLimit(1)
-                    }
-                    Text(timeAgo(session.lastEventTime))
-                    if session.totalTokens > 0 {
-                        Text("· \(session.tokenDisplay)")
+                    HStack(spacing: 4) {
+                        Text(session.projectFolder ?? "")
                             .foregroundStyle(.white.opacity(0.3))
+                        if session.totalTokens > 0 {
+                            Text("· \(session.tokenDisplay)")
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
                     }
+                    .font(.system(size: 9))
                 }
-                .font(.system(size: 9))
-                .foregroundStyle(.white.opacity(0.3))
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
 
-            if let ctx = approvalContext(for: session) {
-                approvalButtons(for: session, ctx: ctx)
-            } else {
                 Circle()
                     .fill(dotColor(session.status))
                     .frame(width: 6, height: 6)
                     .modifier(PulseModifier(isActive: session.status == .working))
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+
+            Divider().background(.white.opacity(0.08))
+
+            if let ctx = approvalContext(for: session) {
+                quickApprovalBar(session: session, ctx: ctx)
+            }
+
+            if session.messages.isEmpty {
+                Spacer()
+                Text("暂无消息")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.3))
+                Spacer()
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 6) {
+                            ForEach(session.messages) { msg in
+                                ChatMessageView(message: msg)
+                                    .id(msg.id)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                    }
+                    .onChange(of: session.messages.count) { _, _ in
+                        withAnimation {
+                            proxy.scrollTo(session.messages.last?.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private func quickApprovalBar(session: ClaudeState, ctx: PermissionContext) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("等待审批: \(ctx.toolName)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.orange)
+                if !ctx.displayInput.isEmpty {
+                    Text(ctx.displayInput)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            Button("拒绝") { claudeService.respondToPermission(sessionId: session.id, approved: false) }
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .buttonStyle(.plain)
+            Button("允许") { claudeService.respondToPermission(sessionId: session.id, approved: true) }
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.white.opacity(0.9))
+                .clipShape(Capsule())
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.orange.opacity(0.08))
+    }
+
+    private func sessionRow(_ session: ClaudeState) -> some View {
+        Button {
+            selectedSessionId = session.id
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(ToolStyle.color(session.currentTool).opacity(0.2))
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Image(systemName: ToolStyle.icon(session.currentTool))
+                            .font(.system(size: 10))
+                            .foregroundStyle(ToolStyle.color(session.currentTool))
+                    }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(session.displayTitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        if let event = session.lastEventName {
+                            eventTag(event)
+                        }
+                        if session.status == .working, let tool = session.currentTool {
+                            Text(tool)
+                                .font(.system(size: 10))
+                                .foregroundStyle(ToolStyle.color(tool))
+                                .lineLimit(1)
+                        }
+                    }
+                    if let msg = session.lastUserMessage, !msg.isEmpty {
+                        Text(msg)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .lineLimit(2)
+                    } else if let msg = session.lastMessage, !msg.isEmpty {
+                        Text(msg)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .lineLimit(2)
+                    }
+                    HStack(spacing: 6) {
+                        if let cwd = session.cwd {
+                            Text(URL(fileURLWithPath: cwd).lastPathComponent)
+                                .lineLimit(1)
+                        }
+                        Text(timeAgo(session.lastEventTime))
+                        if session.totalTokens > 0 {
+                            Text("· \(session.tokenDisplay)")
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
+                    }
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.3))
+                }
+
+                Spacer(minLength: 0)
+
+                if let ctx = approvalContext(for: session) {
+                    approvalButtons(for: session, ctx: ctx)
+                } else {
+                    Circle()
+                        .fill(dotColor(session.status))
+                        .frame(width: 6, height: 6)
+                        .modifier(PulseModifier(isActive: session.status == .working))
+                }
+            }
+        }
+        .buttonStyle(.plain)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .background(
