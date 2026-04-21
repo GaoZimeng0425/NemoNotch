@@ -130,18 +130,14 @@ final class NotchCoordinator {
         guard let settings = appSettings else { return }
         let tabs = Tab.sorted(settings.enabledTabs)
         guard let index = tabs.firstIndex(of: selectedTab), index + 1 < tabs.count else { return }
-        withAnimation(.interactiveSpring(duration: 0.3)) {
-            selectedTab = tabs[index + 1]
-        }
+        selectedTab = tabs[index + 1]
     }
 
     func selectPreviousTab() {
         guard let settings = appSettings else { return }
         let tabs = Tab.sorted(settings.enabledTabs)
         guard let index = tabs.firstIndex(of: selectedTab), index > 0 else { return }
-        withAnimation(.interactiveSpring(duration: 0.3)) {
-            selectedTab = tabs[index - 1]
-        }
+        selectedTab = tabs[index - 1]
     }
 
     private func captureFrontmostApp() {

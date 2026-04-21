@@ -9,9 +9,7 @@ struct TabBarView: View {
             ForEach(Tab.sorted(appSettings.enabledTabs)) { tab in
                 let selected = coordinator.selectedTab == tab
                 Button {
-                    withAnimation(.interactiveSpring(duration: 0.3)) {
-                        coordinator.selectedTab = tab
-                    }
+                    coordinator.selectedTab = tab
                 } label: {
                     Image(systemName: tab.icon)
                         .font(.system(size: 12))

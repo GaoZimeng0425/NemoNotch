@@ -24,7 +24,6 @@ struct NotchView: View {
     @State private var displayedBadgeTypes: [BadgeType] = []
     @State private var badgeTypeUpdateTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
-    @State private var contentOpacity: Double = 1
     @State private var slideForward: Bool = true
 
     private enum BadgeType: String, CaseIterable, Identifiable {
@@ -91,26 +90,26 @@ struct NotchView: View {
             notchShape
                 .zIndex(0)
 
+            if coordinator.status == .opened {
+                notchTabBar
+                    .zIndex(2)
+                    .transition(.opacity)
+            }
+
             if coordinator.status == .closed {
                 compactBadges
                     .zIndex(1)
-                    .transition(.opacity.combined(with: .scale(scale: 0.5)))
 
                 if hasMultipleBadges {
                     badgeRow
                         .zIndex(1)
                         .opacity(shownHasActiveBadge ? 1 : 0)
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
 
             if coordinator.status == .opened {
-                openedContent
+                contentPanel
                     .zIndex(1)
-                    .opacity(contentOpacity)
-                    .transition(.opacity)
-                    .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration).delay(NotchConstants.openContentDelay), value: coordinator.status)
-                    .onAppear { contentOpacity = 1 }
             }
         }
         .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
@@ -150,38 +149,62 @@ struct NotchView: View {
                 }
             }
         }
+        .onChange(of: coordinator.selectedTab) { oldTab, newTab in
+            let tabs = Tab.sorted(appSettings.enabledTabs)
+            let oldIndex = tabs.firstIndex(of: oldTab) ?? 0
+            let newIndex = tabs.firstIndex(of: newTab) ?? 0
+            slideForward = newIndex > oldIndex
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
 
-    private var notchShape: some View {
-        NotchBackgroundView(
-            status: coordinator.status,
-            notchSize: notchSize,
-            hasNotch: hasNotch,
-            cornerRadius: notchCornerRadius,
-            spacing: NotchConstants.notchBackgroundSpacing
+    // MARK: - Tab icons in notch
+
+    private var notchTabBar: some View {
+        let tabs = Tab.sorted(appSettings.enabledTabs)
+        let tabWidth: CGFloat = CGFloat(tabs.count) * 20 + CGFloat(tabs.count - 1) * 4
+        return HStack(spacing: 4) {
+            ForEach(tabs) { tab in
+                let selected = coordinator.selectedTab == tab
+                Button {
+                    coordinator.selectedTab = tab
+                } label: {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? .white : .white.opacity(0.35))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .position(
+            x: notchLeftEdge - tabWidth / 2 - 8,
+            y: hardwareNotchSize.height / 2
         )
-        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
     }
 
-    private var openedContent: some View {
+    // MARK: - Content panel (drops down from notch)
+
+    private var contentPanel: some View {
         VStack(spacing: 0) {
-            TabBarView()
-                .padding(.top, hardwareNotchSize.height + NotchConstants.tabBarTopPadding)
+            Spacer().frame(height: hardwareNotchSize.height)
 
             swipeableContent
+                .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
                 .padding(.top, NotchConstants.tabContentTopPadding)
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
         .frame(width: notchSize.width, height: notchSize.height)
         .clipShape(.rect(
             bottomLeadingRadius: notchCornerRadius,
             bottomTrailingRadius: notchCornerRadius
         ))
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
+
+    // MARK: - Swipeable tab content
 
     private var swipeableContent: some View {
         let tabs = Tab.sorted(appSettings.enabledTabs)
@@ -245,6 +268,8 @@ struct NotchView: View {
         }
     }
 
+    // MARK: - Badge row (second row)
+
     private var badgeRow: some View {
         let secondaryBadges = Array(displayedBadgeTypes.dropFirst())
         return HStack(spacing: NotchConstants.badgeRowSpacing) {
@@ -257,6 +282,10 @@ struct NotchView: View {
                 .buttonStyle(.plain)
             }
         }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.8)),
+            removal: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.8))
+        ))
         .position(x: notchCenterX,
                   y: hardwareNotchSize.height + NotchConstants.badgeRowHeight / 2)
     }
@@ -319,6 +348,8 @@ struct NotchView: View {
         }
     }
 
+    // MARK: - Compact badges (left/right of notch)
+
     private var compactBadges: some View {
         let spread: CGFloat = shownHasActiveBadge ? NotchConstants.badgeSpread : 0
         return ZStack {
@@ -336,6 +367,10 @@ struct NotchView: View {
             )
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
                 .opacity(shownHasActiveBadge ? 1 : 0)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .trailing)),
+                    removal: .opacity.combined(with: .move(edge: .leading))
+                ))
             CompactBadge(
                 side: .right,
                 onTap: { tab in
@@ -350,8 +385,25 @@ struct NotchView: View {
             )
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
                 .opacity(shownHasActiveBadge ? 1 : 0)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .leading)),
+                    removal: .opacity.combined(with: .move(edge: .trailing))
+                ))
         }
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
         .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: notificationService.badges.isEmpty)
+    }
+
+    // MARK: - Notch background shape
+
+    private var notchShape: some View {
+        NotchBackgroundView(
+            status: coordinator.status,
+            notchSize: notchSize,
+            hasNotch: hasNotch,
+            cornerRadius: notchCornerRadius,
+            spacing: NotchConstants.notchBackgroundSpacing
+        )
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
     }
 }
