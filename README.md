@@ -1,82 +1,97 @@
-# macOS 开发学习项目集合
+# NemoNotch
 
-所有项目位于 `/Users/gaozimeng/Learn/macOS` 目录下。共 47 个 macOS/iOS 相关项目，按功能分类如下。
+macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块多功能信息中心。
 
-## AI / ChatGPT 客户端
+<p align="center">
+  <img src="docs/images/screenshot.png" alt="NemoNotch 截图" width="700">
+</p>
 
-- **MacGPT** — Swift Package，GPT 相关库
-- **PanelGPT** — ChatGPT 面板式界面
-- **iChatGPT** — SwiftUI 的 ChatGPT 客户端
-- **macai** — 原生 macOS ChatGPT 客户端，支持标签页和 CoreData
-- **cheetah** — AI 面试辅导工具，用 Whisper + GPT-4 实时指导
-- **masko-code** — 浮动桌宠，实时响应 Claude Code / Codex 状态的动画覆盖层
+## 功能
 
-## 音乐 / 视频 / 媒体
+### 7 个功能标签页
 
-- **Bili.Mac.MenuBar** — 菜单栏 B 站迷你播放器
-- **NeteaseMusic-macOS** — 网易云音乐 macOS 客户端
-- **PlayStatus** — 菜单栏控制 Spotify/Apple Music 播放
-- **Tuneful** — 菜单栏 Spotify/Apple Music 播放控制
-- **musicpod** — Flutter 跨平台音乐/播客播放器
-- **nowplaying-cli** — macOS 命令行工具，获取当前播放媒体信息及模拟媒体控制
-- **Aidoku** — 开源漫画阅读器 (iOS/macOS)
+| 标签 | 功能 |
+|------|------|
+| **媒体控制** | 实时播放控制（播放/暂停/上下曲）、专辑封面、进度条，支持 Spotify 和 Apple Music |
+| **日历** | 15 天日期选择器、当日事件列表、日历颜色标识、权限引导 |
+| **Claude Code** | 会话列表、对话详情、权限审批、Context 用量进度条、子代理监控、模型显示 |
+| **OpenClaw** | 多代理系统状态监控、WebSocket 实时连接、代理工作状态追踪 |
+| **启动器** | 应用图标网格、搜索过滤、快速启动自定义应用列表 |
+| **天气** | 当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
+| **系统** | CPU/内存/电池/磁盘监控、历史趋势图、颜色阈值警告 |
 
-## 窗口管理 / 系统工具
+### 核心特性
 
-- **Loop** — 径向菜单式窗口管理工具
-- **Snap** — Spotlight 替代品，文件搜索+剪贴板+代码片段
-- **DockDoor** — Dock 栏悬停预览窗口
-- **Topit** — 窗口置顶工具
-- **NotchDrop** — 刘海区域拖拽传文件 (类 AirDrop)
-- **Peninsula** — 刘海区域应用管理器，增强 Cmd-Tab 窗口切换、通知计数等
-- **DynamicNotchKit** — 刘海动态通知 SwiftUI 框架
-- **eul** — 系统监控 (CPU/内存/磁盘/网络)
-- **CustomWindowStyle** — 自定义窗口样式探索
-- **DSFQuickActionBar** — Spotlight 风格快速操作栏组件
+- **Notch 浮动面板** — 窗口悬浮在刘海区域，自动检测屏幕 Notch 尺寸
+- **全局快捷键** — `⌥⌘N` 切换面板开关，`⌥⌘1-7` 快速切换标签页
+- **自动切换** — 智能检测活跃服务（Claude 工作中、音乐播放中）自动切到对应标签
+- **菜单栏入口** — 通过菜单栏图标控制面板展开和 Claude Code Hooks 安装
+- **Claude Code 深度集成** — Hook 事件监听、会话追踪、权限拦截、终端检测、中断感知
 
-## 启动器 / 搜索
+## 技术栈
 
-- **Verve** — Rust + Tauri 轻量启动器
-- **sol** — 开源 macOS 应用启动器
-- **launcher** (CodeLauncher) — 开发进程/服务器管理工具
-- **Menu-Bar-Search** — Alfred 工作流，搜索菜单栏项
+- **Swift 5** + **SwiftUI**，纯 macOS 原生应用
+- **AppKit** — 自定义 NSWindow，点击穿透，多屏幕定位
+- **MediaPlayer / MediaRemote** — 媒体播放控制
+- **EventKit** — 日历事件读取
+- **IOKit** — 系统状态监控（CPU、内存、电池、磁盘）
+- **CocoaLumberjack** — 日志系统（`~/.NemoNotch/logs/`，7 天轮转）
+- **WebSocket / Unix Socket** — Claude Code Hooks 和 OpenClaw 通信
 
-## 菜单栏小工具
+## 项目结构
 
-- **TomatoBar** — 菜单栏番茄钟
-- **menubar_runcat** — 菜单栏跑步小猫动画（速度反映系统负载）
-- **Folder Finder** — 快速文件夹导航菜单栏应用
+```
+NemoNotch/
+├── NemoNotchApp.swift           # 入口，MenuBarExtra，全局快捷键
+├── Models/                      # 数据模型（Tab, AppSettings, PlaybackState 等）
+├── Notch/                       # 刘海 UI 核心（窗口、动画、事件监听）
+├── Tabs/                        # 各标签页内容视图
+├── Services/                    # 后台服务（媒体、日历、Claude Code、启动器等）
+├── Settings/                    # 偏好设置界面
+└── Helpers/                     # 工具类
+```
 
-## 桌面 / 壁纸
+## 构建
 
-- **Plash** — 网页作为桌面壁纸
-- **Wallpapers** — 桌面壁纸切换工具
+1. 使用 Xcode 打开 `NemoNotch.xcodeproj`
+2. 选择 `NemoNotch` target
+3. Build & Run（需要 macOS 14+）
 
-## 效率 / 笔记 / 代码片段
+## 鸣谢
 
-- **NotesApp** — SwiftUI + SwiftData 笔记应用
-- **Snippets** — 代码片段管理器
-- **SwiftPamphletApp** — 戴铭开发手册知识参考 App
-- **Quick-Folder-App** — 快速文件夹导航
-- **work plan** — SwiftUI 任务/计划管理应用
+NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 
-## 社交 / 内容
+### 刘海窗口与交互
 
-- **winston** — 原生 Reddit 客户端 (SwiftUI)
+- [**NotchDrop**](https://github.com/Lakr233/NotchDrop) — Notch 窗口定位、多屏幕支持、点击穿透
+- [**DynamicNotchKit**](https://github.com/Lakr233/DynamicNotchKit) — Spring 动画、自动收起、内容切换
+- [**Peninsula**](https://github.com/yufan8414/Peninsula) — 刘海区域多视图状态管理
 
-## 输入 / 录制 / 翻译
+### 媒体与播放控制
 
-- **QuickSpeech** — 全局快捷键语音转文字（支持中文）
-- **Recorder** — 屏幕录制工具 (ScreenCaptureKit)
-- **mac-translate** — Spotlight 风格 Google 翻译
+- [**PlayStatus**](https://github.com/nicklama/PlayStatus) — MediaRemote 框架集成、媒体键拦截
+- [**Tuneful**](https://github.com/Dimillian/Tuneful) — 播放信息获取与 UI 展示
+- [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — 命令行获取播放信息
 
-## UI 组件 / 学习项目
+### 窗口管理与快捷键
 
-- **Custom-Slider-Control** — SwiftUI 仿 iOS 音量滑块
-- **TiktokTutorial** — SwiftUI 仿 TikTok UI 教程
-- **Luminare** — SwiftUI 统一设计语言 UI 组件库
+- [**Loop**](https://github.com/MrKai77/Loop) — 全局快捷键注册、窗口操作引擎
+- [**DSFQuickActionBar**](https://github.com/dagronf/DSFQuickActionBar) — 浮动搜索栏组件
 
-## 其他
+### 菜单栏与系统工具
 
-- **Applite** — Homebrew Cask 图形化管理工具
-- **CURRENT** — 包含 FlickRing.app 和 SwissTomato 番茄钟
+- [**eul**](https://github.com/gao-sun/eul) — 菜单栏架构设计、Combine 响应式模式
+- [**menubar_runcat**](https://github.com/Kyle-Ye/menubar_runcat) — 菜单栏状态动画
+
+### 启动器与 UI 组件
+
+- [**sol**](https://github.com/ospfranco/sol) — 应用启动器架构
+- [**Luminare**](https://github.com/Dimillian/Luminare) — SwiftUI 组件库与设计语言
+
+### AI 与桌面集成
+
+- [**masko-code**](https://github.com/nicepkg/masko-code) — Claude Code 状态监控与桌面覆盖层概念
+
+## License
+
+MIT
