@@ -16,6 +16,7 @@ class NotchWindow: NSPanel {
         backgroundColor = .clear
         hasShadow = false
         isMovable = false
+        acceptsMouseMovedEvents = true
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
