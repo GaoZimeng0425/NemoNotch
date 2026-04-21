@@ -32,6 +32,7 @@ struct CalendarTab: View {
 
             eventListSection
         }
+        .padding(.bottom, 12)
     }
 
     private var monthHeader: some View {

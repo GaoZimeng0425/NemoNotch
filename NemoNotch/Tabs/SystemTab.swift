@@ -20,6 +20,7 @@ struct SystemTab: View {
             diskRow
         }
         .padding(.horizontal, 4)
+        .padding(.bottom, 12)
     }
 
     // MARK: - CPU

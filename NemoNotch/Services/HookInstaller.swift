@@ -5,6 +5,7 @@ enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.nemonotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
     private static var hookCommand: String { "~/.nemonotch/hooks/hook-sender.sh" }
+    private static let socketPath = NotchConstants.hookSocketPath
 
     private static let hookEvents = [
         "PreToolUse",
@@ -14,13 +15,10 @@ enum HookInstaller {
         "SessionEnd",
         "Notification",
         "UserPromptSubmit",
+        "PermissionRequest",
     ]
 
-    private static let scriptVersion = "# version: 2"
-
-    static var currentPort: UInt16 {
-        UInt16(UserDefaults.standard.integer(forKey: "hookServerPort"))
-    }
+    private static let scriptVersion = "# version: 4"
 
     static func isInstalled() -> Bool {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: claudeSettingsPath)),
@@ -40,9 +38,8 @@ enum HookInstaller {
         return false
     }
 
-    static func install(port: UInt16) throws {
-        UserDefaults.standard.set(Int(port), forKey: "hookServerPort")
-        try ensureScriptExists(port: port)
+    static func install() throws {
+        try ensureScriptExists()
 
         var settings: [String: Any] = [:]
         if let data = try? Data(contentsOf: URL(fileURLWithPath: claudeSettingsPath)),
@@ -101,13 +98,12 @@ enum HookInstaller {
         try writeSettings(settings)
     }
 
-    static func ensureScriptExists(port: UInt16) throws {
+    static func ensureScriptExists() throws {
         let scriptURL = URL(fileURLWithPath: hookScriptPath)
 
         if FileManager.default.fileExists(atPath: hookScriptPath),
            let contents = try? String(contentsOf: scriptURL, encoding: .utf8),
-           contents.contains(scriptVersion),
-           contents.contains("localhost:\(port)") {
+           contents.contains(scriptVersion) {
             return
         }
 
@@ -119,11 +115,14 @@ enum HookInstaller {
         let script = """
         #!/bin/bash
         \(scriptVersion)
-        curl -s --connect-timeout 0.3 "http://localhost:\(port)/health" >/dev/null 2>&1 || exit 0
+        SOCKET="\(socketPath)"
+        [ -S "$SOCKET" ] || exit 0
         INPUT=$(cat 2>/dev/null || echo '{}')
-        curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
-          "http://localhost:\(port)/hook" \\
-          --connect-timeout 1 --max-time 2 2>/dev/null || true
+        if echo "$INPUT" | grep -q '"PermissionRequest"'; then
+            echo "$INPUT" | nc -U -w 120 "$SOCKET" 2>/dev/null
+        else
+            echo "$INPUT" | nc -U -w 1 "$SOCKET" 2>/dev/null || true
+        fi
         exit 0
         """
 

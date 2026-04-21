@@ -38,6 +38,7 @@ struct MediaTab: View {
             controls
         }
         .padding(.horizontal, 4)
+        .padding(.bottom, 12)
     }
 
     private var artwork: some View {

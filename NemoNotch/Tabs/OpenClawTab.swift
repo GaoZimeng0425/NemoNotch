@@ -99,6 +99,7 @@ struct OpenClawTab: View {
             }
         }
         .padding(.horizontal, 4)
+        .padding(.bottom, 12)
     }
 
     private var partitionedAgents: (active: [AgentInfo], idle: [AgentInfo]) {
