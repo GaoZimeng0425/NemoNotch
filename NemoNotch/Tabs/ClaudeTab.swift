@@ -72,6 +72,7 @@ struct ClaudeTab: View {
             }
         }
         .padding(.horizontal, 4)
+        .padding(.bottom, 12)
     }
 
     private func chatDetail(session: ClaudeState) -> some View {

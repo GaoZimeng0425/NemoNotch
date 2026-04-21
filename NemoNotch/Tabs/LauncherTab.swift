@@ -25,6 +25,7 @@ struct LauncherTab: View {
             }
         }
         .padding(.horizontal, 4)
+        .padding(.bottom, 12)
     }
 
     private var searchField: some View {
