@@ -6,6 +6,10 @@ enum ConversationParser {
         var messages: [ChatMessage]
         var inputTokens: Int
         var outputTokens: Int
+        var cacheReadTokens: Int
+        var cacheCreationTokens: Int
+        var lastContextTokens: Int
+        var lastModel: String?
         var newOffset: UInt64
         var interrupted: Bool
         var cleared: Bool
@@ -24,7 +28,7 @@ enum ConversationParser {
     }
 
     static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
-        var result = ParseResult(messages: [], inputTokens: 0, outputTokens: 0, newOffset: fromOffset, interrupted: false, cleared: false)
+        var result = ParseResult(messages: [], inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, lastContextTokens: 0, lastModel: nil, newOffset: fromOffset, interrupted: false, cleared: false)
 
         guard let fileHandle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else {
             return result
@@ -56,9 +60,22 @@ enum ConversationParser {
                 continue
             }
 
-            if let usage = json["usage"] as? [String: Any] {
-                result.inputTokens += usage["input_tokens"] as? Int ?? 0
-                result.outputTokens += usage["output_tokens"] as? Int ?? 0
+            if json["type"] as? String == "assistant",
+               let message = json["message"] as? [String: Any] {
+                if let usage = message["usage"] as? [String: Any] {
+                    let input = usage["input_tokens"] as? Int ?? 0
+                    let output = usage["output_tokens"] as? Int ?? 0
+                    let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
+                    let cacheCreation = usage["cache_creation_input_tokens"] as? Int ?? 0
+                    result.inputTokens += input
+                    result.outputTokens += output
+                    result.cacheReadTokens += cacheRead
+                    result.cacheCreationTokens += cacheCreation
+                    result.lastContextTokens = input + cacheRead + cacheCreation
+                }
+                if let model = message["model"] as? String {
+                    result.lastModel = model
+                }
             }
 
             if let message = parseMessage(json, index: messageIndex) {

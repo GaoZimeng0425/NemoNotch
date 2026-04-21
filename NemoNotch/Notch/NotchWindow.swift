@@ -29,8 +29,11 @@ class NotchWindow: NSPanel {
 }
 
 final class PassThroughView: NSView {
+    var isBlocking = false
+
     override func hitTest(_ point: NSPoint) -> NSView? {
         let view = super.hitTest(point)
-        return view === self ? nil : view
+        if view !== self { return view }
+        return isBlocking ? self : nil
     }
 }

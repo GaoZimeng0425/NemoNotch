@@ -94,6 +94,10 @@ struct ClaudeTab: View {
                     HStack(spacing: 4) {
                         Text(session.projectFolder ?? "")
                             .foregroundStyle(.white.opacity(0.3))
+                        if let model = session.displayModel {
+                            Text("· \(model)")
+                                .foregroundStyle(.purple.opacity(0.7))
+                        }
                         if session.totalTokens > 0 {
                             Text("· \(session.tokenDisplay)")
                                 .foregroundStyle(.white.opacity(0.3))
@@ -111,6 +115,12 @@ struct ClaudeTab: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
+
+            if session.lastContextTokens > 0 {
+                contextBar(session: session)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
+            }
 
             Divider().background(.white.opacity(0.08))
 
@@ -225,6 +235,15 @@ struct ClaudeTab: View {
                                 .lineLimit(1)
                         }
                         Text(timeAgo(session.lastEventTime))
+                        if let model = session.displayModel {
+                            Text(model)
+                                .font(.system(size: 8, weight: .medium, design: .rounded))
+                                .foregroundStyle(.purple.opacity(0.7))
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(.purple.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
                         if session.totalTokens > 0 {
                             Text("· \(session.tokenDisplay)")
                                 .foregroundStyle(.white.opacity(0.3))
@@ -236,6 +255,9 @@ struct ClaudeTab: View {
                     }
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.3))
+                    if session.lastContextTokens > 0 {
+                        contextBar(session: session)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -365,6 +387,41 @@ struct ClaudeTab: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    // MARK: - Context Progress Bar
+
+    private func contextBar(session: ClaudeState) -> some View {
+        let percent = session.contextPercent
+        let barColor: Color = {
+            if percent > 0.8 { return .red }
+            if percent > 0.5 { return .orange }
+            return .blue
+        }()
+
+        return VStack(spacing: 3) {
+            HStack {
+                Text("ctx")
+                    .foregroundStyle(.white.opacity(0.35))
+                Spacer()
+                Text("\(session.contextTokenDisplay) / 200K")
+                    .foregroundStyle(.white.opacity(0.3))
+                Text(String(format: "%.0f%%", percent * 100))
+                    .foregroundStyle(barColor.opacity(0.7))
+            }
+            .font(.system(size: 8, design: .monospaced))
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(.white.opacity(0.06))
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(barColor.opacity(0.5))
+                        .frame(width: percent > 0 ? max(geo.size.width * CGFloat(percent), 3) : 0)
+                }
+            }
+            .frame(height: 3)
         }
     }
 }

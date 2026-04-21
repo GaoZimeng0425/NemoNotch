@@ -253,6 +253,14 @@ final class ClaudeCodeService {
                 session.lastParsedOffset = result.newOffset
                 session.inputTokens += result.inputTokens
                 session.outputTokens += result.outputTokens
+                session.cacheReadTokens += result.cacheReadTokens
+                session.cacheCreationTokens += result.cacheCreationTokens
+                if result.lastContextTokens > 0 {
+                    session.lastContextTokens = result.lastContextTokens
+                }
+                if let model = result.lastModel {
+                    session.model = model
+                }
 
                 let userMessages = result.messages.filter { $0.role == .user }
                 if let first = userMessages.first, session.firstUserMessage == nil {
@@ -263,6 +271,10 @@ final class ClaudeCodeService {
                 }
 
                 self.sessions[sessionId] = session
+
+                if result.inputTokens > 0 || result.cacheReadTokens > 0 {
+                    LogService.debug("Tokens +\(result.inputTokens)in +\(result.outputTokens)out +\(result.cacheReadTokens)cr +\(result.cacheCreationTokens)cc, ctx=\(result.lastContextTokens), model=\(result.lastModel ?? "?") → totals: \(session.inputTokens)in \(session.outputTokens)out \(session.cacheReadTokens)cr \(session.cacheCreationTokens)cc", category: "ClaudeCode")
+                }
 
                 if result.interrupted {
                     self.handleInterrupt(sessionId: sessionId)

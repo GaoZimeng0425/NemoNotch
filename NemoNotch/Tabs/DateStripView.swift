@@ -6,6 +6,10 @@ struct DateStripView: View {
     let hasEvents: (Date) -> Bool
     let onSelect: (Date) -> Void
 
+    private var selectedDateId: Date {
+        Calendar.current.startOfDay(for: selectedDate)
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -18,7 +22,14 @@ struct DateStripView: View {
                 .padding(.horizontal, 8)
             }
             .onAppear {
-                proxy.scrollTo(selectedDate, anchor: .center)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    proxy.scrollTo(selectedDateId, anchor: .center)
+                }
+            }
+            .onChange(of: selectedDate) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(selectedDateId, anchor: .center)
+                }
             }
         }
     }
