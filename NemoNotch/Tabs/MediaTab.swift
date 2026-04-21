@@ -19,7 +19,7 @@ struct MediaTab: View {
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("未在播放")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -48,7 +48,7 @@ struct MediaTab: View {
                     .resizable()
             } else {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(.white.opacity(0.1))
+                    .fill(.white.opacity(0.08))
                     .overlay {
                         Image(systemName: "music.note")
                             .foregroundStyle(.white.opacity(0.3))
@@ -57,6 +57,7 @@ struct MediaTab: View {
         }
         .frame(width: 50, height: 50)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
     }
 
     private var trackInfo: some View {
@@ -67,7 +68,7 @@ struct MediaTab: View {
                 .lineLimit(1)
             Text(state.artist)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.white.opacity(0.5))
                 .lineLimit(1)
         }
     }
@@ -76,9 +77,9 @@ struct MediaTab: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.white.opacity(0.15))
+                    .fill(.white.opacity(0.12))
                 Capsule()
-                    .fill(.white.opacity(0.6))
+                    .fill(.white.opacity(0.45))
                     .frame(width: state.duration > 0 ? geo.size.width * CGFloat(state.position / state.duration) : 0)
             }
         }
@@ -86,25 +87,30 @@ struct MediaTab: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: 32) {
             Button(action: { mediaService.previousTrack() }) {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.7))
             }
             .buttonStyle(.plain)
 
             Button(action: { mediaService.togglePlayPause() }) {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: 16))
                     .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(.white.opacity(0.12))
+                    )
             }
             .buttonStyle(.plain)
 
             Button(action: { mediaService.nextTrack() }) {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.7))
             }
             .buttonStyle(.plain)
         }

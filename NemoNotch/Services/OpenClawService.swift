@@ -219,7 +219,7 @@ final class OpenClawService {
 
     private func handleEvent(_ json: [String: Any]) {
         let event = json["event"] as? String ?? ""
-        if event != "agent" && event != "heartbeat" && event != "tick" {
+        if event != "agent" && event != "heartbeat" && event != "tick" && event != "chat" {
             LogService.debug("Event: \(event)", category: "OpenClaw")
         }
 
@@ -473,6 +473,7 @@ final class OpenClawService {
             agents[agentId] = AgentInfo(id: agentId, name: displayName, emoji: emoji, state: state)
         }
 
+        let prevState = agents[agentId]?.state
         agents[agentId]?.state = state
         agents[agentId]?.name = displayName
         agents[agentId]?.emoji = emoji
@@ -481,6 +482,9 @@ final class OpenClawService {
         if let workspace { agents[agentId]?.workspace = workspace }
         agents[agentId]?.lastEventTime = Date()
 
+        if state != prevState {
+            LogService.info("Agent \(displayName): \(String(describing: prevState)) -> \(state), stream=\(stream) phase=\(phase)", category: "OpenClaw")
+        }
         updateActiveAgent()
     }
 
@@ -501,7 +505,7 @@ final class OpenClawService {
     }
 
     private func cleanupStaleAgents() {
-        let idleThreshold = Date().addingTimeInterval(-300)
+        let idleThreshold = Date().addingTimeInterval(-120)
         for (id, agent) in agents {
             if agent.lastEventTime < idleThreshold, agent.state != .idle {
                 agents[id]?.state = .idle

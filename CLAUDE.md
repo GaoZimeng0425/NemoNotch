@@ -6,7 +6,7 @@ NemoNotch 是一个 macOS 刘海工具，在 MacBook 刘海区域提供可交互
 
 ## 技术栈
 
-- Swift 5 + SwiftUI，仅 macOS，无第三方依赖
+- Swift 5 + SwiftUI，仅 macOS，依赖 CocoaLumberjack
 - 关键框架：AppKit（NSWindow）、MediaPlayer、EventKit
 
 ## 项目结构
@@ -75,6 +75,12 @@ NemoNotch/
 | 自定义 UI 组件 | **Luminare** / **CustomWindowStyle** | SwiftUI 组件库，窗口样式定制 |
 | 全局语音输入 | **QuickSpeech** | 全局快捷键 + 系统集成 |
 | 屏幕录制 | **Recorder** | ScreenCaptureKit 用法 |
+
+## 日志系统
+
+- 使用 CocoaLumberjack（`LogService`），同时输出到控制台和文件
+- 日志文件目录：`~/.NemoNotch/logs/`，保留 7 天，每天轮转
+- 调用方式：`LogService.debug/info/warn/error("message", category: "xxx")`
 
 ## 开发约定
 

@@ -24,15 +24,17 @@ struct WeatherTab: View {
     }
 
     private var weatherContent: some View {
-        VStack(spacing: 10) {
-            headerRow
-            statsRow
-            hourlyForecastRow
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 10) {
+                headerRow
+                conditionRow
+                statsRow
+                hourlyForecastRow
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 4)
     }
-
-    // MARK: - Header
 
     private var headerRow: some View {
         HStack(alignment: .center) {
@@ -42,30 +44,26 @@ struct WeatherTab: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
             Image(systemName: conditionIcon)
-                .font(.system(size: 18))
+                .font(.system(size: 20))
                 .foregroundStyle(.white.opacity(0.8))
             Text("\(Int(weatherService.temperature))°")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(.white)
         }
     }
-
-    // MARK: - Condition + High/Low
 
     private var conditionRow: some View {
         HStack {
             Text(weatherService.condition)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.white.opacity(0.5))
                 .lineLimit(1)
             Spacer(minLength: 0)
-            Text("H:\(Int(weatherService.highTemp))° L:\(Int(weatherService.lowTemp))°")
+            Text("H:\(Int(weatherService.highTemp))°  L:\(Int(weatherService.lowTemp))°")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.4))
         }
     }
-
-    // MARK: - Stats
 
     private var statsRow: some View {
         HStack(spacing: 0) {
@@ -75,10 +73,10 @@ struct WeatherTab: View {
             Spacer(minLength: 0)
             statItem(label: "风速", value: "\(Int(weatherService.windSpeed))km/h")
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.06))
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.white.opacity(0.08))
         )
     }
 
@@ -94,14 +92,12 @@ struct WeatherTab: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Hourly Forecast
-
     private var hourlyForecastRow: some View {
         HStack(spacing: 0) {
             ForEach(Array(weatherService.hourlyForecast.enumerated()), id: \.offset) { index, hour in
                 if index > 0 {
                     Rectangle()
-                        .fill(.white.opacity(0.1))
+                        .fill(.white.opacity(0.06))
                         .frame(width: 1, height: 30)
                 }
                 VStack(spacing: 3) {
@@ -118,14 +114,12 @@ struct WeatherTab: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.06))
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.white.opacity(0.08))
         )
     }
-
-    // MARK: - Icon Mapping
 
     private var conditionIcon: String {
         iconForCondition(weatherService.condition)

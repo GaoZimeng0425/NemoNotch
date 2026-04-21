@@ -15,15 +15,13 @@ struct OpenClawTab: View {
         }
     }
 
-    // MARK: - Not Installed
-
     private var notInstalled: some View {
         VStack(spacing: 10) {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("OpenClaw 未安装")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
             Text("npm install -g openclaw@latest")
                 .font(.system(size: 10, design: .monospaced))
@@ -32,15 +30,13 @@ struct OpenClawTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Gateway Offline
-
     private var offlineState: some View {
         VStack(spacing: 8) {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("Gateway 离线")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
             HStack(spacing: 6) {
                 Circle()
@@ -54,15 +50,13 @@ struct OpenClawTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Idle (no agents)
-
     private var idleState: some View {
         VStack(spacing: 8) {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("所有 Agent 空闲")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
             HStack(spacing: 6) {
                 Circle()
@@ -76,21 +70,26 @@ struct OpenClawTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Agent List
-
     private var agentList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: 6) {
                 let (active, idle) = partitionedAgents
 
                 ForEach(active) { agent in
                     agentRow(agent)
                 }
 
-                if !active.isEmpty && !idle.isEmpty {
-                    Divider()
-                        .background(.white.opacity(0.1))
-                        .padding(.vertical, 4)
+                if !idle.isEmpty {
+                    HStack {
+                        Text("空闲")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.3))
+                        Divider()
+                            .background(.white.opacity(0.08))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, idle.isEmpty ? 0 : 4)
                 }
 
                 ForEach(idle) { agent in
@@ -109,19 +108,21 @@ struct OpenClawTab: View {
         return (active, idle)
     }
 
-    // MARK: - Agent Row
-
     private func agentRow(_ agent: AgentInfo) -> some View {
         HStack(spacing: 8) {
-            Text(agent.emoji)
-                .font(.system(size: 16))
-                .frame(width: 20)
+            Circle()
+                .fill(.white.opacity(0.1))
+                .frame(width: 24, height: 24)
+                .overlay {
+                    Text(agent.emoji)
+                        .font(.system(size: 13))
+                }
                 .modifier(PulseModifier(isActive: agent.state == .working || agent.state == .toolCalling))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(agent.name)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
@@ -138,29 +139,30 @@ struct OpenClawTab: View {
                 if let msg = agent.lastMessage, !msg.isEmpty {
                     Text(msg)
                         .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.45))
                         .lineLimit(2)
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     if let workspace = agent.workspace {
                         Text(URL(fileURLWithPath: workspace).lastPathComponent)
-                            .font(.system(size: 9))
-                            .foregroundStyle(.white.opacity(0.3))
                             .lineLimit(1)
                     }
                     Text(timeAgo(agent.lastEventTime))
-                        .font(.system(size: 9))
-                        .foregroundStyle(.white.opacity(0.3))
                 }
+                .font(.system(size: 9))
+                .foregroundStyle(.white.opacity(0.3))
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.white.opacity(0.06))
+        )
     }
-
-    // MARK: - State Tag
 
     private func stateTag(_ state: AgentState) -> some View {
         Text(stateLabel(state))
@@ -168,7 +170,7 @@ struct OpenClawTab: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
-            .background(stateColor(state).opacity(0.7))
+            .background(stateColor(state).opacity(0.6))
             .clipShape(Capsule())
     }
 
@@ -191,8 +193,6 @@ struct OpenClawTab: View {
         case .error: return .red
         }
     }
-
-    // MARK: - Helpers
 
     private func timeAgo(_ date: Date) -> String {
         let interval = Date().timeIntervalSince(date)

@@ -128,10 +128,21 @@ final class ClaudeCodeService {
     }
 
     private func updateActiveSession() {
+        let prev = activeSession?.id
         activeSession = sessions.values
             .filter { $0.status == .working }
             .sorted { $0.lastEventTime > $1.lastEventTime }
             .first ?? sessions.values.sorted { $0.lastEventTime > $1.lastEventTime }.first
+        if activeSession?.id != prev {
+            let statusStr: String
+            switch activeSession?.status {
+            case .working: statusStr = "working"
+            case .waiting: statusStr = "waiting"
+            case .idle: statusStr = "idle"
+            case nil: statusStr = "nil"
+            }
+            LogService.info("Active session: \(prev?.prefix(8) ?? "nil") -> \(activeSession?.id.prefix(8) ?? "nil"), status=\(statusStr)", category: "ClaudeCode")
+        }
     }
 
     private func scheduleTimeoutCleanup() {

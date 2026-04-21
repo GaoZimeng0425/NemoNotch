@@ -6,7 +6,7 @@ struct CalendarTab: View {
 
     var body: some View {
         switch calendarService.authorizationStatus {
-        case .fullAccess, .authorized:
+        case .fullAccess:
             calendarContent
         case .notDetermined:
             permissionRequest
@@ -27,7 +27,7 @@ struct CalendarTab: View {
             .padding(.vertical, 4)
 
             Divider()
-                .background(.white.opacity(0.1))
+                .background(.white.opacity(0.08))
                 .padding(.vertical, 4)
 
             eventListSection
@@ -37,7 +37,7 @@ struct CalendarTab: View {
     private var monthHeader: some View {
         Text(calendarService.selectedMonthLabel)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.7))
+            .foregroundStyle(.white.opacity(0.6))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
     }
@@ -48,7 +48,7 @@ struct CalendarTab: View {
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("需要日历权限")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
             Button("授权访问") {
                 calendarService.requestAccess()
@@ -56,10 +56,10 @@ struct CalendarTab: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(.white.opacity(0.15))
+            .background(.white.opacity(0.12))
             .clipShape(Capsule())
             .foregroundStyle(.white)
-            .font(.caption)
+            .font(.system(size: 11))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -70,7 +70,7 @@ struct CalendarTab: View {
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("日历访问被拒绝")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
             Button("打开系统设置") {
                 calendarService.openSystemSettings()
@@ -78,10 +78,10 @@ struct CalendarTab: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(.white.opacity(0.15))
+            .background(.white.opacity(0.12))
             .clipShape(Capsule())
             .foregroundStyle(.white)
-            .font(.caption)
+            .font(.system(size: 11))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -93,7 +93,7 @@ struct CalendarTab: View {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 6) {
                         ForEach(events) { event in
                             eventRow(event)
                         }
@@ -110,7 +110,7 @@ struct CalendarTab: View {
                 .font(.system(size: 28))
                 .foregroundStyle(.white.opacity(0.3))
             Text("该日无日程")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.4))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -118,9 +118,9 @@ struct CalendarTab: View {
 
     private func eventRow(_ event: CalendarEvent) -> some View {
         HStack(spacing: 8) {
-            Circle()
+            RoundedRectangle(cornerRadius: 1)
                 .fill(Color(cgColor: event.calendarColor))
-                .frame(width: 8, height: 8)
+                .frame(width: 3, height: 24)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
@@ -129,21 +129,17 @@ struct CalendarTab: View {
                     .lineLimit(1)
                 Text(eventTimeRange(event))
                     .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(event.isPast ? 0.2 : 0.5))
+                    .foregroundStyle(.white.opacity(event.isPast ? 0.2 : 0.45))
             }
 
             Spacer(minLength: 0)
         }
-    }
-
-    private func timeUntil(_ event: CalendarEvent) -> String {
-        let interval = event.startDate.timeIntervalSinceNow
-        if interval <= 0 { return "进行中" }
-        let minutes = Int(interval / 60)
-        if minutes < 60 { return "\(minutes) 分钟后" }
-        let hours = minutes / 60
-        let remainMinutes = minutes % 60
-        return remainMinutes > 0 ? "\(hours) 小时 \(remainMinutes) 分钟后" : "\(hours) 小时后"
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.white.opacity(0.06))
+        )
     }
 
     private func eventTimeRange(_ event: CalendarEvent) -> String {
