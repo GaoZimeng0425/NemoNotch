@@ -39,8 +39,7 @@ enum NotchConstants {
     static let openedShadowOpacity: CGFloat = 0.4
 
     // Hook server
-    static let hookBasePort: UInt16 = 49200
-    static let hookMaxPortAttempts: UInt16 = 10
+    static let hookSocketPath = "/tmp/nemonotch.sock"
 
     // Tab content
     static let tabContentHorizontalPadding: CGFloat = 20

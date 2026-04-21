@@ -6,9 +6,9 @@ final class ClaudeCodeService {
     var activeSession: ClaudeState?
     var isHookInstalled = false
     var serverRunning = false
-    var serverPort: UInt16 = 0
 
     let hookServer = HookServer()
+    private let watcherManager = InterruptWatcherManager()
 
     private var timeoutTimer: Timer?
 
@@ -16,30 +16,29 @@ final class ClaudeCodeService {
         hookServer.onEventReceived = { [weak self] event in
             self?.handleEvent(event)
         }
-        hookServer.onReady = { [weak self] port in
+        hookServer.onReady = { [weak self] in
             guard let self else { return }
             self.serverRunning = true
-            self.serverPort = port
-            // Install or update hooks now that we know the actual port the server bound to.
-            // This handles the race where port 49200 is taken and we fall back to 49201+.
-            try? HookInstaller.install(port: port)
+            try? HookInstaller.install()
             self.isHookInstalled = HookInstaller.isInstalled()
         }
         isHookInstalled = HookInstaller.isInstalled()
+
+        watcherManager.onInterrupt = { [weak self] sessionId in
+            self?.handleInterrupt(sessionId: sessionId)
+        }
+        watcherManager.onClear = { [weak self] sessionId in
+            self?.handleClear(sessionId: sessionId)
+        }
     }
 
     func startServer() {
-        do {
-            try hookServer.start()
-        } catch {
-            LogService.error("Failed to start hook server: \(error)", category: "ClaudeCode")
-        }
+        hookServer.start()
     }
 
     func installHooks() {
         do {
-            let port = serverPort > 0 ? serverPort : hookServer.port
-            try HookInstaller.install(port: port)
+            try HookInstaller.install()
             isHookInstalled = true
         } catch {
             LogService.error("Failed to install hooks: \(error)", category: "ClaudeCode")
@@ -55,10 +54,20 @@ final class ClaudeCodeService {
         }
     }
 
+    // MARK: - Permission Response
+
+    func respondToPermission(sessionId: String, approved: Bool) {
+        hookServer.respondToPermission(sessionId: sessionId, approved: approved)
+        if sessions[sessionId] != nil {
+            sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .processing) ?? .processing
+            updateActiveSession()
+        }
+    }
+
+    // MARK: - Event Handling
+
     private func handleEvent(_ event: HookEvent) {
         guard let sessionId = event.sessionId else { return }
-
-        let eventName = event.hookEventName
         let now = Date()
 
         func ensureSession() {
@@ -70,25 +79,29 @@ final class ClaudeCodeService {
         func updateContext() {
             if let cwd = event.cwd { sessions[sessionId]?.cwd = cwd }
             if let msg = event.message, !msg.isEmpty { sessions[sessionId]?.lastMessage = msg }
-            sessions[sessionId]?.lastEventName = eventName
+            sessions[sessionId]?.lastEventName = event.hookEventName
         }
 
-        switch eventName {
+        switch event.hookEventName {
         case "SessionStart":
             sessions[sessionId] = ClaudeState(sessionId: sessionId)
+            sessions[sessionId]?.phase = .idle
             updateContext()
-            loadTranscriptMessages(for: sessionId)
+            if let cwd = event.cwd {
+                watcherManager.startWatching(sessionId: sessionId, cwd: cwd)
+            }
+            parseConversation(for: sessionId)
 
         case "UserPromptSubmit":
             ensureSession()
-            sessions[sessionId]?.status = .working
+            sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .processing) ?? .processing
             updateContext()
             sessions[sessionId]?.lastEventTime = now
-            loadTranscriptMessages(for: sessionId)
+            parseConversation(for: sessionId)
 
         case "PreToolUse":
             ensureSession()
-            sessions[sessionId]?.status = .working
+            sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .processing) ?? .processing
             sessions[sessionId]?.currentTool = event.toolName
             sessions[sessionId]?.isPreToolUse = true
             updateContext()
@@ -96,7 +109,6 @@ final class ClaudeCodeService {
 
         case "PostToolUse":
             ensureSession()
-            sessions[sessionId]?.status = .working
             sessions[sessionId]?.currentTool = nil
             sessions[sessionId]?.isPreToolUse = false
             updateContext()
@@ -104,19 +116,35 @@ final class ClaudeCodeService {
 
         case "Notification":
             ensureSession()
-            sessions[sessionId]?.status = .waiting
+            sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .waitingForInput) ?? .waitingForInput
             updateContext()
             sessions[sessionId]?.lastEventTime = now
 
+        case "PermissionRequest":
+            ensureSession()
+            let ctx = PermissionContext(
+                toolUseId: event.toolName ?? "unknown",
+                toolName: event.toolName ?? "unknown",
+                toolInput: event.message,
+                receivedAt: now
+            )
+            sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .waitingForApproval(ctx)) ?? .waitingForApproval(ctx)
+            updateContext()
+            sessions[sessionId]?.lastEventTime = now
+            LogService.info("Permission request: \(ctx.toolName) for session \(sessionId.prefix(8))", category: "ClaudeCode")
+
         case "Stop":
             if sessions[sessionId] != nil {
-                sessions[sessionId]?.status = .idle
+                sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .idle) ?? .idle
                 sessions[sessionId]?.currentTool = nil
+                sessions[sessionId]?.isPreToolUse = false
                 updateContext()
                 sessions[sessionId]?.lastEventTime = now
+                parseConversation(for: sessionId)
             }
 
         case "SessionEnd":
+            watcherManager.stopWatching(sessionId: sessionId)
             sessions.removeValue(forKey: sessionId)
 
         default:
@@ -127,23 +155,89 @@ final class ClaudeCodeService {
         scheduleTimeoutCleanup()
     }
 
-    private func updateActiveSession() {
-        let prev = activeSession?.id
-        activeSession = sessions.values
-            .filter { $0.status == .working }
-            .sorted { $0.lastEventTime > $1.lastEventTime }
-            .first ?? sessions.values.sorted { $0.lastEventTime > $1.lastEventTime }.first
-        if activeSession?.id != prev {
-            let statusStr: String
-            switch activeSession?.status {
-            case .working: statusStr = "working"
-            case .waiting: statusStr = "waiting"
-            case .idle: statusStr = "idle"
-            case nil: statusStr = "nil"
+    // MARK: - Interrupt & Clear
+
+    private func handleInterrupt(sessionId: String) {
+        guard sessions[sessionId] != nil else { return }
+        sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .idle) ?? .idle
+        sessions[sessionId]?.currentTool = nil
+        sessions[sessionId]?.lastEventTime = Date()
+        updateActiveSession()
+        LogService.info("Interrupt detected for session \(sessionId.prefix(8))", category: "ClaudeCode")
+    }
+
+    private func handleClear(sessionId: String) {
+        guard sessions[sessionId] != nil else { return }
+        sessions[sessionId]?.messages = []
+        sessions[sessionId]?.lastParsedOffset = 0
+        sessions[sessionId]?.phase = sessions[sessionId]?.phase.transition(to: .idle) ?? .idle
+        LogService.info("Clear detected for session \(sessionId.prefix(8))", category: "ClaudeCode")
+    }
+
+    // MARK: - Conversation Parsing
+
+    private func parseConversation(for sessionId: String) {
+        guard let cwd = sessions[sessionId]?.cwd else { return }
+        guard let filePath = ConversationParser.conversationPath(sessionId: sessionId, cwd: cwd) else { return }
+
+        let offset = sessions[sessionId]?.lastParsedOffset ?? 0
+        let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.sessions[sessionId] != nil else { return }
+
+            if result.cleared {
+                self.sessions[sessionId]?.messages = []
             }
-            LogService.info("Active session: \(prev?.prefix(8) ?? "nil") -> \(activeSession?.id.prefix(8) ?? "nil"), status=\(statusStr)", category: "ClaudeCode")
+            self.sessions[sessionId]?.messages.append(contentsOf: result.messages)
+            self.sessions[sessionId]?.lastParsedOffset = result.newOffset
+            self.sessions[sessionId]?.inputTokens += result.inputTokens
+            self.sessions[sessionId]?.outputTokens += result.outputTokens
+
+            let userMessages = result.messages.filter { $0.role == .user }
+            if let first = userMessages.first, self.sessions[sessionId]?.firstUserMessage == nil {
+                self.sessions[sessionId]?.firstUserMessage = String(first.content.prefix(80))
+            }
+            if let last = userMessages.last {
+                self.sessions[sessionId]?.lastUserMessage = String(last.content.prefix(80))
+            }
+
+            if result.interrupted {
+                self.handleInterrupt(sessionId: sessionId)
+            }
         }
     }
+
+    // MARK: - Active Session
+
+    private func updateActiveSession() {
+        let prev = activeSession?.id
+        let sortedSessions = sessions.values.sorted { sessionPriority($0) > sessionPriority($1) }
+        activeSession = sortedSessions.first
+
+        if activeSession?.id != prev {
+            let phaseStr: String
+            if let phase = activeSession?.phase {
+                phaseStr = String(describing: phase)
+            } else {
+                phaseStr = "nil"
+            }
+            LogService.info("Active session: \(prev?.prefix(8) ?? "nil") -> \(activeSession?.id.prefix(8) ?? "nil"), phase=\(phaseStr)", category: "ClaudeCode")
+        }
+    }
+
+    private func sessionPriority(_ session: ClaudeState) -> Int {
+        switch session.phase {
+        case .waitingForApproval: return 100
+        case .processing: return 80
+        case .compacting: return 70
+        case .waitingForInput: return 50
+        case .idle: return 10
+        case .ended: return 0
+        }
+    }
+
+    // MARK: - Timeout
 
     private func scheduleTimeoutCleanup() {
         timeoutTimer?.invalidate()
@@ -156,77 +250,10 @@ final class ClaudeCodeService {
         let threshold = Date().addingTimeInterval(-1800)
         for (id, state) in sessions {
             if state.lastEventTime < threshold {
+                watcherManager.stopWatching(sessionId: id)
                 sessions.removeValue(forKey: id)
             }
         }
         updateActiveSession()
-    }
-
-    // MARK: - Transcript Reading
-
-    private func loadTranscriptMessages(for sessionId: String) {
-        guard let cwd = sessions[sessionId]?.cwd else { return }
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let messages = Self.parseTranscriptMessages(sessionId: sessionId, cwd: cwd)
-            guard let self, let messages, !messages.firstUser.isEmpty || !messages.lastUser.isEmpty else { return }
-            DispatchQueue.main.async {
-                guard self.sessions[sessionId] != nil else { return }
-                if !messages.firstUser.isEmpty {
-                    self.sessions[sessionId]?.firstUserMessage = messages.firstUser
-                }
-                if !messages.lastUser.isEmpty {
-                    self.sessions[sessionId]?.lastUserMessage = messages.lastUser
-                }
-            }
-        }
-    }
-
-    private static func claudeProjectsDir(for cwd: String) -> String {
-        let encoded = "-" + cwd.trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(of: "/", with: "-")
-        return NSString(string: "~/.claude/projects/\(encoded)").expandingTildeInPath
-    }
-
-    private struct TranscriptMessages {
-        var firstUser: String = ""
-        var lastUser: String = ""
-    }
-
-    private static func parseTranscriptMessages(sessionId: String, cwd: String) -> TranscriptMessages? {
-        let dir = claudeProjectsDir(for: cwd)
-        let path = "\(dir)/\(sessionId).jsonl"
-        guard let data = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-
-        var result = TranscriptMessages()
-        var foundFirst = false
-
-        for line in data.components(separatedBy: "\n") {
-            guard !line.isEmpty, let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
-            guard obj["type"] as? String == "user", let message = obj["message"] as? [String: Any] else { continue }
-
-            let text = extractText(from: message)
-            guard !text.isEmpty else { continue }
-
-            if !foundFirst {
-                result.firstUser = String(text.prefix(80))
-                foundFirst = true
-            }
-            result.lastUser = String(text.prefix(80))
-        }
-        return result
-    }
-
-    private static func extractText(from message: [String: Any]) -> String {
-        guard let content = message["content"] else { return "" }
-        if let str = content as? String {
-            return str
-        }
-        if let array = content as? [[String: Any]] {
-            for item in array {
-                if item["type"] as? String == "text", let text = item["text"] as? String {
-                    return text
-                }
-            }
-        }
-        return ""
     }
 }

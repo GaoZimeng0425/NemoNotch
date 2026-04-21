@@ -53,15 +53,9 @@ struct ClaudeTab: View {
             Circle()
                 .fill(claudeService.serverRunning ? Color.green : Color.orange)
                 .frame(width: 6, height: 6)
-            if claudeService.serverRunning {
-                Text("监听端口 \(claudeService.serverPort)")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.35))
-            } else {
-                Text("Hook 服务未启动")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.35))
-            }
+            Text(claudeService.serverRunning ? "Unix Socket 已就绪" : "Hook 服务未启动")
+                .font(.system(size: 9))
+                .foregroundStyle(.white.opacity(0.35))
         }
         .padding(.top, 4)
     }
@@ -121,6 +115,10 @@ struct ClaudeTab: View {
                             .lineLimit(1)
                     }
                     Text(timeAgo(session.lastEventTime))
+                    if session.totalTokens > 0 {
+                        Text("· \(session.tokenDisplay)")
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
                 }
                 .font(.system(size: 9))
                 .foregroundStyle(.white.opacity(0.3))
@@ -158,6 +156,7 @@ struct ClaudeTab: View {
         case "PostToolUse": return ("PostToolUse", .blue)
         case "Stop": return ("Stop", .green)
         case "Notification": return ("Notification", .yellow)
+        case "PermissionRequest": return ("Permission", .red)
         case "UserPromptSubmit": return ("Prompt", .purple)
         case "SessionStart": return ("Start", .cyan)
         default: return (event, .gray)

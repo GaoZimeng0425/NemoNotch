@@ -32,6 +32,10 @@ struct CompactBadge: View {
         if let agent = openClawService.activeAgent {
             return .openclaw(agent.state, agent.emoji, agent.name)
         }
+        // 2.5. Claude waiting for approval
+        if let session = claudeService.activeSession, session.phase.isWaitingForApproval {
+            return .claude(.waiting, session.phase.approvalToolName, true)
+        }
         // 3. Active work (Claude session running)
         if let session = claudeService.activeSession, session.status != .idle {
             return .claude(session.status, session.currentTool, session.isPreToolUse)
