@@ -86,8 +86,8 @@ struct CompactBadge: View {
                         leftNotificationIcon(for: bundleID)
                     case .media where side == .left:
                         leftMediaIcon
-                    case .claude(_, _, _) where side == .left:
-                        leftClaudeIcon
+                    case .claude(let status, _, _) where side == .left:
+                        leftClaudeIcon(animating: status == .working)
                     case .openclaw where side == .left:
                         Text("🦞")
                             .font(.system(size: 11))
@@ -103,29 +103,7 @@ struct CompactBadge: View {
                         Image(systemName: "play.fill")
                             .foregroundStyle(.white.opacity(0.9))
                     case .claude(let status, let tool, let isPre) where side == .right:
-                        if status == .waiting && claudeService.activeSession?.phase.isWaitingForApproval == true {
-                            Circle()
-                                .fill(Color.orange.opacity(0.3))
-                                .frame(width: 16, height: 16)
-                                .overlay {
-                                    Image(systemName: "exclamationmark")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(.orange)
-                                }
-                                .modifier(PulseModifier(isActive: true))
-                        } else {
-                            Image(systemName: ToolStyle.icon(tool))
-                                .foregroundStyle(ToolStyle.color(tool).opacity(0.9))
-                                .modifier(PulseModifier(isActive: status == .working))
-                                .overlay {
-                                    if isPre {
-                                        Circle()
-                                            .stroke(ToolStyle.color(tool), lineWidth: 1.5)
-                                            .frame(width: 16, height: 16)
-                                            .modifier(GlowPulseModifier())
-                                    }
-                                }
-                        }
+                        rightClaudeBadge(status: status, tool: tool, isPre: isPre)
                     case .openclaw(let state, let emoji, _) where side == .right:
                         Text(emoji)
                             .font(.system(size: 10))
@@ -213,17 +191,33 @@ struct CompactBadge: View {
     }
 
     @ViewBuilder
-    private var leftClaudeIcon: some View {
-        if let url = Bundle.main.url(forResource: "claude", withExtension: "webp"),
-           let nsImage = NSImage(contentsOf: url) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+    private func rightClaudeBadge(status: ClaudeStatus, tool: String?, isPre: Bool) -> some View {
+        let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
+        if status == .waiting && claudeService.activeSession?.phase.isWaitingForApproval == true {
+            // Waiting for approval: orange circle + pulsing exclamation
+            Circle()
+                .fill(claudeOrange.opacity(0.25))
+                .frame(width: 18, height: 18)
+                .overlay {
+                    Image(systemName: "exclamationmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(claudeOrange)
+                }
+                .modifier(PulseModifier(isActive: true))
+        } else if status == .working {
+            // Working: character spinner
+            ProcessingSpinner(color: ToolStyle.color(tool))
         } else {
-            Image(systemName: "cpu")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.8))
+            // Idle / waiting for input: colored dot
+            Circle()
+                .fill(ToolStyle.color(tool).opacity(0.7))
+                .frame(width: 8, height: 8)
         }
+    }
+
+    @ViewBuilder
+    private func leftClaudeIcon(animating: Bool) -> some View {
+        ClaudeCrabIcon(size: 14, animateLegs: animating)
     }
 
     private func tabFor(_ badge: BadgeInfo) -> Tab {

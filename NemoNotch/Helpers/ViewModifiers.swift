@@ -5,7 +5,7 @@ struct PulseModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(isActive ? 1 : 1)
+            .opacity(isActive ? 0.4 : 1)
             .animation(
                 isActive ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default,
                 value: isActive
