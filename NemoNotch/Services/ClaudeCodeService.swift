@@ -102,6 +102,7 @@ final class ClaudeCodeService {
                 applySubagentStart(to: &session, event: event)
             }
             sessions[sessionId] = session
+            parseConversation(for: sessionId)
 
         case "PostToolUse":
             var session = ensureSession(sessionId)
@@ -114,6 +115,7 @@ final class ClaudeCodeService {
                 agentWatcherManager.stopWatching(sessionId: sessionId, taskToolId: event.toolUseId ?? "")
             }
             sessions[sessionId] = session
+            parseConversation(for: sessionId)
 
         case "Notification":
             var session = ensureSession(sessionId)
