@@ -16,6 +16,7 @@ struct ClaudeState: Identifiable {
     var inputTokens: Int = 0
     var outputTokens: Int = 0
     var lastParsedOffset: UInt64 = 0
+    var subagentState = SubagentState()
 
     init(sessionId: String) {
         self.id = sessionId

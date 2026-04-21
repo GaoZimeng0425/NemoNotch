@@ -129,7 +129,7 @@ struct ClaudeTab: View {
                     ScrollView {
                         LazyVStack(spacing: 6) {
                             ForEach(session.messages) { msg in
-                                ChatMessageView(message: msg)
+                                ChatMessageView(message: msg, subagentTools: subagentTools(for: msg, session: session))
                                     .id(msg.id)
                             }
                         }
@@ -229,6 +229,10 @@ struct ClaudeTab: View {
                             Text("· \(session.tokenDisplay)")
                                 .foregroundStyle(.white.opacity(0.3))
                         }
+                        if session.subagentState.hasActiveTasks {
+                            Text("· \(session.subagentState.taskSummary() ?? "")")
+                                .foregroundStyle(.orange.opacity(0.7))
+                        }
                     }
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.3))
@@ -297,6 +301,16 @@ struct ClaudeTab: View {
 
     private func approvalContext(for session: ClaudeState) -> PermissionContext? {
         if case .waitingForApproval(let ctx) = session.phase { return ctx }
+        return nil
+    }
+
+    private func subagentTools(for message: ChatMessage, session: ClaudeState) -> [SubagentToolCall]? {
+        guard let toolName = message.toolName, ["Task", "Agent"].contains(toolName) else { return nil }
+        for (_, task) in session.subagentState.activeTasks {
+            if message.id.contains(task.id) {
+                return task.tools
+            }
+        }
         return nil
     }
 

@@ -9,6 +9,7 @@ final class ClaudeCodeService {
 
     let hookServer = HookServer()
     private let watcherManager = InterruptWatcherManager()
+    private let agentWatcherManager = AgentFileWatcherManager()
 
     private var timeoutTimer: Timer?
 
@@ -106,6 +107,9 @@ final class ClaudeCodeService {
             sessions[sessionId]?.isPreToolUse = true
             updateContext()
             sessions[sessionId]?.lastEventTime = now
+            if let toolName = event.toolName, ["Task", "Agent"].contains(toolName) {
+                handleSubagentStart(sessionId: sessionId, event: event)
+            }
 
         case "PostToolUse":
             ensureSession()
@@ -113,6 +117,9 @@ final class ClaudeCodeService {
             sessions[sessionId]?.isPreToolUse = false
             updateContext()
             sessions[sessionId]?.lastEventTime = now
+            if let toolName = event.toolName, ["Task", "Agent"].contains(toolName) {
+                handleSubagentStop(sessionId: sessionId, event: event)
+            }
 
         case "Notification":
             ensureSession()
@@ -146,6 +153,7 @@ final class ClaudeCodeService {
         case "SessionEnd":
             hookServer.cancelPendingPermissions(sessionId: sessionId)
             watcherManager.stopWatching(sessionId: sessionId)
+            agentWatcherManager.stopAll(sessionId: sessionId)
             sessions.removeValue(forKey: sessionId)
 
         default:
@@ -209,6 +217,25 @@ final class ClaudeCodeService {
                 }
             }
         }
+    }
+
+    // MARK: - Subagent Tracking
+
+    private func handleSubagentStart(sessionId: String, event: HookEvent) {
+        let taskToolId = event.toolUseId ?? UUID().uuidString
+        var description: String?
+        if let input = event.message,
+           let data = input.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            description = json["description"] as? String ?? json["prompt"] as? String
+        }
+        sessions[sessionId]?.subagentState.startTask(taskToolId: taskToolId, description: description)
+    }
+
+    private func handleSubagentStop(sessionId: String, event: HookEvent) {
+        let taskToolId = event.toolUseId ?? ""
+        sessions[sessionId]?.subagentState.stopTask(taskToolId: taskToolId)
+        agentWatcherManager.stopWatching(sessionId: sessionId, taskToolId: taskToolId)
     }
 
     // MARK: - Active Session

@@ -56,6 +56,7 @@ struct CompactBadge: View {
 
     @State private var dismissed = false
     @State private var hideTask: Task<Void, Never>? = nil
+    @State private var wasWaitingForApproval = false
 
     private var visibleBadge: BadgeInfo? {
         guard !dismissed else { return nil }
@@ -142,6 +143,12 @@ struct CompactBadge: View {
         }
         .onAppear {
             dismissed = current == nil
+        }
+        .onChange(of: claudeService.activeSession?.phase.isWaitingForApproval == true) { _, isWaiting in
+            if isWaiting && !wasWaitingForApproval && !TerminalDetector.isTerminalFrontmost {
+                NSSound(named: "Pop")?.play()
+            }
+            wasWaitingForApproval = isWaiting
         }
         .onChange(of: current == nil) { _, isNil in
             if !isNil {
