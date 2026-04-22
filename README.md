@@ -68,13 +68,13 @@ NemoNotch draws inspiration from the following open-source projects:
 ### Notch Window & Interaction
 
 - [**NotchDrop**](https://github.com/Lakr233/NotchDrop) — Notch window positioning, multi-screen support, click-through
-- [**DynamicNotchKit**](https://github.com/Lakr233/DynamicNotchKit) — Spring animations, auto-dismiss, content switching
-- [**Peninsula**](https://github.com/yufan8414/Peninsula) — Multi-view state management in the notch area
+- [**DynamicNotchKit**](https://github.com/MrKai77/DynamicNotchKit) — Spring animations, auto-dismiss, content switching
+- [**Peninsula**](https://github.com/celve/Peninsula) — Multi-view state management in the notch area
 
 ### Media & Playback
 
-- [**PlayStatus**](https://github.com/nicklama/PlayStatus) — MediaRemote framework integration, media key interception
-- [**Tuneful**](https://github.com/Dimillian/Tuneful) — Now playing info & UI
+- [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote framework integration, media key interception
+- [**Tuneful**](https://github.com/martinfekete10/Tuneful) — Now playing info & UI
 - [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — CLI tool for now playing info
 
 ### Window Management & Shortcuts
@@ -89,17 +89,17 @@ NemoNotch draws inspiration from the following open-source projects:
 ### Menu Bar & System Tools
 
 - [**eul**](https://github.com/gao-sun/eul) — Menu bar architecture, Combine reactive patterns
-- [**menubar_runcat**](https://github.com/Kyle-Ye/menubar_runcat) — Menu bar status animation
+- [**menubar_runcat**](https://github.com/Kyome22/menubar_runcat) — Menu bar status animation
 
 ### Launcher & UI Components
 
 - [**sol**](https://github.com/ospfranco/sol) — App launcher architecture
-- [**Luminare**](https://github.com/Dimillian/Luminare) — SwiftUI component library & design language
+- [**Luminare**](https://github.com/Lakr233/Luminare) — SwiftUI component library & design language
 
 ### AI & Desktop Integration
 
 - [**Vibe Notch**](https://github.com/farouqaldori/vibe-notch) — Claude Code notch notifications, session monitoring, permission approval UI
-- [**masko-code**](https://github.com/nicepkg/masko-code) — Claude Code status monitoring & desktop overlay concept
+- [**masko-code**](https://github.com/RousselPaul/masko-code) — Claude Code status monitoring & desktop overlay concept
 
 ## License
 
