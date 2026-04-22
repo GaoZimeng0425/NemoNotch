@@ -28,6 +28,8 @@ final class HUDService {
 
     // Battery
     private var batteryRunLoopSource: CFRunLoopSource?
+    private var lastBatteryLevel: Int = -1
+    private var lastChargingState: Bool? = nil
 
     init() {
         LogService.info("HUDService init start", category: "HUD")
@@ -235,9 +237,17 @@ final class HUDService {
               let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeRetainedValue() as? [String: Any] else { continue }
+            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any] else { continue }
             let capacity = (info[kIOPSCurrentCapacityKey] as? Int) ?? 0
             let charging = info[kIOPSIsChargingKey] as? Bool ?? false
+
+            let levelChanged = capacity != lastBatteryLevel
+            let chargingChanged = charging != lastChargingState
+            guard levelChanged || chargingChanged else { return }
+
+            lastBatteryLevel = capacity
+            lastChargingState = charging
+            LogService.info("Battery changed: \(capacity)% charging=\(charging)", category: "HUD")
             showHUD(.battery(charging: charging), value: Float(capacity) / 100.0)
         }
     }

@@ -12,7 +12,7 @@ struct NotchView: View {
 
     private var enabledTabs: Set<Tab> { appSettings.enabledTabs }
 
-    private var screen: NSScreen { NSScreen.main! }
+    private var screen: NSScreen { NSScreen.main ?? NSScreen.screens[0] }
     private var hasNotch: Bool { screen.hasNotch }
     private var hardwareNotchSize: NSSize { coordinator.notchSize }
 

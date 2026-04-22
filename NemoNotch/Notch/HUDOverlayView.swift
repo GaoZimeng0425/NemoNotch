@@ -4,12 +4,15 @@ struct HUDOverlayView: View {
     let type: HUDService.HUDType
     let value: Float
 
+    private static let accentColor = Color(red: 1.0, green: 0.55, blue: 0.05)
+    private static let segmentCount = 20
+
     private var icon: String {
         switch type {
         case .volume: volumeIcon
         case .brightness: brightnessIcon
         case .battery(let charging):
-            charging ? "battery.100.bolt" : batteryIconName
+            charging ? "bolt.fill" : batteryIconName
         }
     }
 
@@ -45,39 +48,43 @@ struct HUDOverlayView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: NotchConstants.hudIconSize, alignment: .center)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Self.accentColor)
+                .frame(width: 18, alignment: .center)
 
-            progressBar
+            segmentedBar
 
             Text(percentageText)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Self.accentColor)
                 .monospacedDigit()
-                .frame(width: 32, alignment: .trailing)
+                .frame(width: 38, alignment: .trailing)
         }
         .padding(.horizontal, NotchConstants.hudHorizontalPadding)
         .frame(height: NotchConstants.hudHeight)
-        .background(.black.opacity(0.85))
+        .background(.black)
         .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+        .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
     }
 
-    private var progressBar: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.white.opacity(0.2))
-
-                Capsule()
-                    .fill(.white.opacity(0.8))
-                    .frame(width: max(0, geo.size.width * CGFloat(value)))
+    private var segmentedBar: some View {
+        HStack(spacing: NotchConstants.hudSegmentSpacing) {
+            ForEach(0..<Self.segmentCount, id: \.self) { index in
+                let threshold = Float(index + 1) / Float(Self.segmentCount)
+                RoundedRectangle(cornerRadius: NotchConstants.hudSegmentCornerRadius)
+                    .fill(
+                        value >= threshold
+                            ? Self.accentColor
+                            : Self.accentColor.opacity(0.15)
+                    )
+                    .frame(
+                        width: NotchConstants.hudSegmentWidth,
+                        height: NotchConstants.hudSegmentHeight
+                    )
+                    .animation(.easeInOut(duration: 0.15).delay(Double(index) * 0.01), value: value)
             }
         }
-        .frame(height: NotchConstants.hudProgressBarHeight)
-        .frame(maxWidth: .infinity)
     }
 }
