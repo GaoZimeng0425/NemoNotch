@@ -29,8 +29,12 @@ xcodebuild -exportArchive \
   -exportOptionsPlist ExportOptions.plist
 
 echo "==> Creating DMG..."
+DMG_STAGING="$BUILD_DIR/dmg_staging"
+mkdir -p "$DMG_STAGING"
+cp -R "$BUILD_DIR/export/$APP_NAME.app" "$DMG_STAGING/"
+ln -s /Applications "$DMG_STAGING/Applications"
 hdiutil create -volname "$APP_NAME" \
-  -srcfolder "$BUILD_DIR/export/$APP_NAME.app" \
+  -srcfolder "$DMG_STAGING" \
   -ov -format UDZO \
   "$BUILD_DIR/$DMG_NAME.dmg"
 

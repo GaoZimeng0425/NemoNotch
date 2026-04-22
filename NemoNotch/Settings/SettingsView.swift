@@ -182,6 +182,14 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
+                            Button {
+                                appSettings.monitoredApps.removeAll { $0 == bundleID }
+                                notificationService.updateMonitoredApps(appSettings.monitoredApps)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red.opacity(0.6))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .onDelete { offsets in
