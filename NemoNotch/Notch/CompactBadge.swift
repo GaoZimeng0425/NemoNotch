@@ -207,6 +207,12 @@ struct CompactBadge: View {
         } else if status == .working {
             // Working: character spinner
             ProcessingSpinner(color: ToolStyle.color(tool))
+        } else if status == .waiting {
+            // Waiting for input: question mark
+            Image(systemName: "questionmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(0.7))
+                .modifier(PulseModifier(isActive: true))
         } else {
             // Idle / waiting for input: colored dot
             Circle()
