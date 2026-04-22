@@ -8,6 +8,7 @@ struct NotchView: View {
     @Environment(ClaudeCodeService.self) var claudeService
     @Environment(NotificationService.self) var notificationService
     @Environment(OpenClawService.self) var openClawService
+    @Environment(HUDService.self) var hudService
 
     private var enabledTabs: Set<Tab> { appSettings.enabledTabs }
 
@@ -111,6 +112,17 @@ struct NotchView: View {
                 contentPanel
                     .zIndex(1)
             }
+
+            // HUD overlay - appears below the notch
+            if let hudType = hudService.activeHUD {
+                HUDOverlayView(type: hudType, value: hudService.hudValue)
+                    .zIndex(3)
+                    .position(
+                        x: notchCenterX,
+                        y: hardwareNotchSize.height + NotchConstants.hudTopPadding + NotchConstants.hudHeight / 2
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
         .onAppear { shownHasActiveBadge = hasActiveBadge }
@@ -155,6 +167,7 @@ struct NotchView: View {
             let newIndex = tabs.firstIndex(of: newTab) ?? 0
             slideForward = newIndex > oldIndex
         }
+        .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.15), value: hudService.activeHUD)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
