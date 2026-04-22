@@ -99,6 +99,19 @@ NemoNotch/
 4. GitHub Actions 自动构建并发布 DMG 到 Releases（workflow 文件：`.github/workflows/release.yml`）
 5. 查看构建状态：`https://github.com/GaoZimeng0425/NemoNotch/actions`
 
+## Git Flow 开发规范
+
+- **main**: 稳定发布分支，只接受来自 develop 的合并
+- **develop**: 日常开发分支，所有功能分支基于此创建
+- **feature/xxx**: 功能分支，从 develop 拉出，完成后合并回 develop
+- **hotfix/xxx**: 紧急修复分支，从 main 拉出，修复后合并回 main 和 develop
+
+### 工作流程
+
+1. 新功能开发：`git checkout develop && git checkout -b feature/xxx`
+2. 开发完成后合并回 develop，测试通过后合并 develop 到 main
+3. 发版时从 main 打 tag（`vX.Y.Z`）
+
 ## 开发约定
 
 - 所有 Service 使用 `@Observable` 宏，通过 SwiftUI 响应式更新 UI
