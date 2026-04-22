@@ -48,4 +48,17 @@ enum NotchConstants {
     static let cornerRadiusClosed: CGFloat = 8
     static let cornerRadiusOpened: CGFloat = 24
     static let notchBackgroundSpacing: CGFloat = 16
+
+    // HUD overlay
+    static let hudHeight: CGFloat = 28
+    static let hudCornerRadius: CGFloat = 14
+    static let hudIconSize: CGFloat = 14
+    static let hudProgressBarHeight: CGFloat = 6
+    static let hudHorizontalPadding: CGFloat = 12
+    static let hudTopPadding: CGFloat = 4
+    static let hudDismissDelay: Double = 2.0
+    static let hudAppearDuration: Double = 0.3
+    static let hudDismissDuration: Double = 0.2
+    static let hudValueTransitionDuration: Double = 0.15
+    static let hudBrightnessPollInterval: Double = 0.5
 }
