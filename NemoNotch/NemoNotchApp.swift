@@ -1,4 +1,5 @@
 import Carbon
+import Darwin
 import SwiftUI
 
 @main
@@ -22,6 +23,7 @@ struct NemoNotchApp: App {
     }
 
     init() {
+        signal(SIGPIPE, SIG_IGN)
         let delegate = AppDelegate.shared
         _appDelegateRef = State(initialValue: delegate)
     }

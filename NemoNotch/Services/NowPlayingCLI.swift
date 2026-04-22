@@ -13,98 +13,232 @@ final class NowPlayingCLI {
     ]
 
     private let queue = DispatchQueue(label: "NemoNotch.NowPlayingCLI", qos: .utility)
-    private let helpers: [HelperType]
     private let processTimeoutSeconds: TimeInterval = 4.0
     private static let extractionTimeoutSeconds: TimeInterval = 4.0
 
+    // Daemon state (accessed only on `queue`)
+    private var daemonProcess: Process?
+    private var daemonStdin: FileHandle?
+    private var daemonStdout: FileHandle?
+    private var responseBuffer = Data()
+    private var pendingCompletion: (([String: Any]?) -> Void)?
+    private var timeoutItem: DispatchWorkItem?
+
+    // Fallback helpers (one-shot)
+    private let fallbackHelpers: [HelperType]
+
     private enum HelperType {
-        case bundled(script: String, gzPath: String)
-        case systemDylib(script: String, dylib: String)
+        case bundled(script: String, dylib: String)
         case external(String)
         case unavailable
+    }
 
-        var debugDescription: String {
-            switch self {
-            case .bundled(let script, let gzPath):
-                return "bundled(script=\((script as NSString).lastPathComponent), gz=\((gzPath as NSString).lastPathComponent))"
-            case .systemDylib(_, let dylib):
-                return "systemDylib(path=\(dylib))"
-            case .external(let path):
-                return "external(path=\(path))"
-            case .unavailable:
-                return "unavailable"
+    init() {
+        var helpers: [HelperType] = []
+        if let script = Bundle.main.path(forResource: "mediaremote-mini", ofType: "pl"),
+           let gzPath = Bundle.main.path(forResource: "MediaRemoteMini", ofType: "bin.gz"),
+           let dylib = Self.extractDylib(gzPath: gzPath) {
+            helpers.append(.bundled(script: script, dylib: dylib))
+        }
+        if let script = Bundle.main.path(forResource: "mediaremote-mini", ofType: "pl"),
+           let dylib = Self.findSystemDylib() {
+            helpers.append(.bundled(script: script, dylib: dylib))
+        }
+        if let path = Self.findExternal() {
+            helpers.append(.external(path))
+        }
+        if helpers.isEmpty { helpers = [.unavailable] }
+        fallbackHelpers = helpers
+    }
+
+    deinit {
+        stopDaemon()
+    }
+
+    // MARK: - Public API
+
+    func fetchNowPlayingInfo(completion: @escaping ([String: Any]?) -> Void) {
+        queue.async {
+            if self.ensureDaemon() {
+                self.fetchViaDaemon(completion: completion)
+            } else {
+                self.fetchUsingFallbacks(from: 0, completion: completion)
             }
         }
     }
 
-    init() {
-        var resolved: [HelperType] = []
+    // MARK: - Daemon Lifecycle
 
-        if let script = Bundle.main.path(forResource: "mediaremote-mini", ofType: "pl"),
-           let gzPath = Bundle.main.path(forResource: "MediaRemoteMini", ofType: "bin.gz") {
-            resolved.append(.bundled(script: script, gzPath: gzPath))
-        }
-
-        if let script = Bundle.main.path(forResource: "mediaremote-mini", ofType: "pl"),
-           let dylib = Self.findSystemDylib() {
-            resolved.append(.systemDylib(script: script, dylib: dylib))
-        }
-
-        if let path = Self.findExternal() {
-            resolved.append(.external(path))
-        }
-
-        if resolved.isEmpty { resolved = [.unavailable] }
-        helpers = resolved
+    @discardableResult
+    private func ensureDaemon() -> Bool {
+        if let p = daemonProcess, p.isRunning { return true }
+        return startDaemon()
     }
 
-    func fetchNowPlayingInfo(completion: @escaping ([String: Any]?) -> Void) {
-        queue.async {
-            self.fetchUsingHelpers(from: 0, completion: completion)
+    private func startDaemon() -> Bool {
+        guard let helper = fallbackHelpers.first,
+              case .bundled(let script, let dylib) = helper else {
+            return false
         }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        process.arguments = [script, dylib, "adapter_get_env", "--daemon"]
+
+        let stdinPipe = Pipe()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        do {
+            try process.run()
+        } catch {
+            LogService.error("daemon start failed: \(error.localizedDescription)", category: "NowPlayingCLI")
+            return false
+        }
+
+        daemonProcess = process
+        daemonStdin = stdinPipe.fileHandleForWriting
+        daemonStdout = stdoutPipe.fileHandleForReading
+
+        daemonStdout?.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            self?.queue.async {
+                self?.handleDaemonData(data)
+            }
+        }
+
+        LogService.info("daemon started (pid=\(process.processIdentifier))", category: "NowPlayingCLI")
+        return true
     }
 
-    private func fetchUsingHelpers(from index: Int, completion: @escaping ([String: Any]?) -> Void) {
-        guard index < helpers.count else {
+    private func stopDaemon() {
+        daemonStdout?.readabilityHandler = nil
+        if let p = daemonProcess, p.isRunning {
+            p.terminate()
+        }
+        daemonProcess = nil
+        daemonStdin = nil
+        daemonStdout = nil
+        responseBuffer = Data()
+        pendingCompletion = nil
+        timeoutItem?.cancel()
+        timeoutItem = nil
+    }
+
+    private func restartDaemon() {
+        stopDaemon()
+        _ = startDaemon()
+    }
+
+    // MARK: - Daemon Fetch
+
+    private func fetchViaDaemon(completion: @escaping ([String: Any]?) -> Void) {
+        guard pendingCompletion == nil else {
             DispatchQueue.main.async { completion(nil) }
             return
         }
 
-        let helper = helpers[index]
+        pendingCompletion = completion
+        responseBuffer = Data()
+
+        guard let data = "\n".data(using: .utf8) else {
+            finishPending(nil)
+            return
+        }
+
+        guard let stdin = daemonStdin, let p = daemonProcess, p.isRunning else {
+            finishPending(nil)
+            return
+        }
+        stdin.write(data)
+
+        let item = DispatchWorkItem { [weak self] in
+            self?.queue.async {
+                self?.handleDaemonTimeout()
+            }
+        }
+        timeoutItem = item
+        queue.asyncAfter(deadline: .now() + processTimeoutSeconds, execute: item)
+    }
+
+    private func handleDaemonData(_ data: Data) {
+        guard pendingCompletion != nil else { return }
+        responseBuffer.append(data)
+
+        guard let newline = responseBuffer.range(of: Data([0x0A])) else { return }
+
+        let responseData = responseBuffer[..<newline.lowerBound]
+        responseBuffer.removeSubrange(...newline.lowerBound)
+
+        timeoutItem?.cancel()
+        timeoutItem = nil
+
+        if let jsonObject = try? JSONSerialization.jsonObject(with: responseData),
+           let info = Self.convertToMediaInfo(jsonObject) {
+            finishPending(info)
+        } else {
+            finishPending(nil)
+        }
+    }
+
+    private func handleDaemonTimeout() {
+        LogService.error("daemon timed out after \(processTimeoutSeconds)s", category: "NowPlayingCLI")
+        daemonStdout?.readabilityHandler = nil
+        restartDaemon()
+        finishPending(nil)
+    }
+
+    private func finishPending(_ result: [String: Any]?) {
+        let completion = pendingCompletion
+        pendingCompletion = nil
+        DispatchQueue.main.async { completion?(result) }
+    }
+
+    // MARK: - Fallback (one-shot processes)
+
+    private func fetchUsingFallbacks(from index: Int, completion: @escaping ([String: Any]?) -> Void) {
+        guard index < fallbackHelpers.count else {
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+
+        let helper = fallbackHelpers[index]
         let next: () -> Void = { [weak self] in
-            self?.fetchUsingHelpers(from: index + 1, completion: completion)
+            self?.fetchUsingFallbacks(from: index + 1, completion: completion)
         }
 
         switch helper {
-        case .bundled(let script, let gzPath):
-            guard let dylib = Self.extractDylib(gzPath: gzPath) else {
-                next()
-                return
-            }
-            runPerl(script: script, dylib: dylib) { info in
-                if let info {
-                    completion(info)
-                } else {
-                    next()
-                }
-            }
+        case .bundled(let script, let dylib):
+            guard let data = runProcess(
+                executable: "/usr/bin/perl",
+                arguments: [script, dylib, "adapter_get_env"],
+                sourceTag: "cli/perl"
+            ) else { next(); return }
 
-        case .systemDylib(let script, let dylib):
-            runPerl(script: script, dylib: dylib) { info in
-                if let info {
-                    completion(info)
-                } else {
-                    next()
-                }
+            if let jsonObject = try? JSONSerialization.jsonObject(with: data),
+               let info = Self.convertToMediaInfo(jsonObject) {
+                DispatchQueue.main.async { completion(info) }
+            } else {
+                next()
             }
 
         case .external(let path):
-            runExternal(path: path) { info in
-                if let info {
-                    completion(info)
-                } else {
-                    next()
-                }
+            guard let data = runProcess(
+                executable: path,
+                arguments: ["get", "--json", "title", "artist", "album",
+                            "duration", "elapsedTime", "playbackRate", "artworkData"],
+                sourceTag: "cli/external"
+            ) else { next(); return }
+
+            if let jsonObject = try? JSONSerialization.jsonObject(with: data),
+               let info = Self.convertToMediaInfo(jsonObject) {
+                DispatchQueue.main.async { completion(info) }
+            } else {
+                next()
             }
 
         case .unavailable:
@@ -112,43 +246,58 @@ final class NowPlayingCLI {
         }
     }
 
-    private func runPerl(script: String, dylib: String, completion: @escaping ([String: Any]?) -> Void) {
-        guard let data = runProcess(
-            executable: "/usr/bin/perl",
-            arguments: [script, dylib, "adapter_get_env"],
-            sourceTag: "cli/perl"
-        ) else {
-            DispatchQueue.main.async { completion(nil) }
-            return
+    private func runProcess(executable: String, arguments: [String], sourceTag: String) -> Data? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        var stdoutData = Data()
+        let readQueue = DispatchQueue(label: "NemoNotch.pipe-read", qos: .utility)
+
+        readQueue.async {
+            stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         }
 
-        guard let jsonObject = try? JSONSerialization.jsonObject(with: data),
-              let info = Self.convertToMediaInfo(jsonObject) else {
-            DispatchQueue.main.async { completion(nil) }
-            return
+        let semaphore = DispatchSemaphore(value: 0)
+
+        do {
+            try process.run()
+        } catch {
+            LogService.error("\(sourceTag) failed to run: \(error.localizedDescription)", category: "NowPlayingCLI")
+            return nil
         }
 
-        DispatchQueue.main.async { completion(info) }
-    }
-
-    private func runExternal(path: String, completion: @escaping ([String: Any]?) -> Void) {
-        guard let data = runProcess(
-            executable: path,
-            arguments: ["get", "--json", "title", "artist", "album",
-                        "duration", "elapsedTime", "playbackRate", "artworkData"],
-            sourceTag: "cli/external"
-        ) else {
-            DispatchQueue.main.async { completion(nil) }
-            return
+        DispatchQueue.global(qos: .utility).async {
+            process.waitUntilExit()
+            semaphore.signal()
         }
 
-        guard let jsonObject = try? JSONSerialization.jsonObject(with: data),
-              let info = Self.convertToMediaInfo(jsonObject) else {
-            DispatchQueue.main.async { completion(nil) }
-            return
+        let timeout = processTimeoutSeconds
+        let waitResult = semaphore.wait(timeout: .now() + timeout)
+
+        if waitResult == .timedOut {
+            LogService.error("\(sourceTag) timed out after \(timeout)s", category: "NowPlayingCLI")
+            process.terminate()
+            _ = semaphore.wait(timeout: .now() + 1)
+            return nil
         }
 
-        DispatchQueue.main.async { completion(info) }
+        if process.terminationStatus != 0 {
+            if let stderrText = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
+               !stderrText.isEmpty {
+                LogService.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
+            } else {
+                LogService.error("\(sourceTag) exit=\(process.terminationStatus)", category: "NowPlayingCLI")
+            }
+            return nil
+        }
+
+        return stdoutData
     }
 
     // MARK: - Dylib extraction
@@ -289,62 +438,7 @@ final class NowPlayingCLI {
         return result
     }
 
-    private func runProcess(executable: String, arguments: [String], sourceTag: String) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        var stdoutData = Data()
-        var stderrData = Data()
-        let readQueue = DispatchQueue(label: "NemoNotch.pipe-read", qos: .utility)
-
-        readQueue.async {
-            stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        }
-        readQueue.async {
-            stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        }
-
-        let semaphore = DispatchSemaphore(value: 0)
-
-        do {
-            try process.run()
-        } catch {
-            LogService.error("\(sourceTag) failed to run: \(error.localizedDescription)", category: "NowPlayingCLI")
-            return nil
-        }
-
-        DispatchQueue.global(qos: .utility).async {
-            process.waitUntilExit()
-            semaphore.signal()
-        }
-
-        let timeout = processTimeoutSeconds
-        let waitResult = semaphore.wait(timeout: .now() + timeout)
-
-        if waitResult == .timedOut {
-            LogService.error("\(sourceTag) timed out after \(timeout)s", category: "NowPlayingCLI")
-            process.terminate()
-            _ = semaphore.wait(timeout: .now() + 1)
-            return nil
-        }
-
-        if process.terminationStatus != 0 {
-            if let stderrText = String(data: stderrData, encoding: .utf8), !stderrText.isEmpty {
-                LogService.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
-            } else {
-                LogService.error("\(sourceTag) exit=\(process.terminationStatus)", category: "NowPlayingCLI")
-            }
-            return nil
-        }
-
-        return stdoutData
-    }
+    // MARK: - Conversion
 
     private static func convertToMediaInfo(_ jsonObject: Any) -> [String: Any]? {
         guard let json = jsonObject as? [String: Any] else { return nil }
@@ -383,7 +477,6 @@ final class NowPlayingCLI {
         }
         guard let text = value as? String, !text.isEmpty else { return nil }
 
-        // nowplaying-cli helper emits ISO-8601 strings.
         if let date = ISO8601DateFormatter.full.date(from: text) {
             return date
         }
