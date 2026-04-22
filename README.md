@@ -82,6 +82,10 @@ NemoNotch draws inspiration from the following open-source projects:
 - [**Loop**](https://github.com/MrKai77/Loop) — Global hotkey registration, window operations
 - [**DSFQuickActionBar**](https://github.com/dagronf/DSFQuickActionBar) — Floating search bar component
 
+### Display & System Monitoring
+
+- [**MonitorControl**](https://github.com/MonitorControl/MonitorControl) — Display brightness reading via DisplayServices API
+
 ### Menu Bar & System Tools
 
 - [**eul**](https://github.com/gao-sun/eul) — Menu bar architecture, Combine reactive patterns
