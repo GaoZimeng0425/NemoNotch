@@ -149,7 +149,12 @@ final class NowPlayingCLI {
             finishPending(nil)
             return
         }
-        daemonStdin?.write(data)
+
+        guard let stdin = daemonStdin, let p = daemonProcess, p.isRunning else {
+            finishPending(nil)
+            return
+        }
+        stdin.write(data)
 
         let item = DispatchWorkItem { [weak self] in
             self?.queue.async {
