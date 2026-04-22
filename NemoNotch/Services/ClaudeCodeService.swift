@@ -140,7 +140,7 @@ final class ClaudeCodeService {
 
         case "Stop":
             if var session = sessions[sessionId] {
-                session.phase = session.phase.transition(to: .idle)
+                session.phase = session.phase.transition(to: .waitingForInput)
                 session.currentTool = nil
                 session.isPreToolUse = false
                 applyContext(to: &session, event: event)
