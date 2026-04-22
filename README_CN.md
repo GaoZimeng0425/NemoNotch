@@ -82,6 +82,10 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 - [**Loop**](https://github.com/MrKai77/Loop) — 全局快捷键注册、窗口操作引擎
 - [**DSFQuickActionBar**](https://github.com/dagronf/DSFQuickActionBar) — 浮动搜索栏组件
 
+### 显示器与系统监控
+
+- [**MonitorControl**](https://github.com/MonitorControl/MonitorControl) — 通过 DisplayServices API 读取屏幕亮度
+
 ### 菜单栏与系统工具
 
 - [**eul**](https://github.com/gao-sun/eul) — 菜单栏架构设计、Combine 响应式模式
