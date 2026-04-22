@@ -82,6 +82,23 @@ NemoNotch/
 - 日志文件目录：`~/.NemoNotch/logs/`，保留 7 天，每天轮转
 - 调用方式：`LogService.debug/info/warn/error("message", category: "xxx")`
 
+## 打包发布
+
+- 一键打包命令：`./build.sh`，自动完成 Archive → 导出 .app → 生成 DMG
+- 输出文件：`build/NemoNotch.dmg`
+- 配套文件：`ExportOptions.plist`（导出配置）、`build.sh`（打包脚本）
+- 当前跳过签名（`CODE_SIGN_IDENTITY="-"`），如需正式分发需配置签名和公证
+
+### 发版流程
+
+用户说"发版"时，执行以下步骤：
+
+1. 确认所有更改已提交到 main 分支
+2. 创建版本 tag（格式 `vX.Y.Z`，如 `v0.1.0`）
+3. 推送 tag 到 origin：`git push origin <tag>`
+4. GitHub Actions 自动构建并发布 DMG 到 Releases（workflow 文件：`.github/workflows/release.yml`）
+5. 查看构建状态：`https://github.com/GaoZimeng0425/NemoNotch/actions`
+
 ## 开发约定
 
 - 所有 Service 使用 `@Observable` 宏，通过 SwiftUI 响应式更新 UI
