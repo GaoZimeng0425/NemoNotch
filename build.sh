@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+SCHEME="NemoNotch"
+PROJECT="NemoNotch.xcodeproj"
+BUILD_DIR="build"
+APP_NAME="NemoNotch"
+DMG_NAME="NemoNotch"
+
+# Clean previous build
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+
+echo "==> Archiving..."
+xcodebuild archive \
+  -project "$PROJECT" \
+  -scheme "$SCHEME" \
+  -configuration Release \
+  -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
+  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  | tail -1
+
+echo "==> Exporting .app..."
+xcodebuild -exportArchive \
+  -archivePath "$BUILD_DIR/$SCHEME.xcarchive" \
+  -exportPath "$BUILD_DIR/export" \
+  -exportOptionsPlist ExportOptions.plist
+
+echo "==> Creating DMG..."
+hdiutil create -volname "$APP_NAME" \
+  -srcfolder "$BUILD_DIR/export/$APP_NAME.app" \
+  -ov -format UDZO \
+  "$BUILD_DIR/$DMG_NAME.dmg"
+
+echo "==> Done: $BUILD_DIR/$DMG_NAME.dmg"
+ls -lh "$BUILD_DIR/$DMG_NAME.dmg"
