@@ -6,10 +6,18 @@ struct HUDOverlayView: View {
 
     private var icon: String {
         switch type {
-        case .volume: value < 0.01 ? "speaker.slash.fill" : "speaker.waveforms.fill"
-        case .brightness: "sun.max.fill"
+        case .volume: volumeIcon
         case .battery(let charging):
             charging ? "battery.100.bolt" : batteryIconName
+        }
+    }
+
+    private var volumeIcon: String {
+        switch value {
+        case 0: "speaker.slash.fill"
+        case ..<0.33: "speaker.wave.1.fill"
+        case ..<0.67: "speaker.wave.2.fill"
+        default: "speaker.wave.3.fill"
         }
     }
 

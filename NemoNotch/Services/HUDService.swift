@@ -8,7 +8,6 @@ import SwiftUI
 final class HUDService {
     enum HUDType: Equatable {
         case volume
-        case brightness
         case battery(charging: Bool)
     }
 
@@ -18,48 +17,56 @@ final class HUDService {
     private var dismissTask: Task<Void, Never>?
     private var volumeListener: AudioObjectPropertyListenerBlock?
     private var volumeAddress: AudioObjectPropertyAddress?
-
-    // Brightness polling
-    private var brightnessPollTimer: Timer?
-    private var lastBrightness: Float = 0
-    fileprivate static let coreDisplayHandle = dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_LAZY)
+    private var volumeDeviceID: AudioObjectID?
 
     // Battery
     private var batteryRunLoopSource: CFRunLoopSource?
 
     init() {
+        LogService.info("HUDService init start", category: "HUD")
         setupVolumeListener()
-        setupBrightnessPolling()
         setupBatteryMonitoring()
+        LogService.info("HUDService init complete", category: "HUD")
     }
 
     deinit {
-        brightnessPollTimer?.invalidate()
-
         if let source = batteryRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
         }
 
-        if var address = volumeAddress, let listener = volumeListener {
-            AudioObjectRemovePropertyListenerBlock(
-                AudioObjectID(kAudioObjectSystemObject),
-                &address,
-                DispatchQueue.main,
-                listener
-            )
+        if let deviceID = volumeDeviceID, var address = volumeAddress, let listener = volumeListener {
+            AudioObjectRemovePropertyListenerBlock(deviceID, &address, DispatchQueue.main, listener)
         }
     }
 
     // MARK: - Volume
 
-    private func setupVolumeListener() {
-        let deviceID = AudioObjectID(kAudioObjectSystemObject)
+    private var defaultOutputDeviceID: AudioObjectID {
+        var deviceID: AudioObjectID = 0
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID)
+        return deviceID
+    }
+
+    private func setupVolumeListener() {
+        let deviceID = defaultOutputDeviceID
+        guard deviceID != 0 else {
+            LogService.warn("No default output device", category: "HUD")
+            return
+        }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain
         )
         volumeAddress = address
+        volumeDeviceID = deviceID
 
         volumeListener = { [weak self] _, _ in
             DispatchQueue.main.async {
@@ -71,13 +78,35 @@ final class HUDService {
         let status = AudioObjectAddPropertyListenerBlock(deviceID, &address, DispatchQueue.main, listener)
         if status != noErr {
             LogService.warn("Failed to register volume listener: \(status)", category: "HUD")
+        } else {
+            LogService.info("Volume listener registered on device \(deviceID)", category: "HUD")
+        }
+
+        // Also listen for default device changes
+        var devChangeAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &devChangeAddr, DispatchQueue.main) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.rebindVolumeListener()
+            }
         }
     }
 
+    private func rebindVolumeListener() {
+        if let oldID = volumeDeviceID, var addr = volumeAddress, let listener = volumeListener {
+            AudioObjectRemovePropertyListenerBlock(oldID, &addr, DispatchQueue.main, listener)
+        }
+        setupVolumeListener()
+    }
+
     private func readVolume() {
-        let deviceID = AudioObjectID(kAudioObjectSystemObject)
+        let deviceID = volumeDeviceID ?? defaultOutputDeviceID
+        guard deviceID != 0 else { return }
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            mSelector: kAudioDevicePropertyVolumeScalar,
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain
         )
@@ -86,42 +115,15 @@ final class HUDService {
         let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &volume)
         guard status == noErr else { return }
 
+        LogService.info("Volume changed: \(volume)", category: "HUD")
         showHUD(.volume, value: volume)
-    }
-
-    // MARK: - Brightness
-
-    private func setupBrightnessPolling() {
-        lastBrightness = currentSystemBrightness
-        brightnessPollTimer = Timer.scheduledTimer(
-            withTimeInterval: NotchConstants.hudBrightnessPollInterval,
-            repeats: true
-        ) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.pollBrightness()
-            }
-        }
-    }
-
-    private var currentSystemBrightness: Float {
-        guard let screen = NSScreen.main else { return lastBrightness }
-        let screenID = screen.displayID
-        guard screenID != 0 else { return lastBrightness }
-        return CoreDisplay_GetBrightness(screenID)
-    }
-
-    private func pollBrightness() {
-        let brightness = currentSystemBrightness
-        guard abs(brightness - lastBrightness) > 0.01 else { return }
-        lastBrightness = brightness
-        showHUD(.brightness, value: brightness)
     }
 
     // MARK: - Battery
 
     private func setupBatteryMonitoring() {
         let context = Unmanaged.passUnretained(self).toOpaque()
-        let source = IOPSNotificationCreateRunLoopSource(
+        guard let unmanagedSource = IOPSNotificationCreateRunLoopSource(
             { context in
                 guard let context else { return }
                 let service = Unmanaged<HUDService>.fromOpaque(context).takeUnretainedValue()
@@ -130,11 +132,11 @@ final class HUDService {
                 }
             },
             context
-        ).takeRetainedValue() as CFRunLoopSource
+        ) else { return }
 
+        let source = unmanagedSource.takeRetainedValue() as CFRunLoopSource
         batteryRunLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
-        readBattery()
     }
 
     private func readBattery() {
@@ -167,13 +169,4 @@ final class HUDService {
             }
         }
     }
-}
-
-// MARK: - CoreDisplay private API
-
-private func CoreDisplay_GetBrightness(_ displayID: UInt32) -> Float {
-    typealias Fn = @convention(c) (UInt32) -> Float
-    guard let handle = HUDService.coreDisplayHandle,
-          let sym = dlsym(handle, "CoreDisplay_GetBrightness") else { return 0 }
-    return unsafeBitCast(sym, to: Fn.self)(displayID)
 }

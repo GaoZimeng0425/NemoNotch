@@ -59,6 +59,5 @@ enum NotchConstants {
     static let hudDismissDelay: Double = 2.0
     static let hudAppearDuration: Double = 0.3
     static let hudDismissDuration: Double = 0.2
-    static let hudValueTransitionDuration: Double = 0.15
-    static let hudBrightnessPollInterval: Double = 0.5
 }
+
