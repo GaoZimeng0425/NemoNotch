@@ -1,9 +1,8 @@
-import Foundation
-import CoreAudio
-import AudioToolbox
 import AppKit
-import SwiftUI
+import AudioToolbox
+import CoreAudio
 import IOKit.ps
+import SwiftUI
 
 @Observable
 final class HUDService {
@@ -18,13 +17,15 @@ final class HUDService {
 
     private var dismissTask: Task<Void, Never>?
     private var volumeListener: AudioObjectPropertyListenerBlock?
+    private var volumeAddress: AudioObjectPropertyAddress?
 
     // Brightness polling
     private var brightnessPollTimer: Timer?
     private var lastBrightness: Float = 0
+    fileprivate static let coreDisplayHandle = dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_LAZY)
 
     // Battery
-    private var powerSourceNotifier: io_object_t = 0
+    private var batteryRunLoopSource: CFRunLoopSource?
 
     init() {
         setupVolumeListener()
@@ -34,6 +35,19 @@ final class HUDService {
 
     deinit {
         brightnessPollTimer?.invalidate()
+
+        if let source = batteryRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+        }
+
+        if var address = volumeAddress, let listener = volumeListener {
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                DispatchQueue.main,
+                listener
+            )
+        }
     }
 
     // MARK: - Volume
@@ -45,6 +59,7 @@ final class HUDService {
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain
         )
+        volumeAddress = address
 
         volumeListener = { [weak self] _, _ in
             DispatchQueue.main.async {
@@ -53,7 +68,10 @@ final class HUDService {
         }
 
         guard let listener = volumeListener else { return }
-        AudioObjectAddPropertyListenerBlock(deviceID, &address, DispatchQueue.main, listener)
+        let status = AudioObjectAddPropertyListenerBlock(deviceID, &address, DispatchQueue.main, listener)
+        if status != noErr {
+            LogService.warn("Failed to register volume listener: \(status)", category: "HUD")
+        }
     }
 
     private func readVolume() {
@@ -86,12 +104,10 @@ final class HUDService {
     }
 
     private var currentSystemBrightness: Float {
-        guard let screen = NSScreen.main else { return 0 }
+        guard let screen = NSScreen.main else { return lastBrightness }
         let screenID = screen.displayID
-        if screenID != 0 {
-            return CoreDisplay_GetBrightness(screenID)
-        }
-        return 0
+        guard screenID != 0 else { return lastBrightness }
+        return CoreDisplay_GetBrightness(screenID)
     }
 
     private func pollBrightness() {
@@ -105,7 +121,7 @@ final class HUDService {
 
     private func setupBatteryMonitoring() {
         let context = Unmanaged.passUnretained(self).toOpaque()
-        let loop = IOPSNotificationCreateRunLoopSource(
+        let source = IOPSNotificationCreateRunLoopSource(
             { context in
                 guard let context else { return }
                 let service = Unmanaged<HUDService>.fromOpaque(context).takeUnretainedValue()
@@ -116,7 +132,8 @@ final class HUDService {
             context
         ).takeRetainedValue() as CFRunLoopSource
 
-        CFRunLoopAddSource(CFRunLoopGetMain(), loop, .defaultMode)
+        batteryRunLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
         readBattery()
     }
 
@@ -156,17 +173,7 @@ final class HUDService {
 
 private func CoreDisplay_GetBrightness(_ displayID: UInt32) -> Float {
     typealias Fn = @convention(c) (UInt32) -> Float
-    let sym = dlsym(dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_LAZY), "CoreDisplay_GetBrightness")
-    guard let sym else { return 0 }
+    guard let handle = HUDService.coreDisplayHandle,
+          let sym = dlsym(handle, "CoreDisplay_GetBrightness") else { return 0 }
     return unsafeBitCast(sym, to: Fn.self)(displayID)
-}
-
-// MARK: - NSScreen displayID
-
-extension NSScreen {
-    var displayID: UInt32 {
-        let key = NSDeviceDescriptionKey("NSScreenNumber")
-        guard let screenNumber = deviceDescription[key] as? NSNumber else { return 0 }
-        return screenNumber.uint32Value
-    }
 }
