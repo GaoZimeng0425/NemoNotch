@@ -32,6 +32,12 @@ extension NSScreen {
         )
     }
 
+    var displayID: UInt32 {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        guard let screenNumber = deviceDescription[key] as? NSNumber else { return 0 }
+        return screenNumber.uint32Value
+    }
+
     var isBuiltInDisplay: Bool {
         let key = NSDeviceDescriptionKey("NSScreenNumber")
         guard let id = deviceDescription[key],
