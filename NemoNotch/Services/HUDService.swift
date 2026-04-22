@@ -1,6 +1,7 @@
 import AppKit
 import AudioToolbox
 import CoreAudio
+import CoreGraphics
 import IOKit.ps
 import SwiftUI
 
@@ -8,6 +9,7 @@ import SwiftUI
 final class HUDService {
     enum HUDType: Equatable {
         case volume
+        case brightness
         case battery(charging: Bool)
     }
 
@@ -19,17 +21,26 @@ final class HUDService {
     private var volumeAddress: AudioObjectPropertyAddress?
     private var volumeDeviceID: AudioObjectID?
 
+    // Brightness
+    private var brightnessTimer: Timer?
+    private var lastBrightness: Float = -1
+    private var displayServicesHandle: UnsafeMutableRawPointer?
+
     // Battery
     private var batteryRunLoopSource: CFRunLoopSource?
 
     init() {
         LogService.info("HUDService init start", category: "HUD")
         setupVolumeListener()
+        setupBrightnessMonitoring()
         setupBatteryMonitoring()
         LogService.info("HUDService init complete", category: "HUD")
     }
 
     deinit {
+        brightnessTimer?.invalidate()
+        if let handle = displayServicesHandle { dlclose(handle) }
+
         if let source = batteryRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
         }
@@ -60,11 +71,16 @@ final class HUDService {
             return
         }
 
+        // Try VirtualMasterVolume first (works on most macOS 26 devices),
+        // fall back to VolumeScalar for older devices
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
+            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain
         )
+        if !AudioObjectHasProperty(deviceID, &address) {
+            address.mSelector = kAudioDevicePropertyVolumeScalar
+        }
         volumeAddress = address
         volumeDeviceID = deviceID
 
@@ -81,6 +97,12 @@ final class HUDService {
         } else {
             LogService.info("Volume listener registered on device \(deviceID)", category: "HUD")
         }
+
+        // Diagnostic: try reading volume directly
+        var diagVolume: Float = 0
+        var diagSize = UInt32(MemoryLayout<Float>.size)
+        let diagStatus = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &diagSize, &diagVolume)
+        LogService.info("Volume diagnostic: status=\(diagStatus), value=\(diagVolume), device=\(deviceID)", category: "HUD")
 
         // Also listen for default device changes
         var devChangeAddr = AudioObjectPropertyAddress(
@@ -105,8 +127,8 @@ final class HUDService {
     private func readVolume() {
         let deviceID = volumeDeviceID ?? defaultOutputDeviceID
         guard deviceID != 0 else { return }
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
+        var address = volumeAddress ?? AudioObjectPropertyAddress(
+            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain
         )
@@ -117,6 +139,75 @@ final class HUDService {
 
         LogService.info("Volume changed: \(volume)", category: "HUD")
         showHUD(.volume, value: volume)
+    }
+
+    // MARK: - Brightness
+
+    private func setupBrightnessMonitoring() {
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.readBrightness()
+            }
+        }
+        brightnessTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func getBrightness() -> Float? {
+        if displayServicesHandle == nil {
+            displayServicesHandle = dlopen("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_LAZY | RTLD_NOW)
+        }
+        guard let handle = displayServicesHandle else {
+            LogService.warn("Failed to load DisplayServices framework", category: "HUD")
+            return nil
+        }
+
+        typealias GetBrightnessFunc = @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>) -> Int32
+        guard let sym = dlsym(handle, "DisplayServicesGetBrightness") else {
+            LogService.warn("DisplayServicesGetBrightness symbol not found", category: "HUD")
+            return nil
+        }
+        let funcPtr = unsafeBitCast(sym, to: GetBrightnessFunc.self)
+
+        var brightness: Float = 0
+        let result = funcPtr(CGMainDisplayID(), &brightness)
+        guard result == 0 else {
+            LogService.warn("DisplayServicesGetBrightness call failed (code: \(result))", category: "HUD")
+            return nil
+        }
+        return brightness
+    }
+
+    private func readBrightness() {
+        guard let brightness = getBrightness() else { return }
+
+        if lastBrightness >= 0, abs(brightness - lastBrightness) > 0.01 {
+            LogService.info("Brightness changed: \(brightness)", category: "HUD")
+            showHUD(.brightness, value: brightness)
+            // Speed up polling while brightness is changing
+            brightnessTimer?.invalidate()
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.readBrightness()
+                }
+            }
+            brightnessTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        } else if lastBrightness >= 0 {
+            // No change — slow back down
+            if let timer = brightnessTimer, timer.timeInterval < 1.0 {
+                timer.invalidate()
+                let slowTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                    DispatchQueue.main.async {
+                        self?.readBrightness()
+                    }
+                }
+                brightnessTimer = slowTimer
+                RunLoop.main.add(slowTimer, forMode: .common)
+            }
+        }
+
+        lastBrightness = brightness
     }
 
     // MARK: - Battery
