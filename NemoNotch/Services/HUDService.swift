@@ -248,7 +248,11 @@ final class HUDService {
             lastBatteryLevel = capacity
             lastChargingState = charging
             LogService.info("Battery changed: \(capacity)% charging=\(charging)", category: "HUD")
-            showHUD(.battery(charging: charging), value: Float(capacity) / 100.0)
+
+            // Only show HUD at 10% intervals
+            if capacity % 10 == 0 || chargingChanged {
+                showHUD(.battery(charging: charging), value: Float(capacity) / 100.0)
+            }
         }
     }
 
