@@ -29,6 +29,9 @@ xcodebuild -exportArchive \
   -exportPath "$BUILD_DIR/export" \
   -exportOptionsPlist ExportOptions.plist
 
+echo "==> Ad-hoc signing..."
+codesign --force --deep --sign - "$BUILD_DIR/export/$APP_NAME.app"
+
 echo "==> Creating DMG..."
 DMG_STAGING="$BUILD_DIR/dmg_staging"
 mkdir -p "$DMG_STAGING"
