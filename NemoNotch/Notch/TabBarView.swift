@@ -12,12 +12,12 @@ struct TabBarView: View {
                     coordinator.selectedTab = tab
                 } label: {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 12))
-                        .foregroundStyle(selected ? .white : .white.opacity(0.35))
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular, design: .rounded))
+                        .foregroundStyle(selected ? NotchTheme.textPrimary : NotchTheme.textTertiary)
                         .frame(width: 28, height: 28)
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(selected ? .white.opacity(0.15) : .clear)
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(selected ? NotchTheme.surfaceEmphasis : .clear)
                         )
                 }
                 .buttonStyle(.plain)

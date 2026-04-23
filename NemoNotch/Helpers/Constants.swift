@@ -26,17 +26,22 @@ enum NotchConstants {
     static let openSpringDuration: Double = 0.314
     static let openContentDelay: Double = 0.157
     static let openTransitionOffset: CGFloat = 130
-    static let badgeFadeDuration: Double = 0.3
-    static let closeSpringDuration: Double = 0.236
-    static let badgeSpringDuration: Double = 0.35
-    static let badgeSpringBounce: Double = 0.15
+    static let badgeFadeDuration: Double = 0.24
+    static let closeSpringDuration: Double = 0.24
+    static let badgeSpringDuration: Double = 0.32
+    static let badgeSpringBounce: Double = 0.08
+    static let tabSwitchSpringDuration: Double = 0.28
+    static let tabSwitchSpringBounce: Double = 0.06
+    static let fadeFastDuration: Double = 0.16
+    static let fadeNormalDuration: Double = 0.24
+    static let pulseDuration: Double = 1.05
 
     // Close animation
     static let closeContentFadeDuration: Double = 0.1
 
     // Shadow
-    static let openedShadowRadius: CGFloat = 12
-    static let openedShadowOpacity: CGFloat = 0.4
+    static let openedShadowRadius: CGFloat = 14
+    static let openedShadowOpacity: CGFloat = 0.34
 
     // Hook server
     static let hookSocketPath = "/tmp/nemonotch.sock"
@@ -64,4 +69,3 @@ enum NotchConstants {
     static let hudSegmentSpacing: CGFloat = 2.5
     static let hudSegmentCornerRadius: CGFloat = 2
 }
-

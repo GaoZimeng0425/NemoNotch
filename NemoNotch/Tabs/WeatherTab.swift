@@ -15,10 +15,10 @@ struct WeatherTab: View {
         VStack(spacing: 8) {
             ProgressView()
                 .controlSize(.small)
-                .tint(.white.opacity(0.5))
+                .tint(NotchTheme.textSecondary)
             Text("加载中...")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -40,15 +40,15 @@ struct WeatherTab: View {
         HStack(alignment: .center) {
             Text(weatherService.cityName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(NotchTheme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             Image(systemName: conditionIcon)
                 .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(NotchTheme.textSecondary)
             Text("\(Int(weatherService.temperature))°")
                 .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(NotchTheme.textPrimary)
         }
     }
 
@@ -56,12 +56,12 @@ struct WeatherTab: View {
         HStack {
             Text(weatherService.condition)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             Text("H:\(Int(weatherService.highTemp))°  L:\(Int(weatherService.lowTemp))°")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textTertiary)
         }
     }
 
@@ -74,20 +74,17 @@ struct WeatherTab: View {
             statItem(label: "风速", value: "\(Int(weatherService.windSpeed))km/h")
         }
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.white.opacity(0.08))
-        )
+        .notchCard(radius: 8, fill: NotchTheme.surface)
     }
 
     private func statItem(label: String, value: String) -> some View {
         VStack(spacing: 2) {
             Text(label)
                 .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textTertiary)
             Text(value)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(NotchTheme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -97,28 +94,25 @@ struct WeatherTab: View {
             ForEach(Array(weatherService.hourlyForecast.enumerated()), id: \.offset) { index, hour in
                 if index > 0 {
                     Rectangle()
-                        .fill(.white.opacity(0.06))
+                        .fill(NotchTheme.stroke.opacity(0.7))
                         .frame(width: 1, height: 30)
                 }
                 VStack(spacing: 3) {
                     Text(hour.time)
                         .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(NotchTheme.textTertiary)
                     Image(systemName: iconForCondition(hour.icon))
                         .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(NotchTheme.textSecondary)
                     Text("\(Int(hour.temp))°")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(NotchTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
             }
         }
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.white.opacity(0.08))
-        )
+        .notchCard(radius: 8, fill: NotchTheme.surface)
     }
 
     private var conditionIcon: String {

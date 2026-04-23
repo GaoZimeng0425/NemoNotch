@@ -27,7 +27,7 @@ struct DateStripView: View {
                 }
             }
             .onChange(of: selectedDate) { _, _ in
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
                     proxy.scrollTo(selectedDateId, anchor: .center)
                 }
             }
@@ -45,24 +45,28 @@ struct DateStripView: View {
             VStack(spacing: 4) {
                 Text(weekdayShort(for: date))
                     .font(.system(size: 9))
-                    .foregroundStyle(isWeekend ? .red.opacity(0.7) : .white.opacity(0.4))
+                    .foregroundStyle(isWeekend ? Color.red.opacity(0.72) : NotchTheme.textTertiary)
 
                 Text("\(Calendar.current.component(.day, from: date))")
                     .font(.system(size: 14, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(
-                        isToday ? .blue
-                        : isSelected ? .white
-                        : .white.opacity(0.6)
+                        isToday ? NotchTheme.accent
+                        : isSelected ? NotchTheme.textPrimary
+                        : NotchTheme.textSecondary
                     )
 
                 Circle()
-                    .fill(hasEvents(date) ? Color.white.opacity(0.5) : .clear)
+                    .fill(hasEvents(date) ? NotchTheme.accent.opacity(0.9) : .clear)
                     .frame(width: 4, height: 4)
             }
             .frame(width: 36, height: 50)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? .white.opacity(0.15) : .clear)
+                    .fill(isSelected ? NotchTheme.surfaceEmphasis : .clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? NotchTheme.stroke : .clear, lineWidth: 0.6)
+                    )
             )
         }
         .buttonStyle(.plain)

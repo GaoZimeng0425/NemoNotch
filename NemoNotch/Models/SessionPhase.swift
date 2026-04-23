@@ -32,7 +32,21 @@ enum SessionPhase: Equatable {
         return nil
     }
 
+    private var kind: String {
+        switch self {
+        case .idle: return "idle"
+        case .processing: return "processing"
+        case .waitingForInput: return "waitingForInput"
+        case .waitingForApproval: return "waitingForApproval"
+        case .compacting: return "compacting"
+        case .ended: return "ended"
+        }
+    }
+
     func canTransition(to next: SessionPhase) -> Bool {
+        // Treat repeated same-kind updates as idempotent (e.g. processing -> processing).
+        if kind == next.kind { return true }
+
         switch (self, next) {
         case (.idle, .processing), (.idle, .ended):
             return true
@@ -43,9 +57,12 @@ enum SessionPhase: Equatable {
              (.processing, .ended):
             return true
         case (.waitingForInput, .processing),
-             (.waitingForInput, .ended):
+             (.waitingForInput, .ended),
+             (.waitingForInput, .idle):
             return true
         case (.waitingForApproval, .processing),
+             (.waitingForApproval, .waitingForInput),
+             (.waitingForApproval, .idle),
              (.waitingForApproval, .ended):
             return true
         case (.compacting, .processing),
@@ -90,7 +107,8 @@ struct PermissionContext: Equatable {
     }
 
     var isInteractiveTool: Bool {
-        toolName == "AskUserQuestion"
+        let normalized = toolName.replacingOccurrences(of: "_", with: "").lowercased()
+        return normalized == "askuserquestion" || normalized == "askuser"
     }
 
     private func formattedToolInput(toolName: String, json: [String: Any]) -> String {

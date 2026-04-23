@@ -3,6 +3,10 @@ import SwiftUI
 enum ToolStyle {
     static func icon(_ tool: String?) -> String {
         guard let tool else { return "gearshape.fill" }
+        let normalized = tool.replacingOccurrences(of: "_", with: "").lowercased()
+        if normalized == "askuserquestion" || normalized == "askuser" {
+            return "questionmark.bubble.fill"
+        }
         if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" {
             return "doc.text.magnifyingglass"
         }
@@ -15,6 +19,8 @@ enum ToolStyle {
 
     static func color(_ tool: String?) -> Color {
         guard let tool else { return .orange }
+        let normalized = tool.replacingOccurrences(of: "_", with: "").lowercased()
+        if normalized == "askuserquestion" || normalized == "askuser" { return .orange }
         if tool.hasPrefix("Read") || tool.hasPrefix("Grep") || tool == "Glob" { return .cyan }
         if tool.hasPrefix("Write") || tool == "Edit" { return .red }
         if tool == "Bash" { return .green }
