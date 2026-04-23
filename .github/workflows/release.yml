@@ -36,6 +36,10 @@ jobs:
             -exportPath build/export \
             -exportOptionsPlist ExportOptions.plist
 
+      - name: Ad-hoc sign
+        run: |
+          codesign --force --deep --sign - build/export/NemoNotch.app
+
       - name: Create DMG
         run: |
           hdiutil create -volname NemoNotch \

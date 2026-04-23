@@ -164,6 +164,24 @@ struct SettingsView: View {
 
     private var notificationListView: some View {
         Form {
+            if !notificationService.isAXTrusted {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("需要辅助功能权限", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.headline)
+                        Text("NemoNotch 需要辅助功能权限才能读取应用通知角标。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("打开系统设置") {
+                            notificationService.openAccessibilitySettings()
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
             Section("已监控的应用") {
                 if appSettings.monitoredApps.isEmpty {
                     Text("尚未添加监控应用")

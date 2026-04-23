@@ -10,6 +10,7 @@ struct BadgeItem: Equatable {
 @Observable
 final class NotificationService {
     var badges: [String: BadgeItem] = [:]
+    var isAXTrusted: Bool = AXIsProcessTrusted()
 
     private var monitoredApps: [String]
     private var pollTimer: Timer?
@@ -33,6 +34,11 @@ final class NotificationService {
         pollDock()
     }
 
+    func openAccessibilitySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
+    }
+
     deinit {
         pollTimer?.invalidate()
     }
@@ -46,7 +52,10 @@ final class NotificationService {
     }
 
     private func pollDock() {
+        isAXTrusted = AXIsProcessTrusted()
         guard !monitoredApps.isEmpty else { return }
+
+        guard isAXTrusted else { return }
 
         // Get Dock PID
         guard let dockPID = NSRunningApplication.runningApplications(
@@ -96,18 +105,12 @@ final class NotificationService {
 
             let label = statusLabel as? String ?? ""
             guard let count = parseBadgeCount(label) else {
-                // Empty label means no badge — skip
                 continue
             }
             let icon = appIcon(for: bundleID)
             updatedBadges[bundleID] = BadgeItem(bundleID: bundleID, count: count, icon: icon)
         }
 
-        if !updatedBadges.isEmpty {
-            for (id, item) in updatedBadges {
-                LogService.debug("badge: \(id) count=\(item.count) iconSize=\(item.icon.size)", category: "NotificationService")
-            }
-        }
         badges = updatedBadges
     }
 
