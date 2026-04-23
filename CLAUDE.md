@@ -276,7 +276,11 @@ notification > openclaw active > claude approval > claude working > media playin
 
 ## Git Flow 开发规范
 
-- **main**: 稳定发布分支，只接受来自 develop 的合并
+**绝对禁止直接在 main 分支上提交代码。** 所有开发必须通过 Git Flow 流程进行，违反此规则会破坏发布分支的稳定性。
+
+### 分支说明
+
+- **main**: 稳定发布分支，只接受来自 develop 的合并，绝不直接 commit
 - **develop**: 日常开发分支，所有功能分支基于此创建
 - **feature/xxx**: 功能分支，从 develop 拉出，完成后合并回 develop
 - **hotfix/xxx**: 紧急修复分支，从 main 拉出，修复后合并回 main 和 develop
