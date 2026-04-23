@@ -20,6 +20,7 @@ xcodebuild archive \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
+  ENABLE_HARDENED_RUNTIME=NO \
   | tail -1
 
 echo "==> Exporting .app..."
