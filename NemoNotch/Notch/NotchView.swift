@@ -22,24 +22,31 @@ struct NotchView: View {
 
     @State private var shownHasActiveBadge: Bool = false
     @State private var hideBadgeTask: Task<Void, Never>? = nil
-    @State private var displayedBadgeTypes: [BadgeType] = []
+    @State private var displayedBadgeItems: [BadgeItem] = []
     @State private var badgeTypeUpdateTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
     @State private var slideForward: Bool = true
     @State private var previousSelectedTab: Tab? = nil
+    @State private var wasWaitingForApproval = false
 
-    private enum BadgeType: String, CaseIterable, Identifiable {
-        case notification, media, claude, openclaw, calendar
-        var id: String { rawValue }
-        var icon: String {
+    private enum BadgeItem: Identifiable, Equatable {
+        case notification(bundleID: String, count: Int)
+        case media
+        case claude(status: ClaudeStatus, tool: String?, waitingApproval: Bool)
+        case openclaw(state: AgentState, emoji: String)
+        case calendar
+
+        var id: String {
             switch self {
-            case .notification: "bell.fill"
-            case .media: "play.fill"
-            case .claude: "cpu"
-            case .openclaw: "terminal"
+            case .notification(let bundleID, _): "notification:\(bundleID)"
+            case .media: "media"
+            case .claude(let status, let tool, let waitingApproval):
+                "claude:\(status):\(tool ?? "nil"):\(waitingApproval)"
+            case .openclaw(let state, let emoji): "openclaw:\(state.rawValue):\(emoji)"
             case .calendar: "calendar"
             }
         }
+
         var tab: Tab {
             switch self {
             case .notification: .media
@@ -49,27 +56,55 @@ struct NotchView: View {
             case .calendar: .calendar
             }
         }
+
+        // Lower value = higher priority
+        var priority: Int {
+            switch self {
+            case .claude(_, _, let waitingApproval) where waitingApproval:
+                return 0
+            case .notification:
+                return 1
+            case .openclaw:
+                return 2
+            case .claude:
+                return 3
+            case .media:
+                return 4
+            case .calendar:
+                return 5
+            }
+        }
     }
 
-    private var activeBadgeTypes: [BadgeType] {
-        var types: [BadgeType] = []
-        if let session = claudeService.activeSession,
-           (session.phase.isWaitingForApproval || session.status == .working) {
-            types.append(.claude)
+    private var activeBadgeItems: [BadgeItem] {
+        var items: [BadgeItem] = []
+        if let session = claudeService.activeSession, session.phase.isWaitingForApproval {
+            items.append(.claude(status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
         }
-        if !notificationService.badges.isEmpty { types.append(.notification) }
-        if openClawService.activeAgent != nil { types.append(.openclaw) }
-        if mediaService.playbackState.isPlaying { types.append(.media) }
+        if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
+            items.append(.notification(bundleID: top.bundleID, count: top.count))
+        }
+        if let agent = openClawService.activeAgent {
+            items.append(.openclaw(state: agent.state, emoji: agent.emoji))
+        }
+        if let session = claudeService.activeSession,
+           !session.phase.isWaitingForApproval && session.status == .working {
+            items.append(.claude(status: session.status, tool: session.currentTool, waitingApproval: false))
+        }
+        if mediaService.playbackState.isPlaying { items.append(.media) }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
-            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { types.append(.calendar) }
+            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { items.append(.calendar) }
         }
-        return types
+        return items.sorted { lhs, rhs in
+            if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+            return lhs.id < rhs.id
+        }
     }
 
-    private var hasMultipleBadges: Bool { displayedBadgeTypes.count >= 2 }
+    private var hasMultipleBadges: Bool { displayedBadgeItems.count >= 2 }
 
-    private var hasActiveBadge: Bool { !activeBadgeTypes.isEmpty }
+    private var hasActiveBadge: Bool { !activeBadgeItems.isEmpty }
 
     private var notchSize: CGSize {
         switch coordinator.status {
@@ -130,6 +165,7 @@ struct NotchView: View {
         }
         .onAppear { shownHasActiveBadge = hasActiveBadge }
         .onAppear { previousSelectedTab = coordinator.selectedTab }
+        .onAppear { wasWaitingForApproval = claudeService.activeSession?.phase.isWaitingForApproval == true }
         .onChange(of: hasActiveBadge) { _, newValue in
             if newValue {
                 hideBadgeTask?.cancel()
@@ -147,12 +183,12 @@ struct NotchView: View {
                 }
             }
         }
-        .onAppear { displayedBadgeTypes = activeBadgeTypes }
-        .onChange(of: activeBadgeTypes) { oldTypes, newTypes in
+        .onAppear { displayedBadgeItems = activeBadgeItems }
+        .onChange(of: activeBadgeItems) { oldTypes, newTypes in
             if newTypes.count > oldTypes.count {
                 badgeTypeUpdateTask?.cancel()
                 withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
-                    displayedBadgeTypes = newTypes
+                    displayedBadgeItems = newTypes
                 }
             } else {
                 badgeTypeUpdateTask?.cancel()
@@ -160,10 +196,16 @@ struct NotchView: View {
                     try? await Task.sleep(for: .milliseconds(500))
                     guard !Task.isCancelled else { return }
                     withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
-                        displayedBadgeTypes = newTypes
+                        displayedBadgeItems = newTypes
                     }
                 }
             }
+        }
+        .onChange(of: claudeService.activeSession?.phase.isWaitingForApproval == true) { _, isWaiting in
+            if isWaiting && !wasWaitingForApproval && !TerminalDetector.isTerminalFrontmost && coordinator.status != .opened {
+                NSSound(named: "Pop")?.play()
+            }
+            wasWaitingForApproval = isWaiting
         }
         .onChange(of: coordinator.selectedTab) { _, newTab in
             let tabs = Tab.sorted(appSettings.enabledTabs)
@@ -292,13 +334,13 @@ struct NotchView: View {
     // MARK: - Badge row (second row)
 
     private var badgeRow: some View {
-        let secondaryBadges = Array(displayedBadgeTypes.dropFirst())
+        let secondaryBadges = Array(displayedBadgeItems.dropFirst())
         return HStack(spacing: NotchConstants.badgeRowSpacing) {
-            ForEach(secondaryBadges) { type in
+            ForEach(secondaryBadges) { item in
                 Button {
-                    coordinator.notchOpen(tab: type.tab)
+                    handleBadgeTap(item)
                 } label: {
-                    badgeRowIcon(for: type)
+                    badgeIcon(for: item, style: .row)
                 }
                 .buttonStyle(.plain)
             }
@@ -311,95 +353,38 @@ struct NotchView: View {
                   y: hardwareNotchSize.height + NotchConstants.badgeRowHeight / 2)
     }
 
-    @ViewBuilder
-    private func badgeRowIcon(for type: BadgeType) -> some View {
-        switch type {
-        case .notification:
-            if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
-                ZStack(alignment: .bottomTrailing) {
-                    Image(nsImage: top.icon)
-                        .resizable()
-                        .frame(width: 16, height: 16)
-                    if top.count > 0 {
-                        Text("\(top.count)")
-                            .font(.system(size: 7, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 2)
-                            .padding(.vertical, 0.5)
-                            .background(.red)
-                            .clipShape(Capsule())
-                    } else {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 6, height: 6)
-                    }
-                }
-            }
-        case .media:
-            if let data = mediaService.playbackState.artworkData,
-               let nsImage = NSImage(data: data) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .frame(width: 16, height: 16)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            } else {
-                Image(systemName: "music.note")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.8))
-            }
-        case .claude:
-            ClaudeCrabIcon(size: 14)
-        case .openclaw:
-            Text("🦞")
-                .font(.system(size: 11))
-        case .calendar:
-            Image(systemName: "calendar")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.8))
-        }
-    }
-
     // MARK: - Compact badges (left/right of notch)
 
     private var compactBadges: some View {
         let spread: CGFloat = shownHasActiveBadge ? NotchConstants.badgeSpread : 0
+        let primaryItem = displayedBadgeItems.first
         return ZStack {
-            CompactBadge(
-                side: .left,
-                onTap: { tab in
-                    coordinator.notchOpen(tab: tab)
-                },
-                onOpenApp: { bundleID in
-                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                        let config = NSWorkspace.OpenConfiguration()
-                        NSWorkspace.shared.openApplication(at: url, configuration: config)
-                    }
+            if let item = primaryItem {
+                Button {
+                    handleBadgeTap(item)
+                } label: {
+                    badgeIcon(for: item, style: .compactLeft)
                 }
-            )
+                .buttonStyle(.plain)
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
                 .opacity(shownHasActiveBadge ? 1 : 0)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .trailing)),
                     removal: .opacity.combined(with: .move(edge: .leading))
                 ))
-            CompactBadge(
-                side: .right,
-                onTap: { tab in
-                    coordinator.notchOpen(tab: tab)
-                },
-                onOpenApp: { bundleID in
-                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                        let config = NSWorkspace.OpenConfiguration()
-                        NSWorkspace.shared.openApplication(at: url, configuration: config)
-                    }
+                Button {
+                    handleBadgeTap(item)
+                } label: {
+                    badgeIcon(for: item, style: .compactRight)
                 }
-            )
+                .buttonStyle(.plain)
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
                 .opacity(shownHasActiveBadge ? 1 : 0)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .leading)),
                     removal: .opacity.combined(with: .move(edge: .trailing))
                 ))
+            }
         }
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
         .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: shownHasActiveBadge)
@@ -416,6 +401,125 @@ struct NotchView: View {
             spacing: NotchConstants.notchBackgroundSpacing
         )
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
+    }
+
+    // MARK: - Badge rendering
+
+    private enum BadgeRenderStyle {
+        case compactLeft
+        case compactRight
+        case row
+    }
+
+    private func handleBadgeTap(_ item: BadgeItem) {
+        switch item {
+        case .notification(let bundleID, _):
+            openApp(bundleID: bundleID)
+        default:
+            coordinator.notchOpen(tab: item.tab)
+        }
+    }
+
+    private func openApp(bundleID: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.openApplication(at: url, configuration: config)
+    }
+
+    @ViewBuilder
+    private func badgeIcon(for item: BadgeItem, style: BadgeRenderStyle) -> some View {
+        switch item {
+        case .notification(let bundleID, let count):
+            switch style {
+            case .compactLeft, .row:
+                if let data = notificationService.badges[bundleID] {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(nsImage: data.icon)
+                            .resizable()
+                            .frame(width: 16, height: 16)
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.system(size: 7, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 2)
+                                .padding(.vertical, 0.5)
+                                .background(.red)
+                                .clipShape(Capsule())
+                        } else {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
+            case .compactRight:
+                Image(systemName: "bell.fill")
+                    .foregroundStyle(.red.opacity(0.9))
+                    .modifier(PulseModifier(isActive: true))
+            }
+        case .media:
+            switch style {
+            case .compactLeft, .row:
+                if let data = mediaService.playbackState.artworkData,
+                   let nsImage = NSImage(data: data) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                }
+            case .compactRight:
+                Image(systemName: "play.fill")
+                    .foregroundStyle(NotchTheme.textPrimary)
+            }
+        case .claude(let status, let tool, let waitingApproval):
+            switch style {
+            case .compactLeft:
+                ClaudeCrabIcon(size: 14, animateLegs: status == .working)
+            case .compactRight:
+                if waitingApproval {
+                    Circle()
+                        .fill(NotchTheme.accent.opacity(0.25))
+                        .frame(width: 18, height: 18)
+                        .overlay {
+                            Image(systemName: "exclamationmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(NotchTheme.accent)
+                        }
+                        .modifier(PulseModifier(isActive: true))
+                } else if status == .working {
+                    ProcessingSpinner(color: ToolStyle.color(tool))
+                } else if status == .waiting {
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                        .modifier(PulseModifier(isActive: true))
+                } else {
+                    Circle()
+                        .fill(ToolStyle.color(tool).opacity(0.7))
+                        .frame(width: 8, height: 8)
+                }
+            case .row:
+                ClaudeCrabIcon(size: 14, animateLegs: status == .working)
+            }
+        case .openclaw(let state, let emoji):
+            Text(emoji)
+                .font(.system(size: style == .row ? 11 : 10))
+                .modifier(PulseModifier(isActive: style == .compactRight && (state == .working || state == .toolCalling)))
+        case .calendar:
+            switch style {
+            case .compactLeft, .row:
+                Image(systemName: "calendar")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(NotchTheme.textPrimary)
+            case .compactRight:
+                Image(systemName: "clock.fill")
+                    .foregroundStyle(NotchTheme.textPrimary)
+            }
+        }
     }
 
     // MARK: - Tab direction
