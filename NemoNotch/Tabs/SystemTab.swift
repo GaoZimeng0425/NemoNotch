@@ -29,7 +29,7 @@ struct SystemTab: View {
         HStack(spacing: 8) {
             Text("CPU")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
                 .frame(width: 40, alignment: .leading)
 
             Text(String(format: "%.0f%%", systemService.cpuUsage))
@@ -74,7 +74,7 @@ struct SystemTab: View {
 
             context.fill(
                 fillPath,
-                with: .color(.white.opacity(0.08))
+                with: .color(NotchTheme.surfaceEmphasis)
             )
 
             var linePath = Path()
@@ -85,7 +85,7 @@ struct SystemTab: View {
 
             context.stroke(
                 linePath,
-                with: .color(.white.opacity(0.5)),
+                with: .color(NotchTheme.accent.opacity(0.9)),
                 lineWidth: 1
             )
         }
@@ -98,13 +98,13 @@ struct SystemTab: View {
         HStack(spacing: 8) {
             Text("RAM")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
                 .frame(width: 40, alignment: .leading)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(.white.opacity(0.12))
+                        .fill(NotchTheme.surfaceEmphasis)
                     Capsule()
                         .fill(memoryGradient)
                         .frame(width: geo.size.width * CGFloat(memoryRatio))
@@ -114,7 +114,7 @@ struct SystemTab: View {
 
             Text("\(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
         }
         .padding(8)
         .background(rowBackground)
@@ -133,22 +133,22 @@ struct SystemTab: View {
         HStack(spacing: 8) {
             Text("BAT")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
                 .frame(width: 40, alignment: .leading)
 
             Image(systemName: batteryIcon)
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(NotchTheme.textSecondary)
 
             Text("\(systemService.batteryLevel)%")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white)
+                .foregroundStyle(NotchTheme.textPrimary)
 
             Spacer(minLength: 0)
 
             Text(batteryStatus)
                 .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textTertiary)
         }
         .padding(8)
         .background(rowBackground)
@@ -185,18 +185,18 @@ struct SystemTab: View {
         HStack(spacing: 8) {
             Text("DISK")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
                 .frame(width: 40, alignment: .leading)
 
             Text("\(formatGB(diskUsed))/\(formatGB(systemService.diskTotal))")
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.white)
+                .foregroundStyle(NotchTheme.textPrimary)
 
             Spacer(minLength: 0)
 
             Text("\(formatGB(systemService.diskFree)) GB 可用")
                 .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textTertiary)
         }
         .padding(8)
         .background(rowBackground)
@@ -206,7 +206,11 @@ struct SystemTab: View {
 
     private var rowBackground: some View {
         RoundedRectangle(cornerRadius: 6)
-            .fill(.white.opacity(0.06))
+            .fill(NotchTheme.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(NotchTheme.stroke, lineWidth: 0.6)
+            )
     }
 
     private func formatGB(_ bytes: UInt64) -> String {

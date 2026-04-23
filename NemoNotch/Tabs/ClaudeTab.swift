@@ -21,17 +21,11 @@ struct ClaudeTab: View {
             ClaudeCrabIcon(size: 28)
             Text("Claude Code Hooks 未安装")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
             Button("安装 Hooks") {
                 claudeService.installHooks()
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(.white.opacity(0.12))
-            .clipShape(Capsule())
-            .foregroundStyle(.white)
-            .font(.system(size: 11))
+            .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -41,7 +35,7 @@ struct ClaudeTab: View {
             ClaudeCrabIcon(size: 28)
             Text("无活跃会话")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
             serverStatus
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -50,11 +44,11 @@ struct ClaudeTab: View {
     private var serverStatus: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(claudeService.serverRunning ? Color.green : Color.orange)
+                .fill(claudeService.serverRunning ? Color.green : NotchTheme.accent)
                 .frame(width: 6, height: 6)
             Text(claudeService.serverRunning ? "Unix Socket 已就绪" : "Hook 服务未启动")
                 .font(.system(size: 9))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(NotchTheme.textTertiary)
         }
         .padding(.top, 4)
     }
@@ -79,25 +73,25 @@ struct ClaudeTab: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(NotchTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.displayTitle)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(NotchTheme.textPrimary)
                         .lineLimit(1)
                     HStack(spacing: 4) {
                         Text(session.projectFolder ?? "")
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(NotchTheme.textMuted)
                         if let model = session.displayModel {
                             Text("· \(model)")
-                                .foregroundStyle(.purple.opacity(0.7))
+                                .foregroundStyle(NotchTheme.accent.opacity(0.88))
                         }
                         if session.totalTokens > 0 {
                             Text("· \(session.tokenDisplay)")
-                                .foregroundStyle(.white.opacity(0.3))
+                                .foregroundStyle(NotchTheme.textMuted)
                         }
                     }
                     .font(.system(size: 9))
@@ -108,7 +102,7 @@ struct ClaudeTab: View {
                 Circle()
                     .fill(dotColor(session.status))
                     .frame(width: 6, height: 6)
-                    .modifier(PulseModifier(isActive: session.status == .working))
+                    .modifier(PulseModifier(isActive: session.status == .working || approvalContext(for: session) != nil))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -119,7 +113,7 @@ struct ClaudeTab: View {
                     .padding(.bottom, 6)
             }
 
-            Divider().background(.white.opacity(0.08))
+            Divider().background(NotchTheme.stroke)
 
             if let ctx = approvalContext(for: session) {
                 quickApprovalBar(session: session, ctx: ctx)
@@ -129,7 +123,7 @@ struct ClaudeTab: View {
                 Spacer()
                 Text("暂无消息")
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(NotchTheme.textMuted)
                 Spacer()
             } else {
                 ScrollViewReader { proxy in
@@ -144,7 +138,7 @@ struct ClaudeTab: View {
                         .padding(.vertical, 4)
                     }
                     .onChange(of: session.messages.count) { _, _ in
-                        withAnimation {
+                        withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
                             proxy.scrollTo(session.messages.last?.id, anchor: .bottom)
                         }
                     }
@@ -158,31 +152,23 @@ struct ClaudeTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("等待审批: \(ctx.toolName)")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(NotchTheme.accent)
                 if !ctx.displayInput.isEmpty {
                     Text(ctx.displayInput)
                         .font(.system(size: 9))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(NotchTheme.textTertiary)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
             Button("拒绝") { claudeService.respondToPermission(sessionId: session.id, approved: false) }
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPillButtonStyle())
             Button("允许") { claudeService.respondToPermission(sessionId: session.id, approved: true) }
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.black)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(.white.opacity(0.9))
-                .clipShape(Capsule())
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.orange.opacity(0.08))
+        .notchCard(radius: 8, fill: NotchTheme.accentSoft)
     }
 
     private func sessionRow(_ session: ClaudeState) -> some View {
@@ -203,7 +189,7 @@ struct ClaudeTab: View {
                     HStack(spacing: 6) {
                         Text(session.displayTitle)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(NotchTheme.textPrimary)
                             .lineLimit(1)
                         if let event = session.lastEventName {
                             eventTag(event)
@@ -218,12 +204,12 @@ struct ClaudeTab: View {
                     if let msg = session.lastUserMessage, !msg.isEmpty {
                         Text(msg)
                             .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(NotchTheme.textSecondary)
                             .lineLimit(2)
                     } else if let msg = session.lastMessage, !msg.isEmpty {
                         Text(msg)
                             .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(NotchTheme.textSecondary)
                             .lineLimit(2)
                     }
                     HStack(spacing: 6) {
@@ -235,23 +221,23 @@ struct ClaudeTab: View {
                         if let model = session.displayModel {
                             Text(model)
                                 .font(.system(size: 8, weight: .medium, design: .rounded))
-                                .foregroundStyle(.purple.opacity(0.7))
+                                .foregroundStyle(NotchTheme.accent.opacity(0.9))
                                 .padding(.horizontal, 3)
                                 .padding(.vertical, 1)
-                                .background(.purple.opacity(0.12))
+                                .background(NotchTheme.accentSoft)
                                 .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
                         if session.totalTokens > 0 {
                             Text("· \(session.tokenDisplay)")
-                                .foregroundStyle(.white.opacity(0.3))
+                                .foregroundStyle(NotchTheme.textMuted)
                         }
                         if session.subagentState.hasActiveTasks {
                             Text("· \(session.subagentState.taskSummary() ?? "")")
-                                .foregroundStyle(.orange.opacity(0.7))
+                                .foregroundStyle(NotchTheme.accent.opacity(0.82))
                         }
                     }
                     .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(NotchTheme.textMuted)
                     if session.lastContextTokens > 0 {
                         contextBar(session: session)
                     }
@@ -265,7 +251,7 @@ struct ClaudeTab: View {
                     Circle()
                         .fill(dotColor(session.status))
                         .frame(width: 6, height: 6)
-                        .modifier(PulseModifier(isActive: session.status == .working))
+                        .modifier(PulseModifier(isActive: session.status == .working || approvalContext(for: session) != nil))
                 }
             }
         }
@@ -274,7 +260,11 @@ struct ClaudeTab: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(approvalContext(for: session) != nil ? .orange.opacity(0.08) : .white.opacity(0.06))
+                .fill(approvalContext(for: session) != nil ? NotchTheme.accentSoft : NotchTheme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                )
         )
     }
 
@@ -306,7 +296,7 @@ struct ClaudeTab: View {
         switch status {
         case .idle: .gray
         case .working: .green
-        case .waiting: .yellow
+        case .waiting: NotchTheme.accent
         }
     }
 
@@ -342,7 +332,7 @@ struct ClaudeTab: View {
                 if !ctx.displayInput.isEmpty {
                     Text(ctx.displayInput)
                         .font(.system(size: 9))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(NotchTheme.textTertiary)
                         .lineLimit(1)
                 }
             }
@@ -351,37 +341,25 @@ struct ClaudeTab: View {
                 if ctx.isInteractiveTool {
                     Text("需要输入")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(NotchTheme.textSecondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(.white.opacity(0.08))
-                        .clipShape(Capsule())
+                        .background(NotchTheme.surfaceEmphasis)
+                        .clipShape(Capsule(style: .continuous))
                 } else {
                     Button {
                         claudeService.respondToPermission(sessionId: session.id, approved: false)
                     } label: {
                         Text("拒绝")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(.white.opacity(0.1))
-                            .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(NotchPillButtonStyle())
 
                     Button {
                         claudeService.respondToPermission(sessionId: session.id, approved: true)
                     } label: {
                         Text("允许")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(.white.opacity(0.9))
-                            .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(NotchPillButtonStyle(prominent: true))
                 }
             }
         }
@@ -400,10 +378,10 @@ struct ClaudeTab: View {
         return VStack(spacing: 3) {
             HStack {
                 Text("ctx")
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(NotchTheme.textMuted)
                 Spacer()
                 Text("\(session.contextTokenDisplay) / 200K")
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(NotchTheme.textMuted)
                 Text(String(format: "%.0f%%", percent * 100))
                     .foregroundStyle(barColor.opacity(0.7))
             }
@@ -412,7 +390,7 @@ struct ClaudeTab: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(.white.opacity(0.06))
+                        .fill(NotchTheme.surface)
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(barColor.opacity(0.5))
                         .frame(width: percent > 0 ? max(geo.size.width * CGFloat(percent), 3) : 0)

@@ -26,6 +26,7 @@ struct NotchView: View {
     @State private var badgeTypeUpdateTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
     @State private var slideForward: Bool = true
+    @State private var previousSelectedTab: Tab? = nil
 
     private enum BadgeType: String, CaseIterable, Identifiable {
         case notification, media, claude, openclaw, calendar
@@ -52,9 +53,12 @@ struct NotchView: View {
 
     private var activeBadgeTypes: [BadgeType] {
         var types: [BadgeType] = []
+        if let session = claudeService.activeSession,
+           (session.phase.isWaitingForApproval || session.status == .working) {
+            types.append(.claude)
+        }
         if !notificationService.badges.isEmpty { types.append(.notification) }
         if openClawService.activeAgent != nil { types.append(.openclaw) }
-        if claudeService.activeSession?.status == .working { types.append(.claude) }
         if mediaService.playbackState.isPlaying { types.append(.media) }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
@@ -124,8 +128,8 @@ struct NotchView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(.interactiveSpring(duration: NotchConstants.openSpringDuration), value: coordinator.status)
         .onAppear { shownHasActiveBadge = hasActiveBadge }
+        .onAppear { previousSelectedTab = coordinator.selectedTab }
         .onChange(of: hasActiveBadge) { _, newValue in
             if newValue {
                 hideBadgeTask?.cancel()
@@ -137,7 +141,7 @@ struct NotchView: View {
                 hideBadgeTask = Task { @MainActor in
                     try? await Task.sleep(for: .seconds(2))
                     guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: NotchConstants.badgeFadeDuration)) {
+                    withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
                         shownHasActiveBadge = false
                     }
                 }
@@ -147,7 +151,7 @@ struct NotchView: View {
         .onChange(of: activeBadgeTypes) { oldTypes, newTypes in
             if newTypes.count > oldTypes.count {
                 badgeTypeUpdateTask?.cancel()
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
                     displayedBadgeTypes = newTypes
                 }
             } else {
@@ -155,19 +159,20 @@ struct NotchView: View {
                 badgeTypeUpdateTask = Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(500))
                     guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
                         displayedBadgeTypes = newTypes
                     }
                 }
             }
         }
-        .onChange(of: coordinator.selectedTab) { oldTab, newTab in
+        .onChange(of: coordinator.selectedTab) { _, newTab in
             let tabs = Tab.sorted(appSettings.enabledTabs)
-            let oldIndex = tabs.firstIndex(of: oldTab) ?? 0
-            let newIndex = tabs.firstIndex(of: newTab) ?? 0
-            slideForward = newIndex > oldIndex
+            if let previous = previousSelectedTab, previous != newTab {
+                slideForward = tabIndex(of: newTab, in: tabs) > tabIndex(of: previous, in: tabs)
+            }
+            previousSelectedTab = newTab
         }
-        .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.15), value: hudService.activeHUD)
+        .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
@@ -181,12 +186,16 @@ struct NotchView: View {
             ForEach(tabs) { tab in
                 let selected = coordinator.selectedTab == tab
                 Button {
-                    coordinator.selectedTab = tab
+                    selectTab(tab)
                 } label: {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 11, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? .white : .white.opacity(0.35))
+                        .font(.system(size: 11, weight: selected ? .semibold : .regular, design: .rounded))
+                        .foregroundStyle(selected ? NotchTheme.textPrimary : NotchTheme.textTertiary)
                         .frame(width: 18, height: 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(selected ? NotchTheme.surfaceEmphasis : .clear)
+                        )
                 }
                 .buttonStyle(.plain)
             }
@@ -234,6 +243,7 @@ struct NotchView: View {
             insertion: .opacity.combined(with: .move(edge: slideForward ? .trailing : .leading)),
             removal: .opacity.combined(with: .move(edge: slideForward ? .leading : .trailing))
         ))
+        .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
         .offset(x: dragOffset)
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -241,19 +251,17 @@ struct NotchView: View {
                     let width = value.translation.width
                     let height = abs(value.translation.height)
                     guard height < abs(width) else { return }
-                    dragOffset = width
+                    dragOffset = width * 0.38
                 }
                 .onEnded { value in
                     let threshold: CGFloat = 80
-                    withAnimation(.interactiveSpring(duration: 0.3)) {
+                    withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
                         dragOffset = 0
                     }
                     if value.translation.width < -threshold && currentIndex + 1 < tabs.count {
-                        slideForward = true
-                        coordinator.selectNextTab()
+                        selectTab(tabs[currentIndex + 1])
                     } else if value.translation.width > threshold && currentIndex > 0 {
-                        slideForward = false
-                        coordinator.selectPreviousTab()
+                        selectTab(tabs[currentIndex - 1])
                     }
                 }
         )
@@ -394,7 +402,7 @@ struct NotchView: View {
                 ))
         }
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
-        .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: notificationService.badges.isEmpty)
+        .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: shownHasActiveBadge)
     }
 
     // MARK: - Notch background shape
@@ -408,5 +416,19 @@ struct NotchView: View {
             spacing: NotchConstants.notchBackgroundSpacing
         )
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
+    }
+
+    // MARK: - Tab direction
+
+    private func tabIndex(of tab: Tab, in tabs: [Tab]) -> Int {
+        tabs.firstIndex(of: tab) ?? 0
+    }
+
+    private func selectTab(_ tab: Tab) {
+        let tabs = Tab.sorted(appSettings.enabledTabs)
+        guard tab != coordinator.selectedTab else { return }
+        slideForward = tabIndex(of: tab, in: tabs) > tabIndex(of: coordinator.selectedTab, in: tabs)
+        previousSelectedTab = coordinator.selectedTab
+        coordinator.selectedTab = tab
     }
 }

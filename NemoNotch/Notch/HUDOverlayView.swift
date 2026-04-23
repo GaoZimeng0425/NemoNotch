@@ -4,7 +4,7 @@ struct HUDOverlayView: View {
     let type: HUDService.HUDType
     let value: Float
 
-    private static let accentColor = Color(red: 1.0, green: 0.55, blue: 0.05)
+    private static let accentColor = NotchTheme.accent
     private static let segmentCount = 20
 
     private var icon: String {
@@ -66,6 +66,10 @@ struct HUDOverlayView: View {
         .frame(height: NotchConstants.hudHeight)
         .background(.black)
         .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(NotchTheme.stroke, lineWidth: 0.6)
+        )
         .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
     }
 

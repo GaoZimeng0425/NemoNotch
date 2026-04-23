@@ -19,13 +19,13 @@ struct OpenClawTab: View {
         VStack(spacing: 10) {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(NotchTheme.textTertiary)
             Text("OpenClaw 未安装")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
             Text("npm install -g openclaw@latest")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(NotchTheme.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -34,17 +34,17 @@ struct OpenClawTab: View {
         VStack(spacing: 8) {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(NotchTheme.textTertiary)
             Text("Gateway 离线")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.orange)
                     .frame(width: 6, height: 6)
                 Text("等待连接...")
                     .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(NotchTheme.textTertiary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -54,17 +54,17 @@ struct OpenClawTab: View {
         VStack(spacing: 8) {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(NotchTheme.textTertiary)
             Text("所有 Agent 空闲")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 6, height: 6)
                 Text("Gateway 在线")
                     .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(NotchTheme.textTertiary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,9 +83,9 @@ struct OpenClawTab: View {
                     HStack {
                         Text("空闲")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(NotchTheme.textMuted)
                         Divider()
-                            .background(.white.opacity(0.08))
+                            .background(NotchTheme.stroke)
                         Spacer()
                     }
                     .padding(.horizontal, 8)
@@ -112,7 +112,7 @@ struct OpenClawTab: View {
     private func agentRow(_ agent: AgentInfo) -> some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(.white.opacity(0.1))
+                .fill(NotchTheme.surfaceEmphasis)
                 .frame(width: 24, height: 24)
                 .overlay {
                     Text(agent.emoji)
@@ -124,7 +124,7 @@ struct OpenClawTab: View {
                 HStack(spacing: 6) {
                     Text(agent.name)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(NotchTheme.textPrimary)
                         .lineLimit(1)
 
                     stateTag(agent.state)
@@ -133,14 +133,14 @@ struct OpenClawTab: View {
                 if let tool = agent.currentTool, !tool.isEmpty {
                     Text(tool)
                         .font(.system(size: 10))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(NotchTheme.accent)
                         .lineLimit(1)
                 }
 
                 if let msg = agent.lastMessage, !msg.isEmpty {
                     Text(msg)
                         .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(NotchTheme.textSecondary)
                         .lineLimit(2)
                 }
 
@@ -152,7 +152,7 @@ struct OpenClawTab: View {
                     Text(timeAgo(agent.lastEventTime))
                 }
                 .font(.system(size: 9))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(NotchTheme.textMuted)
             }
 
             Spacer(minLength: 0)
@@ -161,7 +161,11 @@ struct OpenClawTab: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.06))
+                .fill(NotchTheme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                )
         )
     }
 

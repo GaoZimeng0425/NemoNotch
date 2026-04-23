@@ -24,10 +24,10 @@ struct ChatMessageView: View {
             Spacer(minLength: 40)
             Text(message.content)
                 .font(.system(size: 11))
-                .foregroundStyle(.white)
+                .foregroundStyle(NotchTheme.textPrimary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(.white.opacity(0.12))
+                .background(NotchTheme.surfaceEmphasis)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -35,12 +35,12 @@ struct ChatMessageView: View {
     private var assistantBubble: some View {
         HStack(alignment: .top, spacing: 6) {
             Circle()
-                .fill(.white.opacity(0.3))
+                .fill(NotchTheme.textTertiary)
                 .frame(width: 5, height: 5)
                 .padding(.top, 4)
             MarkdownRenderer.render(message.content)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(NotchTheme.textPrimary)
             Spacer(minLength: 40)
         }
     }
@@ -59,15 +59,14 @@ struct ChatMessageView: View {
                 if let input = message.toolInput {
                     Text(String(input.prefix(80)))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(NotchTheme.textMuted)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(ToolStyle.color(message.toolName).opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .notchCard(radius: 6, fill: ToolStyle.color(message.toolName).opacity(0.10))
 
             if let tools = subagentTools, !tools.isEmpty {
                 subagentToolsList(tools)
@@ -86,11 +85,11 @@ struct ChatMessageView: View {
                         .modifier(PulseModifier(isActive: !tool.isCompleted))
                     Text(tool.name)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(NotchTheme.textSecondary)
                     if !tool.displayInput.isEmpty {
                         Text(tool.displayInput)
                             .font(.system(size: 9))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(NotchTheme.textMuted)
                             .lineLimit(1)
                     }
                 }
@@ -98,7 +97,7 @@ struct ChatMessageView: View {
             if tools.count > 3 {
                 Text("+\(tools.count - 3) more")
                     .font(.system(size: 8))
-                    .foregroundStyle(.white.opacity(0.25))
+                    .foregroundStyle(NotchTheme.textMuted.opacity(0.8))
             }
         }
         .padding(.leading, 12)
@@ -107,7 +106,7 @@ struct ChatMessageView: View {
     private var toolResultBubble: some View {
         Text(String(message.content.prefix(200)))
             .font(.system(size: 10, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.35))
+            .foregroundStyle(NotchTheme.textMuted)
             .lineLimit(3)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -116,7 +115,7 @@ struct ChatMessageView: View {
     private var systemBubble: some View {
         Text(message.content)
             .font(.system(size: 10))
-            .foregroundStyle(.white.opacity(0.3))
+            .foregroundStyle(NotchTheme.textMuted)
             .italic()
     }
 }

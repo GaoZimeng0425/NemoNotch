@@ -24,6 +24,10 @@ struct CompactBadge: View {
     }
 
     private var activeBadge: BadgeInfo? {
+        // 0. Claude waiting for approval (highest priority)
+        if let session = claudeService.activeSession, session.phase.isWaitingForApproval {
+            return .claude(.waiting, session.phase.approvalToolName, true)
+        }
         // 1. Notification (needs attention)
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             return .notification(top.bundleID)
@@ -31,10 +35,6 @@ struct CompactBadge: View {
         // 2. Active work (OpenClaw agent running)
         if let agent = openClawService.activeAgent {
             return .openclaw(agent.state, agent.emoji, agent.name)
-        }
-        // 2.5. Claude waiting for approval
-        if let session = claudeService.activeSession, session.phase.isWaitingForApproval {
-            return .claude(.waiting, session.phase.approvalToolName, true)
         }
         // 3. Active work (Claude session running)
         if let session = claudeService.activeSession, session.status != .idle {
@@ -101,7 +101,7 @@ struct CompactBadge: View {
                             .foregroundStyle(.red.opacity(0.9))
                     case .media where side == .right:
                         Image(systemName: "play.fill")
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(NotchTheme.textPrimary)
                     case .claude(let status, let tool, let isPre) where side == .right:
                         rightClaudeBadge(status: status, tool: tool, isPre: isPre)
                     case .openclaw(let state, let emoji, _) where side == .right:
@@ -110,7 +110,7 @@ struct CompactBadge: View {
                             .modifier(PulseModifier(isActive: state == .working || state == .toolCalling))
                     case .calendar where side == .right:
                         Image(systemName: "clock.fill")
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(NotchTheme.textPrimary)
                     default:
                         EmptyView()
                     }
@@ -132,7 +132,7 @@ struct CompactBadge: View {
             if !isNil {
                 hideTask?.cancel()
                 if dismissed {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
                         dismissed = false
                     }
                 }
@@ -143,7 +143,7 @@ struct CompactBadge: View {
                     try? await Task.sleep(for: .seconds(2))
                     guard !Task.isCancelled else { return }
                     _ = prev
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
                         dismissed = true
                     }
                 }
@@ -186,13 +186,13 @@ struct CompactBadge: View {
         } else {
             Image(systemName: "music.note")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(NotchTheme.textSecondary)
         }
     }
 
     @ViewBuilder
     private func rightClaudeBadge(status: ClaudeStatus, tool: String?, isPre: Bool) -> some View {
-        let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
+        let claudeOrange = NotchTheme.accent
         if status == .waiting && claudeService.activeSession?.phase.isWaitingForApproval == true {
             // Waiting for approval: orange circle + pulsing exclamation
             Circle()

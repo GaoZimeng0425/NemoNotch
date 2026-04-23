@@ -13,7 +13,7 @@ enum MarkdownRenderer {
                 if inCodeBlock {
                     result = result + Text(codeBlockContent.trimmingCharacters(in: .newlines))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(NotchTheme.textSecondary)
                     codeBlockContent = ""
                     inCodeBlock = false
                 } else {
@@ -101,7 +101,7 @@ enum MarkdownRenderer {
                 let content = String(matched.dropFirst(1).dropLast(1))
                 result = result + Text(content)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.cyan.opacity(0.8))
+                    .foregroundStyle(NotchTheme.accent.opacity(0.9))
             }
 
             lastEnd = range.upperBound

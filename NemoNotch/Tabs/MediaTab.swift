@@ -17,10 +17,10 @@ struct MediaTab: View {
         VStack(spacing: 8) {
             Image(systemName: "music.note")
                 .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(NotchTheme.textTertiary)
             Text("未在播放")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(NotchTheme.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -58,18 +58,18 @@ struct MediaTab: View {
         }
         .frame(width: 50, height: 50)
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+        .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
     }
 
     private var trackInfo: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(state.title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(NotchTheme.textPrimary)
                 .lineLimit(1)
             Text(state.artist)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(NotchTheme.textSecondary)
                 .lineLimit(1)
         }
     }
@@ -78,9 +78,9 @@ struct MediaTab: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.white.opacity(0.12))
+                    .fill(NotchTheme.surfaceEmphasis)
                 Capsule()
-                    .fill(.white.opacity(0.45))
+                    .fill(NotchTheme.accent.opacity(0.75))
                     .frame(width: state.duration > 0 ? geo.size.width * CGFloat(state.position / state.duration) : 0)
             }
         }
@@ -92,18 +92,18 @@ struct MediaTab: View {
             Button(action: { mediaService.previousTrack() }) {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(NotchTheme.textSecondary)
             }
             .buttonStyle(.plain)
 
             Button(action: { mediaService.togglePlayPause() }) {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.black.opacity(0.85))
                     .frame(width: 34, height: 34)
                     .background(
                         Circle()
-                            .fill(.white.opacity(0.12))
+                            .fill(NotchTheme.accent)
                     )
             }
             .buttonStyle(.plain)
@@ -111,7 +111,7 @@ struct MediaTab: View {
             Button(action: { mediaService.nextTrack() }) {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(NotchTheme.textSecondary)
             }
             .buttonStyle(.plain)
         }

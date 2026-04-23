@@ -32,21 +32,18 @@ struct LauncherTab: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(NotchTheme.textTertiary)
             TextField("搜索应用", text: Binding(
                 get: { launcherService.searchText },
                 set: { launcherService.searchText = $0 }
             ))
             .textFieldStyle(.plain)
             .font(.system(size: 11))
-            .foregroundStyle(.white)
+            .foregroundStyle(NotchTheme.textPrimary)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.white.opacity(0.08))
-        )
+        .notchCard(radius: 8, fill: NotchTheme.surface)
     }
 
     private func appButton(app: AppItem, index: Int) -> some View {
@@ -61,27 +58,24 @@ struct LauncherTab: View {
                         .frame(width: 32, height: 32)
                 } else {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(.white.opacity(0.08))
+                        .fill(NotchTheme.surface)
                         .frame(width: 32, height: 32)
                         .overlay {
                             Image(systemName: "app")
                                 .font(.system(size: 14))
-                                .foregroundStyle(.white.opacity(0.3))
+                                .foregroundStyle(NotchTheme.textTertiary)
                         }
                 }
 
                 Text(app.name)
                     .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(NotchTheme.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.white.opacity(0.04))
-            )
+            .notchCard(radius: 8, fill: NotchTheme.surfaceSubtle)
         }
         .buttonStyle(.plain)
     }

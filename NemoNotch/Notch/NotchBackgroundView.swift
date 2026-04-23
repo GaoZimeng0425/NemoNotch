@@ -13,7 +13,17 @@ struct NotchBackgroundView: View {
                 .drawingGroup()
         } else {
             Capsule()
-                .fill(.black)
+                .fill(
+                    LinearGradient(
+                        colors: [.black.opacity(0.96), .black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(NotchTheme.stroke.opacity(0.9), lineWidth: 0.6)
+                )
                 .shadow(color: .black.opacity(showShadow ? 0.4 : 0), radius: 6, y: 2)
                 .drawingGroup()
         }
@@ -25,7 +35,13 @@ struct NotchBackgroundView: View {
 
     private var notchedShape: some View {
         Rectangle()
-            .foregroundStyle(.black)
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [.black.opacity(0.95), .black],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .mask(notchBackgroundMaskGroup)
             .frame(
                 width: notchSize.width + cornerRadius * 2,
