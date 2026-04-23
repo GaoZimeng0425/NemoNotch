@@ -22,6 +22,181 @@ NemoNotch/
 └── Helpers/                     # 工具类
 ```
 
+## 架构总览
+
+```mermaid
+graph TB
+    subgraph Entry["App 入口"]
+        App["NemoNotchApp<br/>@main"]
+        AD["AppDelegate<br/>生命周期 & 服务装配"]
+    end
+
+    subgraph Services["Service 居 — 全部 @Observable"]
+        MS["MediaService<br/>MediaRemote + NowPlayingCLI"]
+        CCS["ClaudeCodeService<br/>HookServer + ConversationParser"]
+        OCS["OpenClawService<br/>WebSocket 客户端"]
+        CS["CalendarService<br/>EventKit"]
+        LS["LauncherService<br/>应用搜索 & 启动"]
+        NS["NotificationService<br/>Dock Accessibility API"]
+        WS["WeatherService<br/>wttr.in"]
+        SS["SystemService<br/>IOKit CPU/RAM/Disk"]
+        HUD["HUDService<br/>音量/亮度/电池"]
+        HK["HotkeyService<br/>Carbon 全局快捷键"]
+    end
+
+    subgraph NotchUI["Notch UI 层"]
+        NC["NotchCoordinator<br/>开关状态 & 动画"]
+        NW["NotchWindow<br/>NSPanel .statusBar+8"]
+        NV["NotchView<br/>SwiftUI 主视图"]
+        EM["EventMonitor<br/>鼠标事件监听"]
+        CB["CompactBadge<br/>收起时的图标"]
+    end
+
+    subgraph Tabs["标签页"]
+        MT["MediaTab"]
+        CT["ClaudeTab"]
+        CLT["CalendarTab"]
+        LT["LauncherTab"]
+        OCT["OpenClawTab"]
+        WT["WeatherTab"]
+        ST["SystemTab"]
+    end
+
+    subgraph Settings["设置"]
+        AS["AppSettings<br/>UserDefaults 持久化"]
+        SW["SettingsWindow"]
+        SV["SettingsView"]
+    end
+
+    App --> AD
+    AD -->|"创建 & 持有"| Services
+    AD -->|"创建"| NC
+    NC --> NW --> NV
+    NV --> Tabs
+    NV --> CB
+    EM -->|"鼠标事件"| NC
+    HK -->|"快捷键"| NC
+    AS --> SV
+
+    Services -.->|"@Environment 注入"| NV
+    AS -.->|"@Environment 注入"| NV
+```
+
+### Claude Code 服务架构
+
+```mermaid
+graph LR
+    subgraph External["外部进程"]
+        CC["Claude Code CLI"]
+    end
+
+    subgraph Service["ClaudeCodeService"]
+        HS["HookServer<br/>/tmp/nemonotch.sock"]
+        HI["HookInstaller"]
+        CP["ConversationParser"]
+        IW["InterruptWatcher"]
+        AFW["AgentFileWatcher"]
+    end
+
+    subgraph Data["数据模型"]
+        SP["SessionPhase<br/>状态机"]
+        MSG["[ChatMessage]"]
+        SA["SubagentState"]
+    end
+
+    subgraph Files["文件系统"]
+        S["~/.claude/settings.json"]
+        J["~/.claude/projects/**/*.jsonl"]
+    end
+
+    CC -->|"hook 事件"| HS
+    HI -->|"写入 hooks"| S
+    CC -->|"触发 hooks"| S
+    CP -->|"增量解析"| J
+    IW -->|"监控中断"| J
+    AFW -->|"监控子代理"| J
+
+    HS --> SP
+    CP --> MSG
+    AFW --> SA
+```
+
+### Notch 事件流
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant EM as EventMonitor
+    participant NC as NotchCoordinator
+    participant NW as NotchWindow
+    participant NV as NotchView
+
+    User->>EM: 鼠标进入刘海区域
+    EM->>NC: notchOpen()
+    NC->>NC: autoSelectTab + 触觉反馈
+    NC->>NW: interactiveSpring(0.314) 展开
+    NW->>NV: 显示标签页内容 + badges
+
+    User->>EM: 鼠标离开内容区
+    EM->>NC: notchClose()
+    NC->>NW: spring(0.236) 收起
+    NW->>NV: 隐藏内容
+
+    User->>EM: 右键点击刘海
+    EM->>NC: 上下文菜单
+    NC->>NV: 显示 Settings / Quit
+```
+
+### Badge 优先级（刘海收起时）
+
+```
+notification > openclaw active > claude approval > claude working > media playing > calendar upcoming
+```
+
+### 技术架构
+
+**Service 层（数据源）**
+
+- 9 个 `@Observable` 服务，各自独立获取数据：MediaService 轮询 NowPlaying、ClaudeCodeService 通过 Unix Socket 接收 hook 事件、CalendarService 读 EventKit、OpenClawService 用 WebSocket 连网关等
+- 全部由 `AppDelegate` 在 `applicationDidFinishLaunching` 中创建，通过 `.environment()` 注入到 SwiftUI 视图树
+- 没有 Combine 或单例（除 LogService/EventMonitor），用闭包回调串联事件
+
+**Notch UI 层（窗口 + 交互）**
+
+- `NotchWindow`（NSPanel 子类）浮在 `.statusBar + 8` 层级，`PassThroughView` 控制点击穿透
+- `EventMonitor`（单例）监听全局鼠标事件 → `NotchCoordinator` 管理开/关状态和 spring 动画
+- 收起时 `CompactBadge` 在刘海两侧显示状态图标，按优先级显示（notification > claude > media > calendar）
+
+**Tab 层（内容展示）**
+
+- 7 个 Tab（media/calendar/claude/openclaw/launcher/weather/system），每个对应一个 Service
+- `NotchView` 根据 `Tab.sorted()` 渲染启用的标签页，支持滑动手势切换
+- 自动选择逻辑：Claude 工作中 → ClaudeTab，OpenClaw 有活跃代理 → OpenClawTab，媒体播放中 → MediaTab
+
+**核心数据流**：Service → @Observable 属性变化 → SwiftUI 自动重绘 → Tab 内容更新。用户交互（点击、手势）通过 EventMonitor → NotchCoordinator → 动画更新视图状态。
+
+### 代码借鉴来源
+
+| 模块 | 借鉴项目 | 具体借鉴内容 |
+|------|---------|-------------|
+| NotchWindow + PassThroughView | **Peninsula** | NSPanel 子类窗口管理、刘海定位、三态状态机（closed/popping/opened） |
+| NotchCoordinator 动画 | **NotchDrop** | 三态动画系统、Combine 鼠标接近检测 |
+| Spring 动画参数 | **DynamicNotchKit** | `.bouncy(duration: 0.4)` 弹簧动画、自动消失 Timer |
+| NSScreen 扩展 | **DynamicNotchKit** | `hasNotch`、`notchSize`、`notchFrame` 检测（提取自其 `NSScreen+Extensions.swift`） |
+| NotchBackgroundView 刘海形状 | **Peninsula** | 匹配物理刘海轮廓的自定义 Shape 渲染 |
+| EventMonitor 鼠标事件 | **NotchDrop** | 全局 NSEvent monitor 鼠标接近/离开检测 |
+| HotkeyService | **Peninsula** | Carbon `RegisterEventHotKey` 全局快捷键注册 |
+| MediaRemote 桥接 | **PlayStatus** | `dlopen`/`dlsym` 动态加载 MediaRemote.framework 私有 API |
+| NowPlayingCLI 回退策略 | **nowplaying-cli** | daemon 连接 → legacy callback → MRNowPlayingController 三级回退，dylib 路径搜索 |
+| Claude Code Hook 架构 | **masko-code** | Unix Socket 事件传递、HookInstaller 写入 `~/.claude/settings.json`、`hook-sender.sh` 进程树检测（详见 `notch.md` 逆向分析文档） |
+| ConversationParser | **vibe-notch** | 增量 JSONL 解析、ChatMessage 结构化解析（参考其 parser 709-960 行） |
+| Claude 权限审批 UI | **vibe-notch** | PermissionRequest 审批流程、Socket JSON 响应 |
+| HUDService 亮度监测 | **MonitorControl** | `DisplayServicesGetBrightness()` 私有 API，`dlopen` 动态加载 |
+| SystemService 系统监控 | **eul** | `host_processor_info` CPU 采样、`host_statistics64` 内存读取、IOKit 电池信息 |
+| CompactBadge 状态图标 | **NotchNook** | 刘海两侧图标布局风格 |
+
+所有参考项目位于 `/Users/gaozimeng/Learn/macOS/`，遇到实现问题时优先查看这些项目的做法。
+
 ## 参考项目指南
 
 所有参考项目位于 `/Users/gaozimeng/Learn/macOS/`，遇到实现问题时优先查看这些项目的做法。

@@ -1,15 +1,14 @@
 import AppKit
 
-class NotchWindow: NSPanel {
+class NotchWindow: NSWindow {
     init(rect: NSRect) {
         super.init(
             contentRect: rect,
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
 
-        isFloatingPanel = true
         isOpaque = false
         alphaValue = 1
         level = .statusBar + 8
@@ -20,12 +19,10 @@ class NotchWindow: NSPanel {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
-        hidesOnDeactivate = false
-        isReleasedWhenClosed = false
     }
 
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeMain: Bool { true }
 }
 
 final class PassThroughView: NSView {
