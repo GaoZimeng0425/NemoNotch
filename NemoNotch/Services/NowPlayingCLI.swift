@@ -1,6 +1,6 @@
 @preconcurrency import Foundation
 
-final class NowPlayingCLI {
+final class NowPlayingCLI: @unchecked Sendable {
     private static let infoKeyMapping: [String: String] = [
         "title": "kMRMediaRemoteNowPlayingInfoTitle",
         "artist": "kMRMediaRemoteNowPlayingInfoArtist",
@@ -52,9 +52,7 @@ final class NowPlayingCLI {
     }
 
     deinit {
-        MainActor.assumeIsolated {
-            stopDaemon()
-        }
+        stopDaemon()
     }
 
     // MARK: - Public API
@@ -197,7 +195,8 @@ final class NowPlayingCLI {
     private func finishPending(_ result: [String: Any]?) {
         let completion = pendingCompletion
         pendingCompletion = nil
-        DispatchQueue.main.async { completion?(result) }
+        let box = InfoBox(info: result)
+        DispatchQueue.main.async { completion?(box.info) }
     }
 
     // MARK: - Fallback (one-shot processes)
@@ -438,6 +437,10 @@ final class NowPlayingCLI {
             }
         }
         return result
+    }
+
+    private struct InfoBox: @unchecked Sendable {
+        let info: [String: Any]?
     }
 
     // MARK: - Conversion

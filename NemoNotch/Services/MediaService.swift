@@ -2,10 +2,11 @@ import AppKit
 @preconcurrency import Foundation
 
 private struct NowPlayingInfoBox: @unchecked Sendable {
-    nonisolated(unsafe) let info: [String: Any]?
-    nonisolated init(info: [String: Any]?) { self.info = info }
+    let info: [String: Any]?
+    init(info: [String: Any]?) { self.info = info }
 }
 
+@MainActor
 @Observable
 final class MediaService {
     var playbackState = PlaybackState()

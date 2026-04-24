@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 @Observable
 final class GeminiProvider: AIProvider {
     let source: AISource = .gemini

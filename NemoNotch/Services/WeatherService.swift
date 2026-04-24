@@ -1,6 +1,7 @@
-import CoreLocation
+@preconcurrency import CoreLocation
 import Foundation
 
+@MainActor
 @Observable
 final class WeatherService: NSObject, CLLocationManagerDelegate {
     var temperature: Double = 0
@@ -35,20 +36,26 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
 
     deinit { MainActor.assumeIsolated { timer?.invalidate() } }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedAlways {
-            manager.requestLocation()
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        MainActor.assumeIsolated {
+            if manager.authorizationStatus == .authorizedAlways {
+                manager.requestLocation()
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        lastLocation = location
-        fetchWeather(coordinate: location.coordinate)
+        MainActor.assumeIsolated {
+            self.lastLocation = location
+            self.fetchWeather(coordinate: location.coordinate)
+        }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        fetchWeather()
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        MainActor.assumeIsolated {
+            self.fetchWeather()
+        }
     }
 
     private func fetchWeather(coordinate: CLLocationCoordinate2D? = nil) {

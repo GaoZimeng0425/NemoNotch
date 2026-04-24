@@ -1,6 +1,7 @@
 import Carbon
 import Foundation
 
+@MainActor
 @Observable
 final class HotkeyService {
     private var hotKeyRefs: [EventHotKeyRef] = []

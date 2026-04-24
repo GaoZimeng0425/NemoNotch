@@ -1,7 +1,7 @@
 import CocoaLumberjackSwift
 
 final class LogService {
-    static let shared = LogService()
+    nonisolated(unsafe) static let shared = LogService()
     private let fileLogger: DDFileLogger
 
     private init() {

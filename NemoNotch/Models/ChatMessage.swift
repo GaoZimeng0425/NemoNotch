@@ -16,7 +16,7 @@ struct ChatMessage: Identifiable, Sendable {
     let toolInput: String?
     let timestamp: Date
 
-    nonisolated init(id: String, role: ChatMessageRole, content: String, toolName: String? = nil, toolInput: String? = nil, timestamp: Date = Date()) {
+    init(id: String, role: ChatMessageRole, content: String, toolName: String? = nil, toolInput: String? = nil, timestamp: Date = Date()) {
         self.id = id
         self.role = role
         self.content = content

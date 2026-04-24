@@ -1,5 +1,6 @@
 @preconcurrency import AppKit
 
+@MainActor
 final class EventMonitor {
     static let shared = EventMonitor()
 

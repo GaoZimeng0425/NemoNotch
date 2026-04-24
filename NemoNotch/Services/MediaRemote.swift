@@ -1,6 +1,7 @@
 @preconcurrency import Foundation
 import ObjectiveC.runtime
 
+@MainActor
 final class MediaRemote {
     static let shared = MediaRemote()
 

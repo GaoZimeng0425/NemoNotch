@@ -5,6 +5,7 @@ import CoreGraphics
 import IOKit.ps
 import SwiftUI
 
+@MainActor
 @Observable
 final class HUDService {
     enum HUDType: Equatable {

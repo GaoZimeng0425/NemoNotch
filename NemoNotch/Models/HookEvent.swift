@@ -10,7 +10,7 @@ struct HookEvent: Codable, Sendable {
     let source: String?
     let cliSource: String?
 
-    nonisolated init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         hookEventName = try container.decode(String.self, forKey: .hookEventName)
         sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)

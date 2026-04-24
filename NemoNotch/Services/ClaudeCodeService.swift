@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 @Observable
 final class ClaudeProvider: AIProvider {
     let source: AISource = .claude

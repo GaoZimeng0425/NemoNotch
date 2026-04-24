@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 
+@MainActor
 @Observable
 final class OpenClawService {
     var agents: [String: AgentInfo] = [:]
@@ -194,7 +195,11 @@ final class OpenClawService {
                 self.handleMessage(message)
                 self.receiveMessage()
             case .failure(let error):
-                LogService.error("WebSocket error: \(error)", category: "OpenClaw")
+                if (error as? URLError)?.code == .cannotConnectToHost {
+                    LogService.debug("WebSocket not reachable: \(error)", category: "OpenClaw")
+                } else {
+                    LogService.error("WebSocket error: \(error)", category: "OpenClaw")
+                }
                 self.scheduleReconnect()
             }
         }

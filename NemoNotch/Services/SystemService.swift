@@ -1,6 +1,7 @@
 @preconcurrency import Foundation
 import IOKit.ps
 
+@MainActor
 @Observable
 final class SystemService {
     var cpuUsage: Double = 0

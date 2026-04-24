@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 @Observable
 final class HookServer {
     private(set) var isRunning = false

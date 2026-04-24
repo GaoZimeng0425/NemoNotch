@@ -15,19 +15,19 @@ enum ConversationParser: Sendable {
         var cleared: Bool
     }
 
-    nonisolated static func conversationPath(sessionId: String, cwd: String) -> String? {
+    static func conversationPath(sessionId: String, cwd: String) -> String? {
         let dir = claudeProjectsDir(for: cwd)
         let path = "\(dir)/\(sessionId).jsonl"
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
-    nonisolated static func conversationFiles(for cwd: String) -> [String] {
+    static func conversationFiles(for cwd: String) -> [String] {
         let dir = claudeProjectsDir(for: cwd)
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return [] }
         return files.filter { $0.hasSuffix(".jsonl") }.map { "\(dir)/\($0)" }
     }
 
-    nonisolated static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
+    static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
         var result = ParseResult(messages: [], inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, lastContextTokens: 0, lastModel: nil, newOffset: fromOffset, interrupted: false, cleared: false)
 
         guard let fileHandle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else {
@@ -87,18 +87,18 @@ enum ConversationParser: Sendable {
         return result
     }
 
-    nonisolated static func parseFull(filePath: String) -> ParseResult {
+    static func parseFull(filePath: String) -> ParseResult {
         parseIncremental(filePath: filePath, fromOffset: 0)
     }
 
     // MARK: - Private
 
-    nonisolated private static func claudeProjectsDir(for cwd: String) -> String {
+    private static func claudeProjectsDir(for cwd: String) -> String {
         let encoded = "-" + cwd.trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(of: "/", with: "-")
         return NSString(string: "~/.claude/projects/\(encoded)").expandingTildeInPath
     }
 
-    nonisolated private static func parseMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
         guard let type = json["type"] as? String else { return nil }
         switch type {
         case "user": return parseUserMessage(json, index: index)
@@ -108,14 +108,14 @@ enum ConversationParser: Sendable {
         }
     }
 
-    nonisolated private static func parseUserMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseUserMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
         guard !text.isEmpty else { return nil }
         return ChatMessage(id: "user-\(index)", role: .user, content: text, timestamp: parseTimestamp(json) ?? Date())
     }
 
-    nonisolated private static func parseAssistantMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseAssistantMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
 
@@ -141,7 +141,7 @@ enum ConversationParser: Sendable {
         return ChatMessage(id: "assistant-\(index)", role: .assistant, content: text, timestamp: parseTimestamp(json) ?? Date())
     }
 
-    nonisolated private static func parseToolResult(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseToolResult(_ json: [String: Any], index: Int) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let content = message["content"]
         var text = ""
@@ -161,7 +161,7 @@ enum ConversationParser: Sendable {
         )
     }
 
-    nonisolated private static func extractText(from message: [String: Any]) -> String {
+    private static func extractText(from message: [String: Any]) -> String {
         guard let content = message["content"] else { return "" }
         if let str = content as? String { return str }
         if let array = content as? [[String: Any]] {
@@ -170,27 +170,27 @@ enum ConversationParser: Sendable {
         return ""
     }
 
-    nonisolated private static func parseTimestamp(_ json: [String: Any]) -> Date? {
+    private static func parseTimestamp(_ json: [String: Any]) -> Date? {
         guard let ts = json["timestamp"] as? String else { return nil }
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.date(from: ts)
     }
 
-    nonisolated private static let interruptPatterns = [
+    private static let interruptPatterns = [
         "Interrupted by user",
         "interrupted by user",
         "user doesn't want to proceed",
         "[Request interrupted by user",
     ]
 
-    nonisolated private static func isInterruptLine(_ json: [String: Any]) -> Bool {
+    private static func isInterruptLine(_ json: [String: Any]) -> Bool {
         guard let message = json["message"] as? [String: Any] else { return false }
         let text = extractText(from: message).lowercased()
         return interruptPatterns.contains { text.contains($0.lowercased()) }
     }
 
-    nonisolated private static func isClearLine(_ json: [String: Any]) -> Bool {
+    private static func isClearLine(_ json: [String: Any]) -> Bool {
         guard let message = json["message"] as? [String: Any],
               let content = message["content"] as? [[String: Any]] else { return false }
         return content.contains { block in

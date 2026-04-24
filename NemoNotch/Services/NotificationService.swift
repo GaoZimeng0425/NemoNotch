@@ -7,6 +7,7 @@ struct BadgeItem: Equatable {
     let icon: NSImage
 }
 
+@MainActor
 @Observable
 final class NotificationService {
     var badges: [String: BadgeItem] = [:]
