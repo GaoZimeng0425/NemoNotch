@@ -298,10 +298,10 @@ final class ClaudeProvider: AIProvider {
               let filePath = ConversationParser.conversationPath(sessionId: sessionId, cwd: cwd) else { return }
 
         let offset = session.lastParsedOffset
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
 
-            DispatchQueue.main.async {
+            await MainActor.run {
                 guard let self, var session = self.sessions[sessionId] else { return }
 
                 if result.cleared {
