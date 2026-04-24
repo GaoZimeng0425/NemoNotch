@@ -109,7 +109,10 @@ final class CalendarService {
                 startDate: ek.startDate,
                 endDate: ek.endDate,
                 calendarColor: ek.calendar.cgColor,
-                isAllDay: ek.isAllDay
+                isAllDay: ek.isAllDay,
+                url: ek.url,
+                location: ek.location,
+                notes: ek.notes
             )
             grouped[key, default: []].append(event)
         }
