@@ -1,4 +1,4 @@
-import AppKit
+@preconcurrency import AppKit
 
 final class EventMonitor {
     static let shared = EventMonitor()
