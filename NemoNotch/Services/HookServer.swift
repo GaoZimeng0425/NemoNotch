@@ -3,23 +3,24 @@ import Foundation
 @Observable
 final class HookServer {
     private(set) var isRunning = false
-    private var socketFd: Int32 = -1
-    private var acceptSource: DispatchSourceRead?
+    nonisolated(unsafe) private var socketFd: Int32 = -1
+    nonisolated(unsafe) private var acceptSource: DispatchSourceRead?
     private let socketQueue = DispatchQueue(label: "com.nemonotch.hookserver", qos: .userInitiated)
 
-    private var responseWaiters: [String: (String) -> Void] = [:]
+    nonisolated(unsafe) private var responseWaiters: [String: (String) -> Void] = [:]
 
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: (() -> Void)?
 
     func start() {
+        let socketPath = NotchConstants.hookSocketPath
         socketQueue.async { [weak self] in
-            self?.doStart()
+            self?.doStart(socketPath: socketPath)
         }
     }
 
-    private func doStart() {
-        unlink(NotchConstants.hookSocketPath)
+    nonisolated private func doStart(socketPath: String) {
+        unlink(socketPath)
 
         socketFd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard socketFd >= 0 else {
@@ -32,7 +33,7 @@ final class HookServer {
 
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
-        _ = NotchConstants.hookSocketPath.withCString { ptr in
+        _ = socketPath.withCString { ptr in
             strncpy(&addr.sun_path.0, ptr, 103)
         }
 
@@ -64,10 +65,10 @@ final class HookServer {
         }
         acceptSource?.resume()
 
-        LogService.info("Hook server listening on \(NotchConstants.hookSocketPath)", category: "HookServer")
+        LogService.info("Hook server listening on \(socketPath)", category: "HookServer")
     }
 
-    private func acceptConnection() {
+    nonisolated private func acceptConnection() {
         var addr = sockaddr_un()
         var addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
         let clientFd = withUnsafeMutablePointer(to: &addr) { ptr in
@@ -79,7 +80,7 @@ final class HookServer {
         readRequest(fd: clientFd)
     }
 
-    private func readRequest(fd: Int32) {
+    nonisolated private func readRequest(fd: Int32) {
         var buffer = Data()
         var tempBuf = [UInt8](repeating: 0, count: 4096)
 
@@ -100,7 +101,7 @@ final class HookServer {
             close(fd)
             return
         }
-        
+
         LogService.debug("Raw message received: \(message)", category: "HookServer")
 
         guard let data = message.data(using: .utf8),
@@ -132,7 +133,7 @@ final class HookServer {
         }
     }
 
-    private func handlePermissionRequest(_ event: HookEvent, fd: Int32) {
+    nonisolated private func handlePermissionRequest(_ event: HookEvent, fd: Int32) {
         guard let sessionId = event.sessionId else {
             sendResponse(fd: fd, response: #"{"decision":"deny","reason":"no session id"}"#)
             return
@@ -170,7 +171,7 @@ final class HookServer {
         }
     }
 
-    private func sendResponse(fd: Int32, response: String) {
+    nonisolated private func sendResponse(fd: Int32, response: String) {
         let data = (response + "\n").data(using: .utf8) ?? Data()
         _ = data.withUnsafeBytes { ptr in
             write(fd, ptr.baseAddress, data.count)

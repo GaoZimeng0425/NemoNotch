@@ -33,19 +33,19 @@ final class LogService {
 }
 
 extension LogService {
-    static func debug(_ message: String, category: String = "App") {
+    nonisolated static func debug(_ message: String, category: String = "App") {
         DDLogDebug("[\(category)] \(message)")
     }
 
-    static func info(_ message: String, category: String = "App") {
+    nonisolated static func info(_ message: String, category: String = "App") {
         DDLogInfo("[\(category)] \(message)")
     }
 
-    static func warn(_ message: String, category: String = "App") {
+    nonisolated static func warn(_ message: String, category: String = "App") {
         DDLogWarn("[\(category)] \(message)")
     }
 
-    static func error(_ message: String, category: String = "App") {
+    nonisolated static func error(_ message: String, category: String = "App") {
         DDLogError("[\(category)] \(message)")
     }
 }
