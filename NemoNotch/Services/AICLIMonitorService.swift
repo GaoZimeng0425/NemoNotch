@@ -17,6 +17,7 @@ final class AICLIMonitorService {
 
         claude.setHookServer(hookServer)
         gemini.setHookServer(hookServer)
+        claude.scanExistingSessions()
         gemini.scanExistingSessions()
 
         hookServer.onEventReceived = { [weak self] event in

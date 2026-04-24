@@ -27,6 +27,74 @@ final class ClaudeProvider: AIProvider {
         hookServer = server
     }
 
+    // MARK: - Startup Scan
+
+    func scanExistingSessions() {
+        let fm = FileManager.default
+        let projectsDir = NSString(string: "~/.claude/projects").expandingTildeInPath
+        guard let projectDirs = try? fm.contentsOfDirectory(atPath: projectsDir) else { return }
+
+        let threshold = Date().addingTimeInterval(-3600)
+        var discovered = 0
+
+        for dir in projectDirs {
+            let fullDir = "\(projectsDir)/\(dir)"
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: fullDir, isDirectory: &isDir), isDir.boolValue else { continue }
+
+            guard let files = try? fm.contentsOfDirectory(atPath: fullDir) else { continue }
+            for file in files where file.hasSuffix(".jsonl") {
+                let filePath = "\(fullDir)/\(file)"
+                guard let attrs = try? fm.attributesOfItem(atPath: filePath),
+                      let modDate = attrs[.modificationDate] as? Date,
+                      modDate > threshold else { continue }
+
+                let sessionId = String(file.dropLast(5)) // remove ".jsonl"
+                if sessions[sessionId] != nil { continue }
+
+                var session = AISessionState(sessionId: sessionId, source: .claude)
+                session.lastEventTime = modDate
+
+                // Extract cwd from directory name
+                let cwdEncoded = dir.hasPrefix("-") ? String(dir.dropFirst()) : dir
+                let cwd = "/" + cwdEncoded.replacingOccurrences(of: "-", with: "/")
+                session.cwd = cwd
+
+                let result = ConversationParser.parseFull(filePath: filePath)
+                session.messages = result.messages
+                session.inputTokens = result.inputTokens
+                session.outputTokens = result.outputTokens
+                session.cacheReadTokens = result.cacheReadTokens
+                session.cacheCreationTokens = result.cacheCreationTokens
+                if result.lastContextTokens > 0 { session.lastContextTokens = result.lastContextTokens }
+                if let model = result.lastModel { session.model = model }
+
+                let userMessages = result.messages.filter { $0.role == .user }
+                if let first = userMessages.first { session.firstUserMessage = String(first.content.prefix(80)) }
+                if let last = userMessages.last { session.lastUserMessage = String(last.content.prefix(80)) }
+
+                let meaningful = result.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
+                if let lastMsg = meaningful.last {
+                    switch lastMsg.role {
+                    case .user: session.phase = .processing
+                    case .assistant: session.phase = .waitingForInput
+                    default: session.phase = .idle
+                    }
+                } else {
+                    session.phase = .idle
+                }
+
+                sessions[sessionId] = session
+                discovered += 1
+            }
+        }
+
+        if discovered > 0 {
+            LogService.info("Claude: discovered \(discovered) existing session(s)", category: "ClaudeProvider")
+            updateActiveSession()
+        }
+    }
+
     func installHooks() {
         do {
             try HookInstaller.install(.claude)

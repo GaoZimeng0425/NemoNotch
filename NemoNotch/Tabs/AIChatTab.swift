@@ -2,21 +2,20 @@ import SwiftUI
 
 struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
-    let source: AISource
     @State private var selectedSessionId: String?
 
-    private var provider: any AIProvider {
-        source == .claude ? (aiService.claudeProvider as any AIProvider) : (aiService.geminiProvider as any AIProvider)
+    private var allSessions: [AISessionState] {
+        let claudeSessions = Array(aiService.claudeProvider.sessions.values)
+        let geminiSessions = Array(aiService.geminiProvider.sessions.values)
+        return (claudeSessions + geminiSessions).sorted { $0.lastEventTime > $1.lastEventTime }
     }
 
-    private var allSessions: [AISessionState] {
-        let sessions = Array(provider.sessions.values)
-        LogService.debug("AIChatTab (\(source.rawValue)) sessions count: \(sessions.count)", category: "AIChatTab")
-        return sessions
+    private var anyHookInstalled: Bool {
+        aiService.claudeProvider.isHookInstalled || aiService.geminiProvider.isHookInstalled
     }
 
     var body: some View {
-        if !provider.isHookInstalled {
+        if !anyHookInstalled {
             installPrompt
         } else if allSessions.isEmpty {
             idleState
@@ -29,12 +28,14 @@ struct AIChatTab: View {
 
     private var installPrompt: some View {
         VStack(spacing: 10) {
-            sourceIcon(source, size: 28)
-            Text("\(source.rawValue.capitalized) CLI Hooks 未安装")
+            Image(systemName: "cpu")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(NotchTheme.textSecondary)
+            Text("AI CLI Hooks 未安装")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             Button("安装 Hooks") {
-                provider.installHooks()
+                aiService.installHooks()
             }
             .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
@@ -43,8 +44,10 @@ struct AIChatTab: View {
 
     private var idleState: some View {
         VStack(spacing: 8) {
-            sourceIcon(source, size: 28)
-            Text("无活跃 \(source.rawValue.capitalized) 会话")
+            Image(systemName: "cpu")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(NotchTheme.textSecondary)
+            Text("无活跃 AI 会话")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             serverStatus
@@ -176,9 +179,9 @@ struct AIChatTab: View {
                 }
             }
             Spacer(minLength: 0)
-            Button("拒绝") { provider.respondToPermission(sessionId: session.id, approved: false) }
+            Button("拒绝") { aiService.respondToPermission(sessionId: session.id, approved: false) }
                 .buttonStyle(NotchPillButtonStyle())
-            Button("允许") { provider.respondToPermission(sessionId: session.id, approved: true) }
+            Button("允许") { aiService.respondToPermission(sessionId: session.id, approved: true) }
                 .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
         .padding(.horizontal, 8)
@@ -373,14 +376,14 @@ struct AIChatTab: View {
                         .clipShape(Capsule(style: .continuous))
                 } else {
                     Button {
-                        provider.respondToPermission(sessionId: session.id, approved: false)
+                        aiService.respondToPermission(sessionId: session.id, approved: false)
                     } label: {
                         Text("拒绝")
                     }
                     .buttonStyle(NotchPillButtonStyle())
 
                     Button {
-                        provider.respondToPermission(sessionId: session.id, approved: true)
+                        aiService.respondToPermission(sessionId: session.id, approved: true)
                     } label: {
                         Text("允许")
                     }
@@ -426,6 +429,6 @@ struct AIChatTab: View {
     }
 
     private func sessionById(_ id: String) -> AISessionState? {
-        provider.sessions[id]
+        aiService.claudeProvider.sessions[id] ?? aiService.geminiProvider.sessions[id]
     }
 }

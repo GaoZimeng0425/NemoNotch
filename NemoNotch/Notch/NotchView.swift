@@ -51,8 +51,7 @@ struct NotchView: View {
             switch self {
             case .notification: .media
             case .media: .media
-            case .ai(let source, _, _, _):
-                source == .claude ? .claude : .gemini
+            case .ai: .claude
             case .openclaw: .openclaw
             case .calendar: .calendar
             }
@@ -326,9 +325,7 @@ struct NotchView: View {
         case .calendar:
             CalendarTab()
         case .claude:
-            AIChatTab(source: .claude)
-        case .gemini:
-            AIChatTab(source: .gemini)
+            AIChatTab()
         case .openclaw:
             OpenClawTab()
         case .launcher:

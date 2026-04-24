@@ -203,25 +203,15 @@ final class GeminiProvider: AIProvider {
             session.lastUserMessage = String(last.content.prefix(80))
         }
 
-        let fileAge: TimeInterval = {
-            guard let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
-                  let modDate = attrs[.modificationDate] as? Date else { return .infinity }
-            return Date().timeIntervalSince(modDate)
-        }()
-
-        if fileAge > 120 {
-            session.phase = .idle
-            return
-        }
-
         let meaningful = result.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
         if let lastMsg = meaningful.last {
             switch lastMsg.role {
-            case .user where fileAge < 30: session.phase = .processing
-            case .user: session.phase = .idle
-            case .assistant where fileAge < 30: session.phase = .waitingForInput
+            case .user: session.phase = .processing
+            case .assistant: session.phase = .waitingForInput
             default: session.phase = .idle
             }
+        } else {
+            session.phase = .idle
         }
     }
 
@@ -240,7 +230,6 @@ final class GeminiProvider: AIProvider {
     private func pollFileChanges() {
         let monitored = fileMonitoredSessions
         var staleIds: Set<String> = []
-        let staleThreshold = Date().addingTimeInterval(-1800)
         var changedSessions: [(String, Date)] = []
         var degradedIds: Set<String> = []
 
@@ -249,10 +238,6 @@ final class GeminiProvider: AIProvider {
                   let session = sessions[sessionId] else { continue }
 
             if !FileManager.default.fileExists(atPath: filePath) {
-                staleIds.insert(sessionId)
-                continue
-            }
-            if session.lastEventTime < staleThreshold {
                 staleIds.insert(sessionId)
                 continue
             }
