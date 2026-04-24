@@ -23,17 +23,26 @@ final class MediaService {
 
     func togglePlayPause() {
         remote.sendCommand(.togglePlayPause)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateNowPlaying() }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            self?.updateNowPlaying()
+        }
     }
 
     func nextTrack() {
         remote.sendCommand(.nextTrack)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateNowPlaying() }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            self?.updateNowPlaying()
+        }
     }
 
     func previousTrack() {
         remote.sendCommand(.previousTrack)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateNowPlaying() }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            self?.updateNowPlaying()
+        }
     }
 
     deinit {
