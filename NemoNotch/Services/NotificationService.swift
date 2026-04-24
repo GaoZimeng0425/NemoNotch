@@ -40,7 +40,9 @@ final class NotificationService {
     }
 
     deinit {
-        pollTimer?.invalidate()
+        MainActor.assumeIsolated {
+            pollTimer?.invalidate()
+        }
     }
 
     // MARK: - Polling

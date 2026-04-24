@@ -33,7 +33,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    deinit { timer?.invalidate() }
+    deinit { MainActor.assumeIsolated { timer?.invalidate() } }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         if manager.authorizationStatus == .authorizedAlways {

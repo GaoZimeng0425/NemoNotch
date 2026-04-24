@@ -1,5 +1,10 @@
 import AppKit
-import Foundation
+@preconcurrency import Foundation
+
+private struct NowPlayingInfoBox: @unchecked Sendable {
+    nonisolated(unsafe) let info: [String: Any]?
+    nonisolated init(info: [String: Any]?) { self.info = info }
+}
 
 @Observable
 final class MediaService {
@@ -46,8 +51,10 @@ final class MediaService {
     }
 
     deinit {
-        pollTimer?.invalidate()
-        progressTimer?.invalidate()
+        MainActor.assumeIsolated {
+            pollTimer?.invalidate()
+            progressTimer?.invalidate()
+        }
     }
 
     private func setupNotifications() {
@@ -97,18 +104,17 @@ final class MediaService {
 
         isUpdatingNowPlaying = true
 
-        let finish: () -> Void = { [weak self] in
-            self?.isUpdatingNowPlaying = false
-            if self?.needsFollowupUpdate == true {
-                self?.needsFollowupUpdate = false
-                self?.updateNowPlaying()
-            }
-        }
-
         nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
-            guard let self else { finish(); return }
-            self.applyInfo(cliInfo)
-            finish()
+            let box = NowPlayingInfoBox(info: cliInfo)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.applyInfo(box.info)
+                self.isUpdatingNowPlaying = false
+                if self.needsFollowupUpdate {
+                    self.needsFollowupUpdate = false
+                    self.updateNowPlaying()
+                }
+            }
         }
     }
 

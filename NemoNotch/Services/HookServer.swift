@@ -192,6 +192,8 @@ final class HookServer {
     }
 
     deinit {
-        stop()
+        MainActor.assumeIsolated {
+            stop()
+        }
     }
 }

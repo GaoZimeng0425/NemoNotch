@@ -37,7 +37,9 @@ final class HotkeyService {
     }
 
     deinit {
-        unregisterAll()
+        MainActor.assumeIsolated {
+            unregisterAll()
+        }
     }
 
     private func installEventHandlerIfNeeded() {

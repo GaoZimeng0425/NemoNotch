@@ -74,7 +74,7 @@ struct MenuContent: View {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
-    nonisolated(unsafe) static var shared = AppDelegate()
+    static var shared = AppDelegate()
 
     private(set) var coordinator: NotchCoordinator?
     private var appSettings: AppSettings?

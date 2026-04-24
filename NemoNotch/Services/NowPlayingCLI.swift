@@ -52,12 +52,14 @@ final class NowPlayingCLI {
     }
 
     deinit {
-        stopDaemon()
+        MainActor.assumeIsolated {
+            stopDaemon()
+        }
     }
 
     // MARK: - Public API
 
-    func fetchNowPlayingInfo(completion: @escaping ([String: Any]?) -> Void) {
+    func fetchNowPlayingInfo(completion: @Sendable @escaping ([String: Any]?) -> Void) {
         queue.async {
             if self.ensureDaemon() {
                 self.fetchViaDaemon(completion: completion)
@@ -136,7 +138,7 @@ final class NowPlayingCLI {
 
     // MARK: - Daemon Fetch
 
-    private func fetchViaDaemon(completion: @escaping ([String: Any]?) -> Void) {
+    private func fetchViaDaemon(completion: @Sendable @escaping ([String: Any]?) -> Void) {
         guard pendingCompletion == nil else {
             DispatchQueue.main.async { completion(nil) }
             return
@@ -200,7 +202,7 @@ final class NowPlayingCLI {
 
     // MARK: - Fallback (one-shot processes)
 
-    private func fetchUsingFallbacks(from index: Int, completion: @escaping ([String: Any]?) -> Void) {
+    private func fetchUsingFallbacks(from index: Int, completion: @Sendable @escaping ([String: Any]?) -> Void) {
         guard index < fallbackHelpers.count else {
             DispatchQueue.main.async { completion(nil) }
             return

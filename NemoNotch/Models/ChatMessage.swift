@@ -8,7 +8,7 @@ enum ChatMessageRole: String, Codable {
     case system
 }
 
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Sendable {
     let id: String
     let role: ChatMessageRole
     let content: String
@@ -16,7 +16,7 @@ struct ChatMessage: Identifiable {
     let toolInput: String?
     let timestamp: Date
 
-    init(id: String, role: ChatMessageRole, content: String, toolName: String? = nil, toolInput: String? = nil, timestamp: Date = Date()) {
+    nonisolated init(id: String, role: ChatMessageRole, content: String, toolName: String? = nil, toolInput: String? = nil, timestamp: Date = Date()) {
         self.id = id
         self.role = role
         self.content = content

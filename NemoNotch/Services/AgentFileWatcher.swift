@@ -143,7 +143,9 @@ final class AgentFileWatcher {
     }
 
     deinit {
-        stop()
+        MainActor.assumeIsolated {
+            stop()
+        }
     }
 }
 
