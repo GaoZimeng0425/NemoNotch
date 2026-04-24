@@ -27,7 +27,7 @@ enum Tab: String, CaseIterable, Identifiable {
         switch self {
         case .media: "媒体"
         case .calendar: "日历"
-        case .claude: "Claude"
+        case .claude: "AI"
         case .openclaw: "OpenClaw"
         case .launcher: "启动器"
         case .weather: "天气"

@@ -13,9 +13,9 @@ struct NemoNotchApp: App {
                 coordinator: appDelegate.coordinator,
                 onOpenSettings: { appDelegate.showSettings() }
             )
-            .environment(appDelegate.claudeCodeService ?? ClaudeCodeService())
+            .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
         } label: {
-            Image(systemName: appDelegate.claudeCodeService?.isHookInstalled == true
+            Image(systemName: appDelegate.aiMonitorService?.anyHookInstalled == true
                 ? "menubar.rectangle.fill"
                 : "menubar.rectangle")
         }
@@ -30,7 +30,7 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    @Environment(ClaudeCodeService.self) var claudeCodeService
+    @Environment(AICLIMonitorService.self) var aiService
     let coordinator: NotchCoordinator?
     let onOpenSettings: () -> Void
 
@@ -41,11 +41,18 @@ struct MenuContent: View {
 
         Divider()
 
-        if claudeCodeService.isHookInstalled {
+        if aiService.claudeProvider.isHookInstalled {
             Text("Claude Code Hooks: 已安装 ✓")
         } else {
             Button("安装 Claude Code Hooks...") {
-                claudeCodeService.installHooks()
+                aiService.claudeProvider.installHooks()
+            }
+        }
+        if aiService.geminiProvider.isHookInstalled {
+            Text("Gemini CLI Hooks: 已安装 ✓")
+        } else {
+            Button("安装 Gemini CLI Hooks...") {
+                aiService.geminiProvider.installHooks()
             }
         }
 
@@ -73,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var appSettings: AppSettings?
     private var mediaService: MediaService?
     private var calendarService: CalendarService?
-    private(set) var claudeCodeService: ClaudeCodeService?
+    private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
@@ -90,10 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let settings = AppSettings()
         let media = MediaService()
         let calendar = CalendarService()
-        let claude = ClaudeCodeService()
+        let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
 
-        claude.startServer()
+        aiMonitor.startServer()
 
         let openClaw = OpenClawService()
         openClaw.connect()
@@ -102,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.appSettings = settings
         self.mediaService = media
         self.calendarService = calendar
-        self.claudeCodeService = claude
+        self.aiMonitorService = aiMonitor
         self.launcherService = launcher
 
         let notification = NotificationService(monitoredApps: settings.monitoredApps)
@@ -121,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(settings)
                     .environment(media)
                     .environment(calendar)
-                    .environment(claude)
+                    .environment(aiMonitor)
                     .environment(openClaw)
                     .environment(launcher)
                     .environment(notification)
@@ -131,7 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         notchCoordinator.autoSelectTab = { [weak self] in
             guard let self else { return nil }
-            if self.claudeCodeService?.activeSession?.status == .working { return .claude }
+            if let session = self.aiMonitorService?.activeSession, session.status == .working {
+                return .claude
+            }
             if self.openClawService?.activeAgent != nil { return .openclaw }
             if self.mediaService?.playbackState.isPlaying == true { return .media }
             return nil
@@ -149,12 +158,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if settingsWindow == nil,
            let settings = appSettings,
-           let claude = claudeCodeService,
+           let aiMonitor = aiMonitorService,
            let launcher = launcherService,
            let notification = notificationService {
             let view = SettingsView()
                 .environment(settings)
-                .environment(claude)
+                .environment(aiMonitor)
                 .environment(launcher)
                 .environment(notification)
             let window = SettingsWindow(rootView: view)

@@ -23,6 +23,7 @@ struct LauncherTab: View {
                 }
                 .padding(.horizontal, 6)
             }
+            .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 12)

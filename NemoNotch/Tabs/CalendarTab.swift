@@ -89,6 +89,7 @@ struct CalendarTab: View {
                     }
                     .padding(.horizontal, 4)
                 }
+                .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
             }
         }
     }
