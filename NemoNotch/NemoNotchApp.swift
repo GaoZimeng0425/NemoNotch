@@ -138,7 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         notchCoordinator.autoSelectTab = { [weak self] in
             guard let self else { return nil }
-            if self.aiMonitorService?.activeSession?.status == .working { return .claude }
+            if let session = self.aiMonitorService?.activeSession, session.status == .working {
+                return session.source == .gemini ? .gemini : .claude
+            }
             if self.openClawService?.activeAgent != nil { return .openclaw }
             if self.mediaService?.playbackState.isPlaying == true { return .media }
             return nil

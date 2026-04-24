@@ -30,7 +30,14 @@ final class AppSettings {
         self.defaultTab = storedTab ?? .media
 
         let storedTabs = UserDefaults.standard.stringArray(forKey: "enabledTabs")?.compactMap { Tab(rawValue: $0) }
-        self.enabledTabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
+        var tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
+        
+        // Ensure newly added tabs are enabled by default
+        if storedTabs != nil && !tabs.contains(.gemini) {
+            tabs.insert(.gemini)
+        }
+        
+        self.enabledTabs = tabs
 
         if let data = UserDefaults.standard.data(forKey: "launcherApps"),
            let apps = try? JSONDecoder().decode([AppItem].self, from: data)

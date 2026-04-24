@@ -1,17 +1,22 @@
 import SwiftUI
 
-struct ClaudeTab: View {
+struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
+    let source: AISource
     @State private var selectedSessionId: String?
 
+    private var provider: any AIProvider {
+        source == .claude ? (aiService.claudeProvider as any AIProvider) : (aiService.geminiProvider as any AIProvider)
+    }
+
     private var allSessions: [AISessionState] {
-        let claude = aiService.claudeProvider.sessions.values
-        let gemini = aiService.geminiProvider.sessions.values
-        return Array(claude) + Array(gemini)
+        let sessions = Array(provider.sessions.values)
+        LogService.debug("AIChatTab (\(source.rawValue)) sessions count: \(sessions.count)", category: "AIChatTab")
+        return sessions
     }
 
     var body: some View {
-        if !aiService.anyHookInstalled {
+        if !provider.isHookInstalled {
             installPrompt
         } else if allSessions.isEmpty {
             idleState
@@ -24,12 +29,12 @@ struct ClaudeTab: View {
 
     private var installPrompt: some View {
         VStack(spacing: 10) {
-            ClaudeCrabIcon(size: 28)
-            Text("AI CLI Hooks 未安装")
+            sourceIcon(source, size: 28)
+            Text("\(source.rawValue.capitalized) CLI Hooks 未安装")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             Button("安装 Hooks") {
-                aiService.installHooks()
+                provider.installHooks()
             }
             .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
@@ -38,8 +43,8 @@ struct ClaudeTab: View {
 
     private var idleState: some View {
         VStack(spacing: 8) {
-            ClaudeCrabIcon(size: 28)
-            Text("无活跃会话")
+            sourceIcon(source, size: 28)
+            Text("无活跃 \(source.rawValue.capitalized) 会话")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             serverStatus
@@ -124,7 +129,7 @@ struct ClaudeTab: View {
 
             Divider().background(NotchTheme.stroke)
 
-            if let ctx = approvalContext(for: session), session.source == .claude {
+            if let ctx = approvalContext(for: session) {
                 quickApprovalBar(session: session, ctx: ctx)
             }
 
@@ -163,17 +168,17 @@ struct ClaudeTab: View {
                 Text("等待审批: \(ctx.toolName)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(NotchTheme.accent)
-                if !ctx.displayInput.isEmpty {
-                    Text(ctx.displayInput)
+                if let input = ctx.toolInput, !input.isEmpty {
+                    Text(input)
                         .font(.system(size: 9))
                         .foregroundStyle(NotchTheme.textTertiary)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
-            Button("拒绝") { aiService.respondToPermission(sessionId: session.id, approved: false) }
+            Button("拒绝") { provider.respondToPermission(sessionId: session.id, approved: false) }
                 .buttonStyle(NotchPillButtonStyle())
-            Button("允许") { aiService.respondToPermission(sessionId: session.id, approved: true) }
+            Button("允许") { provider.respondToPermission(sessionId: session.id, approved: true) }
                 .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
         .padding(.horizontal, 8)
@@ -253,7 +258,7 @@ struct ClaudeTab: View {
 
                 Spacer(minLength: 0)
 
-                if let ctx = approvalContext(for: session), session.source == .claude {
+                if let ctx = approvalContext(for: session) {
                     approvalButtons(for: session, ctx: ctx)
                 } else {
                     Circle()
@@ -349,8 +354,8 @@ struct ClaudeTab: View {
                 Text(ctx.toolName)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(.orange.opacity(0.9))
-                if !ctx.displayInput.isEmpty {
-                    Text(ctx.displayInput)
+                if let input = ctx.toolInput, !input.isEmpty {
+                    Text(input)
                         .font(.system(size: 9))
                         .foregroundStyle(NotchTheme.textTertiary)
                         .lineLimit(1)
@@ -368,14 +373,14 @@ struct ClaudeTab: View {
                         .clipShape(Capsule(style: .continuous))
                 } else {
                     Button {
-                        aiService.respondToPermission(sessionId: session.id, approved: false)
+                        provider.respondToPermission(sessionId: session.id, approved: false)
                     } label: {
                         Text("拒绝")
                     }
                     .buttonStyle(NotchPillButtonStyle())
 
                     Button {
-                        aiService.respondToPermission(sessionId: session.id, approved: true)
+                        provider.respondToPermission(sessionId: session.id, approved: true)
                     } label: {
                         Text("允许")
                     }
@@ -421,6 +426,6 @@ struct ClaudeTab: View {
     }
 
     private func sessionById(_ id: String) -> AISessionState? {
-        aiService.claudeProvider.sessions[id] ?? aiService.geminiProvider.sessions[id]
+        provider.sessions[id]
     }
 }

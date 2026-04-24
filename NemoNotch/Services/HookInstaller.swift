@@ -18,8 +18,8 @@ enum HookTarget {
             "SessionEnd", "Notification", "UserPromptSubmit", "PermissionRequest",
         ]
         case .gemini: return [
-            "PreToolUse", "PostToolUse", "Stop", "SessionStart",
-            "SessionEnd", "Notification", "UserPromptSubmit",
+            "SessionStart", "SessionEnd", "Notification",
+            "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
         ]
         }
     }
@@ -31,7 +31,7 @@ enum HookInstaller {
     private static var hookCommand: String { "~/.nemonotch/hooks/hook-sender.sh" }
     private static let socketPath = NotchConstants.hookSocketPath
 
-    private static let scriptVersion = "# version: 5"
+    private static let scriptVersion = "# version: 9"
 
     static func isInstalled(_ target: HookTarget) -> Bool {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
@@ -61,6 +61,23 @@ enum HookInstaller {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
+        
+        // 1. Clean up ALL existing nemonotch hooks from ALL events first
+        for (event, entries) in hooks {
+            if var eventEntries = entries as? [[String: Any]] {
+                eventEntries.removeAll { entry in
+                    guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
+                    return innerHooks.contains { ($0["command"] as? String) == hookCommand }
+                }
+                if eventEntries.isEmpty {
+                    hooks.removeValue(forKey: event)
+                } else {
+                    hooks[event] = eventEntries
+                }
+            }
+        }
+
+        // 2. Register only currently supported events
         let hookEntry: [String: Any] = [
             "matcher": "",
             "hooks": [["type": "command", "command": hookCommand]],
@@ -68,13 +85,7 @@ enum HookInstaller {
 
         for event in target.hookEvents {
             var entries = hooks[event] as? [[String: Any]] ?? []
-            let alreadyRegistered = entries.contains { entry in
-                guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                return innerHooks.contains { ($0["command"] as? String) == hookCommand }
-            }
-            if !alreadyRegistered {
-                entries.append(hookEntry)
-            }
+            entries.append(hookEntry)
             hooks[event] = entries
         }
 
@@ -132,12 +143,27 @@ enum HookInstaller {
         [ -S "$SOCKET" ] || exit 0
 
         # Detect which CLI invoked this hook
-        PARENT=$(ps -o comm= -p $PPID 2>/dev/null || echo "")
-        case "$PARENT" in
-            *gemini*)  CLI_SOURCE="gemini" ;;
-            *claude*)  CLI_SOURCE="claude" ;;
-            *)         CLI_SOURCE="unknown" ;;
-        esac
+        if [ -n "$GEMINI_SESSION_ID" ]; then
+            CLI_SOURCE="gemini"
+        elif [ -n "$CLAUDE_SESSION_ID" ]; then
+            CLI_SOURCE="claude"
+        else
+            # Try to peek into node/bun arguments
+            PARENT_PID=$PPID
+            COMMAND_LINE=$(ps -o args= -p $PARENT_PID 2>/dev/null || echo "")
+            if echo "$COMMAND_LINE" | grep -q "gemini"; then
+                CLI_SOURCE="gemini"
+            elif echo "$COMMAND_LINE" | grep -q "claude"; then
+                CLI_SOURCE="claude"
+            else
+                PARENT=$(ps -o comm= -p $PARENT_PID 2>/dev/null || echo "")
+                case "$PARENT" in
+                    *gemini*)  CLI_SOURCE="gemini" ;;
+                    *claude*)  CLI_SOURCE="claude" ;;
+                    *)         CLI_SOURCE="unknown" ;;
+                esac
+            fi
+        fi
 
         INPUT=$(cat 2>/dev/null || echo '{}')
 
@@ -145,9 +171,14 @@ enum HookInstaller {
         if command -v python3 &>/dev/null; then
             INPUT=$(echo "$INPUT" | python3 -c "
         import sys, json
-        d = json.load(sys.stdin)
-        d['cli_source'] = '$CLI_SOURCE'
-        json.dump(d, sys.stdout)
+        try:
+            d = json.load(sys.stdin)
+            d['cli_source'] = '$CLI_SOURCE'
+            json.dump(d, sys.stdout)
+        except Exception as e:
+            with open('/tmp/nemonotch_hook_error.log', 'a') as f:
+                f.write(str(e) + '\\n')
+            sys.exit(1)
         " 2>/dev/null || echo "$INPUT")
         fi
 

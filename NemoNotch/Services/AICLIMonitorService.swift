@@ -16,6 +16,8 @@ final class AICLIMonitorService {
         self.hookServer = HookServer()
 
         claude.setHookServer(hookServer)
+        gemini.setHookServer(hookServer)
+        gemini.scanExistingSessions()
 
         hookServer.onEventReceived = { [weak self] event in
             self?.routeEvent(event)
@@ -52,18 +54,39 @@ final class AICLIMonitorService {
     func respondToPermission(sessionId: String, approved: Bool) {
         if claudeProvider.sessions[sessionId] != nil {
             claudeProvider.respondToPermission(sessionId: sessionId, approved: approved)
+        } else if geminiProvider.sessions[sessionId] != nil {
+            geminiProvider.respondToPermission(sessionId: sessionId, approved: approved)
         }
     }
 
     // MARK: - Event Routing
 
     private func routeEvent(_ event: HookEvent) {
-        let source = event.cliSource ?? "claude"
+        var source = event.cliSource ?? "unknown"
+        LogService.debug("Incoming event: \(event.hookEventName), raw source: \(event.cliSource ?? "nil"), session: \(event.sessionId ?? "nil")", category: "AICLIMonitorService")
+        
+        // Fallback detection if cliSource is unknown
+        if source == "unknown" {
+            let combined = "\(event.message ?? "") \(event.toolName ?? "") \(event.cwd ?? "")".lowercased()
+            if combined.contains("gemini") || combined.contains("glm") {
+                source = "gemini"
+            }
+        }
+        
+        LogService.info("Routing event \(event.hookEventName) to \(source)", category: "AICLIMonitorService")
+        
         switch source {
         case "gemini":
             geminiProvider.handleEvent(event)
-        default:
+        case "claude":
             claudeProvider.handleEvent(event)
+        default:
+            // Final fallback: try to find which provider has this session
+            if geminiProvider.sessions[event.sessionId ?? ""] != nil {
+                geminiProvider.handleEvent(event)
+            } else {
+                claudeProvider.handleEvent(event)
+            }
         }
     }
 

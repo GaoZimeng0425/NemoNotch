@@ -51,7 +51,8 @@ struct NotchView: View {
             switch self {
             case .notification: .media
             case .media: .media
-            case .ai: .claude
+            case .ai(let source, _, _, _):
+                source == .claude ? .claude : .gemini
             case .openclaw: .openclaw
             case .calendar: .calendar
             }
@@ -78,19 +79,31 @@ struct NotchView: View {
 
     private var activeBadgeItems: [BadgeItem] {
         var items: [BadgeItem] = []
-        if let session = aiService.activeSession, session.phase.isWaitingForApproval {
-            items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
+        
+        // AI Sessions from both providers
+        let aiSessions = [aiService.claudeProvider.activeSession, aiService.geminiProvider.activeSession].compactMap { $0 }
+        
+        // Waiting for approval takes top priority
+        for session in aiSessions {
+            if session.phase.isWaitingForApproval {
+                items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
+            }
         }
+        
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             items.append(.notification(bundleID: top.bundleID, count: top.count))
         }
         if let agent = openClawService.activeAgent {
             items.append(.openclaw(state: agent.state, emoji: agent.emoji))
         }
-        if let session = aiService.activeSession,
-           !session.phase.isWaitingForApproval && session.status == .working {
-            items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false))
+        
+        // Working sessions
+        for session in aiSessions {
+            if !session.phase.isWaitingForApproval && session.status == .working {
+                items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false))
+            }
         }
+        
         if mediaService.playbackState.isPlaying { items.append(.media) }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
@@ -184,20 +197,16 @@ struct NotchView: View {
             }
         }
         .onAppear { displayedBadgeItems = activeBadgeItems }
-        .onChange(of: activeBadgeItems) { oldTypes, newTypes in
-            if newTypes.count > oldTypes.count {
-                badgeTypeUpdateTask?.cancel()
-                withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+        .onChange(of: activeBadgeItems) { _, newTypes in
+            badgeTypeUpdateTask?.cancel()
+            badgeTypeUpdateTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled else { return }
+                let isAdd = newTypes.count > displayedBadgeItems.count
+                withAnimation(isAdd
+                    ? .spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)
+                    : .easeInOut(duration: NotchConstants.fadeNormalDuration)) {
                     displayedBadgeItems = newTypes
-                }
-            } else {
-                badgeTypeUpdateTask?.cancel()
-                badgeTypeUpdateTask = Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(500))
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
-                        displayedBadgeItems = newTypes
-                    }
                 }
             }
         }
@@ -317,7 +326,9 @@ struct NotchView: View {
         case .calendar:
             CalendarTab()
         case .claude:
-            ClaudeTab()
+            AIChatTab(source: .claude)
+        case .gemini:
+            AIChatTab(source: .gemini)
         case .openclaw:
             OpenClawTab()
         case .launcher:

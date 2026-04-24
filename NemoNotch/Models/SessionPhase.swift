@@ -48,7 +48,7 @@ enum SessionPhase: Equatable {
         if kind == next.kind { return true }
 
         switch (self, next) {
-        case (.idle, .processing), (.idle, .ended):
+        case (.idle, .processing), (.idle, .ended), (.idle, .waitingForInput), (.idle, .waitingForApproval):
             return true
         case (.processing, .waitingForInput),
              (.processing, .waitingForApproval),

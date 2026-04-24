@@ -93,10 +93,11 @@ enum GeminiConversationParser {
     static func findSessionFile(sessionId: String, cwd: String) -> String? {
         guard let projectName = projectName(for: cwd) else { return nil }
         let chatsDir = NSHomeDirectory() + "/.gemini/tmp/\(projectName)/chats"
-        let prefix = sessionId.prefix(8)
+        let shortId = String(sessionId.prefix(8))
 
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: chatsDir) else { return nil }
-        let match = files.first { $0.contains(String(prefix)) && $0.hasSuffix(".json") }
+        // Match if the filename contains the shortId (usually it's at the end before .json)
+        let match = files.first { $0.localizedCaseInsensitiveContains(shortId) && $0.hasSuffix(".json") }
         return match.map { chatsDir + "/" + $0 }
     }
 

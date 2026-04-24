@@ -1,7 +1,7 @@
 import Foundation
 
 @Observable
-final class ClaudeProvider {
+final class ClaudeProvider: AIProvider {
     let source: AISource = .claude
     var sessions: [String: AISessionState] = [:]
     var activeSession: AISessionState?
