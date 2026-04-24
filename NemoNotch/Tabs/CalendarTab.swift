@@ -89,6 +89,7 @@ struct CalendarTab: View {
                     }
                     .padding(.horizontal, 4)
                 }
+                .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
             }
         }
     }
@@ -106,6 +107,27 @@ struct CalendarTab: View {
     }
 
     private func eventRow(_ event: CalendarEvent) -> some View {
+        EventRowContent(event: event)
+            .overlay(alignment: .trailing) {
+                if event.meetingURL != nil {
+                    MeetingIcon(platform: event.meetingPlatform)
+                }
+            }
+            .opacity(event.meetingURL != nil ? 1 : event.isPast ? 0.5 : 1)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if let url = event.meetingURL {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+    }
+}
+
+private struct EventRowContent: View {
+    let event: CalendarEvent
+    @State private var isHovered = false
+
+    var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 1)
                 .fill(Color(cgColor: event.calendarColor))
@@ -116,7 +138,7 @@ struct CalendarTab: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(event.isPast ? NotchTheme.textMuted : NotchTheme.textPrimary)
                     .lineLimit(1)
-                Text(eventTimeRange(event))
+                Text(eventTimeRange)
                     .font(.system(size: 10))
                     .foregroundStyle(event.isPast ? NotchTheme.textMuted.opacity(0.75) : NotchTheme.textSecondary)
             }
@@ -127,18 +149,42 @@ struct CalendarTab: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(NotchTheme.surface)
+                .fill(isHovered && event.meetingURL != nil ? NotchTheme.surfaceEmphasis : NotchTheme.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                        .stroke(
+                            isHovered && event.meetingURL != nil ? NotchTheme.accent.opacity(0.4) : NotchTheme.stroke,
+                            lineWidth: 0.6
+                        )
                 )
         )
+        .onHover { hovering in
+            if event.meetingURL != nil {
+                isHovered = hovering
+            }
+        }
     }
 
-    private func eventTimeRange(_ event: CalendarEvent) -> String {
+    private var eventTimeRange: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         if event.isAllDay { return "全天" }
         return "\(formatter.string(from: event.startDate)) - \(formatter.string(from: event.endDate))"
+    }
+}
+
+private struct MeetingIcon: View {
+    let platform: MeetingPlatform
+
+    var body: some View {
+        Circle()
+            .fill(platform.iconColor.opacity(0.2))
+            .frame(width: 22, height: 22)
+            .overlay(
+                Image(systemName: platform.iconName)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(platform.iconColor)
+            )
+            .padding(.trailing, 6)
     }
 }

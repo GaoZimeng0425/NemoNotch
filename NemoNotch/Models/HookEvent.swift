@@ -8,6 +8,7 @@ struct HookEvent: Codable {
     let message: String?
     let cwd: String?
     let source: String?
+    let cliSource: String?
 
     enum CodingKeys: String, CodingKey {
         case hookEventName = "hook_event_name"
@@ -17,5 +18,6 @@ struct HookEvent: Codable {
         case message
         case cwd
         case source
+        case cliSource = "cli_source"
     }
 }

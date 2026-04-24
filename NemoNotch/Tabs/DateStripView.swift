@@ -21,6 +21,7 @@ struct DateStripView: View {
                 }
                 .padding(.horizontal, 8)
             }
+            .notchScrollEdgeShadow(.horizontal, thickness: 10, intensity: 0.34)
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     proxy.scrollTo(selectedDateId, anchor: .center)

@@ -84,3 +84,55 @@ struct GlowPulseModifier: ViewModifier {
             .animation(.easeInOut(duration: NotchConstants.pulseDuration * 0.7).repeatForever(autoreverses: true), value: true)
     }
 }
+
+struct ScrollEdgeShadowMaskModifier: ViewModifier {
+    let axes: Axis.Set
+    var thickness: CGFloat = 14
+    var intensity: Double = 0.42
+
+    private var shadowColor: Color {
+        Color.black.opacity(intensity)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if axes.contains(.vertical) {
+                    LinearGradient(colors: [shadowColor, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: thickness)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if axes.contains(.vertical) {
+                    LinearGradient(colors: [.clear, shadowColor], startPoint: .top, endPoint: .bottom)
+                        .frame(height: thickness)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if axes.contains(.horizontal) {
+                    LinearGradient(colors: [shadowColor, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: thickness)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if axes.contains(.horizontal) {
+                    LinearGradient(colors: [.clear, shadowColor], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: thickness)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+}
+
+extension View {
+    func notchScrollEdgeShadow(
+        _ axes: Axis.Set = .vertical,
+        thickness: CGFloat = 14,
+        intensity: Double = 0.42
+    ) -> some View {
+        modifier(ScrollEdgeShadowMaskModifier(axes: axes, thickness: thickness, intensity: intensity))
+    }
+}

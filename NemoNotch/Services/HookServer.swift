@@ -100,9 +100,12 @@ final class HookServer {
             close(fd)
             return
         }
+        
+        LogService.debug("Raw message received: \(message)", category: "HookServer")
 
         guard let data = message.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            LogService.error("Failed to parse JSON from message", category: "HookServer")
             sendResponse(fd: fd, response: #"{"error":"invalid json"}"#)
             return
         }

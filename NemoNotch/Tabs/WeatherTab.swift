@@ -34,6 +34,7 @@ struct WeatherTab: View {
             .padding(.horizontal, 4)
             .padding(.bottom, 12)
         }
+        .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
     }
 
     private var headerRow: some View {
