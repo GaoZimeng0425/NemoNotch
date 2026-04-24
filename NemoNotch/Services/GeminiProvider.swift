@@ -187,15 +187,15 @@ final class GeminiProvider: AIProvider {
     }
 
     private func applyParsedContent(to session: inout AISessionState, filePath: String) {
-        guard let result = GeminiConversationParser.parseFull(filePath: filePath) else { return }
+        guard let result = GeminiConversationParser.parseDetailed(filePath: filePath) else { return }
 
-        session.messages = result.messages
-        session.inputTokens = result.inputTokens
-        session.outputTokens = result.outputTokens
+        session.messages = result.common.messages
+        session.inputTokens = result.common.inputTokens
+        session.outputTokens = result.common.outputTokens
         session.cacheReadTokens = result.cachedTokens
-        if let model = result.lastModel { session.model = model }
+        if let model = result.common.lastModel { session.model = model }
 
-        let userMessages = result.messages.filter { $0.role == .user }
+        let userMessages = result.common.messages.filter { $0.role == .user }
         if let first = userMessages.first, session.firstUserMessage == nil {
             session.firstUserMessage = String(first.content.prefix(80))
         }
@@ -203,7 +203,7 @@ final class GeminiProvider: AIProvider {
             session.lastUserMessage = String(last.content.prefix(80))
         }
 
-        let meaningful = result.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
+        let meaningful = result.common.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
         if let lastMsg = meaningful.last {
             switch lastMsg.role {
             case .user: session.phase = .processing
@@ -318,23 +318,23 @@ final class GeminiProvider: AIProvider {
         }
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let result = GeminiConversationParser.parseFull(filePath: filePath)
+            let result = GeminiConversationParser.parseDetailed(filePath: filePath)
 
             DispatchQueue.main.async {
                 guard let self else { return }
                 var session = self.sessions[sessionId] ?? AISessionState(sessionId: sessionId, source: .gemini)
 
                 if let result = result {
-                    LogService.info("Gemini parsed \(result.messages.count) messages for \(sessionId.prefix(8))", category: "GeminiProvider")
-                    session.messages = result.messages
-                    session.inputTokens = result.inputTokens
-                    session.outputTokens = result.outputTokens
+                    LogService.info("Gemini parsed \(result.common.messages.count) messages for \(sessionId.prefix(8))", category: "GeminiProvider")
+                    session.messages = result.common.messages
+                    session.inputTokens = result.common.inputTokens
+                    session.outputTokens = result.common.outputTokens
                     session.cacheReadTokens = result.cachedTokens
-                    if let model = result.lastModel {
+                    if let model = result.common.lastModel {
                         session.model = model
                     }
 
-                    let userMessages = result.messages.filter { $0.role == .user }
+                    let userMessages = result.common.messages.filter { $0.role == .user }
                     if let first = userMessages.first, session.firstUserMessage == nil {
                         session.firstUserMessage = String(first.content.prefix(80))
                     }

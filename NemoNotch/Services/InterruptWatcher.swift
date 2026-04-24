@@ -102,7 +102,7 @@ final class InterruptWatcherManager {
     var onClear: ((String) -> Void)?
 
     func startWatching(sessionId: String, cwd: String) {
-        guard let filePath = ConversationParser.conversationPath(sessionId: sessionId, cwd: cwd) else { return }
+        guard let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
         guard watchers[sessionId] == nil else { return }
         let watcher = InterruptWatcher(sessionId: sessionId, filePath: filePath)
         watcher.onInterrupt = { [weak self] sessionId in self?.onInterrupt?(sessionId) }

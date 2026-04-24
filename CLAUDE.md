@@ -2,24 +2,24 @@
 
 ## 项目简介
 
-NemoNotch 是一个 macOS 刘海工具，在 MacBook 刘海区域提供可交互的浮动面板，集成媒体控制、日历事件、Claude Code 监控和应用启动器。
+NemoNotch 是一个 macOS 刘海工具，在 MacBook 刘海区域提供可交互的浮动面板，集成媒体控制、日历事件、AI CLI 监控（Claude Code / Gemini CLI）、OpenClaw 多代理监控和应用启动器。
 
 ## 技术栈
 
 - Swift 5 + SwiftUI，仅 macOS，依赖 CocoaLumberjack
-- 关键框架：AppKit（NSWindow）、MediaPlayer、EventKit
+- 关键框架：AppKit（NSWindow）、MediaPlayer、EventKit、IOKit
 
 ## 项目结构
 
 ```
 NemoNotch/
-├── NemoNotchApp.swift           # 入口，MenuBarExtra，全局快捷键
-├── Models/                      # 数据模型（Tab, AppSettings, PlaybackState 等）
-├── Notch/                       # 刘海 UI 核心（窗口、动画、事件监听）
-├── Tabs/                        # 各标签页内容视图
-├── Services/                    # 后台服务（媒体、日历、Claude Code、启动器）
+├── NemoNotchApp.swift           # 入口，MenuBarExtra，全局快捷键，服务装配
+├── Models/                      # 数据模型（Tab, AppSettings, AIProvider, PlaybackState 等）
+├── Notch/                       # 刘海 UI 核心（窗口、动画、事件监听、TabBar、HUD）
+├── Tabs/                        # 各标签页内容视图（AIChatTab 统一 AI 会话）
+├── Services/                    # 后台服务（媒体、日历、AI CLI、启动器等）
 ├── Settings/                    # 设置界面
-└── Helpers/                     # 工具类
+└── Helpers/                     # 工具类（MarkdownRenderer, ClaudeCrabIcon, ToolStyles）
 ```
 
 ## 架构总览
@@ -31,15 +31,16 @@ graph TB
         AD["AppDelegate<br/>生命周期 & 服务装配"]
     end
 
-    subgraph Services["Service 居 — 全部 @Observable"]
+    subgraph Services["Service 层 — 全部 @Observable"]
         MS["MediaService<br/>MediaRemote + NowPlayingCLI"]
-        CCS["ClaudeCodeService<br/>HookServer + ConversationParser"]
+        AIM["AICLIMonitorService<br/>统一 AI 入口"]
+        CCS["ClaudeCodeService<br/>AIProvider 实现<br/>HookServer + ConversationParser"]
+        GP["GeminiProvider<br/>AIProvider 实现<br/>GeminiConversationParser"]
         OCS["OpenClawService<br/>WebSocket 客户端"]
         CS["CalendarService<br/>EventKit"]
         LS["LauncherService<br/>应用搜索 & 启动"]
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
-        SS["SystemService<br/>IOKit CPU/RAM/Disk"]
         HUD["HUDService<br/>音量/亮度/电池"]
         HK["HotkeyService<br/>Carbon 全局快捷键"]
     end
@@ -50,11 +51,13 @@ graph TB
         NV["NotchView<br/>SwiftUI 主视图"]
         EM["EventMonitor<br/>鼠标事件监听"]
         CB["CompactBadge<br/>收起时的图标"]
+        TB["TabBarView<br/>标签栏导航"]
+        HO["HUDOverlayView<br/>音量/亮度叠加层"]
     end
 
     subgraph Tabs["标签页"]
         MT["MediaTab"]
-        CT["ClaudeTab"]
+        AT["AIChatTab<br/>Claude + Gemini 统一"]
         CLT["CalendarTab"]
         LT["LauncherTab"]
         OCT["OpenClawTab"]
@@ -71,9 +74,13 @@ graph TB
     App --> AD
     AD -->|"创建 & 持有"| Services
     AD -->|"创建"| NC
+    AIM --> CCS
+    AIM --> GP
     NC --> NW --> NV
     NV --> Tabs
     NV --> CB
+    NV --> TB
+    NV --> HO
     EM -->|"鼠标事件"| NC
     HK -->|"快捷键"| NC
     AS --> SV
@@ -82,43 +89,48 @@ graph TB
     AS -.->|"@Environment 注入"| NV
 ```
 
-### Claude Code 服务架构
+### AI 服务架构（多提供商）
 
 ```mermaid
 graph LR
     subgraph External["外部进程"]
         CC["Claude Code CLI"]
+        GC["Gemini CLI"]
     end
 
-    subgraph Service["ClaudeCodeService"]
+    subgraph Monitor["AICLIMonitorService"]
         HS["HookServer<br/>/tmp/nemonotch.sock"]
-        HI["HookInstaller"]
-        CP["ConversationParser"]
-        IW["InterruptWatcher"]
-        AFW["AgentFileWatcher"]
+        CP["ConversationParser<br/>Claude JSONL"]
+        GCP["GeminiConversationParser<br/>Gemini JSON"]
+    end
+
+    subgraph Providers["AIProvider 实现"]
+        CLS["ClaudeCodeService"]
+        GPR["GeminiProvider"]
     end
 
     subgraph Data["数据模型"]
-        SP["SessionPhase<br/>状态机"]
+        AIS["AISessionState<br/>统一会话状态"]
         MSG["[ChatMessage]"]
         SA["SubagentState"]
     end
 
     subgraph Files["文件系统"]
         S["~/.claude/settings.json"]
-        J["~/.claude/projects/**/*.jsonl"]
+        CJ["~/.claude/projects/**/*.jsonl"]
+        GJ["~/.gemini/tmp/*/chats/"]
     end
 
     CC -->|"hook 事件"| HS
-    HI -->|"写入 hooks"| S
-    CC -->|"触发 hooks"| S
-    CP -->|"增量解析"| J
-    IW -->|"监控中断"| J
-    AFW -->|"监控子代理"| J
-
-    HS --> SP
-    CP --> MSG
-    AFW --> SA
+    GC -->|"hook 事件"| HS
+    HS --> CLS
+    HS --> GPR
+    CP -->|"增量解析"| CJ
+    GCP -->|"增量解析"| GJ
+    CLS --> AIS
+    GPR --> AIS
+    AIS --> MSG
+    AIS --> SA
 ```
 
 ### Notch 事件流
@@ -150,28 +162,40 @@ sequenceDiagram
 ### Badge 优先级（刘海收起时）
 
 ```
-notification > openclaw active > claude approval > claude working > media playing > calendar upcoming
+notification > openclaw active > ai approval > ai working > media playing > calendar upcoming
 ```
 
 ### 技术架构
 
 **Service 层（数据源）**
 
-- 9 个 `@Observable` 服务，各自独立获取数据：MediaService 轮询 NowPlaying、ClaudeCodeService 通过 Unix Socket 接收 hook 事件、CalendarService 读 EventKit、OpenClawService 用 WebSocket 连网关等
+- 11 个服务（含 AICLIMonitorService），各自独立获取数据
+- `AICLIMonitorService` 作为统一 AI 入口，协调 `ClaudeCodeService` 和 `GeminiProvider`（均实现 `AIProvider` 协议）
 - 全部由 `AppDelegate` 在 `applicationDidFinishLaunching` 中创建，通过 `.environment()` 注入到 SwiftUI 视图树
 - 没有 Combine 或单例（除 LogService/EventMonitor），用闭包回调串联事件
+
+**AI 多提供商架构**
+
+- `AIProvider` 协议定义统一接口：sessions、activeSession、handleEvent、installHooks、respondToPermission
+- `ClaudeCodeService` 实现 AIProvider，通过 Unix Socket 接收 hook 事件，ConversationParser 增量解析 JSONL
+- `GeminiProvider` 实现 AIProvider，同样接收 hook 事件，GeminiConversationParser 解析 Gemini 会话文件
+- `AICLIMonitorService` 持有 HookServer，将事件路由到对应 provider，提供 `activeSession` 供 UI 层消费
+- `AISessionState` 统一存储会话状态（phase、tokens、messages、subagent 等），支持 `AISource` 区分来源
 
 **Notch UI 层（窗口 + 交互）**
 
 - `NotchWindow`（NSPanel 子类）浮在 `.statusBar + 8` 层级，`PassThroughView` 控制点击穿透
 - `EventMonitor`（单例）监听全局鼠标事件 → `NotchCoordinator` 管理开/关状态和 spring 动画
-- 收起时 `CompactBadge` 在刘海两侧显示状态图标，按优先级显示（notification > claude > media > calendar）
+- `TabBarView` 提供水平标签栏导航，`HUDOverlayView` 显示音量/亮度/电池分段条
+- 收起时 `CompactBadge` 在刘海两侧显示状态图标，按优先级显示（notification > ai > media > calendar）
 
 **Tab 层（内容展示）**
 
 - 7 个 Tab（media/calendar/claude/openclaw/launcher/weather/system），每个对应一个 Service
+- `claude` tab 映射到 `AIChatTab`，统一展示 Claude 和 Gemini 会话列表、对话详情、权限审批
+- `ChatMessageView` 渲染各类型消息（用户/助手/工具/系统），`MarkdownRenderer` 提供轻量 Markdown 解析
 - `NotchView` 根据 `Tab.sorted()` 渲染启用的标签页，支持滑动手势切换
-- 自动选择逻辑：Claude 工作中 → ClaudeTab，OpenClaw 有活跃代理 → OpenClawTab，媒体播放中 → MediaTab
+- 自动选择逻辑：AI 工作中 → AIChatTab，OpenClaw 有活跃代理 → OpenClawTab，媒体播放中 → MediaTab
 
 **核心数据流**：Service → @Observable 属性变化 → SwiftUI 自动重绘 → Tab 内容更新。用户交互（点击、手势）通过 EventMonitor → NotchCoordinator → 动画更新视图状态。
 
@@ -188,9 +212,9 @@ notification > openclaw active > claude approval > claude working > media playin
 | HotkeyService | **Peninsula** | Carbon `RegisterEventHotKey` 全局快捷键注册 |
 | MediaRemote 桥接 | **PlayStatus** | `dlopen`/`dlsym` 动态加载 MediaRemote.framework 私有 API |
 | NowPlayingCLI 回退策略 | **nowplaying-cli** | daemon 连接 → legacy callback → MRNowPlayingController 三级回退，dylib 路径搜索 |
-| Claude Code Hook 架构 | **masko-code** | Unix Socket 事件传递、HookInstaller 写入 `~/.claude/settings.json`、`hook-sender.sh` 进程树检测（详见 `notch.md` 逆向分析文档） |
+| AI Hook 架构 | **masko-code** | Unix Socket 事件传递、HookInstaller 写入 `~/.claude/settings.json`、`hook-sender.sh` 进程树检测 |
 | ConversationParser | **vibe-notch** | 增量 JSONL 解析、ChatMessage 结构化解析（参考其 parser 709-960 行） |
-| Claude 权限审批 UI | **vibe-notch** | PermissionRequest 审批流程、Socket JSON 响应 |
+| AI 权限审批 UI | **vibe-notch** | PermissionRequest 审批流程、Socket JSON 响应 |
 | HUDService 亮度监测 | **MonitorControl** | `DisplayServicesGetBrightness()` 私有 API，`dlopen` 动态加载 |
 | SystemService 系统监控 | **eul** | `host_processor_info` CPU 采样、`host_statistics64` 内存读取、IOKit 电池信息 |
 | CompactBadge 状态图标 | **NotchNook** | 刘海两侧图标布局风格 |
@@ -294,5 +318,16 @@ notification > openclaw active > claude approval > claude working > media playin
 ## 开发约定
 
 - 所有 Service 使用 `@Observable` 宏，通过 SwiftUI 响应式更新 UI
+- AI 提供商实现 `AIProvider` 协议，通过 `AICLIMonitorService` 统一管理
 - 刘海窗口 level 固定为 `.statusBar + 8`，属性为 `fullScreenAuxiliary` + `stationary` + `canJoinAllSpaces`
 - 优先查阅参考项目中的现成实现，避免从零造轮子
+
+### 协议优先的可扩展设计
+
+多提供商场景（AI Provider、Conversation Parser 等）采用**协议 + 具体实现**模式：
+
+- 定义协议只包含**通用接口**（如 `messages`、`tokens`、`findSessionFile`）
+- 每个 Provider/Parser 保留**独立的 Result 类型和解析逻辑**，不强行统一数据结构
+- Provider 特有字段（Claude 的 `cacheRead`、Gemini 的 `thoughtTokens`）留在各自实现中，通过协议扩展或具体类型访问
+- 通用消费方走协议接口，特定逻辑直接访问具体类型
+- 新增 Provider（如 DeepSeek、OpenAI）只需实现协议，不改动已有代码
