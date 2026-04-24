@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
-    @Environment(ClaudeCodeService.self) var claudeCodeService
+    @Environment(AICLIMonitorService.self) var aiService
     @Environment(LauncherService.self) var launcherService
     @Environment(NotificationService.self) var notificationService
 
@@ -20,7 +20,7 @@ struct SettingsView: View {
                 .tag(1)
 
             claudeView
-                .tabItem { Label("Claude Code", systemImage: "cpu") }
+                .tabItem { Label("AI CLI", systemImage: "cpu") }
                 .tag(2)
 
             notificationListView
@@ -101,55 +101,37 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Claude Code
+    // MARK: - AI CLI Hooks
 
     private var claudeView: some View {
         VStack(spacing: 16) {
-            if claudeCodeService.isHookInstalled {
-                Label("Hooks 已安装", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.title3)
-            } else {
-                Label("Hooks 未安装", systemImage: "xmark.circle.fill")
-                    .foregroundStyle(.red)
-                    .font(.title3)
-            }
+            // Claude Code
+            hookSection(
+                name: "Claude Code",
+                icon: "cpu",
+                isInstalled: aiService.claudeProvider.isHookInstalled,
+                onInstall: { aiService.claudeProvider.installHooks() },
+                onUninstall: { aiService.claudeProvider.uninstallHooks() }
+            )
 
-            if claudeCodeService.isHookInstalled && claudeCodeService.sessions.isEmpty {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text("已安装的 Hooks 仅对新会话生效。如果 Claude Code 已在运行，请重启 Claude Code 以加载 Hooks。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(10)
-                .background(.orange.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(.horizontal, 12)
-            }
+            Divider()
 
-            Text("Claude Code hooks 允许 NemoNotch 实时监控你的 Claude Code 会话状态。")
+            // Gemini CLI
+            hookSection(
+                name: "Gemini CLI",
+                icon: "sparkle",
+                isInstalled: aiService.geminiProvider.isHookInstalled,
+                onInstall: { aiService.geminiProvider.installHooks() },
+                onUninstall: { aiService.geminiProvider.uninstallHooks() }
+            )
+
+            Text("Hooks 允许 NemoNotch 实时监控 AI CLI 的会话状态。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
-            HStack(spacing: 12) {
-                Button(claudeCodeService.isHookInstalled ? "重新安装" : "安装 Hooks") {
-                    claudeCodeService.installHooks()
-                }
-                .controlSize(.large)
-
-                if claudeCodeService.isHookInstalled {
-                    Button("卸载 Hooks", role: .destructive) {
-                        claudeCodeService.uninstallHooks()
-                    }
-                    .controlSize(.large)
-                }
-            }
-
-            if claudeCodeService.serverRunning {
+            if aiService.serverRunning {
                 Label("服务运行中", systemImage: "antenna.radiowaves.left.and.right")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -158,6 +140,34 @@ struct SettingsView: View {
             Spacer()
         }
         .padding()
+    }
+
+    private func hookSection(name: String, icon: String, isInstalled: Bool, onInstall: @escaping () -> Void, onUninstall: @escaping () -> Void) -> some View {
+        VStack(spacing: 8) {
+            if isInstalled {
+                Label("\(name) Hooks: 已安装", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.title3)
+            } else {
+                Label("\(name) Hooks: 未安装", systemImage: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .font(.title3)
+            }
+
+            HStack(spacing: 12) {
+                Button(isInstalled ? "重新安装" : "安装 Hooks") {
+                    onInstall()
+                }
+                .controlSize(.large)
+
+                if isInstalled {
+                    Button("卸载 Hooks", role: .destructive) {
+                        onUninstall()
+                    }
+                    .controlSize(.large)
+                }
+            }
+        }
     }
 
     // MARK: - Notification List

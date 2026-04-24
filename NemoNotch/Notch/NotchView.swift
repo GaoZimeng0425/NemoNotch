@@ -5,7 +5,7 @@ struct NotchView: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(MediaService.self) var mediaService
     @Environment(CalendarService.self) var calendarService
-    @Environment(ClaudeCodeService.self) var claudeService
+    @Environment(AICLIMonitorService.self) var aiService
     @Environment(NotificationService.self) var notificationService
     @Environment(OpenClawService.self) var openClawService
     @Environment(HUDService.self) var hudService
@@ -32,7 +32,7 @@ struct NotchView: View {
     private enum BadgeItem: Identifiable, Equatable {
         case notification(bundleID: String, count: Int)
         case media
-        case claude(status: ClaudeStatus, tool: String?, waitingApproval: Bool)
+        case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool)
         case openclaw(state: AgentState, emoji: String)
         case calendar
 
@@ -40,8 +40,8 @@ struct NotchView: View {
             switch self {
             case .notification(let bundleID, _): "notification:\(bundleID)"
             case .media: "media"
-            case .claude(let status, let tool, let waitingApproval):
-                "claude:\(status):\(tool ?? "nil"):\(waitingApproval)"
+            case .ai(let source, let status, let tool, let waitingApproval):
+                "ai:\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
             case .openclaw(let state, let emoji): "openclaw:\(state.rawValue):\(emoji)"
             case .calendar: "calendar"
             }
@@ -51,7 +51,7 @@ struct NotchView: View {
             switch self {
             case .notification: .media
             case .media: .media
-            case .claude: .claude
+            case .ai: .claude
             case .openclaw: .openclaw
             case .calendar: .calendar
             }
@@ -60,13 +60,13 @@ struct NotchView: View {
         // Lower value = higher priority
         var priority: Int {
             switch self {
-            case .claude(_, _, let waitingApproval) where waitingApproval:
+            case .ai(_, _, _, let waitingApproval) where waitingApproval:
                 return 0
             case .notification:
                 return 1
             case .openclaw:
                 return 2
-            case .claude:
+            case .ai:
                 return 3
             case .media:
                 return 4
@@ -78,8 +78,8 @@ struct NotchView: View {
 
     private var activeBadgeItems: [BadgeItem] {
         var items: [BadgeItem] = []
-        if let session = claudeService.activeSession, session.phase.isWaitingForApproval {
-            items.append(.claude(status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
+        if let session = aiService.activeSession, session.phase.isWaitingForApproval {
+            items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
         }
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             items.append(.notification(bundleID: top.bundleID, count: top.count))
@@ -87,9 +87,9 @@ struct NotchView: View {
         if let agent = openClawService.activeAgent {
             items.append(.openclaw(state: agent.state, emoji: agent.emoji))
         }
-        if let session = claudeService.activeSession,
+        if let session = aiService.activeSession,
            !session.phase.isWaitingForApproval && session.status == .working {
-            items.append(.claude(status: session.status, tool: session.currentTool, waitingApproval: false))
+            items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false))
         }
         if mediaService.playbackState.isPlaying { items.append(.media) }
         if let next = calendarService.nextEvent, !next.isPast {
@@ -165,7 +165,7 @@ struct NotchView: View {
         }
         .onAppear { shownHasActiveBadge = hasActiveBadge }
         .onAppear { previousSelectedTab = coordinator.selectedTab }
-        .onAppear { wasWaitingForApproval = claudeService.activeSession?.phase.isWaitingForApproval == true }
+        .onAppear { wasWaitingForApproval = aiService.activeSession?.phase.isWaitingForApproval == true }
         .onChange(of: hasActiveBadge) { _, newValue in
             if newValue {
                 hideBadgeTask?.cancel()
@@ -201,7 +201,7 @@ struct NotchView: View {
                 }
             }
         }
-        .onChange(of: claudeService.activeSession?.phase.isWaitingForApproval == true) { _, isWaiting in
+        .onChange(of: aiService.activeSession?.phase.isWaitingForApproval == true) { _, isWaiting in
             if isWaiting && !wasWaitingForApproval && !TerminalDetector.isTerminalFrontmost && coordinator.status != .opened {
                 NSSound(named: "Pop")?.play()
             }
@@ -475,10 +475,17 @@ struct NotchView: View {
                 Image(systemName: "play.fill")
                     .foregroundStyle(NotchTheme.textPrimary)
             }
-        case .claude(let status, let tool, let waitingApproval):
+        case .ai(let source, let status, let tool, let waitingApproval):
             switch style {
             case .compactLeft:
-                ClaudeCrabIcon(size: 14, animateLegs: status == .working)
+                switch source {
+                case .claude:
+                    ClaudeCrabIcon(size: 14, animateLegs: status == .working)
+                case .gemini:
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
             case .compactRight:
                 if waitingApproval {
                     Circle()
@@ -491,7 +498,7 @@ struct NotchView: View {
                         }
                         .modifier(PulseModifier(isActive: true))
                 } else if status == .working {
-                    ProcessingSpinner(color: ToolStyle.color(tool))
+                    ProcessingSpinner(color: source == .claude ? ToolStyle.color(tool) : .blue)
                 } else if status == .waiting {
                     Image(systemName: "questionmark")
                         .font(.system(size: 9, weight: .bold))
@@ -499,16 +506,30 @@ struct NotchView: View {
                         .modifier(PulseModifier(isActive: true))
                 } else {
                     Circle()
-                        .fill(ToolStyle.color(tool).opacity(0.7))
+                        .fill((source == .claude ? ToolStyle.color(tool) : Color.blue).opacity(0.7))
                         .frame(width: 8, height: 8)
                 }
             case .row:
-                ClaudeCrabIcon(size: 14, animateLegs: status == .working)
+                switch source {
+                case .claude:
+                    ClaudeCrabIcon(size: 14, animateLegs: status == .working)
+                case .gemini:
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
             }
         case .openclaw(let state, let emoji):
-            Text(emoji)
-                .font(.system(size: style == .row ? 11 : 10))
-                .modifier(PulseModifier(isActive: style == .compactRight && (state == .working || state == .toolCalling)))
+            switch style {
+            case .compactLeft, .row:
+                Text(emoji)
+                    .font(.system(size: style == .row ? 11 : 10))
+            case .compactRight:
+                Image(systemName: state.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(openClawStateColor(state))
+                    .modifier(PulseModifier(isActive: state == .working || state == .toolCalling))
+            }
         case .calendar:
             switch style {
             case .compactLeft, .row:
@@ -519,6 +540,21 @@ struct NotchView: View {
                 Image(systemName: "clock.fill")
                     .foregroundStyle(NotchTheme.textPrimary)
             }
+        }
+    }
+
+    private func openClawStateColor(_ state: AgentState) -> Color {
+        switch state {
+        case .idle:
+            return NotchTheme.textSecondary
+        case .working:
+            return .blue
+        case .speaking:
+            return .green
+        case .toolCalling:
+            return NotchTheme.accent
+        case .error:
+            return .red
         }
     }
 

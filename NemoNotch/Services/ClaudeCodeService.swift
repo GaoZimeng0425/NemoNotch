@@ -1,29 +1,19 @@
 import Foundation
 
 @Observable
-final class ClaudeCodeService {
-    var sessions: [String: ClaudeState] = [:]
-    var activeSession: ClaudeState?
+final class ClaudeProvider {
+    let source: AISource = .claude
+    var sessions: [String: AISessionState] = [:]
+    var activeSession: AISessionState?
     var isHookInstalled = false
-    var serverRunning = false
 
-    let hookServer = HookServer()
     private let watcherManager = InterruptWatcherManager()
     private let agentWatcherManager = AgentFileWatcherManager()
-
     private var timeoutTimer: Timer?
+    private weak var hookServer: HookServer?
 
     init() {
-        hookServer.onEventReceived = { [weak self] event in
-            self?.handleEvent(event)
-        }
-        hookServer.onReady = { [weak self] in
-            guard let self else { return }
-            self.serverRunning = true
-            try? HookInstaller.install()
-            self.isHookInstalled = HookInstaller.isInstalled()
-        }
-        isHookInstalled = HookInstaller.isInstalled()
+        isHookInstalled = HookInstaller.isInstalled(.claude)
 
         watcherManager.onInterrupt = { [weak self] sessionId in
             self?.handleInterrupt(sessionId: sessionId)
@@ -33,32 +23,30 @@ final class ClaudeCodeService {
         }
     }
 
-    func startServer() {
-        hookServer.start()
+    func setHookServer(_ server: HookServer) {
+        hookServer = server
     }
 
     func installHooks() {
         do {
-            try HookInstaller.install()
+            try HookInstaller.install(.claude)
             isHookInstalled = true
         } catch {
-            LogService.error("Failed to install hooks: \(error)", category: "ClaudeCode")
+            LogService.error("Failed to install hooks: \(error)", category: "ClaudeProvider")
         }
     }
 
     func uninstallHooks() {
         do {
-            try HookInstaller.uninstall()
+            try HookInstaller.uninstall(.claude)
             isHookInstalled = false
         } catch {
-            LogService.error("Failed to uninstall hooks: \(error)", category: "ClaudeCode")
+            LogService.error("Failed to uninstall hooks: \(error)", category: "ClaudeProvider")
         }
     }
 
-    // MARK: - Permission Response
-
     func respondToPermission(sessionId: String, approved: Bool) {
-        hookServer.respondToPermission(sessionId: sessionId, approved: approved)
+        hookServer?.respondToPermission(sessionId: sessionId, approved: approved)
         if var session = sessions[sessionId] {
             session.phase = session.phase.transition(to: .processing)
             sessions[sessionId] = session
@@ -68,13 +56,13 @@ final class ClaudeCodeService {
 
     // MARK: - Event Handling
 
-    private func handleEvent(_ event: HookEvent) {
+    func handleEvent(_ event: HookEvent) {
         guard let sessionId = event.sessionId else { return }
         let now = Date()
 
         switch event.hookEventName {
         case "SessionStart":
-            var session = ClaudeState(sessionId: sessionId)
+            var session = AISessionState(sessionId: sessionId, source: .claude)
             session.phase = .idle
             applyContext(to: &session, event: event)
             sessions[sessionId] = session
@@ -136,7 +124,7 @@ final class ClaudeCodeService {
             applyContext(to: &session, event: event)
             session.lastEventTime = now
             sessions[sessionId] = session
-            LogService.info("Permission request: \(ctx.toolName) (\(ctx.toolUseId)) for session \(sessionId.prefix(8))", category: "ClaudeCode")
+            LogService.info("Permission request: \(ctx.toolName) (\(ctx.toolUseId)) for session \(sessionId.prefix(8))", category: "ClaudeProvider")
 
         case "Stop":
             if var session = sessions[sessionId] {
@@ -150,7 +138,7 @@ final class ClaudeCodeService {
             }
 
         case "SessionEnd":
-            hookServer.cancelPendingPermissions(sessionId: sessionId)
+            hookServer?.cancelPendingPermissions(sessionId: sessionId)
             watcherManager.stopWatching(sessionId: sessionId)
             agentWatcherManager.stopAll(sessionId: sessionId)
             sessions.removeValue(forKey: sessionId)
@@ -165,18 +153,18 @@ final class ClaudeCodeService {
 
     // MARK: - Helpers
 
-    private func ensureSession(_ sessionId: String) -> ClaudeState {
+    private func ensureSession(_ sessionId: String) -> AISessionState {
         if let existing = sessions[sessionId] { return existing }
-        return ClaudeState(sessionId: sessionId)
+        return AISessionState(sessionId: sessionId, source: .claude)
     }
 
-    private func applyContext(to session: inout ClaudeState, event: HookEvent) {
+    private func applyContext(to session: inout AISessionState, event: HookEvent) {
         if let cwd = event.cwd { session.cwd = cwd }
         if let msg = event.message, !msg.isEmpty { session.lastMessage = msg }
         session.lastEventName = event.hookEventName
     }
 
-    private func applySubagentStart(to session: inout ClaudeState, event: HookEvent) {
+    private func applySubagentStart(to session: inout AISessionState, event: HookEvent) {
         let taskToolId = event.toolUseId ?? UUID().uuidString
         var description: String?
         var agentId: String?
@@ -208,7 +196,7 @@ final class ClaudeCodeService {
         }
     }
 
-    private func applySubagentStop(to session: inout ClaudeState, event: HookEvent) {
+    private func applySubagentStop(to session: inout AISessionState, event: HookEvent) {
         let taskToolId = event.toolUseId ?? ""
         session.subagentState.stopTask(taskToolId: taskToolId)
     }
@@ -222,7 +210,7 @@ final class ClaudeCodeService {
         session.lastEventTime = Date()
         sessions[sessionId] = session
         updateActiveSession()
-        LogService.info("Interrupt detected for session \(sessionId.prefix(8))", category: "ClaudeCode")
+        LogService.info("Interrupt detected for session \(sessionId.prefix(8))", category: "ClaudeProvider")
     }
 
     private func handleClear(sessionId: String) {
@@ -231,7 +219,7 @@ final class ClaudeCodeService {
         session.lastParsedOffset = 0
         session.phase = session.phase.transition(to: .idle)
         sessions[sessionId] = session
-        LogService.info("Clear detected for session \(sessionId.prefix(8))", category: "ClaudeCode")
+        LogService.info("Clear detected for session \(sessionId.prefix(8))", category: "ClaudeProvider")
     }
 
     // MARK: - Conversation Parsing
@@ -275,7 +263,7 @@ final class ClaudeCodeService {
                 self.sessions[sessionId] = session
 
                 if result.inputTokens > 0 || result.cacheReadTokens > 0 {
-                    LogService.debug("Tokens +\(result.inputTokens)in +\(result.outputTokens)out +\(result.cacheReadTokens)cr +\(result.cacheCreationTokens)cc, ctx=\(result.lastContextTokens), model=\(result.lastModel ?? "?") → totals: \(session.inputTokens)in \(session.outputTokens)out \(session.cacheReadTokens)cr \(session.cacheCreationTokens)cc", category: "ClaudeCode")
+                    LogService.debug("Tokens +\(result.inputTokens)in +\(result.outputTokens)out +\(result.cacheReadTokens)cr +\(result.cacheCreationTokens)cc, ctx=\(result.lastContextTokens), model=\(result.lastModel ?? "?") → totals: \(session.inputTokens)in \(session.outputTokens)out \(session.cacheReadTokens)cr \(session.cacheCreationTokens)cc", category: "ClaudeProvider")
                 }
 
                 if result.interrupted {
@@ -307,11 +295,11 @@ final class ClaudeCodeService {
             } else {
                 phaseStr = "nil"
             }
-            LogService.info("Active session: \(prev?.prefix(8) ?? "nil") -> \(activeSession?.id.prefix(8) ?? "nil"), phase=\(phaseStr)", category: "ClaudeCode")
+            LogService.info("Active session: \(prev?.prefix(8) ?? "nil") -> \(activeSession?.id.prefix(8) ?? "nil"), phase=\(phaseStr)", category: "ClaudeProvider")
         }
     }
 
-    private func sessionPriority(_ session: ClaudeState) -> Int {
+    private func sessionPriority(_ session: AISessionState) -> Int {
         switch session.phase {
         case .waitingForApproval: return 100
         case .processing: return 80
@@ -341,3 +329,5 @@ final class ClaudeCodeService {
         updateActiveSession()
     }
 }
+
+typealias ClaudeCodeService = ClaudeProvider

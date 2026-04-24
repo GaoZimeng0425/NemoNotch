@@ -1,15 +1,21 @@
 import SwiftUI
 
 struct ClaudeTab: View {
-    @Environment(ClaudeCodeService.self) var claudeService
+    @Environment(AICLIMonitorService.self) var aiService
     @State private var selectedSessionId: String?
 
+    private var allSessions: [AISessionState] {
+        let claude = aiService.claudeProvider.sessions.values
+        let gemini = aiService.geminiProvider.sessions.values
+        return Array(claude) + Array(gemini)
+    }
+
     var body: some View {
-        if !claudeService.isHookInstalled {
+        if !aiService.anyHookInstalled {
             installPrompt
-        } else if claudeService.sessions.isEmpty {
+        } else if allSessions.isEmpty {
             idleState
-        } else if let sessionId = selectedSessionId, let session = claudeService.sessions[sessionId] {
+        } else if let sessionId = selectedSessionId, let session = sessionById(sessionId) {
             chatDetail(session: session)
         } else {
             sessionList
@@ -19,11 +25,11 @@ struct ClaudeTab: View {
     private var installPrompt: some View {
         VStack(spacing: 10) {
             ClaudeCrabIcon(size: 28)
-            Text("Claude Code Hooks 未安装")
+            Text("AI CLI Hooks 未安装")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             Button("安装 Hooks") {
-                claudeService.installHooks()
+                aiService.installHooks()
             }
             .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
@@ -44,9 +50,9 @@ struct ClaudeTab: View {
     private var serverStatus: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(claudeService.serverRunning ? Color.green : NotchTheme.accent)
+                .fill(aiService.serverRunning ? Color.green : NotchTheme.accent)
                 .frame(width: 6, height: 6)
-            Text(claudeService.serverRunning ? "Unix Socket 已就绪" : "Hook 服务未启动")
+            Text(aiService.serverRunning ? "Unix Socket 已就绪" : "Hook 服务未启动")
                 .font(.system(size: 9))
                 .foregroundStyle(NotchTheme.textTertiary)
         }
@@ -56,16 +62,17 @@ struct ClaudeTab: View {
     private var sessionList: some View {
         ScrollView {
             LazyVStack(spacing: 6) {
-                ForEach(Array(claudeService.sessions.values.sorted { $0.lastEventTime > $1.lastEventTime })) { session in
+                ForEach(allSessions.sorted { $0.lastEventTime > $1.lastEventTime }) { session in
                     sessionRow(session)
                 }
             }
         }
+        .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
         .padding(.horizontal, 4)
         .padding(.bottom, 12)
     }
 
-    private func chatDetail(session: ClaudeState) -> some View {
+    private func chatDetail(session: AISessionState) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Button {
@@ -76,6 +83,8 @@ struct ClaudeTab: View {
                         .foregroundStyle(NotchTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
+
+                sourceIcon(session.source, size: 16)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.displayTitle)
@@ -115,7 +124,7 @@ struct ClaudeTab: View {
 
             Divider().background(NotchTheme.stroke)
 
-            if let ctx = approvalContext(for: session) {
+            if let ctx = approvalContext(for: session), session.source == .claude {
                 quickApprovalBar(session: session, ctx: ctx)
             }
 
@@ -137,6 +146,7 @@ struct ClaudeTab: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                     }
+                    .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
                     .onChange(of: session.messages.count) { _, _ in
                         withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
                             proxy.scrollTo(session.messages.last?.id, anchor: .bottom)
@@ -147,7 +157,7 @@ struct ClaudeTab: View {
         }
     }
 
-    private func quickApprovalBar(session: ClaudeState, ctx: PermissionContext) -> some View {
+    private func quickApprovalBar(session: AISessionState, ctx: PermissionContext) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("等待审批: \(ctx.toolName)")
@@ -161,9 +171,9 @@ struct ClaudeTab: View {
                 }
             }
             Spacer(minLength: 0)
-            Button("拒绝") { claudeService.respondToPermission(sessionId: session.id, approved: false) }
+            Button("拒绝") { aiService.respondToPermission(sessionId: session.id, approved: false) }
                 .buttonStyle(NotchPillButtonStyle())
-            Button("允许") { claudeService.respondToPermission(sessionId: session.id, approved: true) }
+            Button("允许") { aiService.respondToPermission(sessionId: session.id, approved: true) }
                 .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
         .padding(.horizontal, 8)
@@ -171,7 +181,7 @@ struct ClaudeTab: View {
         .notchCard(radius: 8, fill: NotchTheme.accentSoft)
     }
 
-    private func sessionRow(_ session: ClaudeState) -> some View {
+    private func sessionRow(_ session: AISessionState) -> some View {
         Button {
             selectedSessionId = session.id
         } label: {
@@ -180,9 +190,7 @@ struct ClaudeTab: View {
                     .fill(ToolStyle.color(session.currentTool).opacity(0.2))
                     .frame(width: 24, height: 24)
                     .overlay {
-                        Image(systemName: ToolStyle.icon(session.currentTool))
-                            .font(.system(size: 10))
-                            .foregroundStyle(ToolStyle.color(session.currentTool))
+                        sourceIcon(session.source, size: 12)
                     }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -245,13 +253,13 @@ struct ClaudeTab: View {
 
                 Spacer(minLength: 0)
 
-                if let ctx = approvalContext(for: session) {
+                if let ctx = approvalContext(for: session), session.source == .claude {
                     approvalButtons(for: session, ctx: ctx)
                 } else {
                     Circle()
                         .fill(dotColor(session.status))
                         .frame(width: 6, height: 6)
-                        .modifier(PulseModifier(isActive: session.status == .working || approvalContext(for: session) != nil))
+                        .modifier(PulseModifier(isActive: session.status == .working))
                 }
             }
         }
@@ -266,6 +274,18 @@ struct ClaudeTab: View {
                         .stroke(NotchTheme.stroke, lineWidth: 0.6)
                 )
         )
+    }
+
+    @ViewBuilder
+    private func sourceIcon(_ source: AISource, size: CGFloat) -> some View {
+        switch source {
+        case .claude:
+            ClaudeCrabIcon(size: size)
+        case .gemini:
+            Image(systemName: "sparkle")
+                .font(.system(size: size * 0.85, weight: .semibold))
+                .foregroundStyle(.blue)
+        }
     }
 
     private func eventTag(_ event: String) -> some View {
@@ -308,13 +328,13 @@ struct ClaudeTab: View {
         return "\(minutes / 60) 小时前"
     }
 
-    private func approvalContext(for session: ClaudeState) -> PermissionContext? {
+    private func approvalContext(for session: AISessionState) -> PermissionContext? {
         if case .waitingForApproval(let ctx) = session.phase { return ctx }
         return nil
     }
 
-    private func subagentTools(for message: ChatMessage, session: ClaudeState) -> [SubagentToolCall]? {
-        guard let toolName = message.toolName, ["Task", "Agent"].contains(toolName) else { return nil }
+    private func subagentTools(for message: ChatMessage, session: AISessionState) -> [SubagentToolCall]? {
+        guard let toolName = message.toolName, ["Task", "Agent", "invoke_subagent"].contains(toolName) else { return nil }
         for (_, task) in session.subagentState.activeTasks {
             if message.id.contains(task.id) {
                 return task.tools
@@ -323,7 +343,7 @@ struct ClaudeTab: View {
         return nil
     }
 
-    private func approvalButtons(for session: ClaudeState, ctx: PermissionContext) -> some View {
+    private func approvalButtons(for session: AISessionState, ctx: PermissionContext) -> some View {
         VStack(alignment: .trailing, spacing: 4) {
             HStack(spacing: 4) {
                 Text(ctx.toolName)
@@ -348,14 +368,14 @@ struct ClaudeTab: View {
                         .clipShape(Capsule(style: .continuous))
                 } else {
                     Button {
-                        claudeService.respondToPermission(sessionId: session.id, approved: false)
+                        aiService.respondToPermission(sessionId: session.id, approved: false)
                     } label: {
                         Text("拒绝")
                     }
                     .buttonStyle(NotchPillButtonStyle())
 
                     Button {
-                        claudeService.respondToPermission(sessionId: session.id, approved: true)
+                        aiService.respondToPermission(sessionId: session.id, approved: true)
                     } label: {
                         Text("允许")
                     }
@@ -367,7 +387,7 @@ struct ClaudeTab: View {
 
     // MARK: - Context Progress Bar
 
-    private func contextBar(session: ClaudeState) -> some View {
+    private func contextBar(session: AISessionState) -> some View {
         let percent = session.contextPercent
         let barColor: Color = {
             if percent > 0.8 { return .red }
@@ -398,5 +418,9 @@ struct ClaudeTab: View {
             }
             .frame(height: 3)
         }
+    }
+
+    private func sessionById(_ id: String) -> AISessionState? {
+        aiService.claudeProvider.sessions[id] ?? aiService.geminiProvider.sessions[id]
     }
 }
