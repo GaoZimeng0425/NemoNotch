@@ -1,6 +1,6 @@
 import Foundation
 
-enum ConversationParser {
+enum ConversationParser: ConversationParserProtocol {
 
     struct ParseResult {
         var messages: [ChatMessage]
@@ -13,18 +13,34 @@ enum ConversationParser {
         var newOffset: UInt64
         var interrupted: Bool
         var cleared: Bool
+
+        var conversation: ParsedConversation {
+            ParsedConversation(messages: messages, inputTokens: inputTokens, outputTokens: outputTokens, lastModel: lastModel)
+        }
     }
 
-    static func conversationPath(sessionId: String, cwd: String) -> String? {
+    // MARK: - ConversationParserProtocol
+
+    static func findSessionFile(sessionId: String, cwd: String) -> String? {
         let dir = claudeProjectsDir(for: cwd)
         let path = "\(dir)/\(sessionId).jsonl"
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
+    static func parseFull(filePath: String) -> ParsedConversation {
+        parseFullResult(filePath: filePath).conversation
+    }
+
+    // MARK: - Claude-Specific
+
     static func conversationFiles(for cwd: String) -> [String] {
         let dir = claudeProjectsDir(for: cwd)
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return [] }
         return files.filter { $0.hasSuffix(".jsonl") }.map { "\(dir)/\($0)" }
+    }
+
+    static func parseFullResult(filePath: String) -> ParseResult {
+        parseIncremental(filePath: filePath, fromOffset: 0)
     }
 
     static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
@@ -85,10 +101,6 @@ enum ConversationParser {
         }
 
         return result
-    }
-
-    static func parseFull(filePath: String) -> ParseResult {
-        parseIncremental(filePath: filePath, fromOffset: 0)
     }
 
     // MARK: - Private

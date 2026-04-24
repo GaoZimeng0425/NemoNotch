@@ -17,8 +17,8 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 | Tab | Description |
 |-----|-------------|
 | **Media** | Real-time playback controls (play/pause/next/previous), album artwork, progress bar. Supports Spotify & Apple Music |
-| **Calendar** | 15-day date picker, daily event list, color-coded calendars, permission guidance |
-| **Claude Code** | Session list, conversation details, permission approval, context usage bar, subagent monitoring, model display |
+| **Calendar** | 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs, permission guidance |
+| **AI Chat** | Unified Claude Code & Gemini CLI monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
 | **OpenClaw** | Multi-agent status monitoring, WebSocket real-time connection, agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
 | **Weather** | Current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
@@ -27,10 +27,11 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 ### Highlights
 
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
+- **Multi-AI Provider** — Unified interface for Claude Code and Gemini CLI with hook event listening, session tracking, and permission interception
 - **Global Shortcuts** — `⌥⌘N` toggle panel, `⌥⌘1-7` switch tabs
-- **Smart Auto-Switch** — Automatically selects the active tab (Claude working, music playing, etc.)
-- **Menu Bar Entry** — Control panel visibility and Claude Code Hooks installation from the menu bar
-- **Claude Code Integration** — Hook event listening, session tracking, permission interception, terminal detection, interrupt awareness
+- **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
+- **Menu Bar Entry** — Control panel visibility and AI CLI Hooks installation from the menu bar
+- **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 
 ## Tech Stack
 
@@ -40,19 +41,19 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **EventKit** — Calendar event access
 - **IOKit** — System monitoring (CPU, memory, battery, disk)
 - **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7-day rotation)
-- **WebSocket / Unix Socket** — Claude Code Hooks & OpenClaw communication
+- **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
 
 ## Project Structure
 
 ```
 NemoNotch/
 ├── NemoNotchApp.swift           # Entry point, MenuBarExtra, global hotkeys
-├── Models/                      # Data models (Tab, AppSettings, PlaybackState, etc.)
-├── Notch/                       # Notch UI core (window, animation, event handling)
-├── Tabs/                        # Tab content views
-├── Services/                    # Background services (media, calendar, Claude Code, etc.)
+├── Models/                      # Data models (Tab, AppSettings, AIProvider, PlaybackState, etc.)
+├── Notch/                       # Notch UI core (window, animation, event handling, TabBar, HUD)
+├── Tabs/                        # Tab content views (AIChatTab for unified AI sessions)
+├── Services/                    # Background services (media, calendar, AI CLI monitor, launcher, etc.)
 ├── Settings/                    # Preferences UI
-└── Helpers/                     # Utilities
+└── Helpers/                     # Utilities (MarkdownRenderer, ClaudeCrabIcon, ToolStyles)
 ```
 
 ## Build

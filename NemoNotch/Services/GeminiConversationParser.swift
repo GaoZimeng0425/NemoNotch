@@ -1,15 +1,13 @@
 import Foundation
 
-enum GeminiConversationParser {
+enum GeminiConversationParser: ConversationParserProtocol {
+
     struct ParseResult {
-        var messages: [ChatMessage]
-        var inputTokens: Int
-        var outputTokens: Int
-        var cachedTokens: Int
-        var thoughtTokens: Int
-        var toolTokens: Int
-        var totalTokens: Int
-        var lastModel: String?
+        let common: ParsedConversation
+        let cachedTokens: Int
+        let thoughtTokens: Int
+        let toolTokens: Int
+        let totalTokens: Int
     }
 
     private struct GeminiSession: Codable {
@@ -88,7 +86,7 @@ enum GeminiConversationParser {
         let text: String?
     }
 
-    // MARK: - File Discovery
+    // MARK: - ConversationParserProtocol
 
     static func findSessionFile(sessionId: String, cwd: String) -> String? {
         guard let projectName = projectName(for: cwd) else { return nil }
@@ -96,24 +94,17 @@ enum GeminiConversationParser {
         let shortId = String(sessionId.prefix(8))
 
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: chatsDir) else { return nil }
-        // Match if the filename contains the shortId (usually it's at the end before .json)
         let match = files.first { $0.localizedCaseInsensitiveContains(shortId) && $0.hasSuffix(".json") }
         return match.map { chatsDir + "/" + $0 }
     }
 
-    private static func projectName(for cwd: String) -> String? {
-        let path = NSHomeDirectory() + "/.gemini/projects.json"
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let projects = json["projects"] as? [String: String] else {
-            return nil
-        }
-        return projects[cwd]
+    static func parseFull(filePath: String) -> ParsedConversation {
+        parseDetailed(filePath: filePath)?.common ?? ParsedConversation()
     }
 
-    // MARK: - Full Parse
+    // MARK: - Gemini-Specific
 
-    static func parseFull(filePath: String) -> ParseResult? {
+    static func parseDetailed(filePath: String) -> ParseResult? {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
               let session = try? JSONDecoder().decode(GeminiSession.self, from: data),
               let rawMessages = session.messages else {
@@ -208,14 +199,23 @@ enum GeminiConversationParser {
         }
 
         return ParseResult(
-            messages: messages,
-            inputTokens: inputTokens,
-            outputTokens: outputTokens,
+            common: ParsedConversation(messages: messages, inputTokens: inputTokens, outputTokens: outputTokens, lastModel: lastModel),
             cachedTokens: cachedTokens,
             thoughtTokens: thoughtTokens,
             toolTokens: toolTokens,
-            totalTokens: totalTokens,
-            lastModel: lastModel
+            totalTokens: totalTokens
         )
+    }
+
+    // MARK: - Private
+
+    private static func projectName(for cwd: String) -> String? {
+        let path = NSHomeDirectory() + "/.gemini/projects.json"
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let projects = json["projects"] as? [String: String] else {
+            return nil
+        }
+        return projects[cwd]
     }
 }
