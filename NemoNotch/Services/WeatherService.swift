@@ -61,12 +61,15 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
 
         guard let url = URL(string: urlStr) else { return }
 
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-            DispatchQueue.main.async {
-                self?.parseWeather(json)
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+                parseWeather(json)
+            } catch {
+                LogService.warn("Weather fetch failed: \(error.localizedDescription)", category: "Weather")
             }
-        }.resume()
+        }
     }
 
     private func parseWeather(_ json: [String: Any]) {
