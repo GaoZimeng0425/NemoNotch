@@ -105,9 +105,9 @@ final class NowPlayingCLI: @unchecked Sendable {
 
         daemonStdout?.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
-            self?.queue.async {
-                self?.handleDaemonData(data)
+            guard !data.isEmpty, let self else { return }
+            self.queue.async {
+                self.handleDaemonData(data)
             }
         }
 
@@ -157,8 +157,9 @@ final class NowPlayingCLI: @unchecked Sendable {
         stdin.write(data)
 
         let item = DispatchWorkItem { [weak self] in
-            self?.queue.async {
-                self?.handleDaemonTimeout()
+            guard let self else { return }
+            self.queue.async {
+                self.handleDaemonTimeout()
             }
         }
         timeoutItem = item
@@ -257,13 +258,6 @@ final class NowPlayingCLI: @unchecked Sendable {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        var stdoutData = Data()
-        let readQueue = DispatchQueue(label: "NemoNotch.pipe-read", qos: .utility)
-
-        readQueue.async {
-            stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        }
-
         let semaphore = DispatchSemaphore(value: 0)
 
         do {
@@ -298,7 +292,7 @@ final class NowPlayingCLI: @unchecked Sendable {
             return nil
         }
 
-        return stdoutData
+        return stdoutPipe.fileHandleForReading.readDataToEndOfFile()
     }
 
     // MARK: - Dylib extraction
@@ -493,13 +487,13 @@ final class NowPlayingCLI: @unchecked Sendable {
 }
 
 private extension ISO8601DateFormatter {
-    @preconcurrency static let full: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let full: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    static let simple: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let simple: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
