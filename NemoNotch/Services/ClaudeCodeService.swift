@@ -61,7 +61,7 @@ final class ClaudeProvider: AIProvider {
                 let cwd = "/" + cwdEncoded.replacingOccurrences(of: "-", with: "/")
                 session.cwd = cwd
 
-                let result = ConversationParser.parseFull(filePath: filePath)
+                let result = ConversationParser.parseFullResult(filePath: filePath)
                 session.messages = result.messages
                 session.inputTokens = result.inputTokens
                 session.outputTokens = result.outputTokens
@@ -245,7 +245,7 @@ final class ClaudeProvider: AIProvider {
 
     private func startAgentFileWatcher(sessionId: String, taskToolId: String, cwd: String?, agentId: String) {
         guard let cwd else { return }
-        let dir = ConversationParser.conversationPath(sessionId: sessionId, cwd: cwd)
+        let dir = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd)
             .map { ($0 as NSString).deletingLastPathComponent } ?? ""
 
         let nestedPath = "\(dir)/\(sessionId)/subagents/agent-\(agentId).jsonl"
@@ -288,7 +288,7 @@ final class ClaudeProvider: AIProvider {
     private func parseConversation(for sessionId: String) {
         guard let session = sessions[sessionId],
               let cwd = session.cwd,
-              let filePath = ConversationParser.conversationPath(sessionId: sessionId, cwd: cwd) else { return }
+              let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
         let offset = session.lastParsedOffset
         Task.detached(priority: .utility) { [weak self] in
