@@ -79,26 +79,29 @@ struct NotchView: View {
     private var activeBadgeItems: [BadgeItem] {
         var items: [BadgeItem] = []
         
-        // AI Sessions from both providers
-        let aiSessions = [aiService.claudeProvider.activeSession, aiService.geminiProvider.activeSession].compactMap { $0 }
-        
+        // AI Sessions from both providers — all active sessions, not just the top one
+        let allSessions = Array(aiService.claudeProvider.sessions.values) + Array(aiService.geminiProvider.sessions.values)
+        let activeSessions = allSessions.filter { $0.phase.isActive || $0.phase.needsAttention }
+
         // Waiting for approval takes top priority
-        for session in aiSessions {
+        for session in activeSessions {
             if session.phase.isWaitingForApproval {
                 items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
             }
         }
-        
+
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             items.append(.notification(bundleID: top.bundleID, count: top.count))
         }
-        if let agent = openClawService.activeAgent {
+
+        // OpenClaw — all non-idle agents
+        for agent in openClawService.agents.values.filter({ $0.state != .idle }) {
             items.append(.openclaw(state: agent.state, emoji: agent.emoji))
         }
-        
+
         // Working sessions
-        for session in aiSessions {
-            if !session.phase.isWaitingForApproval && session.status == .working {
+        for session in activeSessions {
+            if !session.phase.isWaitingForApproval && session.status == ClaudeStatus.working {
                 items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false))
             }
         }

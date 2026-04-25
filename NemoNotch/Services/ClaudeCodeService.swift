@@ -74,16 +74,8 @@ final class ClaudeProvider: AIProvider {
                 if let first = userMessages.first { session.firstUserMessage = String(first.content.prefix(80)) }
                 if let last = userMessages.last { session.lastUserMessage = String(last.content.prefix(80)) }
 
-                let meaningful = result.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
-                if let lastMsg = meaningful.last {
-                    switch lastMsg.role {
-                    case .user: session.phase = .processing
-                    case .assistant: session.phase = .waitingForInput
-                    default: session.phase = .idle
-                    }
-                } else {
-                    session.phase = .idle
-                }
+                // Scanned sessions start idle; real hook events will update the phase
+                session.phase = .idle
 
                 sessions[sessionId] = session
                 discovered += 1
