@@ -1,6 +1,7 @@
-import Foundation
+@preconcurrency import Foundation
 import IOKit.ps
 
+@MainActor
 @Observable
 final class SystemService {
     var cpuUsage: Double = 0
@@ -27,7 +28,7 @@ final class SystemService {
         }
     }
 
-    deinit { timer?.invalidate() }
+    deinit { MainActor.assumeIsolated { timer?.invalidate() } }
 
     func update() {
         updateCPU()

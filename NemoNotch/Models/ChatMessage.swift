@@ -8,7 +8,7 @@ enum ChatMessageRole: String, Codable {
     case system
 }
 
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Sendable {
     let id: String
     let role: ChatMessageRole
     let content: String

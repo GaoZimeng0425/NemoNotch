@@ -5,6 +5,7 @@ enum AISource: String, Codable, CaseIterable {
     case gemini
 }
 
+@MainActor
 protocol AIProvider: AnyObject, Observable {
     var source: AISource { get }
     var sessions: [String: AISessionState] { get set }

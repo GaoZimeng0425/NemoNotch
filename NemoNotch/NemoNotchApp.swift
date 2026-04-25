@@ -72,9 +72,15 @@ struct MenuContent: View {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
-    static var shared = AppDelegate()
+    nonisolated(unsafe) static var shared = {
+        let instance = AppDelegate()
+        return instance
+    }()
+
+    nonisolated override init() { super.init() }
 
     private(set) var coordinator: NotchCoordinator?
     private var appSettings: AppSettings?

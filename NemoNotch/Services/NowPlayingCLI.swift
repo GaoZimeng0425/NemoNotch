@@ -1,6 +1,6 @@
-import Foundation
+@preconcurrency import Foundation
 
-final class NowPlayingCLI {
+final class NowPlayingCLI: @unchecked Sendable {
     private static let infoKeyMapping: [String: String] = [
         "title": "kMRMediaRemoteNowPlayingInfoTitle",
         "artist": "kMRMediaRemoteNowPlayingInfoArtist",
@@ -57,7 +57,7 @@ final class NowPlayingCLI {
 
     // MARK: - Public API
 
-    func fetchNowPlayingInfo(completion: @escaping ([String: Any]?) -> Void) {
+    func fetchNowPlayingInfo(completion: @Sendable @escaping ([String: Any]?) -> Void) {
         queue.async {
             if self.ensureDaemon() {
                 self.fetchViaDaemon(completion: completion)
@@ -105,9 +105,9 @@ final class NowPlayingCLI {
 
         daemonStdout?.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
-            self?.queue.async {
-                self?.handleDaemonData(data)
+            guard !data.isEmpty, let self else { return }
+            self.queue.async {
+                self.handleDaemonData(data)
             }
         }
 
@@ -136,7 +136,7 @@ final class NowPlayingCLI {
 
     // MARK: - Daemon Fetch
 
-    private func fetchViaDaemon(completion: @escaping ([String: Any]?) -> Void) {
+    private func fetchViaDaemon(completion: @Sendable @escaping ([String: Any]?) -> Void) {
         guard pendingCompletion == nil else {
             DispatchQueue.main.async { completion(nil) }
             return
@@ -157,8 +157,9 @@ final class NowPlayingCLI {
         stdin.write(data)
 
         let item = DispatchWorkItem { [weak self] in
-            self?.queue.async {
-                self?.handleDaemonTimeout()
+            guard let self else { return }
+            self.queue.async {
+                self.handleDaemonTimeout()
             }
         }
         timeoutItem = item
@@ -195,12 +196,13 @@ final class NowPlayingCLI {
     private func finishPending(_ result: [String: Any]?) {
         let completion = pendingCompletion
         pendingCompletion = nil
-        DispatchQueue.main.async { completion?(result) }
+        let box = InfoBox(info: result)
+        DispatchQueue.main.async { completion?(box.info) }
     }
 
     // MARK: - Fallback (one-shot processes)
 
-    private func fetchUsingFallbacks(from index: Int, completion: @escaping ([String: Any]?) -> Void) {
+    private func fetchUsingFallbacks(from index: Int, completion: @Sendable @escaping ([String: Any]?) -> Void) {
         guard index < fallbackHelpers.count else {
             DispatchQueue.main.async { completion(nil) }
             return
@@ -256,13 +258,6 @@ final class NowPlayingCLI {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        var stdoutData = Data()
-        let readQueue = DispatchQueue(label: "NemoNotch.pipe-read", qos: .utility)
-
-        readQueue.async {
-            stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        }
-
         let semaphore = DispatchSemaphore(value: 0)
 
         do {
@@ -297,7 +292,7 @@ final class NowPlayingCLI {
             return nil
         }
 
-        return stdoutData
+        return stdoutPipe.fileHandleForReading.readDataToEndOfFile()
     }
 
     // MARK: - Dylib extraction
@@ -438,6 +433,10 @@ final class NowPlayingCLI {
         return result
     }
 
+    private struct InfoBox: @unchecked Sendable {
+        let info: [String: Any]?
+    }
+
     // MARK: - Conversion
 
     private static func convertToMediaInfo(_ jsonObject: Any) -> [String: Any]? {
@@ -488,13 +487,13 @@ final class NowPlayingCLI {
 }
 
 private extension ISO8601DateFormatter {
-    static let full: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let full: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    static let simple: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let simple: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter

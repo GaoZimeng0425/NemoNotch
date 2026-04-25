@@ -1,6 +1,6 @@
-import Foundation
+@preconcurrency import Foundation
 
-final class InterruptWatcher {
+final class InterruptWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var fileHandle: FileHandle?
     private let filePath: String

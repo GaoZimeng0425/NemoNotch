@@ -1,8 +1,8 @@
 import Foundation
 
-enum ConversationParser {
+enum ConversationParser: Sendable {
 
-    struct ParseResult {
+    struct ParseResult: Sendable {
         var messages: [ChatMessage]
         var inputTokens: Int
         var outputTokens: Int
@@ -170,15 +170,11 @@ enum ConversationParser {
         return ""
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     private static func parseTimestamp(_ json: [String: Any]) -> Date? {
         guard let ts = json["timestamp"] as? String else { return nil }
-        return isoFormatter.date(from: ts)
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: ts)
     }
 
     private static let interruptPatterns = [
