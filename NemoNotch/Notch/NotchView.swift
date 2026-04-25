@@ -21,7 +21,6 @@ struct NotchView: View {
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
     @State private var shownHasActiveBadge: Bool = false
-    @State private var hideBadgeTask: Task<Void, Never>? = nil
     @State private var displayedBadgeItems: [BadgeItem] = []
     @State private var badgeTypeUpdateTask: Task<Void, Never>? = nil
     @State private var dragOffset: CGFloat = 0
@@ -182,20 +181,8 @@ struct NotchView: View {
         .onAppear { previousSelectedTab = coordinator.selectedTab }
         .onAppear { wasWaitingForApproval = aiService.activeSession?.phase.isWaitingForApproval == true }
         .onChange(of: hasActiveBadge) { _, newValue in
-            if newValue {
-                hideBadgeTask?.cancel()
-                withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
-                    shownHasActiveBadge = true
-                }
-            } else {
-                hideBadgeTask?.cancel()
-                hideBadgeTask = Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2))
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: NotchConstants.fadeNormalDuration)) {
-                        shownHasActiveBadge = false
-                    }
-                }
+            withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
+                shownHasActiveBadge = newValue
             }
         }
         .onAppear { displayedBadgeItems = activeBadgeItems }
@@ -204,10 +191,7 @@ struct NotchView: View {
             badgeTypeUpdateTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(16))
                 guard !Task.isCancelled else { return }
-                let isAdd = newTypes.count > displayedBadgeItems.count
-                withAnimation(isAdd
-                    ? .spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)
-                    : .easeInOut(duration: NotchConstants.fadeNormalDuration)) {
+                withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
                     displayedBadgeItems = newTypes
                 }
             }
@@ -380,8 +364,8 @@ struct NotchView: View {
                 .position(x: notchLeftEdge - spread, y: hardwareNotchSize.height / 2)
                 .opacity(shownHasActiveBadge ? 1 : 0)
                 .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .trailing)),
-                    removal: .opacity.combined(with: .move(edge: .leading))
+                    insertion: .opacity.combined(with: .offset(x: NotchConstants.badgeSpread)),
+                    removal: .opacity.combined(with: .offset(x: NotchConstants.badgeSpread))
                 ))
                 Button {
                     handleBadgeTap(item)
@@ -392,13 +376,13 @@ struct NotchView: View {
                 .position(x: notchRightEdge + spread, y: hardwareNotchSize.height / 2)
                 .opacity(shownHasActiveBadge ? 1 : 0)
                 .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .leading)),
-                    removal: .opacity.combined(with: .move(edge: .trailing))
+                    insertion: .opacity.combined(with: .offset(x: -NotchConstants.badgeSpread)),
+                    removal: .opacity.combined(with: .offset(x: -NotchConstants.badgeSpread))
                 ))
             }
         }
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
-        .animation(.easeInOut(duration: NotchConstants.badgeFadeDuration), value: shownHasActiveBadge)
+        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
     }
 
     // MARK: - Notch background shape
