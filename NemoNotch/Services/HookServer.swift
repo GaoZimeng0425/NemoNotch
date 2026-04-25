@@ -4,11 +4,11 @@ import Foundation
 @Observable
 final class HookServer {
     private(set) var isRunning = false
-    nonisolated(unsafe) private var socketFd: Int32 = -1
-    nonisolated(unsafe) private var acceptSource: DispatchSourceRead?
+    @ObservationIgnored nonisolated(unsafe) private var socketFd: Int32 = -1
+    @ObservationIgnored nonisolated(unsafe) private var acceptSource: DispatchSourceRead?
     private let socketQueue = DispatchQueue(label: "com.nemonotch.hookserver", qos: .userInitiated)
 
-    nonisolated(unsafe) private var responseWaiters: [String: (String) -> Void] = [:]
+    @ObservationIgnored nonisolated(unsafe) private var responseWaiters: [String: (String) -> Void] = [:]
 
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: (() -> Void)?

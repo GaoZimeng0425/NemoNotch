@@ -493,7 +493,7 @@ final class NowPlayingCLI: @unchecked Sendable {
 }
 
 private extension ISO8601DateFormatter {
-    static let full: ISO8601DateFormatter = {
+    @preconcurrency static let full: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
