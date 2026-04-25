@@ -6,7 +6,7 @@ NemoNotch 是一个 macOS 刘海工具，在 MacBook 刘海区域提供可交互
 
 ## 技术栈
 
-- Swift 5 + SwiftUI，仅 macOS，依赖 CocoaLumberjack
+- Swift 6 + SwiftUI，仅 macOS，依赖 CocoaLumberjack
 - 关键框架：AppKit（NSWindow）、MediaPlayer、EventKit、IOKit
 
 ## 项目结构

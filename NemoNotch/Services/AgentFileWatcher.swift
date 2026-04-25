@@ -1,6 +1,6 @@
 import Foundation
 
-final class AgentFileWatcher {
+final class AgentFileWatcher: @unchecked Sendable {
     private let filePath: String
     private let taskToolId: String
     private let onUpdate: ([SubagentToolCall]) -> Void

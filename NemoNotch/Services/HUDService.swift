@@ -5,6 +5,7 @@ import CoreGraphics
 import IOKit.ps
 import SwiftUI
 
+@MainActor
 @Observable
 final class HUDService {
     enum HUDType: Equatable {
@@ -40,15 +41,17 @@ final class HUDService {
     }
 
     deinit {
-        brightnessTimer?.invalidate()
-        if let handle = displayServicesHandle { dlclose(handle) }
+        MainActor.assumeIsolated {
+            brightnessTimer?.invalidate()
+            if let handle = displayServicesHandle { dlclose(handle) }
 
-        if let source = batteryRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
-        }
+            if let source = batteryRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+            }
 
-        if let deviceID = volumeDeviceID, var address = volumeAddress, let listener = volumeListener {
-            AudioObjectRemovePropertyListenerBlock(deviceID, &address, DispatchQueue.main, listener)
+            if let deviceID = volumeDeviceID, var address = volumeAddress, let listener = volumeListener {
+                AudioObjectRemovePropertyListenerBlock(deviceID, &address, DispatchQueue.main, listener)
+            }
         }
     }
 

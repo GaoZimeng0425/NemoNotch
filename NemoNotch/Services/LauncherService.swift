@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 
+@MainActor
 @Observable
 final class LauncherService {
     var apps: [AppItem]

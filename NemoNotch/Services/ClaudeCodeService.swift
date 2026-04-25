@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 @Observable
 final class ClaudeProvider: AIProvider {
     let source: AISource = .claude
@@ -73,16 +74,8 @@ final class ClaudeProvider: AIProvider {
                 if let first = userMessages.first { session.firstUserMessage = String(first.content.prefix(80)) }
                 if let last = userMessages.last { session.lastUserMessage = String(last.content.prefix(80)) }
 
-                let meaningful = result.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
-                if let lastMsg = meaningful.last {
-                    switch lastMsg.role {
-                    case .user: session.phase = .processing
-                    case .assistant: session.phase = .waitingForInput
-                    default: session.phase = .idle
-                    }
-                } else {
-                    session.phase = .idle
-                }
+                // Scanned sessions start idle; real hook events will update the phase
+                session.phase = .idle
 
                 sessions[sessionId] = session
                 discovered += 1
@@ -298,10 +291,10 @@ final class ClaudeProvider: AIProvider {
               let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
         let offset = session.lastParsedOffset
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
 
-            DispatchQueue.main.async {
+            await MainActor.run {
                 guard let self, var session = self.sessions[sessionId] else { return }
 
                 if result.cleared {

@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 
+@MainActor
 @Observable
 final class OpenClawService {
     var agents: [String: AgentInfo] = [:]
@@ -162,6 +163,17 @@ final class OpenClawService {
         }
         disconnect()
 
+        let port = gatewayURL.port ?? 18789
+        Task.detached { [weak self] in
+            guard Self.checkPort(host: "127.0.0.1", port: port) else {
+                await self?.scheduleReconnect()
+                return
+            }
+            await self?.openWebSocket()
+        }
+    }
+
+    private func openWebSocket() {
         LogService.info("Connecting to \(gatewayURL)...", category: "OpenClaw")
         let session = URLSession(configuration: .default)
         urlSession = session
@@ -184,18 +196,54 @@ final class OpenClawService {
         ttlTimer = nil
     }
 
+    private nonisolated static func checkPort(host: String, port: Int) -> Bool {
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        hints.ai_flags = AI_NUMERICHOST
+
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, "\(port)", &hints, &res) == 0, let addr = res else { return false }
+        defer { freeaddrinfo(res) }
+
+        let sock = Darwin.socket(addr.pointee.ai_family, addr.pointee.ai_socktype, addr.pointee.ai_protocol)
+        guard sock >= 0 else { return false }
+        defer { close(sock) }
+
+        let flags = fcntl(sock, F_GETFL, 0)
+        _ = fcntl(sock, F_SETFL, flags | O_NONBLOCK)
+
+        let rc = Darwin.connect(sock, addr.pointee.ai_addr, addr.pointee.ai_addrlen)
+        if rc == 0 { return true }
+        guard errno == EINPROGRESS else { return false }
+
+        var pfd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+        guard poll(&pfd, 1, 1000) > 0 else { return false }
+
+        var err: Int32 = 0
+        var len = socklen_t(MemoryLayout<Int32>.size)
+        getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &len)
+        return err == 0
+    }
+
     // MARK: - WebSocket Messages
 
     private func receiveMessage() {
         webSocketTask?.receive { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let message):
-                self.handleMessage(message)
-                self.receiveMessage()
-            case .failure(let error):
-                LogService.error("WebSocket error: \(error)", category: "OpenClaw")
-                self.scheduleReconnect()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                switch result {
+                case .success(let message):
+                    self.handleMessage(message)
+                    self.receiveMessage()
+                case .failure(let error):
+                    if (error as? URLError)?.code == .cannotConnectToHost {
+                        LogService.debug("WebSocket not reachable: \(error)", category: "OpenClaw")
+                    } else {
+                        LogService.error("WebSocket error: \(error)", category: "OpenClaw")
+                    }
+                    self.scheduleReconnect()
+                }
             }
         }
     }

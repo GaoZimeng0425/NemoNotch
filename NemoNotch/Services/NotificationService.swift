@@ -7,6 +7,7 @@ struct BadgeItem: Equatable {
     let icon: NSImage
 }
 
+@MainActor
 @Observable
 final class NotificationService {
     var badges: [String: BadgeItem] = [:]
@@ -40,7 +41,9 @@ final class NotificationService {
     }
 
     deinit {
-        pollTimer?.invalidate()
+        MainActor.assumeIsolated {
+            pollTimer?.invalidate()
+        }
     }
 
     // MARK: - Polling

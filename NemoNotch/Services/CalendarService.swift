@@ -1,6 +1,7 @@
 import EventKit
 import SwiftUI
 
+@MainActor
 @Observable
 final class CalendarService {
     var todayEvents: [CalendarEvent] = []

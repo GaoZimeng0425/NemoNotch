@@ -1,6 +1,7 @@
 import Carbon
 import Foundation
 
+@MainActor
 @Observable
 final class HotkeyService {
     private var hotKeyRefs: [EventHotKeyRef] = []
@@ -37,7 +38,9 @@ final class HotkeyService {
     }
 
     deinit {
-        unregisterAll()
+        MainActor.assumeIsolated {
+            unregisterAll()
+        }
     }
 
     private func installEventHandlerIfNeeded() {

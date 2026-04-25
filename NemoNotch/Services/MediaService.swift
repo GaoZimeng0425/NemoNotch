@@ -1,6 +1,12 @@
 import AppKit
-import Foundation
+@preconcurrency import Foundation
 
+private struct NowPlayingInfoBox: @unchecked Sendable {
+    let info: [String: Any]?
+    init(info: [String: Any]?) { self.info = info }
+}
+
+@MainActor
 @Observable
 final class MediaService {
     var playbackState = PlaybackState()
@@ -23,22 +29,33 @@ final class MediaService {
 
     func togglePlayPause() {
         remote.sendCommand(.togglePlayPause)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateNowPlaying() }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            self?.updateNowPlaying()
+        }
     }
 
     func nextTrack() {
         remote.sendCommand(.nextTrack)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateNowPlaying() }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            self?.updateNowPlaying()
+        }
     }
 
     func previousTrack() {
         remote.sendCommand(.previousTrack)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateNowPlaying() }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            self?.updateNowPlaying()
+        }
     }
 
     deinit {
-        pollTimer?.invalidate()
-        progressTimer?.invalidate()
+        MainActor.assumeIsolated {
+            pollTimer?.invalidate()
+            progressTimer?.invalidate()
+        }
     }
 
     private func setupNotifications() {
@@ -88,18 +105,17 @@ final class MediaService {
 
         isUpdatingNowPlaying = true
 
-        let finish: () -> Void = { [weak self] in
-            self?.isUpdatingNowPlaying = false
-            if self?.needsFollowupUpdate == true {
-                self?.needsFollowupUpdate = false
-                self?.updateNowPlaying()
-            }
-        }
-
         nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
-            guard let self else { finish(); return }
-            self.applyInfo(cliInfo)
-            finish()
+            let box = NowPlayingInfoBox(info: cliInfo)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.applyInfo(box.info)
+                self.isUpdatingNowPlaying = false
+                if self.needsFollowupUpdate {
+                    self.needsFollowupUpdate = false
+                    self.updateNowPlaying()
+                }
+            }
         }
     }
 
