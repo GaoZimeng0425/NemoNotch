@@ -230,18 +230,20 @@ final class OpenClawService {
 
     private func receiveMessage() {
         webSocketTask?.receive { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let message):
-                self.handleMessage(message)
-                self.receiveMessage()
-            case .failure(let error):
-                if (error as? URLError)?.code == .cannotConnectToHost {
-                    LogService.debug("WebSocket not reachable: \(error)", category: "OpenClaw")
-                } else {
-                    LogService.error("WebSocket error: \(error)", category: "OpenClaw")
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                switch result {
+                case .success(let message):
+                    self.handleMessage(message)
+                    self.receiveMessage()
+                case .failure(let error):
+                    if (error as? URLError)?.code == .cannotConnectToHost {
+                        LogService.debug("WebSocket not reachable: \(error)", category: "OpenClaw")
+                    } else {
+                        LogService.error("WebSocket error: \(error)", category: "OpenClaw")
+                    }
+                    self.scheduleReconnect()
                 }
-                self.scheduleReconnect()
             }
         }
     }
