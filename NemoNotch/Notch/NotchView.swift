@@ -322,7 +322,7 @@ struct NotchView: View {
         case .weather:
             WeatherTab()
         case .system:
-            EmptyView()
+            SystemTab()
         }
     }
 

@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var hotkeyService: HotkeyService?
     private var weatherService: WeatherService?
     private var hudService: HUDService?
+    private var systemService: SystemService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -127,6 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let hud = HUDService()
         self.hudService = hud
 
+        let system = SystemService()
+        self.systemService = system
+
         let notchCoordinator = NotchCoordinator { coordinator in
             AnyView(
                 NotchView()
@@ -140,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(notification)
                     .environment(weather)
                     .environment(hud)
+                    .environment(system)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in
