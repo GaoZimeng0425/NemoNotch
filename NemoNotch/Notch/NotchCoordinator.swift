@@ -145,6 +145,10 @@ final class NotchCoordinator {
     }
 
     private func restorePreviousApp() {
+        if AppDelegate.shared.shouldSuppressPreviousAppRestore {
+            previousApp = nil
+            return
+        }
         guard let app = previousApp else { return }
         previousApp = nil
         let currentFront = NSWorkspace.shared.frontmostApplication
@@ -212,6 +216,7 @@ final class NotchCoordinator {
     }
 
     private func handleMouseDown() {
+        guard !isContextMenuVisible else { return }
         let location = NSEvent.mouseLocation
         if status == .closed && NSMouseInRect(location, hitboxRect, false) {
             notchOpen()
