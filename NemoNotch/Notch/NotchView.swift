@@ -31,7 +31,7 @@ struct NotchView: View {
     private enum BadgeItem: Identifiable, Equatable {
         case notification(bundleID: String, count: Int)
         case media
-        case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool)
+        case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool, sessionID: String)
         case openclaw(state: AgentState, emoji: String)
         case calendar
 
@@ -39,8 +39,8 @@ struct NotchView: View {
             switch self {
             case .notification(let bundleID, _): "notification:\(bundleID)"
             case .media: "media"
-            case .ai(let source, let status, let tool, let waitingApproval):
-                "ai:\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
+            case .ai(let source, let status, let tool, let waitingApproval, let sessionID):
+                "ai:\(sessionID):\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
             case .openclaw(let state, let emoji): "openclaw:\(state.rawValue):\(emoji)"
             case .calendar: "calendar"
             }
@@ -59,7 +59,7 @@ struct NotchView: View {
         // Lower value = higher priority
         var priority: Int {
             switch self {
-            case .ai(_, _, _, let waitingApproval) where waitingApproval:
+            case .ai(_, _, _, let waitingApproval, _) where waitingApproval:
                 return 0
             case .notification:
                 return 1
@@ -85,7 +85,7 @@ struct NotchView: View {
         // Waiting for approval takes top priority
         for session in activeSessions {
             if session.phase.isWaitingForApproval {
-                items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true))
+                items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true, sessionID: session.id))
             }
         }
 
@@ -101,7 +101,7 @@ struct NotchView: View {
         // Working sessions
         for session in activeSessions {
             if !session.phase.isWaitingForApproval && session.status == ClaudeStatus.working {
-                items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false))
+                items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false, sessionID: session.id))
             }
         }
         
@@ -470,7 +470,7 @@ struct NotchView: View {
                 Image(systemName: "play.fill")
                     .foregroundStyle(NotchTheme.textPrimary)
             }
-        case .ai(let source, let status, let tool, let waitingApproval):
+        case .ai(let source, let status, let tool, let waitingApproval, _):
             switch style {
             case .compactLeft:
                 switch source {
