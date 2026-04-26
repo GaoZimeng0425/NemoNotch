@@ -12,7 +12,12 @@ struct SystemTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sortPicker
+            Picker("排序", selection: Bindable(systemService).processSortMode) {
+                Text("CPU").tag(ProcessSortMode.cpu)
+                Text("内存").tag(ProcessSortMode.memory)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 4)
 
             ForEach(sortedProcesses) { process in
                 processRow(process)
@@ -22,36 +27,6 @@ struct SystemTab: View {
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 12)
-    }
-
-    // MARK: - Sort Toggle
-
-    private var sortPicker: some View {
-        HStack(spacing: 0) {
-            sortButton("CPU", mode: .cpu)
-            sortButton("内存", mode: .memory)
-        }
-        .background(RoundedRectangle(cornerRadius: 6).fill(NotchTheme.surfaceSubtle))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(NotchTheme.stroke, lineWidth: 0.5))
-        .padding(.horizontal, 4)
-    }
-
-    private func sortButton(_ title: String, mode: ProcessSortMode) -> some View {
-        let selected = systemService.processSortMode == mode
-        return Button {
-            systemService.processSortMode = mode
-        } label: {
-            Text(title)
-                .font(.system(size: 11, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? NotchTheme.textPrimary : NotchTheme.textTertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(selected ? NotchTheme.surfaceEmphasis : .clear)
-                )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Process Row
