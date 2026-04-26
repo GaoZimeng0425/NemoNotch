@@ -376,7 +376,9 @@ final class ClaudeProvider: AIProvider {
     private func scheduleTimeoutCleanup() {
         timeoutTimer?.invalidate()
         timeoutTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
-            self?.cleanupStaleSessions()
+            Task { @MainActor [weak self] in
+                self?.cleanupStaleSessions()
+            }
         }
     }
 

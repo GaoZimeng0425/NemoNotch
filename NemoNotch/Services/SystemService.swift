@@ -213,7 +213,9 @@ final class SystemService {
         var path = [CChar](repeating: 0, count: 1024)
         let count = proc_pidpath(pid, &path, 1024)
         guard count > 0 else { return "PID \(pid)" }
-        let pathStr = String(cString: path)
+        let utf8Bytes = path.prefix(Int(count)).map { UInt8(bitPattern: $0) }
+        let raw = String(decoding: utf8Bytes, as: UTF8.self)
+        let pathStr = raw.split(separator: "\0", maxSplits: 1).first.map(String.init) ?? raw
         let components = pathStr.split(separator: "/")
         if let appName = components.last(where: { $0.hasSuffix(".app") }) {
             return String(appName.dropLast(4))

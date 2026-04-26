@@ -30,7 +30,9 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         locationManager.startMonitoringSignificantLocationChanges()
 
         timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
-            self?.fetchWeather()
+            Task { @MainActor [weak self] in
+                self?.fetchWeather()
+            }
         }
     }
 

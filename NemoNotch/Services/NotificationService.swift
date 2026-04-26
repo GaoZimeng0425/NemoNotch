@@ -50,7 +50,9 @@ final class NotificationService {
 
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.pollDock()
+            Task { @MainActor [weak self] in
+                self?.pollDock()
+            }
         }
     }
 
