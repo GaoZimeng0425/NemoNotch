@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(NotificationService.self) var notificationService
 
     @State private var selectedTab = 0
+    @State private var showAppPicker = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -83,6 +84,9 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .onMove { source, destination in
+                    launcherService.moveApp(from: source, to: destination)
+                }
                 .onDelete { offsets in
                     for index in offsets.sorted().reversed() {
                         launcherService.removeApp(at: index)
@@ -95,10 +99,92 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button("添加应用...") {
+                    launcherService.scanInstalledApps()
+                    showAppPicker = true
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
+        .sheet(isPresented: $showAppPicker) {
+            appPickerSheet
+        }
+    }
+
+    private var appPickerSheet: some View {
+        VStack(spacing: 0) {
+            Text("选择应用")
+                .font(.headline)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("搜索应用", text: Binding(
+                    get: { launcherService.scanSearchText },
+                    set: { launcherService.scanSearchText = $0 }
+                ))
+                .textFieldStyle(.plain)
+                if !launcherService.scanSearchText.isEmpty {
+                    Button {
+                        launcherService.scanSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(8)
+            .background(.bar)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            List(launcherService.filteredScannedApps) { app in
+                HStack {
+                    let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) {
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                            .resizable()
+                            .frame(width: 24, height: 24)
+                    }
+                    VStack(alignment: .leading) {
+                        Text(app.name)
+                        Text(app.bundleIdentifier)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? .blue : .secondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    launcherService.toggleInstalledApp(app)
+                }
+            }
+            .listStyle(.plain)
+
+            HStack {
+                Text("已选 \(launcherService.apps.count) 个应用")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("完成") {
+                    showAppPicker = false
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .frame(width: 400, height: 500)
     }
 
     // MARK: - AI CLI Hooks
