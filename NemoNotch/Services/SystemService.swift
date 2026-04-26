@@ -19,7 +19,6 @@ final class SystemService {
     // Process-level metrics
     var topProcessesByCPU: [ProcessEntry] = []
     var topProcessesByMemory: [ProcessEntry] = []
-    var processSortMode: ProcessSortMode = .cpu
 
     private var timer: Timer?
     private let maxHistory = 60

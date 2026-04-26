@@ -1,10 +1,5 @@
 import AppKit
 
-enum ProcessSortMode: String, CaseIterable {
-    case cpu
-    case memory
-}
-
 struct ProcessEntry: Identifiable {
     let id: Int32 // pid
     let displayName: String

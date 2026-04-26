@@ -3,22 +3,9 @@ import SwiftUI
 struct SystemTab: View {
     @Environment(SystemService.self) var systemService
 
-    private var sortedProcesses: [ProcessEntry] {
-        switch systemService.processSortMode {
-        case .cpu: systemService.topProcessesByCPU
-        case .memory: systemService.topProcessesByMemory
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("排序", selection: Bindable(systemService).processSortMode) {
-                Text("CPU").tag(ProcessSortMode.cpu)
-                Text("内存").tag(ProcessSortMode.memory)
-            }
-            .pickerStyle(.segmented)
-
-            ForEach(sortedProcesses) { process in
+            ForEach(systemService.topProcessesByCPU) { process in
                 processRow(process)
             }
 
@@ -52,9 +39,14 @@ struct SystemTab: View {
 
             Spacer(minLength: 0)
 
-            Text(processValue(process))
+            Text(formatMemory(process.memoryUsed))
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(NotchTheme.textSecondary)
+
+            Text(String(format: "%.1f%%", process.cpuUsage))
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(processColor(process))
+                .foregroundStyle(cpuColor(process.cpuUsage))
+                .frame(width: 42, alignment: .trailing)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -68,22 +60,10 @@ struct SystemTab: View {
         )
     }
 
-    private func processValue(_ process: ProcessEntry) -> String {
-        switch systemService.processSortMode {
-        case .cpu: String(format: "%.1f%%", process.cpuUsage)
-        case .memory: formatMemory(process.memoryUsed)
-        }
-    }
-
-    private func processColor(_ process: ProcessEntry) -> Color {
-        switch systemService.processSortMode {
-        case .cpu:
-            if process.cpuUsage > 80 { return .red }
-            if process.cpuUsage > 50 { return .yellow }
-            return NotchTheme.textPrimary
-        case .memory:
-            return NotchTheme.textPrimary
-        }
+    private func cpuColor(_ usage: Double) -> Color {
+        if usage > 80 { return .red }
+        if usage > 50 { return .yellow }
+        return NotchTheme.textPrimary
     }
 
     // MARK: - Summary Footer
@@ -112,8 +92,8 @@ struct SystemTab: View {
     private func formatMemory(_ bytes: UInt64) -> String {
         let mb = Double(bytes) / 1_048_576
         if mb >= 1024 {
-            return String(format: "%.1f GB", mb / 1024)
+            return String(format: "%.1fG", mb / 1024)
         }
-        return String(format: "%.0f MB", mb)
+        return String(format: "%.0fM", mb)
     }
 }
