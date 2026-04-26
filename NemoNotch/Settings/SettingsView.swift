@@ -28,7 +28,7 @@ struct SettingsView: View {
                 .tabItem { Label("通知", systemImage: "bell.badge") }
                 .tag(3)
         }
-        .frame(width: 430, height: 420)
+        .frame(width: 430, height: 460)
     }
 
     // MARK: - Tab Management

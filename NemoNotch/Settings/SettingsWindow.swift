@@ -4,7 +4,7 @@ import SwiftUI
 final class SettingsWindow<Content: View>: NSWindow {
     init(rootView: Content) {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 460),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -15,7 +15,7 @@ final class SettingsWindow<Content: View>: NSWindow {
         hasShadow = false
         center()
 
-        let hosting = NSHostingController(rootView: rootView.frame(width: 450, height: 400))
+        let hosting = NSHostingController(rootView: rootView.frame(width: 450, height: 460))
         contentView = hosting.view
     }
 }
