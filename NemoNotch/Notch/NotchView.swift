@@ -218,19 +218,23 @@ struct NotchView: View {
 
     private var notchTabBar: some View {
         let tabs = Tab.sorted(appSettings.enabledTabs)
-        let tabWidth: CGFloat = CGFloat(tabs.count) * 20 + CGFloat(tabs.count - 1) * 4
-        return HStack(spacing: 4) {
+        let count = tabs.count
+        let iconSize: CGFloat = count > 5 ? 14 : 18
+        let spacing: CGFloat = count > 5 ? 2 : 4
+        let fontSize: CGFloat = count > 5 ? 9 : 11
+        let tabWidth: CGFloat = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
+        return HStack(spacing: spacing) {
             ForEach(tabs) { tab in
                 let selected = coordinator.selectedTab == tab
                 Button {
                     selectTab(tab)
                 } label: {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 11, weight: selected ? .semibold : .regular, design: .rounded))
+                        .font(.system(size: fontSize, weight: selected ? .semibold : .regular, design: .rounded))
                         .foregroundStyle(selected ? NotchTheme.textPrimary : NotchTheme.textTertiary)
-                        .frame(width: 18, height: 18)
+                        .frame(width: iconSize, height: iconSize)
                         .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            RoundedRectangle(cornerRadius: iconSize / 3, style: .continuous)
                                 .fill(selected ? NotchTheme.surfaceEmphasis : .clear)
                         )
                 }

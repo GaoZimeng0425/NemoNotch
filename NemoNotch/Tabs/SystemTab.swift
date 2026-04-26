@@ -11,13 +11,12 @@ struct SystemTab: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Picker("排序", selection: Bindable(systemService).processSortMode) {
                 Text("CPU").tag(ProcessSortMode.cpu)
                 Text("内存").tag(ProcessSortMode.memory)
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal, 4)
 
             ForEach(sortedProcesses) { process in
                 processRow(process)
