@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(NotificationService.self) var notificationService
 
     @State private var selectedTab = 0
+    @State private var showAppPicker = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -27,7 +28,7 @@ struct SettingsView: View {
                 .tabItem { Label("通知", systemImage: "bell.badge") }
                 .tag(3)
         }
-        .frame(width: 430, height: 420)
+        .frame(width: 430, height: 460)
     }
 
     // MARK: - Tab Management
@@ -67,38 +68,136 @@ struct SettingsView: View {
     // MARK: - App List
 
     private var appListView: some View {
-        VStack(spacing: 0) {
-            List {
-                ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
-                    HStack {
-                        if let image = launcherService.icon(for: app) {
-                            Image(nsImage: image)
-                                .resizable()
-                                .frame(width: 24, height: 24)
-                        }
+        List {
+            ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
+                HStack(spacing: 10) {
+                    if let image = launcherService.icon(for: app) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(app.name)
-                        Spacer()
+                            .font(.body)
                         Text(app.bundleIdentifier)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                }
-                .onDelete { offsets in
-                    for index in offsets.sorted().reversed() {
+                    Spacer()
+                    Button {
                         launcherService.removeApp(at: index)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.red)
                     }
+                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 2)
             }
-
+            .onMove { source, destination in
+                launcherService.moveApp(from: source, to: destination)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
             HStack {
                 Text("\(launcherService.apps.count) 个应用")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button {
+                    launcherService.scanInstalledApps()
+                    showAppPicker = true
+                } label: {
+                    Label("添加应用", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.bar)
         }
+        .sheet(isPresented: $showAppPicker) {
+            appPickerSheet
+        }
+    }
+
+    private var appPickerSheet: some View {
+        VStack(spacing: 0) {
+            Text("选择应用")
+                .font(.headline)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("搜索应用", text: Binding(
+                    get: { launcherService.scanSearchText },
+                    set: { launcherService.scanSearchText = $0 }
+                ))
+                .textFieldStyle(.plain)
+                if !launcherService.scanSearchText.isEmpty {
+                    Button {
+                        launcherService.scanSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(8)
+            .background(.bar)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            List(launcherService.filteredScannedApps) { app in
+                let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
+                HStack(spacing: 10) {
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) {
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(app.name)
+                            .font(.body)
+                        Text(app.bundleIdentifier)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(isSelected ? .blue : .secondary.opacity(0.5))
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    launcherService.toggleInstalledApp(app)
+                }
+                .padding(.vertical, 2)
+            }
+            .listStyle(.plain)
+
+            HStack {
+                Text("已选 \(launcherService.apps.count) 个应用")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("完成") {
+                    showAppPicker = false
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .frame(width: 400, height: 500)
     }
 
     // MARK: - AI CLI Hooks
