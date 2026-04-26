@@ -70,25 +70,31 @@ struct SettingsView: View {
     private var appListView: some View {
         List {
             ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
-                HStack {
+                HStack(spacing: 10) {
                     if let image = launcherService.icon(for: app) {
                         Image(nsImage: image)
                             .resizable()
-                            .frame(width: 24, height: 24)
+                            .frame(width: 28, height: 28)
                     }
-                    Text(app.name)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(app.name)
+                            .font(.body)
+                        Text(app.bundleIdentifier)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
-                    Text(app.bundleIdentifier)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     Button {
                         launcherService.removeApp(at: index)
                     } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(.red.opacity(0.6))
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.red)
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(.vertical, 2)
             }
             .onMove { source, destination in
                 launcherService.moveApp(from: source, to: destination)
@@ -100,15 +106,17 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("添加应用...") {
+                Button {
                     launcherService.scanInstalledApps()
                     showAppPicker = true
+                } label: {
+                    Label("添加应用", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
             .background(.bar)
         }
         .sheet(isPresented: $showAppPicker) {
@@ -148,27 +156,30 @@ struct SettingsView: View {
             .padding(.bottom, 8)
 
             List(launcherService.filteredScannedApps) { app in
-                HStack {
-                    let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
+                let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
+                HStack(spacing: 10) {
                     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) {
                         Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                             .resizable()
-                            .frame(width: 24, height: 24)
+                            .frame(width: 28, height: 28)
                     }
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(app.name)
+                            .font(.body)
                         Text(app.bundleIdentifier)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isSelected ? .blue : .secondary)
+                        .font(.title2)
+                        .foregroundStyle(isSelected ? .blue : .secondary.opacity(0.5))
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
                     launcherService.toggleInstalledApp(app)
                 }
+                .padding(.vertical, 2)
             }
             .listStyle(.plain)
 
@@ -180,8 +191,8 @@ struct SettingsView: View {
                 Button("完成") {
                     showAppPicker = false
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
