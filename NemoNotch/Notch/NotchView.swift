@@ -219,9 +219,9 @@ struct NotchView: View {
     private var notchTabBar: some View {
         let tabs = Tab.sorted(appSettings.enabledTabs)
         let count = tabs.count
-        let iconSize: CGFloat = count > 5 ? 14 : 18
-        let spacing: CGFloat = count > 5 ? 2 : 4
-        let fontSize: CGFloat = count > 5 ? 9 : 11
+        let iconSize: CGFloat = count > 5 ? 16 : 18
+        let spacing: CGFloat = count > 5 ? 3 : 4
+        let fontSize: CGFloat = count > 5 ? 10 : 11
         let tabWidth: CGFloat = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
         return HStack(spacing: spacing) {
             ForEach(tabs) { tab in

@@ -48,7 +48,7 @@ enum NotchConstants {
 
     // Tab content
     static let tabContentHorizontalPadding: CGFloat = 20
-    static let tabContentTopPadding: CGFloat = 8
+    static let tabContentTopPadding: CGFloat = 16
     static let tabBarTopPadding: CGFloat = 10
     static let cornerRadiusClosed: CGFloat = 8
     static let cornerRadiusOpened: CGFloat = 24
