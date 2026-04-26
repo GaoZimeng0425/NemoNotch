@@ -20,7 +20,7 @@ enum NotchConstants {
 
     // Badge layout
     static let closedWidthInset: CGFloat = 4
-    static let upcomingEventThresholdMinutes: Int = 60
+    static let upcomingEventThresholdMinutes: Int = 15
 
     // Animation durations
     static let openSpringDuration: Double = 0.314

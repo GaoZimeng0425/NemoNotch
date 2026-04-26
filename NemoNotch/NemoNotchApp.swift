@@ -75,6 +75,7 @@ struct MenuContent: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
+    private var suppressRestoreUntil: Date = .distantPast
     nonisolated(unsafe) static var shared = {
         let instance = AppDelegate()
         return instance
@@ -93,6 +94,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var hotkeyService: HotkeyService?
     private var weatherService: WeatherService?
     private var hudService: HUDService?
+    private var systemService: SystemService?
+
+    var shouldSuppressPreviousAppRestore: Bool {
+        Date() < suppressRestoreUntil
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -127,6 +133,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let hud = HUDService()
         self.hudService = hud
 
+        let system = SystemService()
+        self.systemService = system
+
         let notchCoordinator = NotchCoordinator { coordinator in
             AnyView(
                 NotchView()
@@ -140,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(notification)
                     .environment(weather)
                     .environment(hud)
+                    .environment(system)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in
@@ -159,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @MainActor
     func showSettings() {
+        suppressRestoreUntil = Date().addingTimeInterval(1.2)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -178,12 +189,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         settingsWindow?.center()
+        settingsWindow?.orderFrontRegardless()
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window === settingsWindow {
+            suppressRestoreUntil = Date().addingTimeInterval(0.6)
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow, window === settingsWindow {
             settingsWindow = nil
+            suppressRestoreUntil = .distantPast
             NSApp.setActivationPolicy(.accessory)
         }
     }

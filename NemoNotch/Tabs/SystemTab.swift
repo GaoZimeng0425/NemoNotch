@@ -3,218 +3,97 @@ import SwiftUI
 struct SystemTab: View {
     @Environment(SystemService.self) var systemService
 
-    private var memoryRatio: Double {
-        guard systemService.memoryTotal > 0 else { return 0 }
-        return Double(systemService.memoryUsed) / Double(systemService.memoryTotal)
-    }
-
-    private var diskUsed: UInt64 {
-        systemService.diskTotal - systemService.diskFree
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            cpuRow
-            memoryRow
-            batteryRow
-            diskRow
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(systemService.topProcessesByCPU) { process in
+                processRow(process)
+            }
+
+            summaryFooter
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 12)
     }
 
-    // MARK: - CPU
+    // MARK: - Process Row
 
-    private var cpuRow: some View {
+    private func processRow(_ process: ProcessEntry) -> some View {
         HStack(spacing: 8) {
-            Text("CPU")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 40, alignment: .leading)
-
-            Text(String(format: "%.0f%%", systemService.cpuUsage))
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundStyle(cpuColor)
-                .frame(width: 38, alignment: .trailing)
-
-            cpuSparkline
-                .frame(maxWidth: .infinity)
-        }
-        .padding(8)
-        .background(rowBackground)
-    }
-
-    private var cpuColor: Color {
-        let usage = systemService.cpuUsage
-        if usage > 80 { return .red }
-        if usage > 50 { return .yellow }
-        return .white
-    }
-
-    private var cpuSparkline: some View {
-        Canvas { context, size in
-            let history = systemService.cpuHistory
-            guard history.count > 1 else { return }
-
-            let points = history.enumerated().map { index, value in
-                CGPoint(
-                    x: size.width * CGFloat(index) / CGFloat(history.count - 1),
-                    y: size.height * (1 - CGFloat(value / 100))
-                )
+            if let icon = process.icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: "app.dashed")
+                    .font(.system(size: 11))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .frame(width: 20, height: 20)
             }
 
-            var fillPath = Path()
-            fillPath.move(to: CGPoint(x: points[0].x, y: size.height))
-            fillPath.addLine(to: points[0])
-            for point in points.dropFirst() {
-                fillPath.addLine(to: point)
-            }
-            fillPath.addLine(to: CGPoint(x: points.last!.x, y: size.height))
-            fillPath.closeSubpath()
+            Text(process.displayName)
+                .font(.system(size: 12))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
 
-            context.fill(
-                fillPath,
-                with: .color(NotchTheme.surfaceEmphasis)
-            )
+            Spacer(minLength: 0)
 
-            var linePath = Path()
-            linePath.move(to: points[0])
-            for point in points.dropFirst() {
-                linePath.addLine(to: point)
-            }
-
-            context.stroke(
-                linePath,
-                with: .color(NotchTheme.accent.opacity(0.9)),
-                lineWidth: 1
-            )
-        }
-        .frame(height: 22)
-    }
-
-    // MARK: - Memory
-
-    private var memoryRow: some View {
-        HStack(spacing: 8) {
-            Text("RAM")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 40, alignment: .leading)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(NotchTheme.surfaceEmphasis)
-                    Capsule()
-                        .fill(memoryGradient)
-                        .frame(width: geo.size.width * CGFloat(memoryRatio))
-                }
-            }
-            .frame(height: 6)
-
-            Text("\(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
+            Text(formatMemory(process.memoryUsed))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(NotchTheme.textSecondary)
+
+            Text(String(format: "%.1f%%", process.cpuUsage))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(cpuColor(process.cpuUsage))
+                .frame(width: 42, alignment: .trailing)
         }
-        .padding(8)
-        .background(rowBackground)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(NotchTheme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                )
+        )
     }
 
-    private var memoryGradient: Color {
-        let ratio = memoryRatio
-        if ratio > 0.85 { return .red }
-        if ratio > 0.65 { return .yellow }
-        return .white.opacity(0.5)
+    private func cpuColor(_ usage: Double) -> Color {
+        if usage > 80 { return .red }
+        if usage > 50 { return .yellow }
+        return NotchTheme.textPrimary
     }
 
-    // MARK: - Battery
+    // MARK: - Summary Footer
 
-    private var batteryRow: some View {
-        HStack(spacing: 8) {
-            Text("BAT")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 40, alignment: .leading)
-
-            Image(systemName: batteryIcon)
-                .font(.system(size: 14))
-                .foregroundStyle(NotchTheme.textSecondary)
-
+    private var summaryFooter: some View {
+        HStack(spacing: 6) {
+            Text("CPU \(Int(systemService.cpuUsage))%")
+            Text("·")
+            Text("RAM \(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
+            Text("·")
             Text("\(systemService.batteryLevel)%")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundStyle(NotchTheme.textPrimary)
-
-            Spacer(minLength: 0)
-
-            Text(batteryStatus)
-                .font(.system(size: 10))
-                .foregroundStyle(NotchTheme.textTertiary)
         }
-        .padding(8)
-        .background(rowBackground)
-    }
-
-    private var batteryIcon: String {
-        if systemService.isCharging {
-            return "battery.100.bolt"
-        }
-        let level = systemService.batteryLevel
-        switch level {
-        case 0...12:   return "battery.0"
-        case 13...37:  return "battery.25"
-        case 38...62:  return "battery.50"
-        case 63...87:  return "battery.75"
-        default:       return "battery.100"
-        }
-    }
-
-    private var batteryStatus: String {
-        if systemService.isCharging {
-            return "充电中"
-        }
-        let minutes = systemService.timeRemaining
-        if minutes > 0 {
-            return "剩余 \(minutes) 分钟"
-        }
-        return ""
-    }
-
-    // MARK: - Disk
-
-    private var diskRow: some View {
-        HStack(spacing: 8) {
-            Text("DISK")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 40, alignment: .leading)
-
-            Text("\(formatGB(diskUsed))/\(formatGB(systemService.diskTotal))")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(NotchTheme.textPrimary)
-
-            Spacer(minLength: 0)
-
-            Text("\(formatGB(systemService.diskFree)) GB 可用")
-                .font(.system(size: 10))
-                .foregroundStyle(NotchTheme.textTertiary)
-        }
-        .padding(8)
-        .background(rowBackground)
+        .font(.system(size: 10))
+        .foregroundStyle(NotchTheme.textTertiary)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 2)
     }
 
     // MARK: - Helpers
 
-    private var rowBackground: some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(NotchTheme.surface)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(NotchTheme.stroke, lineWidth: 0.6)
-            )
-    }
-
     private func formatGB(_ bytes: UInt64) -> String {
         let gb = Double(bytes) / 1_073_741_824
         return String(format: "%.0f", gb)
+    }
+
+    private func formatMemory(_ bytes: UInt64) -> String {
+        let mb = Double(bytes) / 1_048_576
+        if mb >= 1024 {
+            return String(format: "%.1fG", mb / 1024)
+        }
+        return String(format: "%.0fM", mb)
     }
 }
