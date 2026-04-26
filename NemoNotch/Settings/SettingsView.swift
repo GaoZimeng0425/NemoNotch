@@ -28,7 +28,7 @@ struct SettingsView: View {
                 .tabItem { Label("通知", systemImage: "bell.badge") }
                 .tag(3)
         }
-        .frame(width: 430, height: 480)
+        .frame(width: 430, height: 420)
     }
 
     // MARK: - Tab Management
@@ -68,34 +68,33 @@ struct SettingsView: View {
     // MARK: - App List
 
     private var appListView: some View {
-        VStack(spacing: 0) {
-            List {
-                ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
-                    HStack {
-                        if let image = launcherService.icon(for: app) {
-                            Image(nsImage: image)
-                                .resizable()
-                                .frame(width: 24, height: 24)
-                        }
-                        Text(app.name)
-                        Spacer()
-                        Text(app.bundleIdentifier)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button {
-                            launcherService.removeApp(at: index)
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red.opacity(0.6))
-                        }
-                        .buttonStyle(.plain)
+        List {
+            ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
+                HStack {
+                    if let image = launcherService.icon(for: app) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .frame(width: 24, height: 24)
                     }
-                }
-                .onMove { source, destination in
-                    launcherService.moveApp(from: source, to: destination)
+                    Text(app.name)
+                    Spacer()
+                    Text(app.bundleIdentifier)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        launcherService.removeApp(at: index)
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-
+            .onMove { source, destination in
+                launcherService.moveApp(from: source, to: destination)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
             HStack {
                 Text("\(launcherService.apps.count) 个应用")
                     .font(.caption)
@@ -110,6 +109,7 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            .background(.bar)
         }
         .sheet(isPresented: $showAppPicker) {
             appPickerSheet
