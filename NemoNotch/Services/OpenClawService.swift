@@ -548,7 +548,9 @@ final class OpenClawService {
     private func startTTLTimer() {
         ttlTimer?.invalidate()
         ttlTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            self?.cleanupStaleAgents()
+            Task { @MainActor [weak self] in
+                self?.cleanupStaleAgents()
+            }
         }
     }
 
@@ -571,7 +573,9 @@ final class OpenClawService {
         gatewayOnline = false
         reconnectTimer?.invalidate()
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
-            self?.connect()
+            Task { @MainActor [weak self] in
+                self?.connect()
+            }
         }
     }
 }

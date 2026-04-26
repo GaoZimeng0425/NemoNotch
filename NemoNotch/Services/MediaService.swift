@@ -62,37 +62,61 @@ final class MediaService {
         let nc = DistributedNotificationCenter.default()
 
         nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingInfoDidChangeNotification"),
-                       object: nil, queue: .main) { [weak self] _ in self?.updateNowPlaying() }
+                       object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateNowPlaying()
+            }
+        }
 
         nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"),
-                       object: nil, queue: .main) { [weak self] _ in self?.updateNowPlaying() }
+                       object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateNowPlaying()
+            }
+        }
 
         nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingApplicationDidChangeNotification"),
-                       object: nil, queue: .main) { [weak self] _ in self?.updateNowPlaying() }
+                       object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateNowPlaying()
+            }
+        }
 
         nc.addObserver(forName: .init("com.spotify.client.PlaybackStateChanged"),
-                       object: nil, queue: .main) { [weak self] _ in self?.updateNowPlaying() }
+                       object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateNowPlaying()
+            }
+        }
 
         nc.addObserver(forName: .init("com.apple.Music.playerInfo"),
-                       object: nil, queue: .main) { [weak self] _ in self?.updateNowPlaying() }
+                       object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateNowPlaying()
+            }
+        }
     }
 
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.updateNowPlaying()
+            Task { @MainActor [weak self] in
+                self?.updateNowPlaying()
+            }
         }
     }
 
     private func startProgressTick() {
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            guard self.playbackState.isPlaying else { return }
-            guard self.playbackState.duration > 0 else { return }
-            guard !self.playbackState.isEmpty else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard self.playbackState.isPlaying else { return }
+                guard self.playbackState.duration > 0 else { return }
+                guard !self.playbackState.isEmpty else { return }
 
-            let nextPosition = min(self.playbackState.duration, self.playbackState.position + 0.5)
-            if nextPosition > self.playbackState.position {
-                self.playbackState.position = nextPosition
+                let nextPosition = min(self.playbackState.duration, self.playbackState.position + 0.5)
+                if nextPosition > self.playbackState.position {
+                    self.playbackState.position = nextPosition
+                }
             }
         }
     }

@@ -219,7 +219,9 @@ final class GeminiProvider: AIProvider {
     private func startFileMonitoring() {
         guard fileMonitorTimer == nil else { return }
         fileMonitorTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            self?.pollFileChanges()
+            Task { @MainActor [weak self] in
+                self?.pollFileChanges()
+            }
         }
     }
 
@@ -388,7 +390,9 @@ final class GeminiProvider: AIProvider {
     private func scheduleTimeoutCleanup() {
         timeoutTimer?.invalidate()
         timeoutTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
-            self?.cleanupStaleSessions()
+            Task { @MainActor [weak self] in
+                self?.cleanupStaleSessions()
+            }
         }
     }
 
