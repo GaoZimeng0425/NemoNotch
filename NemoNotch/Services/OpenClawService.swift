@@ -547,13 +547,13 @@ final class OpenClawService {
 
     private func startTTLTimer() {
         ttlTimer?.invalidate()
-        ttlTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        ttlTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.cleanupStaleAgents()
         }
     }
 
     private func cleanupStaleAgents() {
-        let idleThreshold = Date().addingTimeInterval(-120)
+        let idleThreshold = Date().addingTimeInterval(-15)
         for (id, agent) in agents {
             if agent.lastEventTime < idleThreshold, agent.state != .idle {
                 agents[id]?.state = .idle
