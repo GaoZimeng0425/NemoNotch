@@ -24,7 +24,9 @@ final class SystemService {
     init() {
         update()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.update()
+            Task { @MainActor in
+                self?.update()
+            }
         }
     }
 
