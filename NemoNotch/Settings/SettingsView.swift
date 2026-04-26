@@ -28,7 +28,7 @@ struct SettingsView: View {
                 .tabItem { Label("通知", systemImage: "bell.badge") }
                 .tag(3)
         }
-        .frame(width: 430, height: 420)
+        .frame(width: 430, height: 480)
     }
 
     // MARK: - Tab Management
@@ -82,15 +82,17 @@ struct SettingsView: View {
                         Text(app.bundleIdentifier)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Button {
+                            launcherService.removeApp(at: index)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .onMove { source, destination in
                     launcherService.moveApp(from: source, to: destination)
-                }
-                .onDelete { offsets in
-                    for index in offsets.sorted().reversed() {
-                        launcherService.removeApp(at: index)
-                    }
                 }
             }
 
