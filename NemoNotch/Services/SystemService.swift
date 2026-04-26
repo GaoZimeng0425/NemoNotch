@@ -110,7 +110,7 @@ final class SystemService {
         guard let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeRetainedValue() as? [String: Any] else { continue }
+            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any] else { continue }
             if let capacity = info[kIOPSCurrentCapacityKey] as? Int {
                 batteryLevel = capacity
             }
