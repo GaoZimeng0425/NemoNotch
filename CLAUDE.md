@@ -192,6 +192,7 @@ notification > openclaw active > ai approval > ai working > media playing > cale
 **Tab 层（内容展示）**
 
 - 7 个 Tab（media/calendar/claude/openclaw/launcher/weather/system），每个对应一个 Service
+- `system` tab 展示 Top 5 进程资源排行（CPU + 内存），使用 `libproc` 内核 API 获取进程数据，`NSRunningApplication` 补充图标和名称
 - `claude` tab 映射到 `AIChatTab`，统一展示 Claude 和 Gemini 会话列表、对话详情、权限审批
 - `ChatMessageView` 渲染各类型消息（用户/助手/工具/系统），`MarkdownRenderer` 提供轻量 Markdown 解析
 - `NotchView` 根据 `Tab.sorted()` 渲染启用的标签页，支持滑动手势切换
@@ -317,6 +318,7 @@ notification > openclaw active > ai approval > ai working > media playing > cale
 
 ## 开发约定
 
+- 每次新增功能或修改已有功能后，必须同步更新 `README.md` 和 `README_CN.md` 中对应的功能描述、技术栈等章节
 - 所有 Service 使用 `@Observable` 宏，通过 SwiftUI 响应式更新 UI
 - AI 提供商实现 `AIProvider` 协议，通过 `AICLIMonitorService` 统一管理
 - 刘海窗口 level 固定为 `.statusBar + 8`，属性为 `fullScreenAuxiliary` + `stationary` + `canJoinAllSpaces`
