@@ -22,7 +22,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 | **OpenClaw** | Multi-agent status monitoring, WebSocket real-time connection, agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
 | **Weather** | Current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
-| **System** | CPU / memory / battery / disk monitoring, sparkline history, color-coded thresholds |
+| **System** | Top 5 process resource ranking (CPU & memory), app icons, system summary footer (CPU / RAM / battery) |
 
 ### Highlights
 
@@ -40,6 +40,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **MediaPlayer / MediaRemote** — Media playback control
 - **EventKit** — Calendar event access
 - **IOKit** — System monitoring (CPU, memory, battery, disk)
+- **libproc** — Per-process resource tracking via kernel APIs
 - **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7-day rotation)
 - **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
 
