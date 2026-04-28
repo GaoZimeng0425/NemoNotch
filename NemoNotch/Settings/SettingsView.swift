@@ -13,11 +13,11 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             tabManagementView
-                .tabItem { Label("Tab 管理", systemImage: "sidebar.left") }
+                .tabItem { Label("settings.tabs", systemImage: "sidebar.left") }
                 .tag(0)
 
             appListView
-                .tabItem { Label("应用列表", systemImage: "square.grid.2x2") }
+                .tabItem { Label("settings.app_list", systemImage: "square.grid.2x2") }
                 .tag(1)
 
             claudeView
@@ -25,17 +25,18 @@ struct SettingsView: View {
                 .tag(2)
 
             notificationListView
-                .tabItem { Label("通知", systemImage: "bell.badge") }
+                .tabItem { Label("settings.notifications", systemImage: "bell.badge") }
                 .tag(3)
         }
         .frame(width: 430, height: 460)
+        .environment(\.locale, appSettings.currentLocale)
     }
 
     // MARK: - Tab Management
 
     private var tabManagementView: some View {
         Form {
-            Section("显示的 Tab") {
+            Section("settings.visible_tabs") {
                 ForEach(Tab.allCases) { tab in
                     Toggle(tab.title, isOn: Binding(
                         get: { appSettings.enabledTabs.contains(tab) },
@@ -50,13 +51,24 @@ struct SettingsView: View {
                 }
             }
 
-            Section("默认 Tab") {
-                Picker("展开时默认显示", selection: Binding(
+            Section("settings.default_tab") {
+                Picker("settings.default_tab_picker", selection: Binding(
                     get: { appSettings.defaultTab },
                     set: { appSettings.defaultTab = $0 }
                 )) {
                     ForEach(Tab.sorted(appSettings.enabledTabs)) { tab in
                         Text(tab.title).tag(tab)
+                    }
+                }
+            }
+
+            Section("settings.language") {
+                Picker("settings.language", selection: Binding(
+                    get: { appSettings.language },
+                    set: { appSettings.language = $0 }
+                )) {
+                    ForEach(AppLanguage.allCases, id: \.self) { lang in
+                        Text(languageDisplayName(lang)).tag(lang)
                     }
                 }
             }
@@ -102,7 +114,7 @@ struct SettingsView: View {
         }
         .safeAreaInset(edge: .bottom) {
             HStack {
-                Text("\(launcherService.apps.count) 个应用")
+                Text("settings.apps_count \(launcherService.apps.count)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -110,7 +122,7 @@ struct SettingsView: View {
                     launcherService.scanInstalledApps()
                     showAppPicker = true
                 } label: {
-                    Label("添加应用", systemImage: "plus")
+                    Label("settings.add_app", systemImage: "plus")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
@@ -126,7 +138,7 @@ struct SettingsView: View {
 
     private var appPickerSheet: some View {
         VStack(spacing: 0) {
-            Text("选择应用")
+            Text("settings.app_picker_title")
                 .font(.headline)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
@@ -134,7 +146,7 @@ struct SettingsView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("搜索应用", text: Binding(
+                TextField("launcher.search_apps", text: Binding(
                     get: { launcherService.scanSearchText },
                     set: { launcherService.scanSearchText = $0 }
                 ))
@@ -184,11 +196,11 @@ struct SettingsView: View {
             .listStyle(.plain)
 
             HStack {
-                Text("已选 \(launcherService.apps.count) 个应用")
+                Text("settings.apps_selected_count \(launcherService.apps.count)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("完成") {
+                Button("common.done") {
                     showAppPicker = false
                 }
                 .buttonStyle(.bordered)
@@ -224,14 +236,14 @@ struct SettingsView: View {
                 onUninstall: { aiService.geminiProvider.uninstallHooks() }
             )
 
-            Text("Hooks 允许 NemoNotch 实时监控 AI CLI 的会话状态。")
+            Text("settings.hooks_description")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
             if aiService.serverRunning {
-                Label("服务运行中", systemImage: "antenna.radiowaves.left.and.right")
+                Label("settings.server_running", systemImage: "antenna.radiowaves.left.and.right")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -244,23 +256,23 @@ struct SettingsView: View {
     private func hookSection(name: String, icon: String, isInstalled: Bool, onInstall: @escaping () -> Void, onUninstall: @escaping () -> Void) -> some View {
         VStack(spacing: 8) {
             if isInstalled {
-                Label("\(name) Hooks: 已安装", systemImage: "checkmark.circle.fill")
+                Label("settings.hooks_installed \(name)", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.title3)
             } else {
-                Label("\(name) Hooks: 未安装", systemImage: "xmark.circle.fill")
+                Label("settings.hooks_not_installed \(name)", systemImage: "xmark.circle.fill")
                     .foregroundStyle(.red)
                     .font(.title3)
             }
 
             HStack(spacing: 12) {
-                Button(isInstalled ? "重新安装" : "安装 Hooks") {
+                Button(isInstalled ? "settings.reinstall" : "settings.install_hooks") {
                     onInstall()
                 }
                 .controlSize(.large)
 
                 if isInstalled {
-                    Button("卸载 Hooks", role: .destructive) {
+                    Button("settings.uninstall_hooks", role: .destructive) {
                         onUninstall()
                     }
                     .controlSize(.large)
@@ -276,13 +288,13 @@ struct SettingsView: View {
             if !notificationService.isAXTrusted {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("需要辅助功能权限", systemImage: "exclamationmark.triangle.fill")
+                        Label("settings.accessibility_required", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                             .font(.headline)
-                        Text("NemoNotch 需要辅助功能权限才能读取应用通知角标。")
+                        Text("settings.accessibility_description")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button("打开系统设置") {
+                        Button("settings.open_system_settings") {
                             notificationService.openAccessibilitySettings()
                         }
                         .controlSize(.small)
@@ -291,9 +303,9 @@ struct SettingsView: View {
                 }
             }
 
-            Section("已监控的应用") {
+            Section("settings.monitored_apps") {
                 if appSettings.monitoredApps.isEmpty {
-                    Text("尚未添加监控应用")
+                    Text("settings.no_monitored_apps")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(appSettings.monitoredApps, id: \.self) { bundleID in
@@ -329,9 +341,9 @@ struct SettingsView: View {
             }
 
             Section {
-                Button("选择应用...") {
+                Button("settings.add_monitored_app") {
                     let panel = NSOpenPanel()
-                    panel.title = "选择要监控的应用"
+                    panel.title = String(localized: "settings.select_monitored_app")
                     panel.canChooseFiles = true
                     panel.canChooseDirectories = false
                     panel.allowsMultipleSelection = false
@@ -349,9 +361,9 @@ struct SettingsView: View {
                     }
                 }
             } header: {
-                Text("添加应用")
+                Text("settings.add_monitored_app")
             } footer: {
-                Text("选择需要监控未读通知的应用（如 Slack、微信）")
+                Text("settings.monitored_footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -368,5 +380,13 @@ struct SettingsView: View {
             return name
         }
         return bundleID
+    }
+
+    private func languageDisplayName(_ language: AppLanguage) -> String {
+        switch language {
+        case .system: return String(localized: "settings.language.system")
+        case .en: return String(localized: "settings.language.en")
+        case .zhHans: return String(localized: "settings.language.zh")
+        }
     }
 }

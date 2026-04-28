@@ -16,7 +16,7 @@ struct WeatherTab: View {
             ProgressView()
                 .controlSize(.small)
                 .tint(NotchTheme.textSecondary)
-            Text("加载中...")
+            Text("weather.loading")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
         }
@@ -68,11 +68,11 @@ struct WeatherTab: View {
 
     private var statsRow: some View {
         HStack(spacing: 0) {
-            statItem(label: "体感", value: "\(Int(weatherService.feelsLike))°")
+            statItem(label: String(localized: "weather.feels_like"), value: "\(Int(weatherService.feelsLike))°")
             Spacer(minLength: 0)
-            statItem(label: "湿度", value: "\(weatherService.humidity)%")
+            statItem(label: String(localized: "weather.humidity"), value: "\(weatherService.humidity)%")
             Spacer(minLength: 0)
-            statItem(label: "风速", value: "\(Int(weatherService.windSpeed))km/h")
+            statItem(label: String(localized: "weather.wind_speed"), value: "\(Int(weatherService.windSpeed))km/h")
         }
         .padding(.vertical, 8)
         .notchCard(radius: 8, fill: NotchTheme.surface)

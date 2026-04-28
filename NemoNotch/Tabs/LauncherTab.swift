@@ -34,7 +34,7 @@ struct LauncherTab: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textTertiary)
-            TextField("搜索应用", text: Binding(
+            TextField("launcher.search_apps", text: Binding(
                 get: { launcherService.searchText },
                 set: { launcherService.searchText = $0 }
             ))

@@ -18,7 +18,7 @@ struct MediaTab: View {
             Image(systemName: "music.note")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("未在播放")
+            Text("media.not_playing")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
         }

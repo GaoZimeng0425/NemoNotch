@@ -5,6 +5,7 @@ struct DateStripView: View {
     let selectedDate: Date
     let hasEvents: (Date) -> Bool
     let onSelect: (Date) -> Void
+    var locale: Locale = .current
 
     private var selectedDateId: Date {
         Calendar.current.startOfDay(for: selectedDate)
@@ -75,7 +76,7 @@ struct DateStripView: View {
 
     private func weekdayShort(for date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.locale = locale
         formatter.dateFormat = "EEE"
         return formatter.string(from: date)
     }

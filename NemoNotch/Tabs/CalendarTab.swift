@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CalendarTab: View {
     @Environment(CalendarService.self) var calendarService
+    @Environment(AppSettings.self) var appSettings
 
     var body: some View {
         switch calendarService.authorizationStatus {
@@ -22,7 +23,8 @@ struct CalendarTab: View {
                 dates: calendarService.dateRange,
                 selectedDate: calendarService.selectedDate,
                 hasEvents: { calendarService.hasEvents(on: $0) },
-                onSelect: { calendarService.selectedDate = $0 }
+                onSelect: { calendarService.selectedDate = $0 },
+                locale: appSettings.currentLocale
             )
             .padding(.vertical, 4)
 
@@ -36,7 +38,7 @@ struct CalendarTab: View {
     }
 
     private var monthHeader: some View {
-        Text(calendarService.selectedMonthLabel)
+        Text(calendarService.monthLabel(locale: appSettings.currentLocale))
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(NotchTheme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -48,10 +50,10 @@ struct CalendarTab: View {
             Image(systemName: "calendar.badge.lock")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("需要日历权限")
+            Text("calendar.permission_required")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
-            Button("授权访问") {
+            Button("calendar.request_access") {
                 calendarService.requestAccess()
             }
             .buttonStyle(NotchPillButtonStyle(prominent: true))
@@ -64,10 +66,10 @@ struct CalendarTab: View {
             Image(systemName: "calendar.badge.exclamationmark")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("日历访问被拒绝")
+            Text("calendar.permission_denied")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
-            Button("打开系统设置") {
+            Button("calendar.open_settings") {
                 calendarService.openSystemSettings()
             }
             .buttonStyle(NotchPillButtonStyle(prominent: true))
@@ -99,7 +101,7 @@ struct CalendarTab: View {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("该日无日程")
+            Text("calendar.no_events")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
         }
@@ -168,7 +170,7 @@ private struct EventRowContent: View {
     private var eventTimeRange: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        if event.isAllDay { return "全天" }
+        if event.isAllDay { return String(localized: "calendar.all_day") }
         return "\(formatter.string(from: event.startDate)) - \(formatter.string(from: event.endDate))"
     }
 }

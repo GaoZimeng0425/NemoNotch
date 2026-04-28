@@ -35,40 +35,41 @@ struct MenuContent: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        Button("展开 Notch") {
+        Button("menu.open_notch") {
             coordinator?.notchOpen()
         }
 
         Divider()
 
         if aiService.claudeProvider.isHookInstalled {
-            Text("Claude Code Hooks: 已安装 ✓")
+            Text("menu.claude_hooks_installed")
         } else {
-            Button("安装 Claude Code Hooks...") {
+            Button("menu.install_claude_hooks") {
                 aiService.claudeProvider.installHooks()
             }
         }
         if aiService.geminiProvider.isHookInstalled {
-            Text("Gemini CLI Hooks: 已安装 ✓")
+            Text("menu.gemini_hooks_installed")
         } else {
-            Button("安装 Gemini CLI Hooks...") {
+            Button("menu.install_gemini_hooks") {
                 aiService.geminiProvider.installHooks()
             }
         }
 
         Divider()
 
-        Button("偏好设置...") {
+        Button("menu.preferences") {
             onOpenSettings()
         }
 
-        Button("关于 NemoNotch") {
+        Button("menu.about") {
             NSApp.activate(ignoringOtherApps: true)
             NSApp.orderFrontStandardAboutPanel(nil)
         }
-        Button("退出 NemoNotch") {
+        Button("menu.quit") {
             NSApplication.shared.terminate(nil)
         }
+        .environment(\.locale, AppDelegate.shared.appSettings?.currentLocale ?? Locale.current)
     }
 }
 
@@ -84,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     nonisolated override init() { super.init() }
 
     private(set) var coordinator: NotchCoordinator?
-    private var appSettings: AppSettings?
+    private(set) var appSettings: AppSettings?
     private var mediaService: MediaService?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
