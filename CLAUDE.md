@@ -318,6 +318,7 @@ notification > openclaw active > ai approval > ai working > media playing > cale
 
 ## 开发约定
 
+- 设计文档放在 `docs/plans/` 目录，已实现的 plan 自动归档，提交时一并提交 plan 文档
 - 每次新增功能或修改已有功能后，必须同步更新 `README.md` 和 `README_CN.md` 中对应的功能描述、技术栈等章节
 - 所有 Service 使用 `@Observable` 宏，通过 SwiftUI 响应式更新 UI
 - AI 提供商实现 `AIProvider` 协议，通过 `AICLIMonitorService` 统一管理

@@ -260,11 +260,11 @@ final class NotchCoordinator {
         )
         contextMenuDelegate = delegate
         menu.delegate = delegate
-        let settingsItem = NSMenuItem(title: "设置...", action: #selector(ContextMenuDelegate.openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: String(localized: "notch.context.settings"), action: #selector(ContextMenuDelegate.openSettings), keyEquivalent: ",")
         settingsItem.target = delegate
         menu.addItem(settingsItem)
         menu.addItem(NSMenuItem.separator())
-        let quitItem = NSMenuItem(title: "退出 NemoNotch", action: #selector(ContextMenuDelegate.quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: String(localized: "notch.context.quit"), action: #selector(ContextMenuDelegate.quitApp), keyEquivalent: "q")
         quitItem.target = delegate
         menu.addItem(quitItem)
         menu.popUp(positioning: nil, at: point, in: nil)

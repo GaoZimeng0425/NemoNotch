@@ -212,6 +212,7 @@ struct NotchView: View {
         .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
+        .environment(\.locale, appSettings.currentLocale)
     }
 
     // MARK: - Tab icons in notch

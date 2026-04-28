@@ -20,7 +20,7 @@ struct OpenClawTab: View {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("OpenClaw 未安装")
+            Text("openclaw.not_installed")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             Text("npm install -g openclaw@latest")
@@ -35,14 +35,14 @@ struct OpenClawTab: View {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("Gateway 离线")
+            Text("openclaw.gateway_offline")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.orange)
                     .frame(width: 6, height: 6)
-                Text("等待连接...")
+                Text("openclaw.waiting_for_connection")
                     .font(.system(size: 9))
                     .foregroundStyle(NotchTheme.textTertiary)
             }
@@ -55,14 +55,14 @@ struct OpenClawTab: View {
             Image(systemName: "ladybug")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("所有 Agent 空闲")
+            Text("openclaw.all_agents_idle")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 6, height: 6)
-                Text("Gateway 在线")
+                Text("openclaw.gateway_online")
                     .font(.system(size: 9))
                     .foregroundStyle(NotchTheme.textTertiary)
             }
@@ -81,7 +81,7 @@ struct OpenClawTab: View {
 
                 if !idle.isEmpty {
                     HStack {
-                        Text("空闲")
+                        Text("openclaw.idle")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(NotchTheme.textMuted)
                         Divider()
@@ -182,11 +182,11 @@ struct OpenClawTab: View {
 
     private func stateLabel(_ state: AgentState) -> String {
         switch state {
-        case .idle: return "空闲"
-        case .working: return "工作中"
-        case .speaking: return "发言"
-        case .toolCalling: return "工具调用"
-        case .error: return "错误"
+        case .idle: return String(localized: "openclaw.state_idle")
+        case .working: return String(localized: "openclaw.state_working")
+        case .speaking: return String(localized: "openclaw.state_speaking")
+        case .toolCalling: return String(localized: "openclaw.state_tool_calling")
+        case .error: return String(localized: "openclaw.state_error")
         }
     }
 
@@ -202,9 +202,9 @@ struct OpenClawTab: View {
 
     private func timeAgo(_ date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "刚刚" }
+        if interval < 60 { return String(localized: "openclaw.time_just_now") }
         let minutes = Int(interval / 60)
-        if minutes < 60 { return "\(minutes)分钟前" }
-        return "\(minutes / 60)小时前"
+        if minutes < 60 { return String(format: String(localized: "openclaw.time_minutes_ago"), minutes) }
+        return String(format: String(localized: "openclaw.time_hours_ago"), minutes / 60)
     }
 }

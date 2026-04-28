@@ -31,10 +31,10 @@ struct AIChatTab: View {
             Image(systemName: "cpu")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(NotchTheme.textSecondary)
-            Text("AI CLI Hooks 未安装")
+            Text("ai.hooks_not_installed")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
-            Button("安装 Hooks") {
+            Button("ai.install_hooks") {
                 aiService.installHooks()
             }
             .buttonStyle(NotchPillButtonStyle(prominent: true))
@@ -47,7 +47,7 @@ struct AIChatTab: View {
             Image(systemName: "cpu")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(NotchTheme.textSecondary)
-            Text("无活跃 AI 会话")
+            Text("ai.no_active_sessions")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             serverStatus
@@ -60,7 +60,7 @@ struct AIChatTab: View {
             Circle()
                 .fill(aiService.serverRunning ? Color.green : NotchTheme.accent)
                 .frame(width: 6, height: 6)
-            Text(aiService.serverRunning ? "Unix Socket 已就绪" : "Hook 服务未启动")
+            Text(aiService.serverRunning ? "ai.unix_socket_ready" : "ai.hook_service_not_started")
                 .font(.system(size: 9))
                 .foregroundStyle(NotchTheme.textTertiary)
         }
@@ -138,7 +138,7 @@ struct AIChatTab: View {
 
             if session.messages.isEmpty {
                 Spacer()
-                Text("暂无消息")
+                Text("ai.no_messages")
                     .font(.system(size: 11))
                     .foregroundStyle(NotchTheme.textMuted)
                 Spacer()
@@ -168,7 +168,7 @@ struct AIChatTab: View {
     private func quickApprovalBar(session: AISessionState, ctx: PermissionContext) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("等待审批: \(ctx.toolName)")
+                Text("ai.awaiting_approval \(ctx.toolName)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(NotchTheme.accent)
                 if let input = ctx.toolInput, !input.isEmpty {
@@ -179,9 +179,9 @@ struct AIChatTab: View {
                 }
             }
             Spacer(minLength: 0)
-            Button("拒绝") { aiService.respondToPermission(sessionId: session.id, approved: false) }
+            Button("ai.deny") { aiService.respondToPermission(sessionId: session.id, approved: false) }
                 .buttonStyle(NotchPillButtonStyle())
-            Button("允许") { aiService.respondToPermission(sessionId: session.id, approved: true) }
+            Button("ai.allow") { aiService.respondToPermission(sessionId: session.id, approved: true) }
                 .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
         .padding(.horizontal, 8)
@@ -330,10 +330,10 @@ struct AIChatTab: View {
 
     private func timeAgo(_ date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "刚刚" }
+        if interval < 60 { return String(localized: "ai.time_just_now") }
         let minutes = Int(interval / 60)
-        if minutes < 60 { return "\(minutes) 分钟前" }
-        return "\(minutes / 60) 小时前"
+        if minutes < 60 { return String(format: String(localized: "ai.time_minutes_ago"), minutes) }
+        return String(format: String(localized: "ai.time_hours_ago"), minutes / 60)
     }
 
     private func approvalContext(for session: AISessionState) -> PermissionContext? {
@@ -367,7 +367,7 @@ struct AIChatTab: View {
 
             HStack(spacing: 4) {
                 if ctx.isInteractiveTool {
-                    Text("需要输入")
+                    Text("ai.requires_input")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(NotchTheme.textSecondary)
                         .padding(.horizontal, 8)
@@ -378,14 +378,14 @@ struct AIChatTab: View {
                     Button {
                         aiService.respondToPermission(sessionId: session.id, approved: false)
                     } label: {
-                        Text("拒绝")
+                        Text("ai.deny")
                     }
                     .buttonStyle(NotchPillButtonStyle())
 
                     Button {
                         aiService.respondToPermission(sessionId: session.id, approved: true)
                     } label: {
-                        Text("允许")
+                        Text("ai.allow")
                     }
                     .buttonStyle(NotchPillButtonStyle(prominent: true))
                 }

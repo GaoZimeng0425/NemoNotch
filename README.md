@@ -32,6 +32,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
 - **Menu Bar Entry** — Control panel visibility and AI CLI Hooks installation from the menu bar
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
+- **i18n** — Supports English and Simplified Chinese, switchable in Settings
 
 ## Tech Stack
 

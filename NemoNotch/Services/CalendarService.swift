@@ -23,10 +23,10 @@ final class CalendarService {
         return (-7...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
     }
 
-    var selectedMonthLabel: String {
+    func monthLabel(locale: Locale = .current) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "M月"
+        formatter.locale = locale
+        formatter.setLocalizedDateFormatFromTemplate("MMMM")
         return formatter.string(from: selectedDate)
     }
 

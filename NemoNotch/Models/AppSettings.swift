@@ -1,5 +1,19 @@
 import Foundation
 
+enum AppLanguage: String, CaseIterable, Codable {
+    case system
+    case en
+    case zhHans = "zh-Hans"
+
+    var locale: Locale? {
+        switch self {
+        case .system: nil
+        case .en: Locale(identifier: "en")
+        case .zhHans: Locale(identifier: "zh-Hans")
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class AppSettings {
@@ -26,6 +40,26 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(monitoredApps, forKey: "monitoredApps") }
     }
 
+    var language: AppLanguage {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: "language")
+            updateAppleLanguages()
+        }
+    }
+
+    var currentLocale: Locale {
+        language.locale ?? Locale.current
+    }
+
+    private func updateAppleLanguages() {
+        if let locale = language.locale {
+            UserDefaults.standard.set([locale.identifier], forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        UserDefaults.standard.synchronize()
+    }
+
     init() {
         let storedTab = UserDefaults.standard.string(forKey: "defaultTab").flatMap { Tab(rawValue: $0) }
         self.defaultTab = storedTab ?? .media
@@ -44,6 +78,9 @@ final class AppSettings {
         }
 
         self.monitoredApps = UserDefaults.standard.stringArray(forKey: "monitoredApps") ?? []
+
+        let storedLang = UserDefaults.standard.string(forKey: "language").flatMap { AppLanguage(rawValue: $0) }
+        self.language = storedLang ?? .system
     }
 
     private static let defaultApps: [AppItem] = [

@@ -25,13 +25,13 @@ enum Tab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .media: "媒体"
-        case .calendar: "日历"
-        case .claude: "AI"
-        case .openclaw: "OpenClaw"
-        case .launcher: "启动器"
-        case .weather: "天气"
-        case .system: "系统"
+        case .media: String(localized: "models.tab.media")
+        case .calendar: String(localized: "models.tab.calendar")
+        case .claude: String(localized: "models.tab.ai")
+        case .openclaw: String(localized: "models.tab.openclaw")
+        case .launcher: String(localized: "models.tab.launcher")
+        case .weather: String(localized: "models.tab.weather")
+        case .system: String(localized: "models.tab.system")
         }
     }
 }

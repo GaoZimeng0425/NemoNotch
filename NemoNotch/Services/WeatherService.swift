@@ -61,11 +61,12 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
     }
 
     private func fetchWeather(coordinate: CLLocationCoordinate2D? = nil) {
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
         var urlStr: String
         if let coord = coordinate {
-            urlStr = "https://wttr.in/\(coord.latitude),\(coord.longitude)?format=j1"
+            urlStr = "https://wttr.in/\(coord.latitude),\(coord.longitude)?format=j1&lang=\(lang)"
         } else {
-            urlStr = "https://wttr.in/?format=j1"
+            urlStr = "https://wttr.in/?format=j1&lang=\(lang)"
         }
 
         guard let url = URL(string: urlStr) else { return }

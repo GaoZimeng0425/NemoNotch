@@ -10,7 +10,7 @@ final class SettingsWindow<Content: View>: NSWindow {
             defer: false
         )
 
-        title = "NemoNotch 偏好设置"
+        title = String(localized: "settings.title")
         isReleasedWhenClosed = false
         hasShadow = false
         center()
