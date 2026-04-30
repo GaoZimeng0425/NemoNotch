@@ -65,7 +65,8 @@ final class AppSettings {
         self.defaultTab = storedTab ?? .overview
 
         let storedTabs = UserDefaults.standard.stringArray(forKey: "enabledTabs")?.compactMap { Tab(rawValue: $0) }
-        let tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
+        var tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
+        if storedTabs != nil { tabs.insert(.overview) }
 
         self.enabledTabs = tabs
 
