@@ -8,6 +8,8 @@ struct PlaybackState: Equatable {
     var position: TimeInterval = 0
     var isPlaying: Bool = false
     var artworkData: Data?
+    var appBundleIdentifier: String?
+    var appName: String?
 
     var isEmpty: Bool { title.isEmpty }
 }

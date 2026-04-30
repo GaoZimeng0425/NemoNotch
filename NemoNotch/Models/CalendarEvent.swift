@@ -18,7 +18,7 @@ struct CalendarEvent: Identifiable {
         calendarColor: CGColor, isAllDay: Bool,
         url: URL? = nil, location: String? = nil, notes: String? = nil
     ) {
-        self.id = "\(title)-\(startDate.timeIntervalSince1970)"
+        self.id = UUID().uuidString
         self.title = title
         self.startDate = startDate
         self.endDate = endDate

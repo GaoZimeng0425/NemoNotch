@@ -10,6 +10,7 @@ private struct NowPlayingInfoBox: @unchecked Sendable {
 @Observable
 final class MediaService {
     var playbackState = PlaybackState()
+    var appIcon: NSImage?
 
     private var pollTimer: Timer?
     private var progressTimer: Timer?
@@ -153,6 +154,7 @@ final class MediaService {
         guard let info, !info.isEmpty else {
             if !playbackState.isEmpty {
                 playbackState = PlaybackState()
+                appIcon = nil
             }
             return
         }
@@ -176,9 +178,13 @@ final class MediaService {
         if title.isEmpty && artist.isEmpty {
             if !playbackState.isEmpty {
                 playbackState = PlaybackState()
+                appIcon = nil
             }
             return
         }
+
+        let bundleID = info["kMRMediaRemoteNowPlayingInfoParentAppBundleID"] as? String
+            ?? info["kMRMediaRemoteNowPlayingInfoAppBundleID"] as? String
 
         playbackState = PlaybackState(
             title: title,
@@ -187,7 +193,21 @@ final class MediaService {
             duration: duration,
             position: position,
             isPlaying: isPlaying,
-            artworkData: artworkData
+            artworkData: artworkData,
+            appBundleIdentifier: bundleID ?? playbackState.appBundleIdentifier,
+            appName: nil
         )
+
+        if let bundleID, !bundleID.isEmpty {
+            applyPlayingApp(bundleID: bundleID)
+        }
+    }
+
+    private func applyPlayingApp(bundleID: String) {
+        playbackState.appBundleIdentifier = bundleID
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            appIcon = NSWorkspace.shared.icon(forFile: url.path)
+            playbackState.appName = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.localizedName
+        }
     }
 }
