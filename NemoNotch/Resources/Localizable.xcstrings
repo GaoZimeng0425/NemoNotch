@@ -549,18 +549,18 @@
         }
       }
     },
-    "models.tab.calendar" : {
+    "models.tab.overview" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Calendar"
+            "value" : "Overview"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "日历"
+            "value" : "概览"
           }
         }
       }
@@ -577,22 +577,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启动器"
-          }
-        }
-      }
-    },
-    "models.tab.media" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Media"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "媒体"
           }
         }
       }
@@ -625,22 +609,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "系统"
-          }
-        }
-      }
-    },
-    "models.tab.weather" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weather"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "天气"
           }
         }
       }
