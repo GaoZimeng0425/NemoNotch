@@ -10,6 +10,8 @@ final class NowPlayingCLI: @unchecked Sendable {
         "playbackRate": "kMRMediaRemoteNowPlayingInfoPlaybackRate",
         "timestamp": "kMRMediaRemoteNowPlayingInfoTimestamp",
         "artworkData": "kMRMediaRemoteNowPlayingInfoArtworkData",
+        "parentApplicationBundleIdentifier": "kMRMediaRemoteNowPlayingInfoParentAppBundleID",
+        "bundleIdentifier": "kMRMediaRemoteNowPlayingInfoAppBundleID",
     ]
 
     private let queue = DispatchQueue(label: "NemoNotch.NowPlayingCLI", qos: .utility)

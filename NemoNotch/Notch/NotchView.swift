@@ -462,7 +462,26 @@ struct NotchView: View {
             case .compactLeft, .row:
                 if let data = mediaService.playbackState.artworkData,
                    let nsImage = NSImage(data: data) {
-                    Image(nsImage: nsImage)
+                    GeometryReader { geo in
+                        let imgAspect = nsImage.size.width / max(nsImage.size.height, 1)
+                        let viewAspect = geo.size.width / max(geo.size.height, 1)
+                        let scale = imgAspect > viewAspect
+                            ? geo.size.height / max(nsImage.size.height, 1)
+                            : geo.size.width / max(nsImage.size.width, 1)
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(
+                                width: nsImage.size.width * scale,
+                                height: nsImage.size.height * scale
+                            )
+                            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    }
+                    .frame(width: 16, height: 16)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else if let appIcon = mediaService.appIcon {
+                    Image(nsImage: appIcon)
                         .resizable()
                         .frame(width: 16, height: 16)
                         .clipShape(RoundedRectangle(cornerRadius: 4))

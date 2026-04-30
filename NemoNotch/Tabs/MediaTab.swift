@@ -42,23 +42,42 @@ struct MediaTab: View {
     }
 
     private var artwork: some View {
-        Group {
-            if let data = state.artworkData,
-               let nsImage = NSImage(data: data) {
-                Image(nsImage: nsImage)
-                    .resizable()
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.white.opacity(0.08))
-                    .overlay {
-                        Image(systemName: "music.note")
-                            .foregroundStyle(.white.opacity(0.3))
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let data = state.artworkData,
+                   let nsImage = NSImage(data: data) {
+                    GeometryReader { geo in
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
                     }
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.white.opacity(0.08))
+                        .overlay {
+                            Image(systemName: "music.note")
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
+                }
+            }
+            .frame(width: 50, height: 50)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
+
+            if let appIcon = mediaService.appIcon {
+                Image(nsImage: appIcon)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
             }
         }
-        .frame(width: 50, height: 50)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
     }
 
     private var trackInfo: some View {
