@@ -9,7 +9,7 @@ final class NotchCoordinator {
     }
 
     var status: Status = .closed
-    var selectedTab: Tab = .media
+    var selectedTab: Tab = .overview
     private var isContextMenuVisible = false
     private var contextMenuDelegate: ContextMenuDelegate?
     var autoSelectTab: (() -> Tab?)?

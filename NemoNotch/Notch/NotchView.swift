@@ -48,11 +48,11 @@ struct NotchView: View {
 
         var tab: Tab {
             switch self {
-            case .notification: .media
-            case .media: .media
+            case .notification: .overview
+            case .media: .overview
             case .ai: .claude
             case .openclaw: .openclaw
-            case .calendar: .calendar
+            case .calendar: .overview
             }
         }
 
@@ -312,10 +312,8 @@ struct NotchView: View {
     @ViewBuilder
     private var tabContent: some View {
         switch coordinator.selectedTab {
-        case .media:
-            MediaTab()
-        case .calendar:
-            CalendarTab()
+        case .overview:
+            OverviewTab()
         case .claude:
             AIChatTab()
         case .openclaw:
@@ -324,8 +322,6 @@ struct NotchView: View {
             LauncherTab {
                 coordinator.notchClose()
             }
-        case .weather:
-            WeatherTab()
         case .system:
             SystemTab()
         }

@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return .claude
             }
             if self.openClawService?.activeAgent != nil { return .openclaw }
-            if self.mediaService?.playbackState.isPlaying == true { return .media }
+            if self.mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }
         notchCoordinator.appSettings = settings
