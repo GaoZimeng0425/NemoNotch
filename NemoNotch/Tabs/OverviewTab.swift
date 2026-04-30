@@ -6,27 +6,27 @@ import SwiftUI
 struct OverviewTab: View {
     @Environment(MediaService.self) var mediaService
 
-    private var isPlaying: Bool { !mediaService.playbackState.isEmpty }
+    private var hasTrack: Bool { !mediaService.playbackState.isEmpty }
 
     var body: some View {
         GeometryReader { geo in
             let gap: CGFloat = 6
-            let numGaps: CGFloat = isPlaying ? 2 : 1
+            let numGaps: CGFloat = hasTrack ? 2 : 1
             let totalCardWidth = geo.size.width - gap * numGaps
 
-            let calendarWidth = totalCardWidth * (isPlaying ? 2.0 / 5.0 : 2.0 / 3.0)
+            let calendarWidth = totalCardWidth * (hasTrack ? 2.0 / 5.0 : 2.0 / 3.0)
             let mediaWidth = totalCardWidth * 2.0 / 5.0
-            let weatherWidth = totalCardWidth * (isPlaying ? 1.0 / 5.0 : 1.0 / 3.0)
+            let weatherWidth = totalCardWidth * (hasTrack ? 1.0 / 5.0 : 1.0 / 3.0)
 
             HStack(alignment: .top, spacing: gap) {
                 OverviewCalendarSection()
                     .frame(width: calendarWidth)
 
-                if isPlaying {
+                if hasTrack {
                     OverviewMediaSection()
                         .frame(width: mediaWidth)
                         .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .trailing)),
+                            insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .leading)),
                             removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .trailing))
                         ))
                 }
@@ -34,7 +34,7 @@ struct OverviewTab: View {
                 OverviewWeatherSection()
                     .frame(width: weatherWidth)
             }
-            .animation(.spring(duration: 0.3, bounce: 0.05), value: isPlaying)
+            .animation(.spring(duration: 0.3, bounce: 0.05), value: hasTrack)
             .frame(maxHeight: .infinity)
         }
         .padding(.bottom, 12)
@@ -172,11 +172,15 @@ private struct CalendarEventRow: View {
         }
     }
 
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
     private var eventTimeRange: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
         if event.isAllDay { return String(localized: "calendar.all_day") }
-        return "\(formatter.string(from: event.startDate)) - \(formatter.string(from: event.endDate))"
+        return "\(Self.timeFormatter.string(from: event.startDate)) - \(Self.timeFormatter.string(from: event.endDate))"
     }
 }
 
@@ -355,7 +359,7 @@ private struct OverviewWeatherSection: View {
             VStack(spacing: 4) {
                 statItem(label: String(localized: "weather.feels_like"), value: "\(Int(weatherService.feelsLike))°")
                 statItem(label: String(localized: "weather.humidity"), value: "\(weatherService.humidity)%")
-                statItem(label: String(localized: "weather.wind_speed"), value: "\(Int(weatherService.windSpeed))")
+                statItem(label: String(localized: "weather.wind_speed"), value: "\(Int(weatherService.windSpeed))km/h")
             }
 
             Spacer(minLength: 0)
