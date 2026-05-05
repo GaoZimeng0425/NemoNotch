@@ -24,7 +24,6 @@ final class MediaService {
         remote.setCanBeNowPlayingApplication(false)
         setupNotifications()
         startPolling()
-        startProgressTick()
         updateNowPlaying()
     }
 
@@ -106,19 +105,18 @@ final class MediaService {
         }
     }
 
-    private func startProgressTick() {
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard self.playbackState.isPlaying else { return }
-                guard self.playbackState.duration > 0 else { return }
-                guard !self.playbackState.isEmpty else { return }
-
-                let nextPosition = min(self.playbackState.duration, self.playbackState.position + 0.5)
-                if nextPosition > self.playbackState.position {
-                    self.playbackState.position = nextPosition
+    private func updateProgressTimer(isPlaying: Bool) {
+        if isPlaying && progressTimer == nil {
+            progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.playbackState.isPlaying, self.playbackState.duration > 0 else { return }
+                    let next = min(self.playbackState.duration, self.playbackState.position + 0.5)
+                    if next > self.playbackState.position { self.playbackState.position = next }
                 }
             }
+        } else if !isPlaying && progressTimer != nil {
+            progressTimer?.invalidate()
+            progressTimer = nil
         }
     }
 
@@ -156,6 +154,7 @@ final class MediaService {
                 playbackState = PlaybackState()
                 appIcon = nil
             }
+            updateProgressTimer(isPlaying: false)
             return
         }
 
@@ -180,6 +179,7 @@ final class MediaService {
                 playbackState = PlaybackState()
                 appIcon = nil
             }
+            updateProgressTimer(isPlaying: false)
             return
         }
 
@@ -201,6 +201,7 @@ final class MediaService {
         if let bundleID, !bundleID.isEmpty {
             applyPlayingApp(bundleID: bundleID)
         }
+        updateProgressTimer(isPlaying: isPlaying)
     }
 
     private func applyPlayingApp(bundleID: String) {

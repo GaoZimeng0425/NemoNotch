@@ -18,6 +18,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var timer: Timer?
     private var lastLocation: CLLocation?
+    private var customCity: String = ""
 
     override init() {
         super.init()
@@ -25,7 +26,6 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
         locationManager.requestAlwaysAuthorization()
 
-        // Immediately fetch by IP as fallback
         fetchWeather()
         locationManager.startMonitoringSignificantLocationChanges()
 
@@ -34,6 +34,12 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
                 self?.fetchWeather()
             }
         }
+    }
+
+    func updateCity(_ city: String) {
+        customCity = city.trimmingCharacters(in: .whitespaces)
+        isLoaded = false
+        fetchWeather()
     }
 
     deinit { MainActor.assumeIsolated { timer?.invalidate() } }
@@ -50,7 +56,9 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         MainActor.assumeIsolated {
             self.lastLocation = location
-            self.fetchWeather(coordinate: location.coordinate)
+            if self.customCity.isEmpty {
+                self.fetchWeather(coordinate: location.coordinate)
+            }
         }
     }
 
@@ -63,7 +71,10 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
     private func fetchWeather(coordinate: CLLocationCoordinate2D? = nil) {
         let lang = Locale.current.language.languageCode?.identifier ?? "en"
         var urlStr: String
-        if let coord = coordinate {
+        if !customCity.isEmpty {
+            let encoded = customCity.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? customCity
+            urlStr = "https://wttr.in/\(encoded)?format=j1&lang=\(lang)"
+        } else if let coord = coordinate {
             urlStr = "https://wttr.in/\(coord.latitude),\(coord.longitude)?format=j1&lang=\(lang)"
         } else {
             urlStr = "https://wttr.in/?format=j1&lang=\(lang)"

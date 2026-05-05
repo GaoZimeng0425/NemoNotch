@@ -129,6 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.notificationService = notification
 
         let weather = WeatherService()
+        if !settings.weatherCity.isEmpty {
+            weather.updateCity(settings.weatherCity)
+        }
         self.weatherService = weather
 
         let hud = HUDService()
@@ -159,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return .claude
             }
             if self.openClawService?.activeAgent != nil { return .openclaw }
-            if self.mediaService?.playbackState.isPlaying == true { return .media }
+            if self.mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }
         notchCoordinator.appSettings = settings
@@ -178,12 +181,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
            let settings = appSettings,
            let aiMonitor = aiMonitorService,
            let launcher = launcherService,
-           let notification = notificationService {
+           let notification = notificationService,
+           let weather = weatherService {
             let view = SettingsView()
                 .environment(settings)
                 .environment(aiMonitor)
                 .environment(launcher)
                 .environment(notification)
+                .environment(weather)
             let window = SettingsWindow(rootView: view)
             window.delegate = self
             settingsWindow = window

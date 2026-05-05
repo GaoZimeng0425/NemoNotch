@@ -5,6 +5,7 @@ enum NotchConstants {
     static let defaultNotchWidth: CGFloat = 200
     static let defaultNotchHeight: CGFloat = 32
     static let openedWidth: CGFloat = 500
+    static let overviewOpenedWidth: CGFloat = 700
     static let openedHeight: CGFloat = 260
     static let hitboxPadding: CGFloat = 10
     static let closeHitboxInset: CGFloat = 20

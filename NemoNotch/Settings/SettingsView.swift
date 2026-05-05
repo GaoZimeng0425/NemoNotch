@@ -6,9 +6,11 @@ struct SettingsView: View {
     @Environment(AICLIMonitorService.self) var aiService
     @Environment(LauncherService.self) var launcherService
     @Environment(NotificationService.self) var notificationService
+    @Environment(WeatherService.self) var weatherService
 
     @State private var selectedTab = 0
     @State private var showAppPicker = false
+    @State private var cityDebounceTask: Task<Void, Never>? = nil
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -60,6 +62,27 @@ struct SettingsView: View {
                         Text(tab.title).tag(tab)
                     }
                 }
+            }
+
+            Section {
+                TextField("settings.weather_city_placeholder", text: Binding(
+                    get: { appSettings.weatherCity },
+                    set: { appSettings.weatherCity = $0 }
+                ))
+                .onChange(of: appSettings.weatherCity) { _, newCity in
+                    cityDebounceTask?.cancel()
+                    cityDebounceTask = Task {
+                        try? await Task.sleep(for: .milliseconds(800))
+                        guard !Task.isCancelled else { return }
+                        weatherService.updateCity(newCity)
+                    }
+                }
+            } header: {
+                Text("settings.weather_city")
+            } footer: {
+                Text("settings.weather_city_footer")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("settings.language") {
