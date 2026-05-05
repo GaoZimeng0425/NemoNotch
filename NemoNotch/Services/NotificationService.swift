@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-struct BadgeItem: Equatable {
+struct DockBadge: Equatable {
     let bundleID: String
     let count: Int
     let icon: NSImage
@@ -10,13 +10,13 @@ struct BadgeItem: Equatable {
 @MainActor
 @Observable
 final class NotificationService {
-    var badges: [String: BadgeItem] = [:]
+    var badges: [String: DockBadge] = [:]
     var isAXTrusted: Bool = AXIsProcessTrusted()
 
     private var monitoredApps: [String]
     private var pollTimer: Timer?
-    // Cache dock element lookups: bundleID -> matching AXUIElement in Dock
     private var dockElements: [String: AXUIElement] = [:]
+    private var iconCache: [String: NSImage] = [:]
 
     init(monitoredApps: [String] = []) {
         self.monitoredApps = monitoredApps
@@ -30,8 +30,8 @@ final class NotificationService {
         for bundleID in badges.keys where !appSet.contains(bundleID) {
             badges.removeValue(forKey: bundleID)
         }
-        // Clear cached elements so they get re-resolved
         dockElements = dockElements.filter { appSet.contains($0.key) }
+        iconCache = iconCache.filter { appSet.contains($0.key) }
         pollDock()
     }
 
@@ -103,7 +103,7 @@ final class NotificationService {
         dockElements = newElements
 
         // Read badge counts from matched elements
-        var updatedBadges: [String: BadgeItem] = [:]
+        var updatedBadges: [String: DockBadge] = [:]
         for (bundleID, element) in dockElements {
             var statusLabel: AnyObject?
             AXUIElementCopyAttributeValue(element, "AXStatusLabel" as CFString, &statusLabel)
@@ -113,7 +113,7 @@ final class NotificationService {
                 continue
             }
             let icon = appIcon(for: bundleID)
-            updatedBadges[bundleID] = BadgeItem(bundleID: bundleID, count: count, icon: icon)
+            updatedBadges[bundleID] = DockBadge(bundleID: bundleID, count: count, icon: icon)
         }
 
         badges = updatedBadges
@@ -142,8 +142,11 @@ final class NotificationService {
     // MARK: - App Icon
 
     private func appIcon(for bundleID: String) -> NSImage {
+        if let cached = iconCache[bundleID] { return cached }
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            return NSWorkspace.shared.icon(forFile: url.path)
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            iconCache[bundleID] = icon
+            return icon
         }
         return NSImage()
     }
