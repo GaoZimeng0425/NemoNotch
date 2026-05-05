@@ -35,10 +35,14 @@ final class NotchCoordinator {
         )
     }
 
+    var openedWidth: CGFloat {
+        selectedTab == .overview ? NotchConstants.overviewOpenedWidth : NotchConstants.openedWidth
+    }
+
     var contentSize: NSSize {
         switch status {
         case .closed: notchSize
-        case .opened: NSSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
+        case .opened: NSSize(width: openedWidth, height: NotchConstants.openedHeight)
         }
     }
 

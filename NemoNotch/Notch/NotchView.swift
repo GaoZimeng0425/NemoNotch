@@ -22,8 +22,6 @@ struct NotchView: View {
 
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
-    @State private var slideForward: Bool = true
-    @State private var previousSelectedTab: Tab? = nil
 
     private var notchSize: CGSize {
         switch coordinator.status {
@@ -35,7 +33,7 @@ struct NotchView: View {
             return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
                           height: hardwareNotchSize.height + extraHeight)
         case .opened:
-            return CGSize(width: NotchConstants.openedWidth, height: NotchConstants.openedHeight)
+            return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         }
     }
 
@@ -52,6 +50,7 @@ struct NotchView: View {
 
         ZStack(alignment: .top) {
             notchShape(shown: shown)
+                .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
                 .zIndex(0)
 
             if coordinator.status == .opened {
@@ -89,6 +88,7 @@ struct NotchView: View {
 
             if coordinator.status == .opened {
                 contentPanel
+                    .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
                     .zIndex(1)
             }
 
@@ -111,14 +111,6 @@ struct NotchView: View {
         .onChange(of: aiService.activeSession?.phase.isWaitingForApproval == true) { _, _ in
             badgeViewModel?.checkApprovalSound(isOpen: coordinator.status == .opened)
         }
-        .onChange(of: coordinator.selectedTab) { _, newTab in
-            let tabs = enabledTabs
-            if let previous = previousSelectedTab, previous != newTab {
-                slideForward = tabIndex(of: newTab, in: tabs) > tabIndex(of: previous, in: tabs)
-            }
-            previousSelectedTab = newTab
-        }
-        .onAppear { previousSelectedTab = coordinator.selectedTab }
         .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
@@ -216,10 +208,7 @@ struct NotchView: View {
             tabContent
         }
         .id(coordinator.selectedTab)
-        .transition(.asymmetric(
-            insertion: .opacity.combined(with: .move(edge: slideForward ? .trailing : .leading)),
-            removal: .opacity.combined(with: .move(edge: slideForward ? .leading : .trailing))
-        ))
+        .transition(.opacity)
         .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
         .offset(x: dragOffset)
         .gesture(
@@ -275,17 +264,8 @@ struct NotchView: View {
         .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shown)
     }
 
-    // MARK: - Tab direction
-
-    private func tabIndex(of tab: Tab, in tabs: [Tab]) -> Int {
-        tabs.firstIndex(of: tab) ?? 0
-    }
-
     private func selectTab(_ tab: Tab) {
-        let tabs = enabledTabs
         guard tab != coordinator.selectedTab else { return }
-        slideForward = tabIndex(of: tab, in: tabs) > tabIndex(of: coordinator.selectedTab, in: tabs)
-        previousSelectedTab = coordinator.selectedTab
         coordinator.selectedTab = tab
     }
 }

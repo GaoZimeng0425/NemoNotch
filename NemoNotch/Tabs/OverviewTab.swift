@@ -330,7 +330,7 @@ private struct OverviewWeatherSection: View {
     }
 
     private var weatherContent: some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(weatherService.cityName)
                 .font(.system(size: 10))
                 .foregroundStyle(NotchTheme.textTertiary)
@@ -349,7 +349,6 @@ private struct OverviewWeatherSection: View {
                 .font(.system(size: 9))
                 .foregroundStyle(NotchTheme.textSecondary)
                 .lineLimit(1)
-                .multilineTextAlignment(.center)
 
             Divider()
                 .background(NotchTheme.stroke)
