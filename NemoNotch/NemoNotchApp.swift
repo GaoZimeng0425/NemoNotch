@@ -181,12 +181,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
            let settings = appSettings,
            let aiMonitor = aiMonitorService,
            let launcher = launcherService,
-           let notification = notificationService {
+           let notification = notificationService,
+           let weather = weatherService {
             let view = SettingsView()
                 .environment(settings)
                 .environment(aiMonitor)
                 .environment(launcher)
                 .environment(notification)
+                .environment(weather)
             let window = SettingsWindow(rootView: view)
             window.delegate = self
             settingsWindow = window
