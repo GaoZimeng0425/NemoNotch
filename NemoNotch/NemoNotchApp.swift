@@ -129,6 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.notificationService = notification
 
         let weather = WeatherService()
+        if !settings.weatherCity.isEmpty {
+            weather.updateCity(settings.weatherCity)
+        }
         self.weatherService = weather
 
         let hud = HUDService()
