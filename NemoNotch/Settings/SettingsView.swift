@@ -10,6 +10,7 @@ struct SettingsView: View {
 
     @State private var selectedTab = 0
     @State private var showAppPicker = false
+    @State private var cityDebounceTask: Task<Void, Never>? = nil
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -68,8 +69,13 @@ struct SettingsView: View {
                     get: { appSettings.weatherCity },
                     set: { appSettings.weatherCity = $0 }
                 ))
-                .onSubmit {
-                    weatherService.updateCity(appSettings.weatherCity)
+                .onChange(of: appSettings.weatherCity) { _, newCity in
+                    cityDebounceTask?.cancel()
+                    cityDebounceTask = Task {
+                        try? await Task.sleep(for: .milliseconds(800))
+                        guard !Task.isCancelled else { return }
+                        weatherService.updateCity(newCity)
+                    }
                 }
             } header: {
                 Text("settings.weather_city")
