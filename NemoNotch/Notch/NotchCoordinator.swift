@@ -50,7 +50,7 @@ final class NotchCoordinator {
         deviceNotchRect.insetBy(dx: -NotchConstants.hitboxPadding, dy: -NotchConstants.hitboxPadding)
     }
 
-    private static let windowWidth: CGFloat = 700
+    private static let windowWidth: CGFloat = 800
     private static let windowHeight: CGFloat = 340
 
     init(content: (NotchCoordinator) -> AnyView) {
