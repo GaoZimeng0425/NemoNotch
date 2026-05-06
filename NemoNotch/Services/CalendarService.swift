@@ -10,7 +10,7 @@ final class CalendarService {
     var selectedDate: Date = Date()
 
     private(set) var multiDayEvents: [Date: [CalendarEvent]] = [:]
-    private nonisolated let eventStore = EKEventStore()
+    private nonisolated(unsafe) let eventStore = EKEventStore()
 
     var eventsForSelectedDate: [CalendarEvent] {
         let key = startOfDay(for: selectedDate)
