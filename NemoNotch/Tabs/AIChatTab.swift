@@ -408,7 +408,7 @@ struct AIChatTab: View {
                 Text("ctx")
                     .foregroundStyle(NotchTheme.textMuted)
                 Spacer()
-                Text("\(session.contextTokenDisplay) / 200K")
+                Text("\(session.contextTokenDisplay) / \(session.contextLimitDisplay)")
                     .foregroundStyle(NotchTheme.textMuted)
                 Text(String(format: "%.0f%%", percent * 100))
                     .foregroundStyle(barColor.opacity(0.7))
