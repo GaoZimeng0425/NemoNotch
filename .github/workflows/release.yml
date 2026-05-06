@@ -24,7 +24,9 @@ jobs:
             -project NemoNotch.xcodeproj \
             -scheme NemoNotch \
             -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
             -archivePath build/NemoNotch.xcarchive \
+            MACOSX_DEPLOYMENT_TARGET=26.2 \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
