@@ -73,7 +73,16 @@ struct AISessionState: Identifiable {
 
     var contextPercent: Double {
         guard lastContextTokens > 0 else { return 0 }
-        return min(Double(lastContextTokens) / 200_000.0, 1.0)
+        let limit = ModelContextWindow.limit(for: model ?? "")
+        return min(Double(lastContextTokens) / Double(limit), 1.0)
+    }
+
+    var contextLimitDisplay: String {
+        let limit = ModelContextWindow.limit(for: model ?? "")
+        if limit >= 1_000_000 {
+            return String(format: "%.0fM", Double(limit) / 1_000_000)
+        }
+        return String(format: "%.0fK", Double(limit) / 1000)
     }
 
     var tokenDisplay: String {
