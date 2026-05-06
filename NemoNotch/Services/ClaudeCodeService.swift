@@ -291,45 +291,43 @@ final class ClaudeProvider: AIProvider {
               let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
         let offset = session.lastParsedOffset
-        Task.detached(priority: .utility) { [weak self] in
+        Task {
             let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
 
-            await MainActor.run {
-                guard let self, var session = self.sessions[sessionId] else { return }
+            guard var session = self.sessions[sessionId] else { return }
 
-                if result.cleared {
-                    session.messages = []
-                }
-                session.messages.append(contentsOf: result.messages)
-                session.lastParsedOffset = result.newOffset
-                session.inputTokens += result.inputTokens
-                session.outputTokens += result.outputTokens
-                session.cacheReadTokens += result.cacheReadTokens
-                session.cacheCreationTokens += result.cacheCreationTokens
-                if result.lastContextTokens > 0 {
-                    session.lastContextTokens = result.lastContextTokens
-                }
-                if let model = result.lastModel {
-                    session.model = model
-                }
+            if result.cleared {
+                session.messages = []
+            }
+            session.messages.append(contentsOf: result.messages)
+            session.lastParsedOffset = result.newOffset
+            session.inputTokens += result.inputTokens
+            session.outputTokens += result.outputTokens
+            session.cacheReadTokens += result.cacheReadTokens
+            session.cacheCreationTokens += result.cacheCreationTokens
+            if result.lastContextTokens > 0 {
+                session.lastContextTokens = result.lastContextTokens
+            }
+            if let model = result.lastModel {
+                session.model = model
+            }
 
-                let userMessages = result.messages.filter { $0.role == .user }
-                if let first = userMessages.first, session.firstUserMessage == nil {
-                    session.firstUserMessage = String(first.content.prefix(80))
-                }
-                if let last = userMessages.last {
-                    session.lastUserMessage = String(last.content.prefix(80))
-                }
+            let userMessages = result.messages.filter { $0.role == .user }
+            if let first = userMessages.first, session.firstUserMessage == nil {
+                session.firstUserMessage = String(first.content.prefix(80))
+            }
+            if let last = userMessages.last {
+                session.lastUserMessage = String(last.content.prefix(80))
+            }
 
-                self.sessions[sessionId] = session
+            self.sessions[sessionId] = session
 
-                if result.inputTokens > 0 || result.cacheReadTokens > 0 {
-                    LogService.debug("Tokens +\(result.inputTokens)in +\(result.outputTokens)out +\(result.cacheReadTokens)cr +\(result.cacheCreationTokens)cc, ctx=\(result.lastContextTokens), model=\(result.lastModel ?? "?") → totals: \(session.inputTokens)in \(session.outputTokens)out \(session.cacheReadTokens)cr \(session.cacheCreationTokens)cc", category: "ClaudeProvider")
-                }
+            if result.inputTokens > 0 || result.cacheReadTokens > 0 {
+                LogService.debug("Tokens +\(result.inputTokens)in +\(result.outputTokens)out +\(result.cacheReadTokens)cr +\(result.cacheCreationTokens)cc, ctx=\(result.lastContextTokens), model=\(result.lastModel ?? "?") → totals: \(session.inputTokens)in \(session.outputTokens)out \(session.cacheReadTokens)cr \(session.cacheCreationTokens)cc", category: "ClaudeProvider")
+            }
 
-                if result.interrupted {
-                    self.handleInterrupt(sessionId: sessionId)
-                }
+            if result.interrupted {
+                self.handleInterrupt(sessionId: sessionId)
             }
         }
     }
