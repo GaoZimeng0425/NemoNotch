@@ -15,7 +15,6 @@ final class NotificationService {
 
     private var monitoredApps: [String]
     private var pollTimer: Timer?
-    private var dockElements: [String: AXUIElement] = [:]
     private var iconCache: [String: NSImage] = [:]
 
     init(monitoredApps: [String] = []) {
@@ -30,7 +29,6 @@ final class NotificationService {
         for bundleID in badges.keys where !appSet.contains(bundleID) {
             badges.removeValue(forKey: bundleID)
         }
-        dockElements = dockElements.filter { appSet.contains($0.key) }
         iconCache = iconCache.filter { appSet.contains($0.key) }
         pollDock()
     }
@@ -44,6 +42,17 @@ final class NotificationService {
         MainActor.assumeIsolated {
             pollTimer?.invalidate()
         }
+    }
+
+    // MARK: - Helpers
+
+    /// Strip invisible Unicode format/control characters (e.g. U+200E LEFT-TO-RIGHT MARK)
+    /// so that app names like "WhatsApp" (with embedded LRM) match their Dock tile titles.
+    private func normalizeName(_ name: String) -> String {
+        name.unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0)
+                && !($0.properties.generalCategory == .format)
+        }.map(String.init).joined()
     }
 
     // MARK: - Polling
@@ -60,24 +69,33 @@ final class NotificationService {
         isAXTrusted = AXIsProcessTrusted()
         guard !monitoredApps.isEmpty else { return }
 
-        guard isAXTrusted else { return }
+        guard isAXTrusted else {
+            LogService.warn("NotificationService: AX not trusted", category: "Notification")
+            return
+        }
 
         // Get Dock PID
         guard let dockPID = NSRunningApplication.runningApplications(
             withBundleIdentifier: "com.apple.dock"
         ).last?.processIdentifier else {
+            LogService.warn("NotificationService: Dock not found", category: "Notification")
             return
         }
 
         let dockApp = AXUIElementCreateApplication(dockPID)
         let allElements = getSubElements(root: dockApp)
+        LogService.debug("NotificationService: found \(allElements.count) AX elements in Dock", category: "Notification")
 
-        // Build a map: localizedName -> bundleID for monitored apps
+        // Build a map: normalized localizedName -> bundleID for monitored apps
         var nameToBundleID: [String: String] = [:]
         for bundleID in monitoredApps {
             if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
                let name = app.localizedName {
-                nameToBundleID[name] = bundleID
+                let normalized = normalizeName(name)
+                nameToBundleID[normalized] = bundleID
+                LogService.debug("NotificationService: mapped \"\(normalized)\" (from \"\(name)\") -> \(bundleID)", category: "Notification")
+            } else {
+                LogService.debug("NotificationService: \(bundleID) not running or no localizedName", category: "Notification")
             }
         }
 
@@ -89,33 +107,33 @@ final class NotificationService {
             return
         }
 
-        // Match dock elements by title (AXTitle == app localizedName)
-        var newElements: [String: AXUIElement] = [:]
+        // Match dock elements by title and read badges inline.
+        // Some apps (e.g. WhatsApp) have duplicate Dock tiles after normalization;
+        // prefer the tile that actually has a badge.
+        var updatedBadges: [String: DockBadge] = [:]
         for element in allElements {
             var title: AnyObject?
             let err = AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
-            guard err == .success, let titleStr = title as? String, let bundleID = nameToBundleID[titleStr] else {
-                continue
-            }
-            newElements[bundleID] = element
-        }
+            guard err == .success, let titleStr = title as? String else { continue }
+            let normalized = normalizeName(titleStr)
+            guard let bundleID = nameToBundleID[normalized] else { continue }
 
-        dockElements = newElements
-
-        // Read badge counts from matched elements
-        var updatedBadges: [String: DockBadge] = [:]
-        for (bundleID, element) in dockElements {
             var statusLabel: AnyObject?
             AXUIElementCopyAttributeValue(element, "AXStatusLabel" as CFString, &statusLabel)
-
             let label = statusLabel as? String ?? ""
+            LogService.debug("NotificationService: matched tile \"\(titleStr)\" (normalized: \"\(normalized)\") -> \(bundleID), statusLabel=\"\(label)\"", category: "Notification")
+
             guard let count = parseBadgeCount(label) else {
+                if updatedBadges[bundleID] == nil {
+                    updatedBadges[bundleID] = DockBadge(bundleID: bundleID, count: 0, icon: appIcon(for: bundleID))
+                }
                 continue
             }
             let icon = appIcon(for: bundleID)
             updatedBadges[bundleID] = DockBadge(bundleID: bundleID, count: count, icon: icon)
         }
 
+        LogService.debug("NotificationService: final badges = \(updatedBadges.mapValues { $0.count })", category: "Notification")
         badges = updatedBadges
     }
 
