@@ -4,15 +4,18 @@ struct SystemTab: View {
     @Environment(SystemService.self) var systemService
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(systemService.topProcessesByCPU) { process in
-                processRow(process)
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(systemService.topProcessesByCPU) { process in
+                    processRow(process)
+                }
 
-            summaryFooter
+                summaryFooter
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 12)
+        .scrollDisabled(true)
     }
 
     // MARK: - Process Row
