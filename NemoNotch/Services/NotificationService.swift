@@ -124,9 +124,6 @@ final class NotificationService {
             LogService.debug("NotificationService: matched tile \"\(titleStr)\" (normalized: \"\(normalized)\") -> \(bundleID), statusLabel=\"\(label)\"", category: "Notification")
 
             guard let count = parseBadgeCount(label) else {
-                if updatedBadges[bundleID] == nil {
-                    updatedBadges[bundleID] = DockBadge(bundleID: bundleID, count: 0, icon: appIcon(for: bundleID))
-                }
                 continue
             }
             let icon = appIcon(for: bundleID)
