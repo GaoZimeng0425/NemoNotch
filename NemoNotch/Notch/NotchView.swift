@@ -53,12 +53,6 @@ struct NotchView: View {
                 .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
                 .zIndex(0)
 
-            if coordinator.status == .opened {
-                notchTabBar
-                    .zIndex(2)
-                    .transition(.opacity)
-            }
-
             if coordinator.status == .closed {
                 CompactBadgesView(
                     items: items,
@@ -86,11 +80,10 @@ struct NotchView: View {
                 }
             }
 
-            if coordinator.status == .opened {
-                contentPanel
-                    .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
-                    .zIndex(1)
-            }
+            contentPanel
+                .opacity(coordinator.status == .opened ? 1 : 0)
+                .allowsHitTesting(coordinator.status == .opened)
+                .zIndex(1)
 
             // HUD overlay - appears below the notch
             if let hudType = hudService.activeHUD {
@@ -151,6 +144,8 @@ struct NotchView: View {
         let spacing: CGFloat = count > 5 ? 3 : 4
         let fontSize: CGFloat = count > 5 ? 10 : 11
         let tabWidth: CGFloat = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
+        // Position in contentPanel's local coords: (0,0) is top-left
+        let localX = (notchSize.width - hardwareNotchSize.width) / 2 - tabWidth / 2 - 8
         return HStack(spacing: spacing) {
             ForEach(tabs) { tab in
                 let selected = coordinator.selectedTab == tab
@@ -169,30 +164,32 @@ struct NotchView: View {
                 .buttonStyle(.plain)
             }
         }
-        .position(
-            x: notchLeftEdge - tabWidth / 2 - 8,
-            y: hardwareNotchSize.height / 2
-        )
+        .position(x: localX, y: hardwareNotchSize.height / 2)
     }
 
     // MARK: - Content panel (drops down from notch)
 
     private var contentPanel: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: hardwareNotchSize.height)
+        ZStack(alignment: .top) {
+            // Tab bar at the top, clipped by the content panel shape
+            notchTabBar
 
-            swipeableContent
-                .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
-                .padding(.top, NotchConstants.tabContentTopPadding)
+            VStack(spacing: 0) {
+                Spacer().frame(height: hardwareNotchSize.height)
 
-            Spacer(minLength: 0)
+                swipeableContent
+                    .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
+                    .padding(.top, NotchConstants.tabContentTopPadding)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                Spacer(minLength: 0)
+            }
         }
         .frame(width: notchSize.width, height: notchSize.height)
         .clipShape(.rect(
             bottomLeadingRadius: notchCornerRadius,
             bottomTrailingRadius: notchCornerRadius
         ))
-        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     // MARK: - Swipeable tab content
