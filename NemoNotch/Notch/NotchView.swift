@@ -81,6 +81,7 @@ struct NotchView: View {
             }
 
             contentPanel
+                .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
                 .opacity(coordinator.status == .opened ? 1 : 0)
                 .allowsHitTesting(coordinator.status == .opened)
                 .zIndex(1)
