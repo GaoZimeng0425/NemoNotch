@@ -42,6 +42,10 @@ final class CalendarService {
         )
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     func requestAccess() {
         Task { @MainActor in
             do {

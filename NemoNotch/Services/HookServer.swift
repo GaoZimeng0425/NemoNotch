@@ -103,7 +103,9 @@ final class HookServer {
             return
         }
 
-        LogService.debug("Raw message received: \(message)", category: "HookServer")
+        // Avoid logging the full payload — it can contain conversation text,
+        // file paths, or other sensitive content. Log size only.
+        LogService.debug("Received hook message: \(message.utf8.count) bytes", category: "HookServer")
 
         guard let data = message.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -181,6 +183,14 @@ final class HookServer {
     }
 
     func stop() {
+        // Tear down on socketQueue so we don't race with doStart/acceptConnection,
+        // which read/mutate socketFd and acceptSource on that same queue.
+        socketQueue.async { [weak self] in
+            self?.doStop()
+        }
+    }
+
+    nonisolated private func doStop() {
         acceptSource?.cancel()
         acceptSource = nil
         if socketFd >= 0 {
@@ -194,8 +204,10 @@ final class HookServer {
     }
 
     deinit {
-        MainActor.assumeIsolated {
-            stop()
+        // Synchronously tear down to ensure the socket fd is closed before
+        // the instance is released; doStop is nonisolated so this is safe.
+        socketQueue.sync { [self] in
+            doStop()
         }
     }
 }

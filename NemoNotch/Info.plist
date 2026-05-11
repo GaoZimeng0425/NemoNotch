@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<!-- 注意：本项目 GENERATE_INFOPLIST_FILE = YES，此文件不进构建产物。
+     实际生效的 Info.plist 键定义在 NemoNotch.xcodeproj/project.pbxproj 的 INFOPLIST_KEY_* 中。 -->
 <dict>
-	<key>LSUIElement</key>
-	<true/>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。</string>
 </dict>
 </plist>

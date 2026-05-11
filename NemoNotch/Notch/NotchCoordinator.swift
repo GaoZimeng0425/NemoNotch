@@ -99,6 +99,10 @@ final class NotchCoordinator {
         setupEventMonitoring()
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     func notchOpen(tab: Tab? = nil) {
         guard status == .closed else { return }
         captureFrontmostApp()

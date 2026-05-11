@@ -208,14 +208,53 @@ private struct OverviewMediaSection: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            artwork
-            trackInfo
-            progressBar
-            controls
+            if let denied = mediaService.permissionDeniedPlayer {
+                permissionBanner(player: denied)
+            } else {
+                artwork
+                trackInfo
+                progressBar
+                controls
+            }
         }
         .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
         .notchCard(radius: 8, fill: NotchTheme.surface)
+    }
+
+    private func permissionBanner(player: KnownPlayer) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 20))
+                .foregroundStyle(NotchTheme.accent)
+            Text("\(player.displayName) 自动化权限被拒绝")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text("在 系统设置 → 隐私与安全 → 自动化 中开启")
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                Button("打开设置") { mediaService.openAutomationSettings() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(NotchTheme.accent))
+                    .foregroundStyle(Color.black.opacity(0.85))
+
+                Button("忽略") { mediaService.dismissPermissionBanner() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+            }
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var artwork: some View {
@@ -256,16 +295,14 @@ private struct OverviewMediaSection: View {
     }
 
     private var progressBar: some View {
-        VStack(spacing: 3) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(NotchTheme.surfaceEmphasis)
-                    Capsule()
-                        .fill(NotchTheme.accent.opacity(0.75))
-                        .frame(width: state.duration > 0 ? geo.size.width * CGFloat(state.position / state.duration) : 0)
-                }
-            }
-            .frame(height: 3)
+        VStack(spacing: 5) {
+            ProgressScrubber(
+                position: state.position,
+                duration: state.duration,
+                enabled: mediaService.supportsSeeking,
+                onScrub: { fraction in mediaService.seek(toFraction: fraction) }
+            )
+            .frame(height: 12)
 
             HStack {
                 Text(formatTime(state.position))
@@ -330,6 +367,59 @@ private struct OverviewMediaSection: View {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return "\(minutes):\(String(format: "%02d", seconds))"
+    }
+}
+
+// MARK: - Progress Scrubber
+
+private struct ProgressScrubber: View {
+    let position: Double
+    let duration: Double
+    let enabled: Bool
+    let onScrub: (Double) -> Void
+
+    @State private var dragFraction: Double?
+    @State private var isHovering = false
+
+    private var fraction: Double {
+        if let dragFraction { return dragFraction }
+        guard duration > 0 else { return 0 }
+        return max(0, min(1, position / duration))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let barHeight: CGFloat = (isHovering || dragFraction != nil) ? 6 : 4
+            ZStack(alignment: .leading) {
+                Color.clear // hit area
+                Capsule()
+                    .fill(NotchTheme.surfaceEmphasis)
+                    .frame(height: barHeight)
+                Capsule()
+                    .fill(NotchTheme.accent.opacity(0.85))
+                    .frame(width: geo.size.width * CGFloat(fraction), height: barHeight)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .animation(.easeOut(duration: 0.12), value: barHeight)
+            .onHover { hovering in
+                guard enabled else { return }
+                isHovering = hovering
+            }
+            .gesture(
+                enabled
+                    ? DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let f = max(0, min(1, value.location.x / max(geo.size.width, 1)))
+                            dragFraction = f
+                        }
+                        .onEnded { _ in
+                            if let f = dragFraction { onScrub(f) }
+                            dragFraction = nil
+                        }
+                    : nil
+            )
+        }
     }
 }
 

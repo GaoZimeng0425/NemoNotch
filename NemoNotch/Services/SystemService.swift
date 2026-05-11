@@ -33,11 +33,25 @@ final class SystemService {
     private var lastUpdateTime: Date = .now
 
     init() {
+        // No timer until a view becomes visible — see setActive(_:).
         update()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.update()
+    }
+
+    /// Toggle live polling. Call with `true` when the SystemTab appears and
+    /// `false` when it disappears so we don't burn CPU enumerating processes
+    /// while the notch is closed.
+    func setActive(_ active: Bool) {
+        if active {
+            guard timer == nil else { return }
+            update()
+            timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    self?.update()
+                }
             }
+        } else {
+            timer?.invalidate()
+            timer = nil
         }
     }
 

@@ -12,6 +12,7 @@ final class LauncherService {
     }
 
     private let settings: AppSettings
+    private var iconCache: [String: NSImage] = [:]
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -20,8 +21,11 @@ final class LauncherService {
     }
 
     func icon(for app: AppItem) -> NSImage? {
+        if let cached = iconCache[app.bundleIdentifier] { return cached }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        iconCache[app.bundleIdentifier] = icon
+        return icon
     }
 
     func launchApp(at index: Int) {
