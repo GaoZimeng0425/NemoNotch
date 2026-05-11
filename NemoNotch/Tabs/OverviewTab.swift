@@ -207,58 +207,42 @@ private struct OverviewMediaSection: View {
     private var state: PlaybackState { mediaService.playbackState }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                artwork
-                trackInfo
-                Spacer(minLength: 0)
-            }
+        VStack(spacing: 6) {
+            artwork
+            trackInfo
             progressBar
             controls
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 8)
+        .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
         .notchCard(radius: 8, fill: NotchTheme.surface)
     }
 
     private var artwork: some View {
         ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let data = state.artworkData, let nsImage = NSImage(data: data) {
-                    GeometryReader { geo in
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    }
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(.white.opacity(0.08))
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .foregroundStyle(.white.opacity(0.3))
-                        }
-                }
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
+            VinylDiscView(
+                isPlaying: state.isPlaying,
+                artworkData: state.artworkData,
+                appIcon: mediaService.appIcon,
+                size: 80
+            )
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
             if let appIcon = mediaService.appIcon {
                 Image(nsImage: appIcon)
                     .resizable()
-                    .frame(width: 13, height: 13)
+                    .frame(width: 22, height: 22)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .offset(x: 2, y: 2)
             }
         }
+        .frame(height: 80)
     }
 
     private var trackInfo: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(state.title)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(NotchTheme.textPrimary)
@@ -268,28 +252,51 @@ private struct OverviewMediaSection: View {
                 .foregroundStyle(NotchTheme.textSecondary)
                 .lineLimit(1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var progressBar: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(NotchTheme.surfaceEmphasis)
-                Capsule()
-                    .fill(NotchTheme.accent.opacity(0.75))
-                    .frame(width: state.duration > 0 ? geo.size.width * CGFloat(state.position / state.duration) : 0)
+        VStack(spacing: 3) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(NotchTheme.surfaceEmphasis)
+                    Capsule()
+                        .fill(NotchTheme.accent.opacity(0.75))
+                        .frame(width: state.duration > 0 ? geo.size.width * CGFloat(state.position / state.duration) : 0)
+                }
+            }
+            .frame(height: 3)
+
+            HStack {
+                Text(formatTime(state.position))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                Spacer()
+                Text(formatTime(state.duration))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(NotchTheme.textTertiary)
             }
         }
-        .frame(height: 2)
     }
 
     private var controls: some View {
-        HStack(spacing: 20) {
+        let canSeek = mediaService.supportsSeeking
+        return HStack(spacing: canSeek ? 10 : 14) {
             Button(action: { mediaService.previousTrack() }) {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: canSeek ? 11 : 12))
                     .foregroundStyle(NotchTheme.textSecondary)
             }
             .buttonStyle(.plain)
+
+            if canSeek {
+                Button(action: { mediaService.skipBackward() }) {
+                    Image(systemName: "gobackward.15")
+                        .font(.system(size: 13))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
 
             Button(action: { mediaService.togglePlayPause() }) {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
@@ -300,13 +307,29 @@ private struct OverviewMediaSection: View {
             }
             .buttonStyle(.plain)
 
+            if canSeek {
+                Button(action: { mediaService.skipForward() }) {
+                    Image(systemName: "goforward.15")
+                        .font(.system(size: 13))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+
             Button(action: { mediaService.nextTrack() }) {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: canSeek ? 11 : 12))
                     .foregroundStyle(NotchTheme.textSecondary)
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        guard time.isFinite && time > 0 else { return "0:00" }
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return "\(minutes):\(String(format: "%02d", seconds))"
     }
 }
 

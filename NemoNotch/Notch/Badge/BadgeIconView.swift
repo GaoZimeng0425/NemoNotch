@@ -66,41 +66,17 @@ struct BadgeIconView: View {
 
     @ViewBuilder
     private var mediaBadge: some View {
+        let isPlaying = mediaService.playbackState.isPlaying
         switch style {
         case .compactLeft, .row:
-            if let data = mediaService.playbackState.artworkData,
-               let nsImage = NSImage(data: data) {
-                GeometryReader { geo in
-                    let imgAspect = nsImage.size.width / max(nsImage.size.height, 1)
-                    let viewAspect = geo.size.width / max(geo.size.height, 1)
-                    let scale = imgAspect > viewAspect
-                        ? geo.size.height / max(nsImage.size.height, 1)
-                        : geo.size.width / max(nsImage.size.width, 1)
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(
-                            width: nsImage.size.width * scale,
-                            height: nsImage.size.height * scale
-                        )
-                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
-                }
-                .frame(width: 16, height: 16)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-            } else if let appIcon = mediaService.appIcon {
-                Image(nsImage: appIcon)
-                    .resizable()
-                    .frame(width: 16, height: 16)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            } else {
-                Image(systemName: "music.note")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(NotchTheme.textSecondary)
-            }
+            VinylDiscView(
+                isPlaying: isPlaying,
+                artworkData: mediaService.playbackState.artworkData,
+                appIcon: mediaService.appIcon,
+                size: style == .row ? 18 : 20
+            )
         case .compactRight:
-            Image(systemName: "play.fill")
-                .foregroundStyle(NotchTheme.textPrimary)
+          AudioEqualizerView(isActive: isPlaying, maxHeight: 10, barWidth: 1.5, color: NotchTheme.accent)
         }
     }
 

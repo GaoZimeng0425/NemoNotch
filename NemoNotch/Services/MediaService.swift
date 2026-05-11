@@ -51,6 +51,28 @@ final class MediaService {
         }
     }
 
+    var supportsSeeking: Bool {
+        MediaBridge.supportsSeeking(bundleID: playbackState.appBundleIdentifier)
+    }
+
+    func skipForward(_ interval: Double = 15) {
+        let target = min(playbackState.position + interval, playbackState.duration)
+        MediaBridge.setPlayerPosition(bundleID: playbackState.appBundleIdentifier, position: target)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.5))
+            self?.updateNowPlaying()
+        }
+    }
+
+    func skipBackward(_ interval: Double = 15) {
+        let target = max(playbackState.position - interval, 0)
+        MediaBridge.setPlayerPosition(bundleID: playbackState.appBundleIdentifier, position: target)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.5))
+            self?.updateNowPlaying()
+        }
+    }
+
     deinit {
         MainActor.assumeIsolated {
             pollTimer?.invalidate()
