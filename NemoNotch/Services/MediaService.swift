@@ -20,6 +20,8 @@ final class MediaService {
     private var reconcileTask: Task<Void, Never>?
     private var isUpdatingNowPlaying = false
     private var needsFollowupUpdate = false
+    private var needsFollowupValidation = false
+    private var validationTask: Task<Void, Never>?
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
 

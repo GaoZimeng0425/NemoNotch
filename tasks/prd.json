@@ -1,0 +1,96 @@
+{
+  "name": "Media Playback State Sync",
+  "description": "Fix Spotify play/pause state inconsistency by cross-validating NowPlayingCLI data with MediaRemote direct API and adding notification-driven delayed re-queries. Only modifies MediaService.swift.",
+  "branchName": "ralph/media-playback-state-sync",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add validation state properties",
+      "description": "As a developer, I need validation state tracking properties so that the new validation flow can manage concurrent queries and follow-up requests.",
+      "acceptanceCriteria": [
+        "Add `private var needsFollowupValidation = false` after existing `needsFollowupUpdate` property in MediaService",
+        "Add `private var validationTask: Task<Void, Never>?` after needsFollowupValidation",
+        "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "File: NemoNotch/Services/MediaService.swift. These are two simple private properties, no logic yet.",
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-002",
+      "title": "Add mergePlaybackState helper",
+      "description": "As a developer, I need a merge function that cross-validates NowPlayingCLI data with MediaRemote direct API, preferring MediaRemote for playbackRate when they disagree.",
+      "acceptanceCriteria": [
+        "Add `private func mergePlaybackState(cliInfo: [String: Any]?, mrInfo: [String: Any]?) -> [String: Any]?` method to MediaService",
+        "Method returns mrInfo when cliInfo is nil, cliInfo when mrInfo is nil",
+        "When both exist and disagree on isPlaying (playbackRate > 0), overrides cliInfo's playbackRate with mrInfo's value",
+        "Method is placed before applyInfo() in the file",
+        "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: NemoNotch/Services/MediaService.swift. Pure function, no side effects. Insert before the existing applyInfo method.",
+      "dependsOn": [
+        "US-001"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Add updateNowPlayingWithValidation method",
+      "description": "As a developer, I need a new query path that fires both NowPlayingCLI and MediaRemote.getNowPlayingInfo, merges results, then schedules a 250ms confirmatory re-query.",
+      "acceptanceCriteria": [
+        "Add `private func updateNowPlayingWithValidation()` to MediaService, placed after existing updateNowPlaying() method",
+        "Method checks isUpdatingNowPlaying guard and sets needsFollowupValidation if busy",
+        "Fires nowPlayingCLI.fetchNowPlayingInfo, then inside its callback fires remote.getNowPlayingInfo",
+        "Calls mergePlaybackState with both results then applyInfo with merged result",
+        "After applying, calls scheduleValidationFollowup() to queue a 250ms re-query",
+        "Add `private func scheduleValidationFollowup()` that cancels previous validationTask and schedules updateNowPlaying() after 250ms delay",
+        "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: NemoNotch/Services/MediaService.swift. The MediaRemote.getNowPlayingInfo callback is nested inside the CLI callback so both results are available before merge. getNowPlayingInfo dispatches to main queue so this is safe.",
+      "dependsOn": [
+        "US-002"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Classify notifications into state vs metadata paths",
+      "description": "As a developer, I need to split notification handlers so state-change notifications use the validation path and metadata notifications use the existing simple poll path.",
+      "acceptanceCriteria": [
+        "Replace entire setupNotifications() method in MediaService",
+        "State notifications (kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification, com.spotify.client.PlaybackStateChanged) call updateNowPlayingWithValidation()",
+        "Metadata notifications (kMRMediaRemoteNowPlayingInfoDidChangeNotification, kMRMediaRemoteNowPlayingApplicationDidChangeNotification, com.apple.Music.playerInfo) call updateNowPlaying()",
+        "All 5 notifications from the original code are still registered",
+        "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "File: NemoNotch/Services/MediaService.swift. Replace the existing setupNotifications() method. The notification names must match exactly — copy them from the existing code.",
+      "dependsOn": [
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Add validationTask cleanup to deinit",
+      "description": "As a developer, I need to cancel the validation task when MediaService is deallocated to prevent dangling tasks.",
+      "acceptanceCriteria": [
+        "Add `validationTask?.cancel()` to the existing deinit block in MediaService",
+        "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "File: NemoNotch/Services/MediaService.swift. One line addition to existing deinit block, after reconcileTask?.cancel().",
+      "dependsOn": [
+        "US-001"
+      ]
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-05-11T16:39:47.526Z"
+  }
+}
