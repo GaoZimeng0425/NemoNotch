@@ -140,9 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let system = SystemService()
         self.systemService = system
 
-        let notchCoordinator = NotchCoordinator { coordinator in
+        let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
-                NotchView()
+                NotchView(screen: screen)
                     .environment(coordinator)
                     .environment(settings)
                     .environment(media)
