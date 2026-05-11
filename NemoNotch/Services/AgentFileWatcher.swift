@@ -8,7 +8,10 @@ final class AgentFileWatcher: @unchecked Sendable {
     private var fileHandle: FileHandle?
     private let queue = DispatchQueue(label: "com.nemonotch.agentwatcher", qos: .utility)
     private var seenToolIds: Set<String> = []
+    private var completedIds: Set<String> = []
     private var allTools: [SubagentToolCall] = []
+    private var readOffset: UInt64 = 0
+    private var pendingTail = Data()
 
     init(filePath: String, taskToolId: String, onUpdate: @escaping ([SubagentToolCall]) -> Void) {
         self.filePath = filePath
@@ -69,66 +72,84 @@ final class AgentFileWatcher: @unchecked Sendable {
     }
 
     private func parseFile() {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
-              let text = String(data: data, encoding: .utf8) else { return }
+        guard let handle = fileHandle else { return }
 
-        let completedIds = parseCompletedToolIds(text)
+        // Read only the bytes appended since last invocation.
+        do {
+            try handle.seek(toOffset: readOffset)
+        } catch {
+            return
+        }
+        guard let chunk = try? handle.readToEnd(), !chunk.isEmpty else { return }
+        readOffset += UInt64(chunk.count)
 
-        for line in text.components(separatedBy: "\n") {
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
+        var buffer = pendingTail
+        buffer.append(chunk)
+        pendingTail.removeAll(keepingCapacity: true)
 
-            if let message = json["message"] as? [String: Any],
-               let content = message["content"] as? [[String: Any]] {
-                for block in content {
-                    if block["type"] as? String == "tool_use",
-                       let toolId = block["id"] as? String,
-                       let toolName = block["name"] as? String {
-                        guard !seenToolIds.contains(toolId) else { continue }
-                        seenToolIds.insert(toolId)
+        let newline = UInt8(ascii: "\n")
+        var lineStart = buffer.startIndex
+        var didChange = false
 
-                        let input = block["input"].flatMap {
-                            try? String(data: JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]), encoding: .utf8)
-                        } ?? ""
-
-                        allTools.append(SubagentToolCall(
-                            id: toolId,
-                            name: toolName,
-                            input: input,
-                            isCompleted: completedIds.contains(toolId),
-                            timestamp: parseTimestamp(json) ?? Date()
-                        ))
-                    }
+        for i in buffer.indices {
+            if buffer[i] == newline {
+                let lineRange = lineStart..<i
+                if !lineRange.isEmpty {
+                    if processLine(buffer.subdata(in: lineRange)) { didChange = true }
                 }
+                lineStart = buffer.index(after: i)
             }
         }
 
-        // Update completion status for existing tools
-        for i in allTools.indices {
-            allTools[i].isCompleted = completedIds.contains(allTools[i].id)
+        // Preserve the trailing partial line for next time.
+        if lineStart < buffer.endIndex {
+            pendingTail = buffer.subdata(in: lineStart..<buffer.endIndex)
         }
 
+        guard didChange else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.onUpdate(self.allTools)
         }
     }
 
-    private func parseCompletedToolIds(_ text: String) -> Set<String> {
-        var ids: Set<String> = []
-        for line in text.components(separatedBy: "\n") {
-            guard !line.isEmpty, let data = line.data(using: .utf8) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let message = json["message"] as? [String: Any],
-                  let content = message["content"] as? [[String: Any]] else { continue }
-            for block in content {
-                if block["type"] as? String == "tool_result",
-                   let toolUseId = block["tool_use_id"] as? String {
-                    ids.insert(toolUseId)
+    /// Parse a single JSONL line, mutate `seenToolIds` / `completedIds` /
+    /// `allTools` accordingly. Returns true if state changed.
+    private func processLine(_ data: Data) -> Bool {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = json["message"] as? [String: Any],
+              let content = message["content"] as? [[String: Any]] else { return false }
+
+        var changed = false
+        for block in content {
+            let type = block["type"] as? String
+            if type == "tool_use",
+               let toolId = block["id"] as? String,
+               let toolName = block["name"] as? String,
+               !seenToolIds.contains(toolId) {
+                seenToolIds.insert(toolId)
+                let input = block["input"].flatMap {
+                    try? String(data: JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]), encoding: .utf8)
+                } ?? ""
+                allTools.append(SubagentToolCall(
+                    id: toolId,
+                    name: toolName,
+                    input: input,
+                    isCompleted: completedIds.contains(toolId),
+                    timestamp: parseTimestamp(json) ?? Date()
+                ))
+                changed = true
+            } else if type == "tool_result",
+                      let toolUseId = block["tool_use_id"] as? String,
+                      !completedIds.contains(toolUseId) {
+                completedIds.insert(toolUseId)
+                if let idx = allTools.firstIndex(where: { $0.id == toolUseId }) {
+                    allTools[idx].isCompleted = true
                 }
+                changed = true
             }
         }
-        return ids
+        return changed
     }
 
     private let isoFormatter: ISO8601DateFormatter = {

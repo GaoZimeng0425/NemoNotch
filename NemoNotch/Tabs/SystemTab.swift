@@ -16,6 +16,8 @@ struct SystemTab: View {
             .padding(.bottom, 12)
         }
         .scrollDisabled(true)
+        .onAppear { systemService.setActive(true) }
+        .onDisappear { systemService.setActive(false) }
     }
 
     // MARK: - Process Row
