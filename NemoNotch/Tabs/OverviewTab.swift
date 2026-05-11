@@ -440,6 +440,7 @@ private struct OverviewWeatherSection: View {
             }
         }
         .notchCard(radius: 8, fill: NotchTheme.surface)
+        .activates(weatherService)
     }
 
     private var weatherContent: some View {

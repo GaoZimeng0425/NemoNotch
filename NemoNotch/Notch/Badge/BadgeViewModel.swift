@@ -33,8 +33,7 @@ final class BadgeViewModel {
     var activeBadgeItems: [BadgeItem] {
         var items: [BadgeItem] = []
 
-        let allSessions = Array(aiService.claudeProvider.sessions.values) + Array(aiService.geminiProvider.sessions.values)
-        let activeSessions = allSessions.filter { $0.phase.isActive || $0.phase.needsAttention }
+        let activeSessions = aiService.store.sortedSessions.filter { $0.phase.isActive || $0.phase.needsAttention }
 
         for session in activeSessions {
             if session.phase.isWaitingForApproval {

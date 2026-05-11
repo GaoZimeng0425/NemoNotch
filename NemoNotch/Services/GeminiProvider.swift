@@ -4,17 +4,17 @@ import Foundation
 @Observable
 final class GeminiProvider: AIProvider {
     let source: AISource = .gemini
-    var sessions: [String: AISessionState] = [:]
-    var activeSession: AISessionState?
     var isHookInstalled = false
 
+    private let store: AISessionStore
     private var timeoutTimer: Timer?
     private var sessionFiles: [String: String] = [:]
     private var fileMonitoredSessions: Set<String> = []
     private var fileMonitorTimer: Timer?
     private weak var hookServer: HookServer?
 
-    init() {
+    init(store: AISessionStore) {
+        self.store = store
         isHookInstalled = HookInstaller.isInstalled(.gemini)
     }
 
@@ -42,10 +42,8 @@ final class GeminiProvider: AIProvider {
 
     func respondToPermission(sessionId: String, approved: Bool) {
         hookServer?.respondToPermission(sessionId: sessionId, approved: approved)
-        if var session = sessions[sessionId] {
+        store.mutate(sessionId) { session in
             session.phase = session.phase.transition(to: .processing)
-            sessions[sessionId] = session
-            updateActiveSession()
         }
     }
 
@@ -68,73 +66,72 @@ final class GeminiProvider: AIProvider {
             if let cwd = event.cwd {
                 sessionFiles[sessionId] = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd)
             }
-            sessions[sessionId] = session
+            store.upsert(session)
             parseConversation(for: sessionId)
 
-        case "BeforeAgent": // Maps to UserPromptSubmit
-            var session = ensureSession(sessionId)
-            session.phase = .processing
-            applyContext(to: &session, event: event)
-            session.lastEventTime = now
-            sessions[sessionId] = session
-            parseConversation(for: sessionId)
-
-        case "BeforeTool": // Maps to PreToolUse
-            var session = ensureSession(sessionId)
-            session.phase = .processing
-            session.currentTool = event.toolName
-            session.isPreToolUse = true
-            applyContext(to: &session, event: event)
-            session.lastEventTime = now
-            if let toolName = event.toolName, toolName == "invoke_subagent" {
-                session.subagentState.startTask(
-                    taskToolId: event.toolUseId ?? UUID().uuidString,
-                    description: "Subagent"
-                )
+        case "BeforeAgent":
+            store.mutateOrCreate(sessionId, source: .gemini) { session in
+                session.phase = .processing
+                self.applyContext(to: &session, event: event)
+                session.lastEventTime = now
             }
-            sessions[sessionId] = session
             parseConversation(for: sessionId)
 
-        case "AfterTool": // Maps to PostToolUse
-            var session = ensureSession(sessionId)
-            session.currentTool = nil
-            session.isPreToolUse = false
-            applyContext(to: &session, event: event)
-            session.lastEventTime = now
-            if let toolName = event.toolName, toolName == "invoke_subagent" {
-                session.subagentState.stopTask(taskToolId: event.toolUseId ?? "")
+        case "BeforeTool":
+            store.mutateOrCreate(sessionId, source: .gemini) { session in
+                session.phase = .processing
+                session.currentTool = event.toolName
+                session.isPreToolUse = true
+                self.applyContext(to: &session, event: event)
+                session.lastEventTime = now
+                if let toolName = event.toolName, toolName == "invoke_subagent" {
+                    session.subagentState.startTask(
+                        taskToolId: event.toolUseId ?? UUID().uuidString,
+                        description: "Subagent"
+                    )
+                }
             }
-            sessions[sessionId] = session
+            parseConversation(for: sessionId)
+
+        case "AfterTool":
+            store.mutateOrCreate(sessionId, source: .gemini) { session in
+                session.currentTool = nil
+                session.isPreToolUse = false
+                self.applyContext(to: &session, event: event)
+                session.lastEventTime = now
+                if let toolName = event.toolName, toolName == "invoke_subagent" {
+                    session.subagentState.stopTask(taskToolId: event.toolUseId ?? "")
+                }
+            }
             parseConversation(for: sessionId)
 
         case "Notification":
-            var session = ensureSession(sessionId)
-            session.phase = .waitingForInput
-            applyContext(to: &session, event: event)
-            session.lastEventTime = now
-            sessions[sessionId] = session
+            store.mutateOrCreate(sessionId, source: .gemini) { session in
+                session.phase = .waitingForInput
+                self.applyContext(to: &session, event: event)
+                session.lastEventTime = now
+            }
             parseConversation(for: sessionId)
 
-        case "AfterAgent": // Maps to Stop
-            if var session = sessions[sessionId] {
+        case "AfterAgent":
+            guard store.contains(sessionId) else { return }
+            store.mutate(sessionId) { session in
                 session.phase = .waitingForInput
                 session.currentTool = nil
                 session.isPreToolUse = false
-                applyContext(to: &session, event: event)
+                self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
-                sessions[sessionId] = session
-                parseConversation(for: sessionId)
             }
+            parseConversation(for: sessionId)
 
         case "SessionEnd":
             sessionFiles.removeValue(forKey: sessionId)
-            sessions.removeValue(forKey: sessionId)
+            store.remove(sessionId)
 
         default:
             break
         }
 
-        updateActiveSession()
         scheduleTimeoutCleanup()
     }
 
@@ -166,7 +163,7 @@ final class GeminiProvider: AIProvider {
                       let sessionJson = try? JSONSerialization.jsonObject(with: fileData) as? [String: Any],
                       let sessionId = sessionJson["sessionId"] as? String else { continue }
 
-                if sessions[sessionId] != nil { continue }
+                if store.contains(sessionId) { continue }
 
                 var state = AISessionState(sessionId: sessionId, source: .gemini)
                 state.cwd = cwd
@@ -175,14 +172,12 @@ final class GeminiProvider: AIProvider {
                 fileMonitoredSessions.insert(sessionId)
 
                 applyParsedContent(to: &state, filePath: filePath)
-
-                sessions[sessionId] = state
+                store.upsert(state)
             }
         }
 
         if !fileMonitoredSessions.isEmpty {
             LogService.info("Gemini: discovered \(fileMonitoredSessions.count) existing session(s)", category: "GeminiProvider")
-            updateActiveSession()
             startFileMonitoring()
         }
     }
@@ -238,14 +233,13 @@ final class GeminiProvider: AIProvider {
 
         for sessionId in monitored {
             guard let filePath = sessionFiles[sessionId],
-                  let session = sessions[sessionId] else { continue }
+                  let session = store.get(sessionId) else { continue }
 
             if !FileManager.default.fileExists(atPath: filePath) {
                 staleIds.insert(sessionId)
                 continue
             }
 
-            // Degrade active sessions whose file hasn't changed in 2 minutes
             if session.phase == .processing || session.phase == .waitingForInput {
                 if let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
                    let modDate = attrs[.modificationDate] as? Date,
@@ -265,37 +259,27 @@ final class GeminiProvider: AIProvider {
         for id in staleIds {
             fileMonitoredSessions.remove(id)
             sessionFiles.removeValue(forKey: id)
-            sessions.removeValue(forKey: id)
+            store.remove(id)
         }
 
         for id in degradedIds {
-            if var session = sessions[id] {
-                session.phase = .idle
-                sessions[id] = session
-            }
+            store.mutate(id) { session in session.phase = .idle }
         }
 
         for (sessionId, modDate) in changedSessions {
-            guard var session = sessions[sessionId] else { continue }
-            session.lastEventTime = modDate
-            applyParsedContent(to: &session, filePath: sessionFiles[sessionId] ?? "")
-            sessions[sessionId] = session
+            guard let filePath = sessionFiles[sessionId] else { continue }
+            store.mutate(sessionId) { session in
+                session.lastEventTime = modDate
+                self.applyParsedContent(to: &session, filePath: filePath)
+            }
         }
 
-        if !changedSessions.isEmpty || !staleIds.isEmpty || !degradedIds.isEmpty {
-            updateActiveSession()
-        }
         if fileMonitoredSessions.isEmpty {
             stopFileMonitoring()
         }
     }
 
     // MARK: - Helpers
-
-    private func ensureSession(_ sessionId: String) -> AISessionState {
-        if let existing = sessions[sessionId] { return existing }
-        return AISessionState(sessionId: sessionId, source: .gemini)
-    }
 
     private func applyContext(to session: inout AISessionState, event: HookEvent) {
         if let cwd = event.cwd { session.cwd = cwd }
@@ -312,12 +296,11 @@ final class GeminiProvider: AIProvider {
             }
         }
 
-        guard let filePath = sessionFiles[sessionId] else { 
-            // If file still not found, try again in a second
+        guard let filePath = sessionFiles[sessionId] else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.parseConversation(for: sessionId)
             }
-            return 
+            return
         }
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -325,64 +308,33 @@ final class GeminiProvider: AIProvider {
 
             DispatchQueue.main.async {
                 guard let self else { return }
-                var session = self.sessions[sessionId] ?? AISessionState(sessionId: sessionId, source: .gemini)
+                self.store.mutateOrCreate(sessionId, source: .gemini) { session in
+                    if let result {
+                        LogService.info("Gemini parsed \(result.common.messages.count) messages for \(sessionId.prefix(8))", category: "GeminiProvider")
+                        session.messages = result.common.messages
+                        session.inputTokens = result.common.inputTokens
+                        session.outputTokens = result.common.outputTokens
+                        session.cacheReadTokens = result.cachedTokens
+                        if let model = result.common.lastModel { session.model = model }
 
-                if let result = result {
-                    LogService.info("Gemini parsed \(result.common.messages.count) messages for \(sessionId.prefix(8))", category: "GeminiProvider")
-                    session.messages = result.common.messages
-                    session.inputTokens = result.common.inputTokens
-                    session.outputTokens = result.common.outputTokens
-                    session.cacheReadTokens = result.cachedTokens
-                    if let model = result.common.lastModel {
-                        session.model = model
+                        let userMessages = result.common.messages.filter { $0.role == .user }
+                        if let first = userMessages.first, session.firstUserMessage == nil {
+                            session.firstUserMessage = String(first.content.prefix(80))
+                        }
+                        if let last = userMessages.last {
+                            session.lastUserMessage = String(last.content.prefix(80))
+                        }
+                    } else {
+                        LogService.error("Gemini failed to parse result for \(sessionId.prefix(8))", category: "GeminiProvider")
                     }
-
-                    let userMessages = result.common.messages.filter { $0.role == .user }
-                    if let first = userMessages.first, session.firstUserMessage == nil {
-                        session.firstUserMessage = String(first.content.prefix(80))
-                    }
-                    if let last = userMessages.last {
-                        session.lastUserMessage = String(last.content.prefix(80))
-                    }
-                } else {
-                    LogService.error("Gemini failed to parse result for \(sessionId.prefix(8))", category: "GeminiProvider")
                 }
-
-                self.sessions[sessionId] = session
-                self.updateActiveSession()
             }
         }
     }
 
     private func resolveFile(for sessionId: String) -> String? {
-        guard let cwd = sessions[sessionId]?.cwd else { return nil }
+        guard let cwd = store.get(sessionId)?.cwd else { return nil }
         return GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd)
-    }
-
-    // MARK: - Active Session
-
-    private func updateActiveSession() {
-        let prevId = activeSession?.id
-        let allSessions = Array(sessions.values)
-        let sortedSessions = allSessions.sorted { s1, s2 in
-            sessionPriority(s1) > sessionPriority(s2)
-        }
-        activeSession = sortedSessions.first
-
-        if activeSession?.id != prevId {
-            LogService.info("Gemini active session: \(prevId ?? "nil") -> \(activeSession?.id ?? "nil")", category: "GeminiProvider")
-        }
-    }
-
-    private func sessionPriority(_ session: AISessionState) -> Int {
-        switch session.phase {
-        case .processing: return 80
-        case .compacting: return 70
-        case .waitingForInput: return 50
-        case .idle: return 10
-        case .ended: return 0
-        case .waitingForApproval: return 100
-        }
     }
 
     // MARK: - Timeout
@@ -398,11 +350,10 @@ final class GeminiProvider: AIProvider {
 
     private func cleanupStaleSessions() {
         let threshold = Date().addingTimeInterval(-1800)
-        let staleIds = sessions.filter { $0.value.lastEventTime < threshold }.map(\.key)
-        for id in staleIds {
-            sessionFiles.removeValue(forKey: id)
-            sessions.removeValue(forKey: id)
+        let stale = store.sessions(for: .gemini).filter { $0.lastEventTime < threshold }
+        for session in stale {
+            sessionFiles.removeValue(forKey: session.id)
+            store.remove(session.id)
         }
-        updateActiveSession()
     }
 }
