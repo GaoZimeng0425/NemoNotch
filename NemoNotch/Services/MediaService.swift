@@ -241,6 +241,24 @@ final class MediaService {
         return !(title.isEmpty && artist.isEmpty)
     }
 
+    private func mergePlaybackState(cliInfo: [String: Any]?, mrInfo: [String: Any]?) -> [String: Any]? {
+        guard let cliInfo else { return mrInfo }
+        guard let mrInfo else { return cliInfo }
+
+        let cliRate = (cliInfo["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? 0
+        let mrRate = (mrInfo["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? 0
+        let cliPlaying = cliRate > 0
+        let mrPlaying = mrRate > 0
+
+        if cliPlaying != mrPlaying {
+            var merged = cliInfo
+            merged["kMRMediaRemoteNowPlayingInfoPlaybackRate"] = NSNumber(value: mrRate)
+            return merged
+        }
+
+        return cliInfo
+    }
+
     private func applyInfo(_ info: [String: Any]?) {
         guard let info, !info.isEmpty else {
             if !playbackState.isEmpty {

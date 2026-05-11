@@ -30,11 +30,12 @@
         "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "File: NemoNotch/Services/MediaService.swift. Pure function, no side effects. Insert before the existing applyInfo method.",
       "dependsOn": [
         "US-001"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-003",
@@ -91,6 +92,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-05-11T16:39:47.526Z"
+    "updatedAt": "2026-05-11T16:41:29.256Z"
   }
 }
