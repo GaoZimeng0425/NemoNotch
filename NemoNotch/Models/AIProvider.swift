@@ -8,8 +8,6 @@ enum AISource: String, Codable, CaseIterable {
 @MainActor
 protocol AIProvider: AnyObject, Observable {
     var source: AISource { get }
-    var sessions: [String: AISessionState] { get set }
-    var activeSession: AISessionState? { get set }
     var isHookInstalled: Bool { get set }
     func handleEvent(_ event: HookEvent)
     func installHooks()
