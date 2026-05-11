@@ -12,11 +12,17 @@ final class MediaRemote {
         case stop = 3
         case nextTrack = 4
         case previousTrack = 5
+        case skipBackward15 = 12
+        case skipForward15 = 13
+        case skipBackward = 17
+        case skipForward = 18
+        case seekToPlaybackPosition = 19
     }
 
     private typealias GetNowPlayingInfoFn = @convention(c) (DispatchQueue, @escaping ([String: Any]) -> Void) -> Void
     private typealias GetNowPlayingApplicationPIDFn = @convention(c) (DispatchQueue, @escaping (Int32) -> Void) -> Void
     private typealias SendCommandFn = @convention(c) (Int, [AnyHashable: Any]?) -> Bool
+    private typealias SetElapsedTimeFn = @convention(c) (Double) -> Void
     private typealias RegisterFn = @convention(c) (DispatchQueue) -> Void
     private typealias SetCanBeNowPlayingFn = @convention(c) (Bool) -> Void
     private static let initialDelayMs = 150
@@ -27,6 +33,7 @@ final class MediaRemote {
     private let sendCommandFn: SendCommandFn?
     private let registerFn: RegisterFn?
     private let setCanBeNowPlayingFn: SetCanBeNowPlayingFn?
+    private let setElapsedTimeFn: SetElapsedTimeFn?
 
     private init() {
         let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
@@ -50,6 +57,7 @@ final class MediaRemote {
         self.sendCommandFn = loadFn("MRMediaRemoteSendCommand", as: SendCommandFn.self)
         self.registerFn = loadFn("MRMediaRemoteRegisterForNowPlayingNotifications", as: RegisterFn.self)
         self.setCanBeNowPlayingFn = loadFn("MRMediaRemoteSetCanBeNowPlayingApplication", as: SetCanBeNowPlayingFn.self)
+        self.setElapsedTimeFn = loadFn("MRMediaRemoteSetElapsedTime", as: SetElapsedTimeFn.self)
     }
 
     func registerForNotifications() {
@@ -131,9 +139,38 @@ final class MediaRemote {
     }
 
     @discardableResult
-    func sendCommand(_ command: Command) -> Bool {
+    func sendCommand(_ command: Command, options: [AnyHashable: Any]? = nil) -> Bool {
         guard let fn = sendCommandFn else { return false }
-        return fn(command.rawValue, nil)
+        return fn(command.rawValue, options)
+    }
+
+    /// Seek by a relative interval (positive forward, negative backward) using
+    /// MediaRemote's skip commands. Works system-wide for any player that
+    /// supports MPRemoteCommandCenter skip handlers (Music, Podcasts, Safari/
+    /// Chrome media, etc.) — no AppleScript permission needed.
+    @discardableResult
+    func skip(interval: Double) -> Bool {
+        guard interval != 0 else { return false }
+        let forward = interval > 0
+        let magnitude = abs(interval)
+        let options: [AnyHashable: Any] = [
+            "kMRMediaRemoteOptionSkipInterval": NSNumber(value: magnitude),
+        ]
+        // Try the generic skip command first (honors the interval).
+        if sendCommand(forward ? .skipForward : .skipBackward, options: options) {
+            return true
+        }
+        // Fallback: dedicated 15s skip commands (interval is ignored by API).
+        return sendCommand(forward ? .skipForward15 : .skipBackward15)
+    }
+
+    /// Seek to absolute elapsed time (seconds). Returns true if the API symbol
+    /// was available.
+    @discardableResult
+    func setElapsedTime(_ seconds: Double) -> Bool {
+        guard let fn = setElapsedTimeFn else { return false }
+        fn(seconds)
+        return true
     }
 
     // MARK: - macOS 15.4+ via MRNowPlayingController

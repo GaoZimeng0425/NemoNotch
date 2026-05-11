@@ -280,6 +280,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "NemoNotch 需要控制音乐播放器以实现快进、快退等播放控制功能。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -333,6 +334,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "NemoNotch 需要控制音乐播放器以实现快进、快退等播放控制功能。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -165,6 +165,30 @@ sequenceDiagram
 notification > openclaw active > ai approval > ai working > media playing > calendar upcoming
 ```
 
+### Info.plist 配置（关键陷阱）
+
+**项目设置了 `GENERATE_INFOPLIST_FILE = YES`**，源文件 `NemoNotch/Info.plist` 中的键**不会进构建产物**！所有 Info.plist 键必须在 `NemoNotch.xcodeproj/project.pbxproj` 中以 `INFOPLIST_KEY_*` 形式声明（Debug 和 Release 两份配置都要加）。
+
+加新权限描述（如 `NSAppleEventsUsageDescription`、`NSMicrophoneUsageDescription` 等）的正确流程：
+
+1. 编辑 `project.pbxproj`，找到所有 `INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = ...;` 这种行，在旁边加一行 `INFOPLIST_KEY_NSAppleEventsUsageDescription = "...";`
+2. 验证：`/usr/libexec/PlistBuddy -c "Print :Key" $APP/Contents/Info.plist` 必须能输出
+3. **缺失 `NSAppleEventsUsageDescription` 会让 macOS 直接拒绝弹"自动化授权"对话框**，且自动化设置面板没法手动添加 app —— 这条坑非常深，调试时优先检查构建产物的 Info.plist 是否真的有这条 key
+
+### 媒体信息获取（关键）
+
+**⚠️ 重要**：媒体的 Now Playing 信息（标题、艺人、专辑、封面、时长、进度、播放状态）**全部通过 `NowPlayingCLI` 获取**，不是通过 `MediaRemote.swift` 里的 `MRMediaRemoteGetNowPlayingInfo`！
+
+- `NowPlayingCLI` 启动一个 perl daemon（`mediaremote-mini.pl` + 解压自 `MediaRemoteMini.bin.gz` 的 dylib），通过 stdin/stdout JSON 协议轮询读取信息
+- `MediaService.updateNowPlaying()` → `nowPlayingCLI.fetchNowPlayingInfo()` → `applyInfo()`
+- `MediaRemote.swift` 只用来**发送控制命令**（play/pause/next/prev/skip）和**注册系统通知**触发刷新
+- 调试"信息丢失"问题时，应优先排查 NowPlayingCLI daemon 状态 / dylib 解压（`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`）/ perl 脚本，而不是改 MediaRemote.swift
+
+**媒体 seek（快进/回退 15s）**：
+
+- Music / Spotify：必须走 AppleScript `set player position`（`MediaBridge.setPlayerPosition`），因为 Spotify 不响应 MediaRemote 的 `SkipBackward/Forward` 命令（系统返回 "never supported"）。需要用户在"系统设置 → 隐私 → 自动化"中授权
+- 其他播放器（浏览器、Podcasts 等）：走 MediaRemote 的 `skip(interval:)` 命令
+
 ### 技术架构
 
 **Service 层（数据源）**
