@@ -70,11 +70,12 @@
         "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "File: NemoNotch/Services/MediaService.swift. Replace the existing setupNotifications() method. The notification names must match exactly — copy them from the existing code.",
       "dependsOn": [
         "US-003"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-005",
@@ -93,6 +94,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-05-11T16:44:13.663Z"
+    "updatedAt": "2026-05-11T16:45:31.263Z"
   }
 }

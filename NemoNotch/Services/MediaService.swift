@@ -144,6 +144,7 @@ final class MediaService {
     private func setupNotifications() {
         let nc = DistributedNotificationCenter.default()
 
+        // Metadata notifications → simple poll path
         nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingInfoDidChangeNotification"),
                        object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -151,13 +152,15 @@ final class MediaService {
             }
         }
 
+        // State notifications → validation path
         nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"),
                        object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.updateNowPlaying()
+                self?.updateNowPlayingWithValidation()
             }
         }
 
+        // Metadata notifications → simple poll path
         nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingApplicationDidChangeNotification"),
                        object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -165,13 +168,15 @@ final class MediaService {
             }
         }
 
+        // State notifications → validation path
         nc.addObserver(forName: .init("com.spotify.client.PlaybackStateChanged"),
                        object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.updateNowPlaying()
+                self?.updateNowPlayingWithValidation()
             }
         }
 
+        // Metadata notifications → simple poll path
         nc.addObserver(forName: .init("com.apple.Music.playerInfo"),
                        object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
