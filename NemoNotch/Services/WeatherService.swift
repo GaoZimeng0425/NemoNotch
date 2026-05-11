@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class WeatherService: NSObject, CLLocationManagerDelegate {
+final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware {
     var temperature: Double = 0
     var condition: String = "--"
     var feelsLike: Double = 0
@@ -25,14 +25,25 @@ final class WeatherService: NSObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
         locationManager.requestAlwaysAuthorization()
+        // Defer location monitoring + refresh timer until a view becomes
+        // visible — see setActive(_:). The first activation triggers the
+        // initial fetch.
+    }
 
-        fetchWeather()
-        locationManager.startMonitoringSignificantLocationChanges()
-
-        timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.fetchWeather()
+    func setActive(_ active: Bool) {
+        if active {
+            guard timer == nil else { return }
+            fetchWeather()
+            locationManager.startMonitoringSignificantLocationChanges()
+            timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.fetchWeather()
+                }
             }
+        } else {
+            timer?.invalidate()
+            timer = nil
+            locationManager.stopMonitoringSignificantLocationChanges()
         }
     }
 

@@ -4,7 +4,7 @@ import IOKit.ps
 
 @MainActor
 @Observable
-final class SystemService {
+final class SystemService: LifecycleAware {
     // System-level metrics
     var cpuUsage: Double = 0
     var cpuHistory: [Double] = []
