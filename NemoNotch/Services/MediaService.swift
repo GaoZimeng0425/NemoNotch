@@ -235,6 +235,46 @@ final class MediaService {
         }
     }
 
+    private func updateNowPlayingWithValidation() {
+        if isUpdatingNowPlaying {
+            needsFollowupValidation = true
+            return
+        }
+
+        isUpdatingNowPlaying = true
+
+        nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
+            let cliBox = NowPlayingInfoBox(info: cliInfo)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.remote.getNowPlayingInfo { mrInfo in
+                    let merged = self.mergePlaybackState(cliInfo: cliBox.info, mrInfo: mrInfo)
+                    self.applyInfo(merged)
+                    self.isUpdatingNowPlaying = false
+
+                    if self.needsFollowupValidation {
+                        self.needsFollowupValidation = false
+                        self.updateNowPlayingWithValidation()
+                    } else if self.needsFollowupUpdate {
+                        self.needsFollowupUpdate = false
+                        self.updateNowPlaying()
+                    }
+
+                    self.scheduleValidationFollowup()
+                }
+            }
+        }
+    }
+
+    private func scheduleValidationFollowup() {
+        validationTask?.cancel()
+        validationTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            self?.updateNowPlaying()
+        }
+    }
+
     private static func hasMetadata(_ info: [String: Any]) -> Bool {
         let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
         let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""

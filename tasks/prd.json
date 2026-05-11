@@ -51,11 +51,12 @@
         "xcodebuild -scheme NemoNotch -configuration Debug build succeeds"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "File: NemoNotch/Services/MediaService.swift. The MediaRemote.getNowPlayingInfo callback is nested inside the CLI callback so both results are available before merge. getNowPlayingInfo dispatches to main queue so this is safe.",
       "dependsOn": [
         "US-002"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-004",
@@ -92,6 +93,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-05-11T16:41:29.256Z"
+    "updatedAt": "2026-05-11T16:44:13.663Z"
   }
 }
