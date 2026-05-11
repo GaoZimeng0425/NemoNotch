@@ -138,6 +138,7 @@ final class MediaService {
             pollTimer?.invalidate()
             progressTimer?.invalidate()
             reconcileTask?.cancel()
+            validationTask?.cancel()
         }
     }
 
