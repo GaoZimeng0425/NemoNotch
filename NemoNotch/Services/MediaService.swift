@@ -20,10 +20,15 @@ final class MediaService {
     private var reconcileTask: Task<Void, Never>?
     private var isUpdatingNowPlaying = false
     private var needsFollowupUpdate = false
-    private var needsFollowupValidation = false
-    private var validationTask: Task<Void, Never>?
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
+
+    // ── Reconcile guard ──────────────────────────────────────────────
+    // After an optimistic toggle we set `reconcileExpectedIsPlaying` to
+    // the value we expect.  `applyInfo` must preserve it until
+    // `reconcilePlayState` clears the flag and queries the authoritative
+    // source (ScriptingBridge for known players, CLI otherwise).
+    private var reconcileExpectedIsPlaying: Bool?
 
     init() {
         remote.registerForNotifications()
@@ -46,13 +51,21 @@ final class MediaService {
         permissionDeniedPlayer = nil
     }
 
+    // ── Player controls ──────────────────────────────────────────────
+
     func togglePlayPause() {
         let bundleID = playbackState.appBundleIdentifier
+        let target = !playbackState.isPlaying
+        LogService.debug("[Media] toggle: \(playbackState.isPlaying) → \(target), player=\(bundleID ?? "nil")", category: "media")
+        playbackState.isPlaying = target
+        reconcileExpectedIsPlaying = target
+        updateProgressTimer(isPlaying: target)
         if MediaBridge.supportsSeeking(bundleID: bundleID) {
             MediaBridge.togglePlayPause(bundleID: bundleID)
         } else {
             remote.sendCommand(.togglePlayPause)
         }
+        scheduleReconcile(after: 0.5)
     }
 
     func nextTrack() {
@@ -77,21 +90,48 @@ final class MediaService {
         scheduleReconcile(after: 0.6)
     }
 
-    /// Optimistic UI hint: zero progress and dim artwork until the real track
-    /// metadata arrives. We keep the title so the user has continuity.
     private func applyTrackChangePlaceholder() {
         playbackState.position = 0
         playbackState.duration = 0
     }
+
+    // ── Reconcile ────────────────────────────────────────────────────
+    // The reconcile is the ONLY place that clears the optimistic guard
+    // and queries the *authoritative* play state.
 
     private func scheduleReconcile(after seconds: TimeInterval) {
         reconcileTask?.cancel()
         reconcileTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            self?.updateNowPlaying()
+            self?.reconcilePlayState()
         }
     }
+
+    /// Queries the authoritative play state and keeps the guard set to the
+    /// SB value. The guard self-clears in `applyInfo` once CLI catches up.
+    private func reconcilePlayState() {
+        let bundleID = playbackState.appBundleIdentifier
+        LogService.debug("[Media] reconcile: player=\(bundleID ?? "nil")", category: "media")
+
+        // For known players (Spotify / Music) query ScriptingBridge
+        // directly — synchronous, zero cache, authoritative.
+        if let playing = MediaBridge.isPlaying(bundleID: bundleID) {
+            LogService.debug("[Media] reconcile: ScriptingBridge isPlaying=\(playing), was=\(playbackState.isPlaying)", category: "media")
+            playbackState.isPlaying = playing
+            updateProgressTimer(isPlaying: playing)
+            // Keep guard set to SB value — applyInfo will auto-clear it
+            // once CLI returns a matching value. This prevents stale CLI
+            // data from overwriting the authoritative SB state.
+            reconcileExpectedIsPlaying = playing
+        } else {
+            LogService.debug("[Media] reconcile: unknown player, falling back to CLI", category: "media")
+            reconcileExpectedIsPlaying = nil
+            updateNowPlaying()
+        }
+    }
+
+    // ── Seek ─────────────────────────────────────────────────────────
 
     var supportsSeeking: Bool {
         MediaBridge.supportsSeeking(bundleID: playbackState.appBundleIdentifier)
@@ -105,7 +145,6 @@ final class MediaService {
         seek(by: -interval)
     }
 
-    /// Drag-to-seek entry point used by the progress bar.
     func seek(toFraction fraction: Double) {
         guard playbackState.duration > 0 else { return }
         let target = max(0, min(playbackState.duration, fraction * playbackState.duration))
@@ -138,71 +177,55 @@ final class MediaService {
             pollTimer?.invalidate()
             progressTimer?.invalidate()
             reconcileTask?.cancel()
-            validationTask?.cancel()
         }
     }
+
+    // ── Notifications ────────────────────────────────────────────────
+    // All notifications go through the same simple updateNowPlaying path.
+    // The reconcile guard in applyInfo prevents stale CLI data from
+    // overriding the optimistic isPlaying during the reconcile window.
 
     private func setupNotifications() {
         let nc = DistributedNotificationCenter.default()
 
-        // Metadata notifications → simple poll path
-        nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingInfoDidChangeNotification"),
-                       object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateNowPlaying()
-            }
-        }
+        let names: [NSNotification.Name] = [
+            .init("kMRMediaRemoteNowPlayingInfoDidChangeNotification"),
+            .init("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"),
+            .init("kMRMediaRemoteNowPlayingApplicationDidChangeNotification"),
+            .init("com.spotify.client.PlaybackStateChanged"),
+            .init("com.apple.Music.playerInfo"),
+        ]
 
-        // State notifications → validation path
-        nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification"),
-                       object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateNowPlayingWithValidation()
-            }
-        }
-
-        // Metadata notifications → simple poll path
-        nc.addObserver(forName: .init("kMRMediaRemoteNowPlayingApplicationDidChangeNotification"),
-                       object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateNowPlaying()
-            }
-        }
-
-        // State notifications → validation path
-        nc.addObserver(forName: .init("com.spotify.client.PlaybackStateChanged"),
-                       object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateNowPlayingWithValidation()
-            }
-        }
-
-        // Metadata notifications → simple poll path
-        nc.addObserver(forName: .init("com.apple.Music.playerInfo"),
-                       object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateNowPlaying()
+        for name in names {
+            nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                Task { @MainActor [weak self] in
+                    LogService.debug("[Media] notification: \(name.rawValue)", category: "media")
+                    self?.updateNowPlaying()
+                }
             }
         }
     }
 
+    // ── Polling ──────────────────────────────────────────────────────
+
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
+                LogService.debug("[Media] poll timer", category: "media")
                 self?.updateNowPlaying()
                 self?.recheckPermissionIfBannerShown()
             }
         }
     }
 
-    /// If the banner is up, probe whether the user has since granted access.
-    /// On success, dismiss the banner silently.
     private func recheckPermissionIfBannerShown() {
         guard let player = permissionDeniedPlayer else { return }
         if MediaBridge.hasAutomationAccess(bundleID: player.rawValue) {
             permissionDeniedPlayer = nil
         }
     }
+
+    // ── Progress timer ───────────────────────────────────────────────
 
     private func updateProgressTimer(isPlaying: Bool) {
         if isPlaying && progressTimer == nil {
@@ -218,6 +241,8 @@ final class MediaService {
             progressTimer = nil
         }
     }
+
+    // ── Core data fetch ──────────────────────────────────────────────
 
     private func updateNowPlaying() {
         if isUpdatingNowPlaying {
@@ -241,69 +266,7 @@ final class MediaService {
         }
     }
 
-    private func updateNowPlayingWithValidation() {
-        if isUpdatingNowPlaying {
-            needsFollowupValidation = true
-            return
-        }
-
-        isUpdatingNowPlaying = true
-
-        nowPlayingCLI.fetchNowPlayingInfo { [weak self] cliInfo in
-            let cliBox = NowPlayingInfoBox(info: cliInfo)
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.remote.getNowPlayingInfo { mrInfo in
-                    let merged = self.mergePlaybackState(cliInfo: cliBox.info, mrInfo: mrInfo)
-                    self.applyInfo(merged)
-                    self.isUpdatingNowPlaying = false
-
-                    if self.needsFollowupValidation {
-                        self.needsFollowupValidation = false
-                        self.updateNowPlayingWithValidation()
-                    } else if self.needsFollowupUpdate {
-                        self.needsFollowupUpdate = false
-                        self.updateNowPlaying()
-                    }
-
-                    self.scheduleValidationFollowup()
-                }
-            }
-        }
-    }
-
-    private func scheduleValidationFollowup() {
-        validationTask?.cancel()
-        validationTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            self?.updateNowPlaying()
-        }
-    }
-
-    private static func hasMetadata(_ info: [String: Any]) -> Bool {
-        let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
-        let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
-        return !(title.isEmpty && artist.isEmpty)
-    }
-
-    private func mergePlaybackState(cliInfo: [String: Any]?, mrInfo: [String: Any]?) -> [String: Any]? {
-        guard let cliInfo else { return mrInfo }
-        guard let mrInfo else { return cliInfo }
-
-        let cliRate = (cliInfo["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? 0
-        let mrRate = (mrInfo["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? 0
-        let cliPlaying = cliRate > 0
-        let mrPlaying = mrRate > 0
-
-        if cliPlaying != mrPlaying {
-            var merged = cliInfo
-            merged["kMRMediaRemoteNowPlayingInfoPlaybackRate"] = NSNumber(value: mrRate)
-            return merged
-        }
-
-        return cliInfo
-    }
+    // ── Apply fetched data to UI state ───────────────────────────────
 
     private func applyInfo(_ info: [String: Any]?) {
         guard let info, !info.isEmpty else {
@@ -320,10 +283,29 @@ final class MediaService {
         let album = info["kMRMediaRemoteNowPlayingInfoAlbum"] as? String ?? ""
         let duration = info["kMRMediaRemoteNowPlayingInfoDuration"] as? TimeInterval ?? 0
         var position = info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? TimeInterval ?? 0
-        let playbackRate = (info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? 0
-        let isPlaying = playbackRate > 0
 
-        if isPlaying, let timestamp = info["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date {
+        // ── isPlaying resolution ──────────────────────────────────
+        // Guard protects isPlaying from stale CLI data. Once CLI returns
+        // a value that matches the guard, the guard self-clears — CLI has
+        // caught up and is safe to trust again.
+        let cliPlaying = (info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? 0 > 0
+        let resolvedIsPlaying: Bool
+        if let expected = reconcileExpectedIsPlaying {
+            if cliPlaying == expected {
+                // CLI has caught up — safe to drop the guard.
+                reconcileExpectedIsPlaying = nil
+                resolvedIsPlaying = cliPlaying
+                LogService.debug("[Media] applyInfo: guard lifted, CLI caught up (=\(cliPlaying)), title=\(title)", category: "media")
+            } else {
+                resolvedIsPlaying = expected
+                LogService.debug("[Media] applyInfo: guarded, expected=\(expected), cli=\(cliPlaying), title=\(title)", category: "media")
+            }
+        } else {
+            resolvedIsPlaying = cliPlaying
+            LogService.debug("[Media] applyInfo: from CLI, isPlaying=\(cliPlaying), title=\(title)", category: "media")
+        }
+
+        if resolvedIsPlaying, let timestamp = info["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date {
             let elapsed = Date().timeIntervalSince(timestamp)
             position = max(0, position + elapsed)
             if duration > 0 { position = min(position, duration) }
@@ -352,7 +334,7 @@ final class MediaService {
             album: album,
             duration: duration,
             position: position,
-            isPlaying: isPlaying,
+            isPlaying: resolvedIsPlaying,
             artworkData: artworkData,
             appBundleIdentifier: resolvedBundleID,
             appName: nil
@@ -361,12 +343,10 @@ final class MediaService {
         if let resolvedBundleID, !resolvedBundleID.isEmpty {
             applyPlayingApp(bundleID: resolvedBundleID, changed: resolvedBundleID != previousBundleID)
         }
-        updateProgressTimer(isPlaying: isPlaying)
+        updateProgressTimer(isPlaying: resolvedIsPlaying)
     }
 
     private func applyPlayingApp(bundleID: String, changed: Bool) {
-        // Only hit NSWorkspace (disk IO + Launch Services) when the bundleID
-        // actually changes. Otherwise the cached icon/appName are still valid.
         guard changed else { return }
 
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {

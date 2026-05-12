@@ -69,6 +69,16 @@ private enum PlayerHandle {
         }
     }
 
+    /// Authoritative play state directly from the player app.
+    var isPlaying: Bool? {
+        switch self {
+        case .spotify(let a): return a.playerState == .playing
+        case .music(let a):
+            let s = a.playerState
+            return s == .playing || s == .fastForwarding || s == .rewinding
+        }
+    }
+
     func togglePlayPause() {
         switch self {
         case .spotify(let a): a.playpause?()
@@ -154,6 +164,13 @@ enum MediaBridge {
 
     static func playerPosition(bundleID: String?) -> Double? {
         handle(for: bundleID)?.position
+    }
+
+    /// Query the player's actual play state via ScriptingBridge.
+    /// Returns nil for unknown players or if the app isn't running.
+    static func isPlaying(bundleID: String?) -> Bool? {
+        guard let bundleID, isRunning(bundleID: bundleID) else { return nil }
+        return handle(for: bundleID)?.isPlaying
     }
 
     static func togglePlayPause(bundleID: String?) {
