@@ -86,6 +86,13 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             notchShape(shown: shown)
                 .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+                .animation(
+                    .spring(
+                        duration: NotchConstants.tabSwitchSpringDuration,
+                        bounce: NotchConstants.tabSwitchSpringBounce
+                    ),
+                    value: coordinator.selectedTab
+                )
                 .zIndex(0)
 
             if effectiveStatus == .closed {
