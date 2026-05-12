@@ -14,12 +14,25 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
 
-    private var hasNotch: Bool { screen.hasNotch }
-    private var hardwareNotchSize: NSSize { coordinator.notchSize }
+    private var hasNotch: Bool {
+        screen.hasNotch
+    }
 
-    private var notchCenterX: CGFloat { screen.frame.midX }
-    private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
-    private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
+    private var hardwareNotchSize: NSSize {
+        coordinator.notchSize
+    }
+
+    private var notchCenterX: CGFloat {
+        screen.frame.midX
+    }
+
+    private var notchLeftEdge: CGFloat {
+        notchCenterX - hardwareNotchSize.width / 2
+    }
+
+    private var notchRightEdge: CGFloat {
+        notchCenterX + hardwareNotchSize.width / 2
+    }
 
     /// Per-screen view of the coordinator's global status. Non-active screens
     /// always render the collapsed state so that only the mouse-targeted
@@ -36,7 +49,9 @@ struct NotchView: View {
         return target?.displayID == screen.displayID
     }
 
-    private var enabledTabs: [Tab] { Tab.sorted(appSettings.enabledTabs) }
+    private var enabledTabs: [Tab] {
+        Tab.sorted(appSettings.enabledTabs)
+    }
 
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
@@ -48,8 +63,10 @@ struct NotchView: View {
             let multiBadges = badgeViewModel?.hasMultipleBadges ?? false
             let extraWidth: CGFloat = hasBadge ? NotchConstants.badgePadding * 2 : 0
             let extraHeight: CGFloat = (multiBadges && hasBadge) ? NotchConstants.badgeRowHeight : 0
-            return CGSize(width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
-                          height: hardwareNotchSize.height + extraHeight)
+            return CGSize(
+                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
+                height: hardwareNotchSize.height + extraHeight
+            )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         }
@@ -68,7 +85,14 @@ struct NotchView: View {
 
         ZStack(alignment: .top) {
             notchShape(shown: shown)
-                .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
+                .animation(
+                    .spring(
+                        duration: NotchConstants.tabSwitchSpringDuration,
+                        bounce: NotchConstants.tabSwitchSpringBounce
+                    ),
+                    value: coordinator.selectedTab
+                )
+                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
                 .zIndex(0)
 
             if effectiveStatus == .closed {
@@ -99,9 +123,17 @@ struct NotchView: View {
             }
 
             contentPanel
-                .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
+                .scaleEffect(effectiveStatus == .opened ? 1 : 0.2, anchor: .top)
                 .opacity(effectiveStatus == .opened ? 1 : 0)
                 .allowsHitTesting(effectiveStatus == .opened)
+                .animation(
+                    .spring(
+                        duration: NotchConstants.tabSwitchSpringDuration,
+                        bounce: NotchConstants.tabSwitchSpringBounce
+                    ),
+                    value: coordinator.selectedTab
+                )
+                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
                 .zIndex(1)
 
             // HUD overlay - render only on the primary HUD screen so it
@@ -147,7 +179,7 @@ struct NotchView: View {
 
     private func handleBadgeTap(_ item: BadgeItem) {
         switch item {
-        case .notification(let bundleID, _):
+        case let .notification(bundleID, _):
             guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
             NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         default:
@@ -163,9 +195,9 @@ struct NotchView: View {
         let iconSize: CGFloat = count > 5 ? 16 : 18
         let spacing: CGFloat = count > 5 ? 3 : 4
         let fontSize: CGFloat = count > 5 ? 10 : 11
-        let tabWidth: CGFloat = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
+        let tabWidth = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
         // Position in contentPanel's local coords: (0,0) is top-left
-        let localX = (notchSize.width - hardwareNotchSize.width) / 2 - tabWidth / 2 - 8
+        let localX = (coordinator.openedWidth - hardwareNotchSize.width) / 2 - tabWidth / 2 - 8
         return HStack(spacing: spacing) {
             ForEach(tabs) { tab in
                 let selected = coordinator.selectedTab == tab
@@ -205,10 +237,10 @@ struct NotchView: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(width: notchSize.width, height: notchSize.height)
+        .frame(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         .clipShape(.rect(
-            bottomLeadingRadius: notchCornerRadius,
-            bottomTrailingRadius: notchCornerRadius
+            bottomLeadingRadius: NotchConstants.cornerRadiusOpened,
+            bottomTrailingRadius: NotchConstants.cornerRadiusOpened
         ))
     }
 
@@ -226,7 +258,10 @@ struct NotchView: View {
         }
         .id(coordinator.selectedTab)
         .transition(.opacity)
-        .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
+        .animation(
+            .spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce),
+            value: coordinator.selectedTab
+        )
         .offset(x: dragOffset)
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -238,12 +273,15 @@ struct NotchView: View {
                 }
                 .onEnded { value in
                     let threshold: CGFloat = 80
-                    withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+                    withAnimation(.spring(
+                        duration: NotchConstants.tabSwitchSpringDuration,
+                        bounce: NotchConstants.tabSwitchSpringBounce
+                    )) {
                         dragOffset = 0
                     }
-                    if value.translation.width < -threshold && currentIndex + 1 < tabs.count {
+                    if value.translation.width < -threshold, currentIndex + 1 < tabs.count {
                         selectTab(tabs[currentIndex + 1])
-                    } else if value.translation.width > threshold && currentIndex > 0 {
+                    } else if value.translation.width > threshold, currentIndex > 0 {
                         selectTab(tabs[currentIndex - 1])
                     }
                 }
@@ -278,7 +316,10 @@ struct NotchView: View {
             cornerRadius: notchCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing
         )
-        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shown)
+        .animation(
+            .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
+            value: shown
+        )
     }
 
     private func selectTab(_ tab: Tab) {
