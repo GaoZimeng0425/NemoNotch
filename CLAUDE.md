@@ -265,7 +265,7 @@ Workflow:
 ### Coding Conventions
 
 - Design docs go in `docs/plans/`, implemented plans are auto-archived, commit plan docs alongside code
-- After adding or modifying features, must update `README.md` and `README_CN.md` to reflect changes in feature descriptions, tech stack, etc.
+- After adding or modifying features, must update `README.md`, `README_CN.md`, and `CLAUDE.md` to reflect changes in feature descriptions, tech stack, architecture, etc.
 - All Services use `@Observable` macro, UI updates via SwiftUI reactivity
 - AI providers implement the `AIProvider` protocol, managed via `AICLIMonitorService`
 - Notch window level is fixed at `.statusBar + 8`, properties: `fullScreenAuxiliary` + `stationary` + `canJoinAllSpaces`
