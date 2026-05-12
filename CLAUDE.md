@@ -7,7 +7,7 @@ NemoNotch is a macOS notch utility that provides an interactive floating panel i
 ### Tech Stack
 
 - Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack
-- Key frameworks: AppKit (NSWindow), MediaPlayer, EventKit, IOKit
+- Key frameworks: AppKit (NSWindow), MediaPlayer, ScriptingBridge, EventKit, IOKit
 
 ### Project Structure
 
@@ -34,7 +34,7 @@ graph TB
     end
 
     subgraph Services["Service Layer — all @Observable"]
-        MS["MediaService<br/>MediaRemote + NowPlayingCLI"]
+        MS["MediaService<br/>MediaRemote + NowPlayingCLI + MediaBridge"]
         AIM["AICLIMonitorService<br/>Unified AI entry"]
         CCS["ClaudeCodeService<br/>AIProvider impl<br/>HookServer + ConversationParser"]
         GP["GeminiProvider<br/>AIProvider impl<br/>GeminiConversationParser"]
@@ -58,12 +58,10 @@ graph TB
     end
 
     subgraph Tabs["Tabs"]
-        MT["MediaTab"]
+        OT["OverviewTab<br/>Media + Calendar + Weather"]
         AT["AIChatTab<br/>Claude + Gemini unified"]
-        CLT["CalendarTab"]
         LT["LauncherTab"]
         OCT["OpenClawTab"]
-        WT["WeatherTab"]
         ST["SystemTab"]
     end
 
@@ -183,12 +181,19 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 
 ### Media Info Retrieval
 
-**⚠️ Important**: Now Playing info (title, artist, album, artwork, duration, progress, playback state) is **all retrieved via `NowPlayingCLI`**, not via `MRMediaRemoteGetNowPlayingInfo` in `MediaRemote.swift`!
+**⚠️ Important**: Now Playing info (title, artist, album, artwork, duration, progress) is **retrieved via `NowPlayingCLI`**; playback state (isPlaying) uses a **reconcile mechanism** combining optimistic UI + ScriptingBridge authority.
 
 - `NowPlayingCLI` launches a perl daemon (`mediaremote-mini.pl` + dylib extracted from `MediaRemoteMini.bin.gz`), polling via stdin/stdout JSON protocol
 - `MediaService.updateNowPlaying()` → `nowPlayingCLI.fetchNowPlayingInfo()` → `applyInfo()`
-- `MediaRemote.swift` is only used for **sending control commands** (play/pause/next/prev/skip) and **registering system notifications** to trigger refresh
+- `MediaRemote.swift` is used for **sending control commands** (play/pause/next/prev/skip for unknown players) and **registering system notifications** to trigger refresh
+- `MediaBridge` (ScriptingBridge) provides **authoritative play state** for known players (Music, Spotify) via `MediaBridge.isPlaying(bundleID:)` — synchronous, zero cache
 - When debugging "info lost" issues, prioritize investigating NowPlayingCLI daemon state / dylib extraction (`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`) / perl script, rather than modifying MediaRemote.swift
+
+**Play/Pause state reconcile flow**:
+
+1. User taps play/pause → `togglePlayPause()` sets optimistic `isPlaying` + `reconcileExpectedIsPlaying` guard
+2. After 0.5s, `reconcilePlayState()` queries ScriptingBridge for real state
+3. `applyInfo()` respects the guard: if CLI returns stale data, guard preserves the authoritative value; once CLI catches up (matches guard), guard self-clears
 
 **Media seek (skip forward/back 15s)**:
 
