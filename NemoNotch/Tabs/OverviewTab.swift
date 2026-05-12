@@ -6,7 +6,9 @@ import SwiftUI
 struct OverviewTab: View {
     @Environment(MediaService.self) var mediaService
 
-    private var hasTrack: Bool { !mediaService.playbackState.isEmpty }
+    private var hasTrack: Bool {
+        !mediaService.playbackState.isEmpty
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -204,7 +206,9 @@ private struct CalendarMeetingIcon: View {
 private struct OverviewMediaSection: View {
     @Environment(MediaService.self) var mediaService
 
-    private var state: PlaybackState { mediaService.playbackState }
+    private var state: PlaybackState {
+        mediaService.playbackState
+    }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -274,6 +278,12 @@ private struct OverviewMediaSection: View {
                     .clipShape(RoundedRectangle(cornerRadius: 5))
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     .offset(x: 2, y: 2)
+                    .onTapGesture {
+                        if let bundleID = state.appBundleIdentifier,
+                           let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                        }
+                    }
             }
         }
         .frame(height: 80)
@@ -366,7 +376,7 @@ private struct OverviewMediaSection: View {
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
-        guard time.isFinite && time > 0 else { return "0:00" }
+        guard time.isFinite, time > 0 else { return "0:00" }
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return "\(minutes):\(String(format: "%02d", seconds))"
@@ -412,14 +422,14 @@ private struct ProgressScrubber: View {
             .gesture(
                 enabled
                     ? DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let f = max(0, min(1, value.location.x / max(geo.size.width, 1)))
-                            dragFraction = f
-                        }
-                        .onEnded { _ in
-                            if let f = dragFraction { onScrub(f) }
-                            dragFraction = nil
-                        }
+                    .onChanged { value in
+                        let f = max(0, min(1, value.location.x / max(geo.size.width, 1)))
+                        dragFraction = f
+                    }
+                    .onEnded { _ in
+                        if let f = dragFraction { onScrub(f) }
+                        dragFraction = nil
+                    }
                     : nil
             )
         }
