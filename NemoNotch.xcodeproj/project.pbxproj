@@ -57,6 +57,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 45DDDF8D2F9363C50037E18E /* Build configuration list for PBXNativeTarget "NemoNotch" */;
 			buildPhases = (
+				45299A022FB2E6D400080F70 /* ShellScript */,
 				45DDDF7C2F9363C40037E18E /* Sources */,
 				45DDDF7D2F9363C40037E18E /* Frameworks */,
 				45DDDF7E2F9363C40037E18E /* Resources */,
@@ -123,6 +124,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		45299A022FB2E6D400080F70 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if which swiftformat >/dev/null;\n  then swiftformat \"$SRCROOT\" --cache quiet\nelse\n  echo \"warning: swiftformat not installed, run: brew install swiftformat\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		45DDDF7C2F9363C40037E18E /* Sources */ = {

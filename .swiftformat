@@ -1,0 +1,34 @@
+# NemoNotch SwiftFormat configuration
+--swiftversion 6.0
+
+# Indentation
+--indent 4
+--tabwidth 4
+--smarttabs enabled
+--indentcase false
+
+# Wrapping
+--maxwidth 120
+--wraparguments before-first
+--wrapcollections before-first
+
+# Other
+--self remove
+--importgrouping alpha
+--semicolons never
+--commas always
+--decimalgrouping 3,6
+--exponentcase lowercase
+--header ignore
+--ifdef indent
+--operatorfunc spaced
+--ranges spaced
+--stripunusedargs closure-only
+--trimwhitespace always
+--voidtype void
+--emptybraces no-space
+
+# Disabled rules
+--disable redundantReturn
+--disable trailingClosures
+--disable wrapMultilineStatementBraces

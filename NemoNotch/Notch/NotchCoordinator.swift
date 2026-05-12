@@ -71,8 +71,8 @@ final class NotchCoordinator {
     // MARK: - Init
 
     init(content: @escaping (NotchCoordinator, NSScreen) -> AnyView) {
-        self.contentBuilder = content
-        self.notchSize = Self.resolveUnifiedNotchSize()
+        contentBuilder = content
+        notchSize = Self.resolveUnifiedNotchSize()
 
         rebuildSlots()
 
@@ -144,7 +144,12 @@ final class NotchCoordinator {
         window.contentView = passThrough
         window.orderFrontRegardless()
 
-        return NotchWindowSlot(displayID: screen.displayID, window: window, passThrough: passThrough, hostingController: hosting)
+        return NotchWindowSlot(
+            displayID: screen.displayID,
+            window: window,
+            passThrough: passThrough,
+            hostingController: hosting
+        )
     }
 
     private static func windowFrame(for screen: NSScreen) -> NSRect {
@@ -176,9 +181,9 @@ final class NotchCoordinator {
         } else if let auto = autoSelectTab?() {
             selectedTab = auto
         }
-        activeScreen = target
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
         withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
+            activeScreen = target
             status = .opened
         }
         slot.passThrough.isBlocking = true
@@ -325,11 +330,19 @@ final class NotchCoordinator {
         )
         contextMenuDelegate = delegate
         menu.delegate = delegate
-        let settingsItem = NSMenuItem(title: String(localized: "notch.context.settings"), action: #selector(ContextMenuDelegate.openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(
+            title: String(localized: "notch.context.settings"),
+            action: #selector(ContextMenuDelegate.openSettings),
+            keyEquivalent: ","
+        )
         settingsItem.target = delegate
         menu.addItem(settingsItem)
         menu.addItem(NSMenuItem.separator())
-        let quitItem = NSMenuItem(title: String(localized: "notch.context.quit"), action: #selector(ContextMenuDelegate.quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(
+            title: String(localized: "notch.context.quit"),
+            action: #selector(ContextMenuDelegate.quitApp),
+            keyEquivalent: "q"
+        )
         quitItem.target = delegate
         menu.addItem(quitItem)
         menu.popUp(positioning: nil, at: point, in: nil)
@@ -347,7 +360,12 @@ final class NotchWindowSlot {
     let passThrough: PassThroughView
     let hostingController: NSHostingController<AnyView>
 
-    init(displayID: UInt32, window: NotchWindow, passThrough: PassThroughView, hostingController: NSHostingController<AnyView>) {
+    init(
+        displayID: UInt32,
+        window: NotchWindow,
+        passThrough: PassThroughView,
+        hostingController: NSHostingController<AnyView>
+    ) {
         self.displayID = displayID
         self.window = window
         self.passThrough = passThrough
@@ -386,7 +404,16 @@ private final class ContextMenuDelegate: NSObject, NSMenuDelegate {
         self.onSettings = onSettings
         self.onQuit = onQuit
     }
-    func menuDidClose(_ menu: NSMenu) { onClose() }
-    @objc func openSettings() { onSettings() }
-    @objc func quitApp() { onQuit() }
+
+    func menuDidClose(_ menu: NSMenu) {
+        onClose()
+    }
+
+    @objc func openSettings() {
+        onSettings()
+    }
+
+    @objc func quitApp() {
+        onQuit()
+    }
 }
