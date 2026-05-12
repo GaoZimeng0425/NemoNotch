@@ -141,7 +141,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if which swiftformat >/dev/null;\n  then swiftformat \"$SRCROOT\" --cache quiet\nelse\n  echo \"warning: swiftformat not installed, run: brew install swiftformat\"\nfi\n";
+			shellScript = "if which swiftformat >/dev/null;\n  then swiftformat \"$SRCROOT\" --cache quiet || true\nelse\n  echo \"warning: swiftformat not installed, run: brew install swiftformat\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
