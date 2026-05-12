@@ -1,65 +1,65 @@
 # NemoNotch — CLAUDE.md
 
-## 项目概述
+## Project Overview
 
-NemoNotch 是一个 macOS 刘海工具，在 MacBook 刘海区域提供可交互的浮动面板，集成媒体控制、日历事件、AI CLI 监控（Claude Code / Gemini CLI）、OpenClaw 多代理监控和应用启动器。
+NemoNotch is a macOS notch utility that provides an interactive floating panel in the MacBook notch area, integrating media controls, calendar events, AI CLI monitoring (Claude Code / Gemini CLI), OpenClaw multi-agent monitoring, and an app launcher.
 
-### 技术栈
+### Tech Stack
 
-- Swift 6 + SwiftUI，仅 macOS，依赖 CocoaLumberjack
-- 关键框架：AppKit（NSWindow）、MediaPlayer、EventKit、IOKit
+- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack
+- Key frameworks: AppKit (NSWindow), MediaPlayer, EventKit, IOKit
 
-### 项目结构
+### Project Structure
 
 ```
 NemoNotch/
-├── NemoNotchApp.swift           # 入口，MenuBarExtra，全局快捷键，服务装配
-├── Models/                      # 数据模型（Tab, AppSettings, AIProvider, PlaybackState 等）
-├── Notch/                       # 刘海 UI 核心（窗口、动画、事件监听、TabBar、HUD）
-├── Tabs/                        # 各标签页内容视图（AIChatTab 统一 AI 会话）
-├── Services/                    # 后台服务（媒体、日历、AI CLI、启动器等）
-├── Settings/                    # 设置界面
-└── Helpers/                     # 工具类（MarkdownRenderer, ClaudeCrabIcon, ToolStyles）
+├── NemoNotchApp.swift           # Entry point, MenuBarExtra, global hotkeys, service assembly
+├── Models/                      # Data models (Tab, AppSettings, AIProvider, PlaybackState, etc.)
+├── Notch/                       # Notch UI core (window, animation, event monitoring, TabBar, HUD)
+├── Tabs/                        # Tab content views (AIChatTab unifies AI sessions)
+├── Services/                    # Background services (media, calendar, AI CLI, launcher, etc.)
+├── Settings/                    # Settings UI
+└── Helpers/                     # Utilities (MarkdownRenderer, ClaudeCrabIcon, ToolStyles)
 ```
 
-## 架构
+## Architecture
 
-### 总览
+### Overview
 
 ```mermaid
 graph TB
-    subgraph Entry["App 入口"]
+    subgraph Entry["App Entry"]
         App["NemoNotchApp<br/>@main"]
-        AD["AppDelegate<br/>生命周期 & 服务装配"]
+        AD["AppDelegate<br/>Lifecycle & Service Assembly"]
     end
 
-    subgraph Services["Service 层 — 全部 @Observable"]
+    subgraph Services["Service Layer — all @Observable"]
         MS["MediaService<br/>MediaRemote + NowPlayingCLI"]
-        AIM["AICLIMonitorService<br/>统一 AI 入口"]
-        CCS["ClaudeCodeService<br/>AIProvider 实现<br/>HookServer + ConversationParser"]
-        GP["GeminiProvider<br/>AIProvider 实现<br/>GeminiConversationParser"]
-        OCS["OpenClawService<br/>WebSocket 客户端"]
+        AIM["AICLIMonitorService<br/>Unified AI entry"]
+        CCS["ClaudeCodeService<br/>AIProvider impl<br/>HookServer + ConversationParser"]
+        GP["GeminiProvider<br/>AIProvider impl<br/>GeminiConversationParser"]
+        OCS["OpenClawService<br/>WebSocket client"]
         CS["CalendarService<br/>EventKit"]
-        LS["LauncherService<br/>应用搜索 & 启动"]
+        LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
-        HUD["HUDService<br/>音量/亮度/电池"]
-        HK["HotkeyService<br/>Carbon 全局快捷键"]
+        HUD["HUDService<br/>Volume/Brightness/Battery"]
+        HK["HotkeyService<br/>Carbon global hotkeys"]
     end
 
-    subgraph NotchUI["Notch UI 层"]
-        NC["NotchCoordinator<br/>开关状态 & 动画"]
+    subgraph NotchUI["Notch UI Layer"]
+        NC["NotchCoordinator<br/>Open/close state & animation"]
         NW["NotchWindow<br/>NSPanel .statusBar+8"]
-        NV["NotchView<br/>SwiftUI 主视图"]
-        EM["EventMonitor<br/>鼠标事件监听"]
-        CB["CompactBadge<br/>收起时的图标"]
-        TB["TabBarView<br/>标签栏导航"]
-        HO["HUDOverlayView<br/>音量/亮度叠加层"]
+        NV["NotchView<br/>SwiftUI main view"]
+        EM["EventMonitor<br/>Mouse event listener"]
+        CB["CompactBadge<br/>Collapsed icons"]
+        TB["TabBarView<br/>Tab navigation"]
+        HO["HUDOverlayView<br/>Volume/Brightness overlay"]
     end
 
-    subgraph Tabs["标签页"]
+    subgraph Tabs["Tabs"]
         MT["MediaTab"]
-        AT["AIChatTab<br/>Claude + Gemini 统一"]
+        AT["AIChatTab<br/>Claude + Gemini unified"]
         CLT["CalendarTab"]
         LT["LauncherTab"]
         OCT["OpenClawTab"]
@@ -67,15 +67,15 @@ graph TB
         ST["SystemTab"]
     end
 
-    subgraph Settings["设置"]
-        AS["AppSettings<br/>UserDefaults 持久化"]
+    subgraph Settings["Settings"]
+        AS["AppSettings<br/>UserDefaults persistence"]
         SW["SettingsWindow"]
         SV["SettingsView"]
     end
 
     App --> AD
-    AD -->|"创建 & 持有"| Services
-    AD -->|"创建"| NC
+    AD -->|"creates & owns"| Services
+    AD -->|"creates"| NC
     AIM --> CCS
     AIM --> GP
     NC --> NW --> NV
@@ -83,21 +83,21 @@ graph TB
     NV --> CB
     NV --> TB
     NV --> HO
-    EM -->|"鼠标事件"| NC
-    HK -->|"快捷键"| NC
+    EM -->|"mouse events"| NC
+    HK -->|"hotkeys"| NC
     AS --> SV
 
-    Services -.->|"@Environment 注入"| NV
-    AS -.->|"@Environment 注入"| NV
+    Services -.->|"@Environment injection"| NV
+    AS -.->|"@Environment injection"| NV
 ```
 
-核心数据流：Service → @Observable 属性变化 → SwiftUI 自动重绘 → Tab 内容更新。
+Core data flow: Service → @Observable property changes → SwiftUI auto-redraw → Tab content updates.
 
-### AI 服务架构
+### AI Service Architecture
 
 ```mermaid
 graph LR
-    subgraph External["外部进程"]
+    subgraph External["External Processes"]
         CC["Claude Code CLI"]
         GC["Gemini CLI"]
     end
@@ -108,36 +108,36 @@ graph LR
         GCP["GeminiConversationParser<br/>Gemini JSON"]
     end
 
-    subgraph Providers["AIProvider 实现"]
+    subgraph Providers["AIProvider Implementations"]
         CLS["ClaudeCodeService"]
         GPR["GeminiProvider"]
     end
 
-    subgraph Data["数据模型"]
-        AIS["AISessionState<br/>统一会话状态"]
+    subgraph Data["Data Models"]
+        AIS["AISessionState<br/>Unified session state"]
         MSG["[ChatMessage]"]
         SA["SubagentState"]
     end
 
-    subgraph Files["文件系统"]
+    subgraph Files["File System"]
         S["~/.claude/settings.json"]
         CJ["~/.claude/projects/**/*.jsonl"]
         GJ["~/.gemini/tmp/*/chats/"]
     end
 
-    CC -->|"hook 事件"| HS
-    GC -->|"hook 事件"| HS
+    CC -->|"hook events"| HS
+    GC -->|"hook events"| HS
     HS --> CLS
     HS --> GPR
-    CP -->|"增量解析"| CJ
-    GCP -->|"增量解析"| GJ
+    CP -->|"incremental parse"| CJ
+    GCP -->|"incremental parse"| GJ
     CLS --> AIS
     GPR --> AIS
     AIS --> MSG
     AIS --> SA
 ```
 
-### Notch 事件流
+### Notch Event Flow
 
 ```mermaid
 sequenceDiagram
@@ -147,143 +147,172 @@ sequenceDiagram
     participant NW as NotchWindow
     participant NV as NotchView
 
-    User->>EM: 鼠标进入刘海区域
+    User->>EM: Mouse enters notch area
     EM->>NC: notchOpen()
-    NC->>NC: autoSelectTab + 触觉反馈
-    NC->>NW: interactiveSpring(0.314) 展开
-    NW->>NV: 显示标签页内容 + badges
+    NC->>NC: autoSelectTab + haptic feedback
+    NC->>NW: interactiveSpring(0.314) expand
+    NW->>NV: Show tab content + badges
 
-    User->>EM: 鼠标离开内容区
+    User->>EM: Mouse leaves content area
     EM->>NC: notchClose()
-    NC->>NW: spring(0.236) 收起
-    NW->>NV: 隐藏内容
+    NC->>NW: spring(0.236) collapse
+    NW->>NV: Hide content
 
-    User->>EM: 右键点击刘海
-    EM->>NC: 上下文菜单
-    NC->>NV: 显示 Settings / Quit
+    User->>EM: Right-click notch
+    EM->>NC: Context menu
+    NC->>NV: Show Settings / Quit
 ```
 
-### Badge 优先级（刘海收起时）
+### Badge Priority (when notch is collapsed)
 
 ```
 notification > openclaw active > ai approval > ai working > media playing > calendar upcoming
 ```
 
-## 调试陷阱
+## Debug Pitfalls
 
-### Info.plist 配置
+### Info.plist Configuration
 
-**项目设置了 `GENERATE_INFOPLIST_FILE = YES`**，源文件 `NemoNotch/Info.plist` 中的键**不会进构建产物**！所有 Info.plist 键必须在 `NemoNotch.xcodeproj/project.pbxproj` 中以 `INFOPLIST_KEY_*` 形式声明（Debug 和 Release 两份配置都要加）。
+**The project has `GENERATE_INFOPLIST_FILE = YES`**, so keys in the source `NemoNotch/Info.plist` will **not** end up in the build product! All Info.plist keys must be declared as `INFOPLIST_KEY_*` in `NemoNotch.xcodeproj/project.pbxproj` (both Debug and Release configurations).
 
-加新权限描述（如 `NSAppleEventsUsageDescription`、`NSMicrophoneUsageDescription` 等）的正确流程：
+Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsageDescription`, `NSMicrophoneUsageDescription`):
 
-1. 编辑 `project.pbxproj`，找到所有 `INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = ...;` 这种行，在旁边加一行 `INFOPLIST_KEY_NSAppleEventsUsageDescription = "...";`
-2. 验证：`/usr/libexec/PlistBuddy -c "Print :Key" $APP/Contents/Info.plist` 必须能输出
-3. **缺失 `NSAppleEventsUsageDescription` 会让 macOS 直接拒绝弹"自动化授权"对话框**，且自动化设置面板没法手动添加 app —— 这条坑非常深，调试时优先检查构建产物的 Info.plist 是否真的有这条 key
+1. Edit `project.pbxproj`, find all `INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = ...;` lines, add a new line next to them: `INFOPLIST_KEY_NSAppleEventsUsageDescription = "...";`
+2. Verify: `/usr/libexec/PlistBuddy -c "Print :Key" $APP/Contents/Info.plist` must output the value
+3. **Missing `NSAppleEventsUsageDescription` causes macOS to silently refuse to show the "automation authorization" dialog**, and the automation settings panel cannot manually add the app — this pitfall is extremely deep. When debugging, first check whether the build product's Info.plist actually has this key.
 
-### 媒体信息获取
+### Media Info Retrieval
 
-**⚠️ 重要**：媒体的 Now Playing 信息（标题、艺人、专辑、封面、时长、进度、播放状态）**全部通过 `NowPlayingCLI` 获取**，不是通过 `MediaRemote.swift` 里的 `MRMediaRemoteGetNowPlayingInfo`！
+**⚠️ Important**: Now Playing info (title, artist, album, artwork, duration, progress, playback state) is **all retrieved via `NowPlayingCLI`**, not via `MRMediaRemoteGetNowPlayingInfo` in `MediaRemote.swift`!
 
-- `NowPlayingCLI` 启动一个 perl daemon（`mediaremote-mini.pl` + 解压自 `MediaRemoteMini.bin.gz` 的 dylib），通过 stdin/stdout JSON 协议轮询读取信息
+- `NowPlayingCLI` launches a perl daemon (`mediaremote-mini.pl` + dylib extracted from `MediaRemoteMini.bin.gz`), polling via stdin/stdout JSON protocol
 - `MediaService.updateNowPlaying()` → `nowPlayingCLI.fetchNowPlayingInfo()` → `applyInfo()`
-- `MediaRemote.swift` 只用来**发送控制命令**（play/pause/next/prev/skip）和**注册系统通知**触发刷新
-- 调试"信息丢失"问题时，应优先排查 NowPlayingCLI daemon 状态 / dylib 解压（`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`）/ perl 脚本，而不是改 MediaRemote.swift
+- `MediaRemote.swift` is only used for **sending control commands** (play/pause/next/prev/skip) and **registering system notifications** to trigger refresh
+- When debugging "info lost" issues, prioritize investigating NowPlayingCLI daemon state / dylib extraction (`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`) / perl script, rather than modifying MediaRemote.swift
 
-**媒体 seek（快进/回退 15s）**：
+**Media seek (skip forward/back 15s)**:
 
-- Music / Spotify：必须走 AppleScript `set player position`（`MediaBridge.setPlayerPosition`），因为 Spotify 不响应 MediaRemote 的 `SkipBackward/Forward` 命令（系统返回 "never supported"）。需要用户在"系统设置 → 隐私 → 自动化"中授权
-- 其他播放器（浏览器、Podcasts 等）：走 MediaRemote 的 `skip(interval:)` 命令
+- Music / Spotify: must use AppleScript `set player position` (`MediaBridge.setPlayerPosition`), because Spotify doesn't respond to MediaRemote's `SkipBackward/Forward` commands (system returns "never supported"). Requires user authorization in "System Settings → Privacy → Automation"
+- Other players (browsers, Podcasts, etc.): use MediaRemote's `skip(interval:)` command
 
-## 开发约定
+## Development Conventions
 
-### 日志规范
+### Behavioral Guidelines
 
-使用 CocoaLumberjack（`LogService`），同时输出到控制台和文件。日志文件目录：`~/.NemoNotch/logs/`，保留 7 天，每天轮转。
+**Think Before Coding:**
+- State assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-调用方式：`LogService.debug/info/warn/error("message", category: "xxx")`
+**Simplicity First:**
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
 
-**日志覆盖要求** — 实现功能时，每个关键节点必须添加日志，确保问题可追溯：
+**Surgical Changes:**
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Remove imports/variables/functions that YOUR changes made unused.
+- Every changed line should trace directly to the user's request.
 
-- **Service 初始化/销毁**：`init` / `deinit` 记录 `.info` 级别日志，标记生命周期
-- **外部交互**：网络请求、IPC 通信、文件 I/O、子进程启动/退出等，记录 `.info`（成功）或 `.error`（失败）
-- **状态变更**：关键属性赋值（播放状态切换、会话阶段变化、连接状态等），记录 `.debug`，包含变更前后的值
-- **错误路径**：所有 `catch`、`nil` 回退、权限被拒、超时等异常分支，必须记录 `.warn` 或 `.error`，附带上下文信息
-- **异步回调入口**：Timer、NotificationCenter、Delegate 回调的入口记录 `.debug`，确认回调确实触发
+**Goal-Driven Execution:**
+- Transform tasks into verifiable goals with success criteria.
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- For multi-step tasks, state a brief plan with verification at each step.
 
-category 命名规则：按模块取名，如 `"MediaService"`、`"HookServer"`、`"NotchCoordinator"`，便于按模块过滤
+### Logging
 
-### Git 工作流
+Use CocoaLumberjack (`LogService`), outputting to both console and file. Log directory: `~/.NemoNotch/logs/`, rotated daily, retained for 7 days.
 
-**绝对禁止直接在 main 分支上提交代码。** 所有开发必须通过 Git Flow 流程进行，违反此规则会破坏发布分支的稳定性。
+Usage: `LogService.debug/info/warn/error("message", category: "xxx")`
 
-- **main**: 稳定发布分支，只接受来自 develop 的合并，绝不直接 commit
-- **develop**: 日常开发分支，所有功能分支基于此创建
-- **feature/xxx**: 功能分支，从 develop 拉出，完成后合并回 develop
-- **hotfix/xxx**: 紧急修复分支，从 main 拉出，修复后合并回 main 和 develop
+**Log coverage requirements** — When implementing features, logs must be added at every key point:
 
-工作流程：
+- **Service init/deinit**: `.info` level, marking lifecycle
+- **External interactions**: Network requests, IPC, file I/O, subprocess launch/exit — `.info` (success) or `.error` (failure)
+- **State changes**: Key property assignments (playback state, session phase, connection status) — `.debug` with before/after values
+- **Error paths**: All `catch`, `nil` fallbacks, permission denials, timeouts — `.warn` or `.error` with context
+- **Async callback entry**: Timer, NotificationCenter, Delegate callbacks — `.debug` to confirm callback fired
 
-1. 新功能开发：`git checkout develop && git checkout -b feature/xxx`
-2. 开发完成后合并回 develop，测试通过后合并 develop 到 main
-3. 发版时从 main 打 tag（`vX.Y.Z`）
+Category naming: use module name, e.g. `"MediaService"`, `"HookServer"`, `"NotchCoordinator"`, for easy filtering.
 
-### 编码约定
+### Git Workflow
 
-- 设计文档放在 `docs/plans/` 目录，已实现的 plan 自动归档，提交时一并提交 plan 文档
-- 每次新增功能或修改已有功能后，必须同步更新 `README.md` 和 `README_CN.md` 中对应的功能描述、技术栈等章节
-- 所有 Service 使用 `@Observable` 宏，通过 SwiftUI 响应式更新 UI
-- AI 提供商实现 `AIProvider` 协议，通过 `AICLIMonitorService` 统一管理
-- 刘海窗口 level 固定为 `.statusBar + 8`，属性为 `fullScreenAuxiliary` + `stationary` + `canJoinAllSpaces`
-- 优先查阅参考项目中的现成实现，避免从零造轮子
+**Never commit directly on main.** All development must follow Git Flow.
 
-### 协议优先的可扩展设计
+- **main**: Stable release branch, only accepts merges from develop, never direct commits
+- **develop**: Daily development branch, all feature branches are based on this
+- **feature/xxx**: Feature branches, branched from develop, merged back to develop when complete
+- **hotfix/xxx**: Hotfix branches, branched from main, merged back to both main and develop
 
-多提供商场景（AI Provider、Conversation Parser 等）采用**协议 + 具体实现**模式：
+Workflow:
 
-- 定义协议只包含**通用接口**（如 `messages`、`tokens`、`findSessionFile`）
-- 每个 Provider/Parser 保留**独立的 Result 类型和解析逻辑**，不强行统一数据结构
-- Provider 特有字段（Claude 的 `cacheRead`、Gemini 的 `thoughtTokens`）留在各自实现中，通过协议扩展或具体类型访问
-- 通用消费方走协议接口，特定逻辑直接访问具体类型
-- 新增 Provider（如 DeepSeek、OpenAI）只需实现协议，不改动已有代码
+1. New feature: `git checkout develop && git checkout -b feature/xxx`
+2. After development, merge back to develop. After testing, merge develop to main
+3. Release: tag from main (`vX.Y.Z`)
 
-## 参考项目
+### Coding Conventions
 
-所有参考项目位于 `/Users/gaozimeng/Learn/macOS/`，遇到实现问题时优先查看这些项目的做法。
+- Design docs go in `docs/plans/`, implemented plans are auto-archived, commit plan docs alongside code
+- After adding or modifying features, must update `README.md` and `README_CN.md` to reflect changes in feature descriptions, tech stack, etc.
+- All Services use `@Observable` macro, UI updates via SwiftUI reactivity
+- AI providers implement the `AIProvider` protocol, managed via `AICLIMonitorService`
+- Notch window level is fixed at `.statusBar + 8`, properties: `fullScreenAuxiliary` + `stationary` + `canJoinAllSpaces`
+- Prefer checking reference projects for existing implementations before building from scratch
 
-| 需求 | 参考项目 | 借鉴内容 |
-|------|---------|----------|
-| 刘海窗口定位、多屏幕 | **NotchDrop** | NSPanel 子类，screen.notchSize 检测，每屏独立 WindowController |
-| 刘海窗口管理、三态状态机 | **Peninsula** | NSPanel 子类窗口管理、刘海定位、closed/popping/opened 状态机、NotchBackgroundView 刘海形状渲染 |
-| 刘海动画、自动收起 | **DynamicNotchKit** | Spring 动画 .bouncy(duration: 0.4)、Timer 自动消失、NSScreen 扩展（hasNotch/notchSize/notchFrame） |
-| 鼠标事件监听 | **NotchDrop** | 全局 NSEvent monitor 鼠标接近/离开检测 |
-| 全局快捷键 | **Peninsula** | Carbon RegisterEventHotKey 全局快捷键注册 |
-| Now Playing 信息获取 | **PlayStatus** / **Tuneful** | MediaPlayer 框架，MPNowPlayingInfoCenter 轮询 |
-| 媒体键拦截 | **PlayStatus** | sendEvent override 拦截 NX_KEYTYPE_PLAY 等系统按键 |
-| 命令行播放信息 | **nowplaying-cli** | daemon 连接 → legacy callback → MRNowPlayingController 三级回退，dylib 路径搜索 |
-| MediaRemote 桥接 | **PlayStatus** | dlopen/dlsym 动态加载 MediaRemote.framework 私有 API |
-| 窗口管理 | **Loop** | WindowEngine 架构，径向菜单，键盘事件处理 |
-| Spotlight 搜索栏 | **DSFQuickActionBar** | NSPanel 浮窗，异步搜索，键盘导航 |
-| Dock 悬停预览 | **DockDoor** | SCWindow 截图，窗口缩略图缓存，AXUIElement 控制窗口 |
-| 菜单栏架构 | **eul** | StatusBarManager，Combine 响应式，深色/浅色模式适配，host_processor_info CPU 采样、host_statistics64 内存读取 |
-| 亮度监测 | **MonitorControl** | DisplayServicesGetBrightness() 私有 API，dlopen 动态加载 |
-| AI Hook 架构 | **masko-code** | Unix Socket 事件传递、HookInstaller 写入 ~/.claude/settings.json、hook-sender.sh 进程树检测 |
-| 会话解析 | **vibe-notch** | 增量 JSONL 解析、ChatMessage 结构化解析、PermissionRequest 审批流程 |
-| 状态图标 | **NotchNook** | 刘海两侧图标布局风格 |
+### Protocol-First Extensible Design
 
-## 打包发布
+Multi-provider scenarios (AI Provider, Conversation Parser, etc.) use a **protocol + concrete implementation** pattern:
 
-- 一键打包命令：`./build.sh`，自动完成 Archive → 导出 .app → 生成 DMG
-- 输出文件：`build/NemoNotch.dmg`
-- 配套文件：`ExportOptions.plist`（导出配置）、`build.sh`（打包脚本）
-- 当前跳过签名（`CODE_SIGN_IDENTITY="-"`），如需正式分发需配置签名和公证
+- Define protocols with only **common interfaces** (e.g. `messages`, `tokens`, `findSessionFile`)
+- Each Provider/Parser keeps **independent Result types and parsing logic**, don't force unified data structures
+- Provider-specific fields (Claude's `cacheRead`, Gemini's `thoughtTokens`) stay in their implementations, accessed via protocol extensions or concrete types
+- Generic consumers use protocol interfaces, specific logic accesses concrete types
+- Adding a new Provider (e.g. DeepSeek, OpenAI) only requires implementing the protocol, no changes to existing code
 
-### 发版流程
+## Reference Projects
 
-用户说"发版"时，执行以下步骤：
+All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check these first when facing implementation questions.
 
-1. 确认所有更改已提交到 main 分支
-2. 创建版本 tag（格式 `vX.Y.Z`，如 `v0.1.0`）
-3. 推送 tag 到 origin：`git push origin <tag>`
-4. GitHub Actions 自动构建并发布 DMG 到 Releases（workflow 文件：`.github/workflows/release.yml`）
-5. 查看构建状态：`https://github.com/GaoZimeng0425/NemoNotch/actions`
+| Need | Reference Project | What to Reference |
+|------|------------------|-------------------|
+| Notch window positioning, multi-screen | **NotchDrop** | NSPanel subclass, screen.notchSize detection, per-screen WindowController |
+| Notch window management, tri-state machine | **Peninsula** | NSPanel subclass, notch positioning, closed/popping/opened state machine, NotchBackgroundView notch shape rendering |
+| Notch animation, auto-collapse | **DynamicNotchKit** | Spring animation .bouncy(duration: 0.4), Timer auto-dismiss, NSScreen extensions (hasNotch/notchSize/notchFrame) |
+| Mouse event monitoring | **NotchDrop** | Global NSEvent monitor for mouse approach/leave detection |
+| Global hotkeys | **Peninsula** | Carbon RegisterEventHotKey global hotkey registration |
+| Now Playing info retrieval | **PlayStatus** / **Tuneful** | MediaPlayer framework, MPNowPlayingInfoCenter polling |
+| Media key interception | **PlayStatus** | sendEvent override intercepting NX_KEYTYPE_PLAY etc. |
+| CLI now playing info | **nowplaying-cli** | daemon connection → legacy callback → MRNowPlayingController three-tier fallback, dylib path search |
+| MediaRemote bridging | **PlayStatus** | dlopen/dlsym dynamic loading of MediaRemote.framework private API |
+| Window management | **Loop** | WindowEngine architecture, radial menu, keyboard event handling |
+| Spotlight-style search | **DSFQuickActionBar** | NSPanel floating window, async search, keyboard navigation |
+| Dock hover preview | **DockDoor** | SCWindow screenshots, window thumbnail cache, AXUIElement window control |
+| Menu bar architecture | **eul** | StatusBarManager, Combine reactive, dark/light mode adaptation, host_processor_info CPU sampling, host_statistics64 memory reading |
+| Brightness monitoring | **MonitorControl** | DisplayServicesGetBrightness() private API, dlopen dynamic loading |
+| AI Hook architecture | **masko-code** | Unix Socket event delivery, HookInstaller writing to ~/.claude/settings.json, hook-sender.sh process tree detection |
+| Conversation parsing | **vibe-notch** | Incremental JSONL parsing, ChatMessage structured parsing, PermissionRequest approval flow |
+| Status icons | **NotchNook** | Notch-side icon layout style |
+
+## Build & Release
+
+- One-click build: `./build.sh`, auto Archive → export .app → generate DMG
+- Output: `build/NemoNotch.dmg`
+- Supporting files: `ExportOptions.plist` (export config), `build.sh` (build script)
+- Currently skips signing (`CODE_SIGN_IDENTITY="-"`), configure signing and notarization for official distribution
+
+### Release Process
+
+When the user says "release":
+
+1. Confirm all changes are committed to main
+2. Create version tag (format `vX.Y.Z`, e.g. `v0.1.0`)
+3. Push tag to origin: `git push origin <tag>`
+4. GitHub Actions auto-builds and publishes DMG to Releases (workflow: `.github/workflows/release.yml`)
+5. Build status: `https://github.com/GaoZimeng0425/NemoNotch/actions`
