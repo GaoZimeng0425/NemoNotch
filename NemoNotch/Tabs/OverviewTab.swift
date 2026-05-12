@@ -271,8 +271,7 @@ private struct OverviewMediaSection: View {
                 Image(nsImage: appIcon)
                     .resizable()
                     .frame(width: 22, height: 22)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     .offset(x: 2, y: 2)
             }
@@ -318,19 +317,21 @@ private struct OverviewMediaSection: View {
 
     private var controls: some View {
         let canSeek = mediaService.supportsSeeking
-        return HStack(spacing: canSeek ? 10 : 14) {
+        return HStack(spacing: canSeek ? 6 : 10) {
             Button(action: { mediaService.previousTrack() }) {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: canSeek ? 11 : 12))
+                    .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
 
             if canSeek {
                 Button(action: { mediaService.skipBackward() }) {
                     Image(systemName: "gobackward.15")
-                        .font(.system(size: 13))
+                        .font(.system(size: 18))
                         .foregroundStyle(NotchTheme.textSecondary)
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
             }
@@ -347,16 +348,18 @@ private struct OverviewMediaSection: View {
             if canSeek {
                 Button(action: { mediaService.skipForward() }) {
                     Image(systemName: "goforward.15")
-                        .font(.system(size: 13))
+                        .font(.system(size: 18))
                         .foregroundStyle(NotchTheme.textSecondary)
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
             }
 
             Button(action: { mediaService.nextTrack() }) {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: canSeek ? 11 : 12))
+                    .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
         }
