@@ -4,15 +4,9 @@ struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
     @State private var selectedSessionId: String?
 
-    private var allSessions: [AISessionState] {
-        let claudeSessions = Array(aiService.claudeProvider.sessions.values)
-        let geminiSessions = Array(aiService.geminiProvider.sessions.values)
-        return (claudeSessions + geminiSessions).sorted { $0.lastEventTime > $1.lastEventTime }
-    }
+    private var allSessions: [AISessionState] { aiService.store.sortedSessions }
 
-    private var anyHookInstalled: Bool {
-        aiService.claudeProvider.isHookInstalled || aiService.geminiProvider.isHookInstalled
-    }
+    private var anyHookInstalled: Bool { aiService.anyHookInstalled }
 
     var body: some View {
         if !anyHookInstalled {
@@ -70,7 +64,7 @@ struct AIChatTab: View {
     private var sessionList: some View {
         ScrollView {
             LazyVStack(spacing: 6) {
-                ForEach(allSessions.sorted { $0.lastEventTime > $1.lastEventTime }) { session in
+                ForEach(allSessions) { session in
                     sessionRow(session)
                 }
             }
@@ -429,6 +423,6 @@ struct AIChatTab: View {
     }
 
     private func sessionById(_ id: String) -> AISessionState? {
-        aiService.claudeProvider.sessions[id] ?? aiService.geminiProvider.sessions[id]
+        aiService.store.get(id)
     }
 }

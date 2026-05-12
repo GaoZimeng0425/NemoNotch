@@ -19,7 +19,7 @@ final class NotificationService {
 
     init(monitoredApps: [String] = []) {
         self.monitoredApps = monitoredApps
-        startPolling()
+        syncPollingState()
     }
 
     func updateMonitoredApps(_ apps: [String]) {
@@ -30,7 +30,21 @@ final class NotificationService {
             badges.removeValue(forKey: bundleID)
         }
         iconCache = iconCache.filter { appSet.contains($0.key) }
-        pollDock()
+        syncPollingState()
+    }
+
+    /// Start the poll timer iff there's something to poll. With an empty
+    /// monitored-apps list, pollDock exits immediately — so running the timer
+    /// just wakes the main run loop for nothing.
+    private func syncPollingState() {
+        if monitoredApps.isEmpty {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            badges.removeAll()
+        } else {
+            startPolling()
+            pollDock()
+        }
     }
 
     func openAccessibilitySettings() {
@@ -58,6 +72,7 @@ final class NotificationService {
     // MARK: - Polling
 
     private func startPolling() {
+        guard pollTimer == nil else { return }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.pollDock()

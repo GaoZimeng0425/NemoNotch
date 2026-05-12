@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct NotchView: View {
+    /// Screen this view instance renders on. Each `NotchWindowSlot` hosts its
+    /// own NotchView bound to its display.
+    let screen: NSScreen
+
     @Environment(NotchCoordinator.self) var coordinator
     @Environment(AppSettings.self) var appSettings
     @Environment(MediaService.self) var mediaService
@@ -10,7 +14,6 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
 
-    private var screen: NSScreen { NSScreen.main ?? NSScreen.screens[0] }
     private var hasNotch: Bool { screen.hasNotch }
     private var hardwareNotchSize: NSSize { coordinator.notchSize }
 
@@ -18,13 +21,28 @@ struct NotchView: View {
     private var notchLeftEdge: CGFloat { notchCenterX - hardwareNotchSize.width / 2 }
     private var notchRightEdge: CGFloat { notchCenterX + hardwareNotchSize.width / 2 }
 
+    /// Per-screen view of the coordinator's global status. Non-active screens
+    /// always render the collapsed state so that only the mouse-targeted
+    /// screen visually expands.
+    private var effectiveStatus: NotchCoordinator.Status {
+        coordinator.isActiveScreen(screen) ? coordinator.status : .closed
+    }
+
+    /// HUD shows on the built-in display when present (where keyboard
+    /// system events originate), otherwise on the first connected screen.
+    /// Either way, exactly one screen renders it.
+    private var isHUDScreen: Bool {
+        let target = NSScreen.screens.first(where: { $0.isBuiltInDisplay }) ?? NSScreen.screens.first
+        return target?.displayID == screen.displayID
+    }
+
     private var enabledTabs: [Tab] { Tab.sorted(appSettings.enabledTabs) }
 
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
 
     private var notchSize: CGSize {
-        switch coordinator.status {
+        switch effectiveStatus {
         case .closed:
             let hasBadge = badgeViewModel?.shownHasActiveBadge ?? false
             let multiBadges = badgeViewModel?.hasMultipleBadges ?? false
@@ -38,7 +56,7 @@ struct NotchView: View {
     }
 
     private var notchCornerRadius: CGFloat {
-        switch coordinator.status {
+        switch effectiveStatus {
         case .closed: NotchConstants.cornerRadiusClosed
         case .opened: NotchConstants.cornerRadiusOpened
         }
@@ -53,7 +71,7 @@ struct NotchView: View {
                 .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
                 .zIndex(0)
 
-            if coordinator.status == .closed {
+            if effectiveStatus == .closed {
                 CompactBadgesView(
                     items: items,
                     shownHasActiveBadge: shown,
@@ -81,12 +99,14 @@ struct NotchView: View {
             }
 
             contentPanel
-                .opacity(coordinator.status == .opened ? 1 : 0)
-                .allowsHitTesting(coordinator.status == .opened)
+                .animation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce), value: coordinator.selectedTab)
+                .opacity(effectiveStatus == .opened ? 1 : 0)
+                .allowsHitTesting(effectiveStatus == .opened)
                 .zIndex(1)
 
-            // HUD overlay - appears below the notch
-            if let hudType = hudService.activeHUD {
+            // HUD overlay - render only on the primary HUD screen so it
+            // doesn't flash on every connected display simultaneously.
+            if isHUDScreen, let hudType = hudService.activeHUD {
                 HUDOverlayView(type: hudType, value: hudService.hudValue)
                     .zIndex(3)
                     .position(
@@ -102,7 +122,7 @@ struct NotchView: View {
             badgeViewModel?.updateDisplayedBadges(newTypes: newTypes)
         }
         .onChange(of: aiService.activeSession?.phase.isWaitingForApproval == true) { _, _ in
-            badgeViewModel?.checkApprovalSound(isOpen: coordinator.status == .opened)
+            badgeViewModel?.checkApprovalSound(isOpen: effectiveStatus == .opened)
         }
         .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -252,7 +272,7 @@ struct NotchView: View {
 
     private func notchShape(shown: Bool) -> some View {
         NotchBackgroundView(
-            status: coordinator.status,
+            status: effectiveStatus,
             notchSize: notchSize,
             hasNotch: hasNotch,
             cornerRadius: notchCornerRadius,

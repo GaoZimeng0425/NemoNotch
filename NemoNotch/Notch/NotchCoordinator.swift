@@ -10,29 +10,41 @@ final class NotchCoordinator {
 
     var status: Status = .closed
     var selectedTab: Tab = .overview
+    /// The screen currently driving expansion. Only this screen's window
+    /// reflects the opened state; others remain collapsed but stay visible
+    /// to display badges. `nil` outside of an open session.
+    private(set) var activeScreen: NSScreen?
     private var isContextMenuVisible = false
     private var contextMenuDelegate: ContextMenuDelegate?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
 
-    let window: NotchWindow
-    private let passThrough: PassThroughView
-    private var hostingController: NSHostingController<AnyView>?
-
+    /// Unified across all screens — derived once from the built-in display's
+    /// physical notch, or a default fallback for headless / external-only setups.
     private(set) var notchSize: NSSize
-    private(set) var screenFrame: NSRect
+
+    /// Per-screen window infrastructure, keyed by CGDirectDisplayID.
+    private var slots: [UInt32: NotchWindowSlot] = [:]
+    private let contentBuilder: (NotchCoordinator, NSScreen) -> AnyView
 
     private var previousApp: NSRunningApplication?
     private static let ourBundleIdentifier = Bundle.main.bundleIdentifier
+    private static let windowWidth: CGFloat = 800
+    private static let windowHeight: CGFloat = 340
 
-    private var deviceNotchRect: NSRect {
-        let screen = NSScreen.main!
-        return NSRect(
+    // MARK: - Geometry
+
+    func deviceNotchRect(for screen: NSScreen) -> NSRect {
+        NSRect(
             x: screen.frame.midX - notchSize.width / 2,
             y: screen.frame.maxY - notchSize.height,
             width: notchSize.width,
             height: notchSize.height
         )
+    }
+
+    func hitboxRect(for screen: NSScreen) -> NSRect {
+        deviceNotchRect(for: screen).insetBy(dx: -NotchConstants.hitboxPadding, dy: -NotchConstants.hitboxPadding)
     }
 
     var openedWidth: CGFloat {
@@ -46,48 +58,23 @@ final class NotchCoordinator {
         }
     }
 
-    private var hitboxRect: NSRect {
-        deviceNotchRect.insetBy(dx: -NotchConstants.hitboxPadding, dy: -NotchConstants.hitboxPadding)
+    private func contentRect(for screen: NSScreen, hitInset: CGFloat) -> NSRect {
+        let rect = NSRect(
+            x: screen.frame.midX - contentSize.width / 2,
+            y: screen.frame.maxY - contentSize.height,
+            width: contentSize.width,
+            height: contentSize.height
+        )
+        return rect.insetBy(dx: -hitInset, dy: -hitInset)
     }
 
-    private static let windowWidth: CGFloat = 800
-    private static let windowHeight: CGFloat = 340
+    // MARK: - Init
 
-    init(content: (NotchCoordinator) -> AnyView) {
-        let screen = NSScreen.main!
-        self.screenFrame = screen.frame
-        self.notchSize = screen.hasNotch
-            ? screen.notchSize
-            : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
+    init(content: @escaping (NotchCoordinator, NSScreen) -> AnyView) {
+        self.contentBuilder = content
+        self.notchSize = Self.resolveUnifiedNotchSize()
 
-        let sf = screen.frame
-        let wf = NSRect(
-            x: sf.midX - Self.windowWidth / 2,
-            y: sf.maxY - Self.windowHeight,
-            width: Self.windowWidth,
-            height: Self.windowHeight
-        )
-        self.window = NotchWindow(rect: wf)
-
-        let passThrough = PassThroughView(frame: NSRect(x: 0, y: 0, width: wf.width, height: wf.height))
-        passThrough.wantsLayer = true
-        passThrough.layer?.backgroundColor = .clear
-        self.passThrough = passThrough
-
-        let hosting = NSHostingController(rootView: content(self))
-        hosting.view.frame = NSRect(
-            x: sf.minX - wf.minX,
-            y: sf.minY - wf.minY,
-            width: sf.width,
-            height: sf.height
-        )
-        hosting.view.wantsLayer = true
-        hosting.view.layer?.backgroundColor = .clear
-        self.hostingController = hosting
-
-        passThrough.addSubview(hosting.view)
-        window.contentView = passThrough
-        window.orderFrontRegardless()
+        rebuildSlots()
 
         NotificationCenter.default.addObserver(
             self,
@@ -99,31 +86,116 @@ final class NotchCoordinator {
         setupEventMonitoring()
     }
 
-    func notchOpen(tab: Tab? = nil) {
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    /// Use the built-in display's physical notch when available, otherwise
+    /// fall back to defaults — guarantees a sensible unified size on Macs
+    /// without a notch (Mac mini, Mac Pro, clamshell).
+    private static func resolveUnifiedNotchSize() -> NSSize {
+        if let builtin = NSScreen.screens.first(where: { $0.isBuiltInDisplay && $0.hasNotch }) {
+            return builtin.notchSize
+        }
+        return NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
+    }
+
+    // MARK: - Slot Management
+
+    private func rebuildSlots() {
+        let currentIDs = Set(NSScreen.screens.map(\.displayID))
+
+        // Remove slots for screens that disappeared.
+        for (id, slot) in slots where !currentIDs.contains(id) {
+            slot.close()
+            slots.removeValue(forKey: id)
+        }
+
+        // Add or update slots for current screens.
+        for screen in NSScreen.screens {
+            let id = screen.displayID
+            if let existing = slots[id] {
+                existing.updateFrame(for: screen)
+            } else {
+                slots[id] = makeSlot(for: screen)
+            }
+        }
+    }
+
+    private func makeSlot(for screen: NSScreen) -> NotchWindowSlot {
+        let wf = Self.windowFrame(for: screen)
+        let window = NotchWindow(rect: wf)
+        let passThrough = PassThroughView(frame: NSRect(x: 0, y: 0, width: wf.width, height: wf.height))
+        passThrough.wantsLayer = true
+        passThrough.layer?.backgroundColor = .clear
+
+        let hosting = NSHostingController(rootView: contentBuilder(self, screen))
+        let sf = screen.frame
+        hosting.view.frame = NSRect(
+            x: sf.minX - wf.minX,
+            y: sf.minY - wf.minY,
+            width: sf.width,
+            height: sf.height
+        )
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.backgroundColor = .clear
+
+        passThrough.addSubview(hosting.view)
+        window.contentView = passThrough
+        window.orderFrontRegardless()
+
+        return NotchWindowSlot(displayID: screen.displayID, window: window, passThrough: passThrough, hostingController: hosting)
+    }
+
+    private static func windowFrame(for screen: NSScreen) -> NSRect {
+        let sf = screen.frame
+        return NSRect(
+            x: sf.midX - windowWidth / 2,
+            y: sf.maxY - windowHeight,
+            width: windowWidth,
+            height: windowHeight
+        )
+    }
+
+    // MARK: - Open / Close
+
+    /// True if `screen` is the one currently driving expansion. NotchView
+    /// uses this to render either the opened or collapsed state per window.
+    func isActiveScreen(_ screen: NSScreen) -> Bool {
+        activeScreen?.displayID == screen.displayID
+    }
+
+    func notchOpen(tab: Tab? = nil, on screen: NSScreen? = nil) {
         guard status == .closed else { return }
+        let target = screen ?? NSScreen.screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
+        guard let target, let slot = slots[target.displayID] else { return }
+
         captureFrontmostApp()
         if let tab {
             selectedTab = tab
         } else if let auto = autoSelectTab?() {
             selectedTab = auto
         }
+        activeScreen = target
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
         withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
             status = .opened
         }
-        passThrough.isBlocking = true
-        window.makeKeyAndOrderFront(nil)
+        slot.passThrough.isBlocking = true
+        slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func notchClose() {
+        let openedScreen = activeScreen
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
         }
-        passThrough.isBlocking = false
-        if window.isKeyWindow {
-            window.resignKey()
+        if let openedScreen, let slot = slots[openedScreen.displayID] {
+            slot.passThrough.isBlocking = false
+            if slot.window.isKeyWindow { slot.window.resignKey() }
         }
+        activeScreen = nil
         restorePreviousApp()
     }
 
@@ -163,26 +235,16 @@ final class NotchCoordinator {
     }
 
     @objc private func screenParametersChanged() {
-        let screen = NSScreen.main!
-        screenFrame = screen.frame
-        notchSize = screen.hasNotch
-            ? screen.notchSize
-            : NSSize(width: NotchConstants.defaultNotchWidth, height: NotchConstants.defaultNotchHeight)
-        let sf = screenFrame
-        let wf = NSRect(
-            x: sf.midX - Self.windowWidth / 2,
-            y: sf.maxY - Self.windowHeight,
-            width: Self.windowWidth,
-            height: Self.windowHeight
-        )
-        window.setFrame(wf, display: true)
-        hostingController?.view.frame = NSRect(
-            x: sf.minX - wf.minX,
-            y: sf.minY - wf.minY,
-            width: sf.width,
-            height: sf.height
-        )
+        notchSize = Self.resolveUnifiedNotchSize()
+        rebuildSlots()
+        // If the active screen disappeared mid-session, gracefully collapse.
+        if let active = activeScreen, slots[active.displayID] == nil {
+            activeScreen = nil
+            status = .closed
+        }
     }
+
+    // MARK: - Event Routing
 
     private func setupEventMonitoring() {
         let monitor = EventMonitor.shared
@@ -197,23 +259,25 @@ final class NotchCoordinator {
         }
     }
 
+    /// Locate the screen currently under the given mouse point. Used to
+    /// scope event handling to the correct slot.
+    private func screen(at point: NSPoint) -> NSScreen? {
+        NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+    }
+
     private func handleMouseMove(_ location: NSPoint) {
         guard !isContextMenuVisible else { return }
-        let hitbox = hitboxRect
-        let isInHitbox = NSMouseInRect(location, hitbox, false)
 
         switch status {
         case .closed:
-            if isInHitbox { notchOpen() }
+            guard let screen = screen(at: location) else { return }
+            if NSMouseInRect(location, hitboxRect(for: screen), false) {
+                notchOpen(on: screen)
+            }
         case .opened:
-            let contentRect = NSRect(
-                x: screenFrame.midX - contentSize.width / 2,
-                y: screenFrame.maxY - contentSize.height,
-                width: contentSize.width,
-                height: contentSize.height
-            )
-            let isInContent = NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.closeHitboxInset, dy: -NotchConstants.closeHitboxInset), false)
-            if !isInContent {
+            guard let active = activeScreen else { return }
+            let contentHit = contentRect(for: active, hitInset: NotchConstants.closeHitboxInset)
+            if !NSMouseInRect(location, contentHit, false) {
                 notchClose()
             }
         }
@@ -222,18 +286,18 @@ final class NotchCoordinator {
     private func handleMouseDown() {
         guard !isContextMenuVisible else { return }
         let location = NSEvent.mouseLocation
-        if status == .closed && NSMouseInRect(location, hitboxRect, false) {
-            notchOpen()
+
+        if status == .closed {
+            guard let screen = screen(at: location) else { return }
+            if NSMouseInRect(location, hitboxRect(for: screen), false) {
+                notchOpen(on: screen)
+            }
+            return
         }
-        if status == .opened {
-            let contentRect = NSRect(
-                x: screenFrame.midX - contentSize.width / 2,
-                y: screenFrame.maxY - contentSize.height,
-                width: contentSize.width,
-                height: contentSize.height
-            )
-            let isInContent = NSMouseInRect(location, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false)
-            if !isInContent {
+
+        if status == .opened, let active = activeScreen {
+            let contentHit = contentRect(for: active, hitInset: NotchConstants.clickHitboxInset)
+            if !NSMouseInRect(location, contentHit, false) {
                 notchClose()
             }
         }
@@ -243,15 +307,12 @@ final class NotchCoordinator {
         let isInNotch: Bool
         switch status {
         case .closed:
-            isInNotch = NSMouseInRect(point, hitboxRect, false)
+            guard let screen = screen(at: point) else { return }
+            isInNotch = NSMouseInRect(point, hitboxRect(for: screen), false)
         case .opened:
-            let contentRect = NSRect(
-                x: screenFrame.midX - contentSize.width / 2,
-                y: screenFrame.maxY - contentSize.height,
-                width: contentSize.width,
-                height: contentSize.height
-            )
-            isInNotch = NSMouseInRect(point, contentRect.insetBy(dx: -NotchConstants.clickHitboxInset, dy: -NotchConstants.clickHitboxInset), false)
+            guard let active = activeScreen else { return }
+            let contentHit = contentRect(for: active, hitInset: NotchConstants.clickHitboxInset)
+            isInNotch = NSMouseInRect(point, contentHit, false)
         }
         guard isInNotch else { return }
 
@@ -272,6 +333,47 @@ final class NotchCoordinator {
         quitItem.target = delegate
         menu.addItem(quitItem)
         menu.popUp(positioning: nil, at: point, in: nil)
+    }
+}
+
+// MARK: - NotchWindowSlot
+
+/// Owns the per-screen NSPanel infrastructure. The coordinator holds one of
+/// these per connected screen.
+@MainActor
+final class NotchWindowSlot {
+    let displayID: UInt32
+    let window: NotchWindow
+    let passThrough: PassThroughView
+    let hostingController: NSHostingController<AnyView>
+
+    init(displayID: UInt32, window: NotchWindow, passThrough: PassThroughView, hostingController: NSHostingController<AnyView>) {
+        self.displayID = displayID
+        self.window = window
+        self.passThrough = passThrough
+        self.hostingController = hostingController
+    }
+
+    func updateFrame(for screen: NSScreen) {
+        let sf = screen.frame
+        let wf = NSRect(
+            x: sf.midX - window.frame.width / 2,
+            y: sf.maxY - window.frame.height,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        window.setFrame(wf, display: true)
+        hostingController.view.frame = NSRect(
+            x: sf.minX - wf.minX,
+            y: sf.minY - wf.minY,
+            width: sf.width,
+            height: sf.height
+        )
+    }
+
+    func close() {
+        window.orderOut(nil)
+        window.close()
     }
 }
 

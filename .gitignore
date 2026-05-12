@@ -8,4 +8,5 @@
 logs/
 build/
 build.log
+.ralph-tui/
 .worktrees/

@@ -207,58 +207,80 @@ private struct OverviewMediaSection: View {
     private var state: PlaybackState { mediaService.playbackState }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(spacing: 6) {
+            if let denied = mediaService.permissionDeniedPlayer {
+                permissionBanner(player: denied)
+            } else {
                 artwork
                 trackInfo
-                Spacer(minLength: 0)
+                progressBar
+                controls
             }
-            progressBar
-            controls
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 8)
+        .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
         .notchCard(radius: 8, fill: NotchTheme.surface)
     }
 
+    private func permissionBanner(player: KnownPlayer) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 20))
+                .foregroundStyle(NotchTheme.accent)
+            Text("\(player.displayName) 自动化权限被拒绝")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text("在 系统设置 → 隐私与安全 → 自动化 中开启")
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                Button("打开设置") { mediaService.openAutomationSettings() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(NotchTheme.accent))
+                    .foregroundStyle(Color.black.opacity(0.85))
+
+                Button("忽略") { mediaService.dismissPermissionBanner() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+            }
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var artwork: some View {
         ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let data = state.artworkData, let nsImage = NSImage(data: data) {
-                    GeometryReader { geo in
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    }
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(.white.opacity(0.08))
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .foregroundStyle(.white.opacity(0.3))
-                        }
-                }
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
+            VinylDiscView(
+                isPlaying: state.isPlaying,
+                artworkData: state.artworkData,
+                appIcon: mediaService.appIcon,
+                size: 80
+            )
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
             if let appIcon = mediaService.appIcon {
                 Image(nsImage: appIcon)
                     .resizable()
-                    .frame(width: 13, height: 13)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .offset(x: 2, y: 2)
             }
         }
+        .frame(height: 80)
     }
 
     private var trackInfo: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(state.title)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(NotchTheme.textPrimary)
@@ -268,28 +290,51 @@ private struct OverviewMediaSection: View {
                 .foregroundStyle(NotchTheme.textSecondary)
                 .lineLimit(1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var progressBar: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(NotchTheme.surfaceEmphasis)
-                Capsule()
-                    .fill(NotchTheme.accent.opacity(0.75))
-                    .frame(width: state.duration > 0 ? geo.size.width * CGFloat(state.position / state.duration) : 0)
+        VStack(spacing: 5) {
+            ProgressScrubber(
+                position: state.position,
+                duration: state.duration,
+                enabled: mediaService.supportsSeeking,
+                onScrub: { fraction in mediaService.seek(toFraction: fraction) }
+            )
+            .frame(height: 12)
+
+            HStack {
+                Text(formatTime(state.position))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                Spacer()
+                Text(formatTime(state.duration))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(NotchTheme.textTertiary)
             }
         }
-        .frame(height: 2)
     }
 
     private var controls: some View {
-        HStack(spacing: 20) {
+        let canSeek = mediaService.supportsSeeking
+        return HStack(spacing: canSeek ? 6 : 10) {
             Button(action: { mediaService.previousTrack() }) {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+
+            if canSeek {
+                Button(action: { mediaService.skipBackward() }) {
+                    Image(systemName: "gobackward.15")
+                        .font(.system(size: 18))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+            }
 
             Button(action: { mediaService.togglePlayPause() }) {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
@@ -300,12 +345,83 @@ private struct OverviewMediaSection: View {
             }
             .buttonStyle(.plain)
 
+            if canSeek {
+                Button(action: { mediaService.skipForward() }) {
+                    Image(systemName: "goforward.15")
+                        .font(.system(size: 18))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+            }
+
             Button(action: { mediaService.nextTrack() }) {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        guard time.isFinite && time > 0 else { return "0:00" }
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return "\(minutes):\(String(format: "%02d", seconds))"
+    }
+}
+
+// MARK: - Progress Scrubber
+
+private struct ProgressScrubber: View {
+    let position: Double
+    let duration: Double
+    let enabled: Bool
+    let onScrub: (Double) -> Void
+
+    @State private var dragFraction: Double?
+    @State private var isHovering = false
+
+    private var fraction: Double {
+        if let dragFraction { return dragFraction }
+        guard duration > 0 else { return 0 }
+        return max(0, min(1, position / duration))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let barHeight: CGFloat = (isHovering || dragFraction != nil) ? 6 : 4
+            ZStack(alignment: .leading) {
+                Color.clear // hit area
+                Capsule()
+                    .fill(NotchTheme.surfaceEmphasis)
+                    .frame(height: barHeight)
+                Capsule()
+                    .fill(NotchTheme.accent.opacity(0.85))
+                    .frame(width: geo.size.width * CGFloat(fraction), height: barHeight)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .animation(.easeOut(duration: 0.12), value: barHeight)
+            .onHover { hovering in
+                guard enabled else { return }
+                isHovering = hovering
+            }
+            .gesture(
+                enabled
+                    ? DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let f = max(0, min(1, value.location.x / max(geo.size.width, 1)))
+                            dragFraction = f
+                        }
+                        .onEnded { _ in
+                            if let f = dragFraction { onScrub(f) }
+                            dragFraction = nil
+                        }
+                    : nil
+            )
         }
     }
 }
@@ -327,6 +443,7 @@ private struct OverviewWeatherSection: View {
             }
         }
         .notchCard(radius: 8, fill: NotchTheme.surface)
+        .activates(weatherService)
     }
 
     private var weatherContent: some View {
