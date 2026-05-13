@@ -25,8 +25,6 @@ struct LauncherTab: View {
             }
             .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 12)
     }
 
     private var searchField: some View {

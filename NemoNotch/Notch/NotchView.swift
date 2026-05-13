@@ -14,10 +14,6 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
 
-    private var hasNotch: Bool {
-        screen.hasNotch
-    }
-
     private var hardwareNotchSize: NSSize {
         coordinator.notchSize
     }
@@ -233,8 +229,7 @@ struct NotchView: View {
             Spacer().frame(height: hardwareNotchSize.height)
 
             swipeableContent
-                .padding(.horizontal, NotchConstants.tabContentHorizontalPadding)
-                .padding(.top, NotchConstants.tabContentTopPadding)
+                .padding(NotchConstants.tabContentPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             Spacer(minLength: 0)
@@ -314,7 +309,6 @@ struct NotchView: View {
         NotchBackgroundView(
             status: effectiveStatus,
             notchSize: notchSize,
-            hasNotch: hasNotch,
             cornerRadius: notchCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing
         )

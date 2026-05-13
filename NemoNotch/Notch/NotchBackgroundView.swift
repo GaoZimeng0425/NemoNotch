@@ -3,30 +3,12 @@ import SwiftUI
 struct NotchBackgroundView: View {
     let status: NotchCoordinator.Status
     let notchSize: CGSize
-    let hasNotch: Bool
     let cornerRadius: CGFloat
     let spacing: CGFloat
 
     var body: some View {
-        if hasNotch {
-            notchedShape
-                .drawingGroup()
-        } else {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [.black.opacity(0.96), .black],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(NotchTheme.stroke.opacity(0.9), lineWidth: 0.6)
-                )
-                .shadow(color: .black.opacity(showShadow ? 0.4 : 0), radius: 6, y: 2)
-                .drawingGroup()
-        }
+        notchedShape
+            .drawingGroup()
     }
 
     private var showShadow: Bool {
