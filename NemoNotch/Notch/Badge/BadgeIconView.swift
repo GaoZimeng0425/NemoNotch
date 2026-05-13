@@ -133,8 +133,17 @@ struct BadgeIconView: View {
     private func agentsBadge(state: AgentMonitorState, emoji: String) -> some View {
         switch style {
         case .compactLeft, .row:
-            Text(emoji)
-                .font(.system(size: style == .row ? 11 : 10))
+            if emoji.isEmpty {
+                Image("HermesIcon")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: style == .row ? 11 : 10, height: style == .row ? 11 : 10)
+                    .foregroundStyle(agentMonitorStateColor(state))
+            } else {
+                Text(emoji)
+                    .font(.system(size: style == .row ? 11 : 10))
+            }
         case .compactRight:
             Image(systemName: state.icon)
                 .font(.system(size: 10, weight: .semibold))
