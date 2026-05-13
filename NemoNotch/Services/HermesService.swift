@@ -18,10 +18,10 @@ final class HermesService: MultiAgentMonitor {
     private var lastMessageCounts: [String: Int] = [:]
     private var lastModDates: [String: Date] = [:]
 
-    /// FSEvent stream for directory monitoring
+    /// FSEvent stream for instant file change notifications
     private var eventStream: FSEventStreamRef?
-    /// Rescan timer for profile discovery (rare)
-    private var rescanTimer: Timer?
+    /// Fallback polling timer (every 3s) + staleness eviction (every 5s)
+    private var pollTimer: Timer?
 
     init() {
         hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
@@ -36,13 +36,21 @@ final class HermesService: MultiAgentMonitor {
 
     func connect() {
         guard isInstalled else { return }
-        LogService.info("Starting Hermes monitoring (FSEvents)", category: "HermesService")
+        LogService.info("Starting Hermes monitoring (FSEvents + polling fallback)", category: "HermesService")
         startWatching()
         refreshSessions()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshSessions()
+                self?.evictStaleAgents()
+            }
+        }
     }
 
     func disconnect() {
         stopWatching()
+        pollTimer?.invalidate()
+        pollTimer = nil
         sessionMessages = [:]
         lastMessageCounts = [:]
         lastModDates = [:]
@@ -94,19 +102,10 @@ final class HermesService: MultiAgentMonitor {
         FSEventStreamStart(stream)
         eventStream = stream
 
-        // Periodically rescan for new profile directories
-        rescanTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.restartWatchingIfDirectoriesChanged()
-            }
-        }
-
         LogService.info("FSEventStream started for \(directoriesToWatch.count) directories", category: "HermesService")
     }
 
     private func stopWatching() {
-        rescanTimer?.invalidate()
-        rescanTimer = nil
         if let stream = eventStream {
             FSEventStreamStop(stream)
             FSEventStreamInvalidate(stream)
@@ -131,17 +130,6 @@ final class HermesService: MultiAgentMonitor {
             }
         }
         return dirs
-    }
-
-    private func restartWatchingIfDirectoriesChanged() {
-        let current = Set(sessionDirectories())
-        let watched = Set(eventStream.map { _ in sessionDirectories() } ?? [])
-        if current != watched {
-            LogService.info("Session directories changed, restarting FSEventStream", category: "HermesService")
-            startWatching()
-            refreshSessions()
-        }
-        evictStaleAgents()
     }
 
     /// Remove agents whose session file hasn't been modified recently.
@@ -181,7 +169,7 @@ final class HermesService: MultiAgentMonitor {
 
     // MARK: - Session File Parsing
 
-    /// Full scan — called on connect and when directories change.
+    /// Full scan — called on connect and by polling timer.
     private func refreshSessions() {
         Task.detached { [weak self] in
             let files = HermesConversationParser.findAllSessionFiles()
