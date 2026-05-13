@@ -72,8 +72,11 @@ final class HermesService: MultiAgentMonitor {
             { _, eventInfo, numEvents, eventPaths, _, _ in
                 guard let info = eventInfo else { return }
                 let service = Unmanaged<HermesService>.fromOpaque(info).takeUnretainedValue()
+                // Must extract paths synchronously — pointer is invalid after callback returns
+                let nsArray = unsafeBitCast(eventPaths, to: NSArray.self)
+                let pathStrings = (0 ..< Int(numEvents)).compactMap { nsArray.object(at: $0) as? String }
                 Task { @MainActor in
-                    service.onFileEvents(paths: eventPaths, count: numEvents)
+                    service.onFileEvents(paths: pathStrings)
                 }
             },
             &context,
@@ -156,12 +159,11 @@ final class HermesService: MultiAgentMonitor {
         updateActiveAgent()
     }
 
-    /// Callback from FSEventStream — parse changed session files.
-    private func onFileEvents(paths: UnsafeRawPointer, count: Int) {
-        let eventPaths = unsafeBitCast(paths, to: NSArray.self) as! [String]
+    /// Callback from FSEventStream — filter and parse changed session files.
+    private func onFileEvents(paths: [String]) {
         var changedFiles: [(path: String, sessionId: String)] = []
 
-        for path in eventPaths {
+        for path in paths {
             guard path.hasSuffix(".json"), path.contains("session_") else { continue }
             let filename = (path as NSString).lastPathComponent
             guard filename.hasPrefix("session_") else { continue }
