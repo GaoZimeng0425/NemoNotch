@@ -16,6 +16,7 @@ final class HermesService: MultiAgentMonitor {
     /// sessionId → recently parsed messages (max 20)
     var sessionMessages: [String: [ChatMessage]] = [:]
     private var lastMessageCounts: [String: Int] = [:]
+    private var lastModDates: [String: Date] = [:]
     private var pollTimer: Timer?
 
     init() {
@@ -45,6 +46,7 @@ final class HermesService: MultiAgentMonitor {
         pollTimer = nil
         sessionMessages = [:]
         lastMessageCounts = [:]
+        lastModDates = [:]
         isOnline = false
         LogService.info("Disconnected from Hermes monitoring", category: "HermesService")
     }
@@ -52,40 +54,53 @@ final class HermesService: MultiAgentMonitor {
     // MARK: - Session File Polling
 
     private func refreshSessions() {
-        let files = HermesConversationParser.findAllSessionFiles()
+        Task.detached { [weak self] in
+            let files = HermesConversationParser.findAllSessionFiles()
+            var updates: [(sessionId: String, messages: [ChatMessage], count: Int)] = []
+            var currentSessionIds: Set<String> = []
 
-        var currentSessionIds: Set<String> = []
-        for file in files {
-            currentSessionIds.insert(file.sessionId)
+            for file in files {
+                currentSessionIds.insert(file.sessionId)
 
-            guard let count = HermesConversationParser.readMessageCount(filePath: file.path) else { continue }
-            let lastCount = lastMessageCounts[file.sessionId] ?? 0
+                guard let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+                      let modDate = attrs[.modificationDate] as? Date else { continue }
 
-            if count > lastCount {
+                let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
+                if lastCount > 0 {
+                    guard let lastMod = await self?.lastModDates[file.sessionId], modDate > lastMod else { continue }
+                }
+
+                guard let count = HermesConversationParser.readMessageCount(filePath: file.path),
+                      count > lastCount else { continue }
+
                 let parsed = HermesConversationParser.parseFull(filePath: file.path)
                 let recent = Array(parsed.messages.suffix(20))
-                sessionMessages[file.sessionId] = recent
-                lastMessageCounts[file.sessionId] = count
+                updates.append((file.sessionId, recent, count))
+            }
 
-                // Update lastMessage on the agent if it exists
-                if let lastMsg = recent.last?.content {
-                    updateAgentLastMessage(sessionId: file.sessionId, message: lastMsg)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                for update in updates {
+                    sessionMessages[update.sessionId] = update.messages
+                    lastMessageCounts[update.sessionId] = update.count
+                    if let lastMsg = update.messages.last?.content {
+                        updateAgentLastMessage(sessionId: update.sessionId, message: lastMsg)
+                    }
+                    if !update.messages.isEmpty {
+                        LogService.debug(
+                            "Parsed \(update.messages.count) messages for session \(update.sessionId)",
+                            category: "HermesService"
+                        )
+                    }
                 }
 
-                if !recent.isEmpty {
-                    LogService.debug(
-                        "Parsed \(recent.count) messages for session \(file.sessionId)",
-                        category: "HermesService"
-                    )
+                let stale = lastMessageCounts.keys.filter { !currentSessionIds.contains($0) }
+                for id in stale {
+                    lastMessageCounts.removeValue(forKey: id)
+                    lastModDates.removeValue(forKey: id)
+                    sessionMessages.removeValue(forKey: id)
                 }
             }
-        }
-
-        // Clean up disappeared sessions
-        let stale = lastMessageCounts.keys.filter { !currentSessionIds.contains($0) }
-        for id in stale {
-            lastMessageCounts.removeValue(forKey: id)
-            sessionMessages.removeValue(forKey: id)
         }
     }
 
