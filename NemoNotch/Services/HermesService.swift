@@ -17,7 +17,11 @@ final class HermesService: MultiAgentMonitor {
     var sessionMessages: [String: [ChatMessage]] = [:]
     private var lastMessageCounts: [String: Int] = [:]
     private var lastModDates: [String: Date] = [:]
-    private var pollTimer: Timer?
+
+    /// FSEvent stream for directory monitoring
+    private var eventStream: FSEventStreamRef?
+    /// Rescan timer for profile discovery (rare)
+    private var rescanTimer: Timer?
 
     init() {
         hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
@@ -32,18 +36,13 @@ final class HermesService: MultiAgentMonitor {
 
     func connect() {
         guard isInstalled else { return }
-        LogService.info("Starting Hermes monitoring (hook + session polling)", category: "HermesService")
+        LogService.info("Starting Hermes monitoring (FSEvents)", category: "HermesService")
+        startWatching()
         refreshSessions()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshSessions()
-            }
-        }
     }
 
     func disconnect() {
-        pollTimer?.invalidate()
-        pollTimer = nil
+        stopWatching()
         sessionMessages = [:]
         lastMessageCounts = [:]
         lastModDates = [:]
@@ -51,13 +50,120 @@ final class HermesService: MultiAgentMonitor {
         LogService.info("Disconnected from Hermes monitoring", category: "HermesService")
     }
 
-    // MARK: - Session File Polling
+    // MARK: - FSEvents Directory Watching
 
+    private func startWatching() {
+        stopWatching()
+
+        let directoriesToWatch = sessionDirectories()
+        guard !directoriesToWatch.isEmpty else { return }
+
+        let paths = directoriesToWatch as CFArray
+        var context = FSEventStreamContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil,
+            release: nil,
+            copyDescription: nil
+        )
+
+        guard let stream = FSEventStreamCreate(
+            kCFAllocatorDefault,
+            { _, eventInfo, numEvents, eventPaths, _, _ in
+                guard let info = eventInfo else { return }
+                let service = Unmanaged<HermesService>.fromOpaque(info).takeUnretainedValue()
+                Task { @MainActor in
+                    service.onFileEvents(paths: eventPaths, count: numEvents)
+                }
+            },
+            &context,
+            paths,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            0,
+            UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
+        ) else {
+            LogService.error("Failed to create FSEventStream", category: "HermesService")
+            return
+        }
+
+        FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        FSEventStreamStart(stream)
+        eventStream = stream
+
+        // Periodically rescan for new profile directories
+        rescanTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.restartWatchingIfDirectoriesChanged()
+            }
+        }
+
+        LogService.info("FSEventStream started for \(directoriesToWatch.count) directories", category: "HermesService")
+    }
+
+    private func stopWatching() {
+        rescanTimer?.invalidate()
+        rescanTimer = nil
+        if let stream = eventStream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            eventStream = nil
+        }
+    }
+
+    /// All session directories to watch: default + each named profile.
+    private func sessionDirectories() -> [String] {
+        let fm = FileManager.default
+        var dirs = [hermesDir + "/sessions"]
+
+        let profilesDir = hermesDir + "/profiles"
+        if let profiles = try? fm.contentsOfDirectory(atPath: profilesDir) {
+            for name in profiles {
+                let dir = "\(profilesDir)/\(name)/sessions"
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue {
+                    dirs.append(dir)
+                }
+            }
+        }
+        return dirs
+    }
+
+    private func restartWatchingIfDirectoriesChanged() {
+        let current = Set(sessionDirectories())
+        let watched = Set(eventStream.map { _ in sessionDirectories() } ?? [])
+        if current != watched {
+            LogService.info("Session directories changed, restarting FSEventStream", category: "HermesService")
+            startWatching()
+            refreshSessions()
+        }
+    }
+
+    /// Callback from FSEventStream — parse changed session files.
+    private func onFileEvents(paths: UnsafeRawPointer, count: Int) {
+        let eventPaths = unsafeBitCast(paths, to: NSArray.self) as! [String]
+        var changedFiles: [(path: String, sessionId: String)] = []
+
+        for path in eventPaths {
+            guard path.hasSuffix(".json"), path.contains("session_") else { continue }
+            let filename = (path as NSString).lastPathComponent
+            guard filename.hasPrefix("session_") else { continue }
+            let sessionId = String(filename.dropFirst("session_".count).dropLast(".json".count))
+            changedFiles.append((path, sessionId))
+        }
+
+        guard !changedFiles.isEmpty else { return }
+        parseChangedFiles(changedFiles)
+    }
+
+    // MARK: - Session File Parsing
+
+    /// Full scan — called on connect and when directories change.
     private func refreshSessions() {
         Task.detached { [weak self] in
             let files = HermesConversationParser.findAllSessionFiles()
             let now = Date()
-            let activeThreshold: TimeInterval = 600 // 10 minutes
+            let activeThreshold: TimeInterval = 600
             var updates: [(sessionId: String, messages: [ChatMessage], count: Int, isActive: Bool)] = []
             var currentSessionIds: Set<String> = []
 
@@ -72,7 +178,6 @@ final class HermesService: MultiAgentMonitor {
 
                 if lastCount > 0 {
                     guard let lastMod = await self?.lastModDates[file.sessionId], modDate > lastMod else {
-                        // File unchanged but still active — keep existing data
                         if isActive {
                             await MainActor.run { [weak self] in
                                 self?.ensureAgentExists(sessionId: file.sessionId)
@@ -119,7 +224,52 @@ final class HermesService: MultiAgentMonitor {
         }
     }
 
-    /// Ensure a MonitoredAgent exists for a session discovered via file polling.
+    /// Incremental parse — called when FSEvents reports changed files.
+    private func parseChangedFiles(_ files: [(path: String, sessionId: String)]) {
+        Task.detached { [weak self] in
+            let now = Date()
+            let activeThreshold: TimeInterval = 600
+            var updates: [(sessionId: String, messages: [ChatMessage], count: Int, isActive: Bool)] = []
+
+            for file in files {
+                let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
+
+                guard let count = HermesConversationParser.readMessageCount(filePath: file.path),
+                      count > lastCount else { continue }
+
+                let parsed = HermesConversationParser.parseFull(filePath: file.path)
+                let recent = Array(parsed.messages.suffix(20))
+
+                let isActive: Bool = if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+                                        let modDate = attrs[.modificationDate] as? Date {
+                    now.timeIntervalSince(modDate) < activeThreshold
+                } else {
+                    true
+                }
+
+                updates.append((file.sessionId, recent, count, isActive))
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                for update in updates {
+                    sessionMessages[update.sessionId] = update.messages
+                    lastMessageCounts[update.sessionId] = update.count
+                    if update.isActive {
+                        ensureAgentExists(sessionId: update.sessionId)
+                    }
+                    if let lastMsg = update.messages.last?.content {
+                        updateAgentLastMessage(sessionId: update.sessionId, message: lastMsg)
+                    }
+                    LogService.debug(
+                        "FSEvent: parsed \(update.messages.count) messages for session \(update.sessionId)",
+                        category: "HermesService"
+                    )
+                }
+            }
+        }
+    }
+
     private func ensureAgentExists(sessionId: String) {
         if agents[sessionId] == nil {
             upsertAgent(id: sessionId, state: .working)
