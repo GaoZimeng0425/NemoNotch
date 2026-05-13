@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 @MainActor
 @Observable
@@ -11,19 +12,18 @@ final class HermesService: MultiAgentMonitor {
     let iconEmoji = "🐦"
 
     private var pollTimer: Timer?
-    private let baseURL: String
+    private let hermesDir: String
+    private var lastMessageTimestamps: [String: Double] = [:]
 
     init() {
-        let hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
+        hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
         isInstalled = FileManager.default.fileExists(atPath: hermesDir)
-        baseURL = "http://127.0.0.1:8787"
-
         LogService.info("HermesService initialized, installed=\(isInstalled)", category: "HermesService")
     }
 
     func connect() {
         guard isInstalled else { return }
-        LogService.info("Connecting to Hermes WebUI at \(baseURL)", category: "HermesService")
+        LogService.info("Starting Hermes file-based monitoring", category: "HermesService")
         startPolling()
     }
 
@@ -31,7 +31,7 @@ final class HermesService: MultiAgentMonitor {
         pollTimer?.invalidate()
         pollTimer = nil
         isOnline = false
-        LogService.info("Disconnected from Hermes WebUI", category: "HermesService")
+        LogService.info("Disconnected from Hermes monitoring", category: "HermesService")
     }
 
     // MARK: - Polling
@@ -40,84 +40,153 @@ final class HermesService: MultiAgentMonitor {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                await pollHealth()
-                if isOnline {
-                    await pollSessions()
-                }
+                self?.poll()
             }
         }
         pollTimer?.fire()
     }
 
-    private func pollHealth() async {
-        guard let url = URL(string: "\(baseURL)/health") else { return }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 3
+    private func poll() {
+        checkOnline()
+        guard isOnline else { return }
+        queryActiveSessions()
+    }
 
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let wasOnline = isOnline
-            isOnline = statusCode == 200
+    // MARK: - Online Detection
 
-            if !wasOnline, isOnline {
-                LogService.info("Hermes WebUI online", category: "HermesService")
-            } else if wasOnline, !isOnline {
-                LogService.info("Hermes WebUI offline", category: "HermesService")
-            }
-        } catch {
+    private func checkOnline() {
+        let pidPath = (hermesDir as NSString).appendingPathComponent("gateway.pid")
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: pidPath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let pid = json["pid"] as? Int else {
             if isOnline {
-                LogService.warn("Hermes health check failed: \(error)", category: "HermesService")
+                LogService.info("Hermes gateway.pid missing", category: "HermesService")
             }
             isOnline = false
+            return
+        }
+
+        let alive = kill(pid_t(pid), 0) == 0
+        let wasOnline = isOnline
+        isOnline = alive
+
+        if !wasOnline, alive {
+            LogService.info("Hermes gateway online (pid \(pid))", category: "HermesService")
+        } else if wasOnline, !alive {
+            LogService.info("Hermes gateway offline", category: "HermesService")
         }
     }
 
-    private func pollSessions() async {
-        guard let url = URL(string: "\(baseURL)/api/sessions") else { return }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 5
+    // MARK: - Session Query
 
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
-            parseSessions(json)
-        } catch {
-            LogService.warn("Hermes sessions poll failed: \(error)", category: "HermesService")
-        }
-    }
+    private func queryActiveSessions() {
+        let profileName = activeProfileName()
+        let dbPath = hermesDir + "/profiles/" + profileName + "/state.db"
 
-    // MARK: - Parsing
+        guard FileManager.default.fileExists(atPath: dbPath) else { return }
 
-    private func parseSessions(_ sessions: [[String: Any]]) {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else { return }
+        defer { sqlite3_close(db) }
+
+        // Set WAL mode to avoid blocking the writer
+        sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nil, nil, nil)
+
         var updated: [String: MonitoredAgent] = [:]
 
-        for session in sessions {
-            guard let id = session["id"] as? String else { continue }
-            let name = session["title"] as? String ?? "Session"
-            let stateStr = session["status"] as? String ?? "idle"
-            let tool = session["current_tool"] as? String
-            let msg = session["last_message"] as? String
-            let workspace = session["workspace"] as? String
+        // Query sessions with ended_at IS NULL (still active)
+        let query = """
+            SELECT s.id, s.source, s.model, s.message_count, s.tool_call_count, s.title,
+                   (SELECT m.content FROM messages m WHERE m.session_id = s.id AND m.role = 'assistant' ORDER BY m.timestamp DESC LIMIT 1) as last_msg,
+                   (SELECT m.tool_name FROM messages m WHERE m.session_id = s.id AND m.role = 'tool' ORDER BY m.timestamp DESC LIMIT 1) as last_tool,
+                   (SELECT MAX(m.timestamp) FROM messages m WHERE m.session_id = s.id) as last_ts,
+                   (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND m.timestamp > ?) as recent_count
+            FROM sessions s
+            WHERE s.ended_at IS NULL
+            ORDER BY s.started_at DESC
+        """
 
-            let state = AgentMonitorState.normalize(stateStr)
-            let truncated = msg.map { String($0.prefix(120)) }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK, let stmt else { return }
+        defer { sqlite3_finalize(stmt) }
+
+        let cutoff = Date().timeIntervalSince1970 - 10
+        sqlite3_bind_double(stmt, 1, cutoff)
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = String(cString: sqlite3_column_text(stmt, 0))
+            let source = String(cString: sqlite3_column_text(stmt, 1))
+            let model = String(cString: sqlite3_column_text(stmt, 2))
+            let messageCount = sqlite3_column_int(stmt, 3)
+            let toolCallCount = sqlite3_column_int(stmt, 4)
+
+            let title: String = sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? ""
+            let lastMsg: String? = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
+            let lastTool: String? = sqlite3_column_text(stmt, 7).map { String(cString: $0) }
+            let lastTs = sqlite3_column_double(stmt, 8)
+            let recentCount = sqlite3_column_int(stmt, 9)
+
+            let state = determineState(
+                source: source,
+                lastTool: lastTool,
+                lastTs: lastTs,
+                recentCount: recentCount
+            )
+
+            let displayTitle = title.isEmpty ? "Hermes (\(model))" : title
+            let truncatedMsg = lastMsg.map { String($0.prefix(120)) }
 
             updated[id] = MonitoredAgent(
                 id: id,
-                name: name,
+                name: displayTitle,
                 emoji: "🐦",
                 state: state,
-                currentTool: tool,
-                lastMessage: truncated,
-                workspace: workspace,
-                lastEventTime: Date()
+                currentTool: lastTool,
+                lastMessage: truncatedMsg,
+                workspace: nil,
+                lastEventTime: Date(timeIntervalSince1970: lastTs)
             )
+
+            lastMessageTimestamps[id] = lastTs
         }
 
         agents = updated
         updateActiveAgent()
+    }
+
+    // MARK: - State Detection
+
+    private func determineState(
+        source: String,
+        lastTool: String?,
+        lastTs: Double,
+        recentCount: Int32
+    ) -> AgentMonitorState {
+        let timeSinceLastMessage = Date().timeIntervalSince1970 - lastTs
+
+        // If last activity was within 30 seconds and there's a tool, agent is tool-calling
+        if let tool = lastTool, !tool.isEmpty, timeSinceLastMessage < 30 {
+            return .toolCalling
+        }
+
+        // If recent messages (within 10s window), agent is actively working
+        if recentCount > 0, timeSinceLastMessage < 30 {
+            return lastTool != nil ? .toolCalling : .speaking
+        }
+
+        // If last activity was within 2 minutes, consider it working
+        if timeSinceLastMessage < 120 {
+            return .working
+        }
+
+        return .idle
+    }
+
+    private func activeProfileName() -> String {
+        let path = hermesDir + "/active_profile"
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return "default" }
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "default" : trimmed
     }
 
     private func updateActiveAgent() {
