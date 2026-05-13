@@ -4,18 +4,19 @@ struct SystemTab: View {
     @Environment(SystemService.self) var systemService
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                networkSpeedCard
-
-                ForEach(systemService.topProcessesByCPU) { process in
-                    processRow(process)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(systemService.topProcessesByCPU) { process in
+                        processRow(process)
+                    }
                 }
-
-                summaryFooter
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 12)
+
+            infoFooter
+                .padding(.horizontal, 4)
+                .padding(.bottom, 8)
         }
         .activates(systemService)
     }
@@ -65,32 +66,32 @@ struct SystemTab: View {
         )
     }
 
-    // MARK: - Network Speed Card
+    // MARK: - Info Footer
 
-    private var networkSpeedCard: some View {
-        HStack {
-            VStack(spacing: 2) {
-                Text("\u{2191}")
-                    .font(.system(size: 10))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                Text(formatSpeed(systemService.uploadSpeed))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(NotchTheme.accent)
+    private var infoFooter: some View {
+        VStack(spacing: 4) {
+            HStack {
+                VStack(spacing: 1) {
+                    Text("\u{2191} \(formatSpeed(systemService.uploadSpeed))")
+                    Text("\u{2193} \(formatSpeed(systemService.downloadSpeed))")
+                }
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(NotchTheme.accent)
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("CPU \(Int(systemService.cpuUsage))%")
+                    Text("RAM \(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
+                }
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(NotchTheme.textTertiary)
             }
 
-            Spacer()
-
-            VStack(spacing: 2) {
-                Text("\u{2193}")
-                    .font(.system(size: 10))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                Text(formatSpeed(systemService.downloadSpeed))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(NotchTheme.accent)
-            }
+            Text("\(systemService.batteryLevel)%")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textTertiary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .notchCard()
     }
 
@@ -110,22 +111,6 @@ struct SystemTab: View {
         if usage > 80 { return .red }
         if usage > 50 { return .yellow }
         return NotchTheme.textPrimary
-    }
-
-    // MARK: - Summary Footer
-
-    private var summaryFooter: some View {
-        HStack(spacing: 6) {
-            Text("CPU \(Int(systemService.cpuUsage))%")
-            Text("·")
-            Text("RAM \(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
-            Text("·")
-            Text("\(systemService.batteryLevel)%")
-        }
-        .font(.system(size: 10))
-        .foregroundStyle(NotchTheme.textTertiary)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 2)
     }
 
     // MARK: - Helpers
