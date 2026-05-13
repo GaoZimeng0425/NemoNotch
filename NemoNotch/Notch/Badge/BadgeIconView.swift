@@ -16,14 +16,14 @@ struct BadgeIconView: View {
 
     var body: some View {
         switch item {
-        case .notification(let bundleID, let count):
+        case let .notification(bundleID, count):
             notificationBadge(bundleID: bundleID, count: count)
         case .media:
             mediaBadge
-        case .ai(let source, let status, let tool, let waitingApproval, _):
+        case let .ai(source, status, tool, waitingApproval, _):
             aiBadge(source: source, status: status, tool: tool, waitingApproval: waitingApproval)
-        case .openclaw(let state, let emoji):
-            openclawBadge(state: state, emoji: emoji)
+        case let .agents(state, emoji):
+            agentsBadge(state: state, emoji: emoji)
         case .calendar:
             calendarBadge
         }
@@ -76,7 +76,7 @@ struct BadgeIconView: View {
                 size: style == .row ? 18 : 20
             )
         case .compactRight:
-          AudioEqualizerView(isActive: isPlaying, maxHeight: 10, barWidth: 1.5, color: NotchTheme.accent)
+            AudioEqualizerView(isActive: isPlaying, maxHeight: 10, barWidth: 1.5, color: NotchTheme.accent)
         }
     }
 
@@ -127,10 +127,10 @@ struct BadgeIconView: View {
         }
     }
 
-    // MARK: - OpenClaw
+    // MARK: - Agents
 
     @ViewBuilder
-    private func openclawBadge(state: AgentState, emoji: String) -> some View {
+    private func agentsBadge(state: AgentMonitorState, emoji: String) -> some View {
         switch style {
         case .compactLeft, .row:
             Text(emoji)
@@ -138,12 +138,12 @@ struct BadgeIconView: View {
         case .compactRight:
             Image(systemName: state.icon)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(openClawStateColor(state))
+                .foregroundStyle(agentMonitorStateColor(state))
                 .modifier(PulseModifier(isActive: state == .working || state == .toolCalling))
         }
     }
 
-    private func openClawStateColor(_ state: AgentState) -> Color {
+    private func agentMonitorStateColor(_ state: AgentMonitorState) -> Color {
         switch state {
         case .idle: NotchTheme.textSecondary
         case .working: .blue
@@ -181,7 +181,9 @@ struct CompactBadgesView: View {
     let notificationService: NotificationService
     let mediaService: MediaService
 
-    private var hasMultipleBadges: Bool { items.count >= 2 }
+    private var hasMultipleBadges: Bool {
+        items.count >= 2
+    }
 
     var body: some View {
         let spread: CGFloat = shownHasActiveBadge ? NotchConstants.badgeSpread : 0
@@ -222,8 +224,14 @@ struct CompactBadgesView: View {
                 ))
             }
         }
-        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: spread)
-        .animation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce), value: shownHasActiveBadge)
+        .animation(
+            .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
+            value: spread
+        )
+        .animation(
+            .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
+            value: shownHasActiveBadge
+        )
     }
 }
 

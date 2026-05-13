@@ -3,17 +3,19 @@ import SwiftUI
 enum Tab: String, CaseIterable, Identifiable {
     case overview
     case claude
-    case openclaw
+    case agents
     case launcher
     case system
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var icon: String {
         switch self {
         case .overview: "rectangle.3.group"
         case .claude: "cpu"
-        case .openclaw: "ladybug"
+        case .agents: "ladybug.fill"
         case .launcher: "square.grid.2x2"
         case .system: "gearshape.2"
         }
@@ -23,7 +25,7 @@ enum Tab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: String(localized: "models.tab.overview")
         case .claude: String(localized: "models.tab.ai")
-        case .openclaw: String(localized: "models.tab.openclaw")
+        case .agents: String(localized: "models.tab.agents")
         case .launcher: String(localized: "models.tab.launcher")
         case .system: String(localized: "models.tab.system")
         }

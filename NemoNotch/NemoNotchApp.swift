@@ -77,12 +77,11 @@ struct MenuContent: View {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
     private var suppressRestoreUntil: Date = .distantPast
-    nonisolated(unsafe) static var shared = {
-        let instance = AppDelegate()
-        return instance
-    }()
+    nonisolated(unsafe) static var shared = AppDelegate()
 
-    nonisolated override init() { super.init() }
+    override nonisolated init() {
+        super.init()
+    }
 
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
@@ -117,28 +116,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let openClaw = OpenClawService()
         openClaw.connect()
-        self.openClawService = openClaw
+        openClawService = openClaw
 
-        self.appSettings = settings
-        self.mediaService = media
-        self.calendarService = calendar
-        self.aiMonitorService = aiMonitor
-        self.launcherService = launcher
+        appSettings = settings
+        mediaService = media
+        calendarService = calendar
+        aiMonitorService = aiMonitor
+        launcherService = launcher
 
         let notification = NotificationService(monitoredApps: settings.monitoredApps)
-        self.notificationService = notification
+        notificationService = notification
 
         let weather = WeatherService()
         if !settings.weatherCity.isEmpty {
             weather.updateCity(settings.weatherCity)
         }
-        self.weatherService = weather
+        weatherService = weather
 
         let hud = HUDService()
-        self.hudService = hud
+        hudService = hud
 
         let system = SystemService()
-        self.systemService = system
+        systemService = system
 
         let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
@@ -158,15 +157,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         notchCoordinator.autoSelectTab = { [weak self] in
             guard let self else { return nil }
-            if let session = self.aiMonitorService?.activeSession, session.status == .working {
+            if let session = aiMonitorService?.activeSession, session.status == .working {
                 return .claude
             }
-            if self.openClawService?.activeAgent != nil { return .openclaw }
-            if self.mediaService?.playbackState.isPlaying == true { return .overview }
+            if openClawService?.activeAgent != nil { return .agents }
+            if mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }
         notchCoordinator.appSettings = settings
-        self.coordinator = notchCoordinator
+        coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator, settings: settings)
     }
@@ -215,7 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func setupHotkeys(coordinator: NotchCoordinator, settings: AppSettings) {
         let hotkeys = HotkeyService()
-        self.hotkeyService = hotkeys
+        hotkeyService = hotkeys
 
         hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
             switch coordinator.status {

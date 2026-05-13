@@ -41,6 +41,12 @@
     "%lld°" : {
 
     },
+    "↑" : {
+
+    },
+    "↓" : {
+
+    },
     "+%lld more" : {
 
     },
@@ -565,6 +571,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启动器"
+          }
+        }
+      }
+    },
+    "models.tab.agents" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "智能体"
           }
         }
       }

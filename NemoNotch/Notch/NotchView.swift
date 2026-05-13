@@ -292,7 +292,7 @@ struct NotchView: View {
             OverviewTab()
         case .claude:
             AIChatTab()
-        case .openclaw:
+        case .agents:
             OpenClawTab()
         case .launcher:
             LauncherTab {
