@@ -136,10 +136,8 @@ struct BadgeIconView: View {
             if emoji.isEmpty {
                 Image("HermesIcon")
                     .resizable()
-                    .renderingMode(.template)
                     .aspectRatio(contentMode: .fit)
                     .frame(width: style == .row ? 11 : 10, height: style == .row ? 11 : 10)
-                    .foregroundStyle(agentMonitorStateColor(state))
             } else {
                 Text(emoji)
                     .font(.system(size: style == .row ? 11 : 10))

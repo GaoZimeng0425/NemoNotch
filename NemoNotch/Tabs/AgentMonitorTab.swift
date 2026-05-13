@@ -95,10 +95,8 @@ struct AgentMonitorSection: View {
                 if monitor is HermesService {
                     Image("HermesIcon")
                         .resizable()
-                        .renderingMode(.template)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 14, height: 14)
-                        .foregroundStyle(NotchTheme.textSecondary)
                 } else {
                     Text(monitor.iconEmoji)
                         .font(.system(size: 11))
@@ -171,10 +169,8 @@ struct AgentRowView: View {
                         if agent.emoji.isEmpty, agent.name.hasPrefix("Hermes") {
                             Image("HermesIcon")
                                 .resizable()
-                                .renderingMode(.template)
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 16, height: 16)
-                                .foregroundStyle(NotchTheme.textPrimary)
                         } else {
                             Text(agent.emoji)
                                 .font(.system(size: 13))
