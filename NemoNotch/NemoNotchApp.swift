@@ -89,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
+    private var hermesService: HermesService?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
     private var hotkeyService: HotkeyService?
@@ -117,6 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let openClaw = OpenClawService()
         openClaw.connect()
         openClawService = openClaw
+
+        let hermes = HermesService()
+        hermes.connect()
+        hermesService = hermes
 
         appSettings = settings
         mediaService = media
@@ -148,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(calendar)
                     .environment(aiMonitor)
                     .environment(openClaw)
+                    .environment(hermes)
                     .environment(launcher)
                     .environment(notification)
                     .environment(weather)
@@ -160,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if let session = aiMonitorService?.activeSession, session.status == .working {
                 return .claude
             }
-            if openClawService?.activeAgent != nil { return .agents }
+            if openClawService?.activeAgent != nil || hermesService?.activeAgent != nil { return .agents }
             if mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }

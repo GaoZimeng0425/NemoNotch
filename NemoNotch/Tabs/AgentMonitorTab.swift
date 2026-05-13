@@ -2,10 +2,12 @@ import SwiftUI
 
 struct AgentMonitorTab: View {
     @Environment(OpenClawService.self) var openClawService
+    @Environment(HermesService.self) var hermesService
 
     private var monitors: [any MultiAgentMonitor] {
         var list: [any MultiAgentMonitor] = []
         if openClawService.isInstalled { list.append(openClawService) }
+        if hermesService.isInstalled { list.append(hermesService) }
         return list
     }
 

@@ -11,6 +11,7 @@ struct NotchView: View {
     @Environment(AICLIMonitorService.self) var aiService
     @Environment(NotificationService.self) var notificationService
     @Environment(OpenClawService.self) var openClawService
+    @Environment(HermesService.self) var hermesService
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
 
