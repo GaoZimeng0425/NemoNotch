@@ -172,7 +172,8 @@ struct NotchView: View {
             calendarService: calendarService,
             aiService: aiService,
             notificationService: notificationService,
-            openClawService: openClawService
+            openClawService: openClawService,
+            hermesService: hermesService
         )
         vm.initialize()
         badgeViewModel = vm
