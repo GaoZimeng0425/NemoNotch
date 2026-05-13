@@ -37,19 +37,18 @@ enum NotchConstants {
     static let fadeNormalDuration: Double = 0.24
     static let pulseDuration: Double = 1.05
 
-    // Close animation
+    /// Close animation
     static let closeContentFadeDuration: Double = 0.1
 
     // Shadow
     static let openedShadowRadius: CGFloat = 14
     static let openedShadowOpacity: CGFloat = 0.34
 
-    // Hook server
+    /// Hook server
     static let hookSocketPath = "/tmp/nemonotch.sock"
 
     // Tab content
-    static let tabContentHorizontalPadding: CGFloat = 20
-    static let tabContentTopPadding: CGFloat = 8
+    static let tabContentPadding: CGFloat = 12
     static let tabBarTopPadding: CGFloat = 10
     static let cornerRadiusClosed: CGFloat = 8
     static let cornerRadiusOpened: CGFloat = 24

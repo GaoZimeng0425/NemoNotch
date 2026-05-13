@@ -4,9 +4,13 @@ struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
     @State private var selectedSessionId: String?
 
-    private var allSessions: [AISessionState] { aiService.store.sortedSessions }
+    private var allSessions: [AISessionState] {
+        aiService.store.sortedSessions
+    }
 
-    private var anyHookInstalled: Bool { aiService.anyHookInstalled }
+    private var anyHookInstalled: Bool {
+        aiService.anyHookInstalled
+    }
 
     var body: some View {
         if !anyHookInstalled {
@@ -70,8 +74,6 @@ struct AIChatTab: View {
             }
         }
         .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
-        .padding(.horizontal, 4)
-        .padding(.bottom, 12)
     }
 
     private func chatDetail(session: AISessionState) -> some View {
@@ -113,7 +115,8 @@ struct AIChatTab: View {
                 Circle()
                     .fill(dotColor(session.status))
                     .frame(width: 6, height: 6)
-                    .modifier(PulseModifier(isActive: session.status == .working || approvalContext(for: session) != nil))
+                    .modifier(PulseModifier(isActive: session
+                            .status == .working || approvalContext(for: session) != nil))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -150,7 +153,10 @@ struct AIChatTab: View {
                     }
                     .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
                     .onChange(of: session.messages.count) { _, _ in
-                        withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+                        withAnimation(.spring(
+                            duration: NotchConstants.tabSwitchSpringDuration,
+                            bounce: NotchConstants.tabSwitchSpringBounce
+                        )) {
                             proxy.scrollTo(session.messages.last?.id, anchor: .bottom)
                         }
                     }
@@ -331,12 +337,13 @@ struct AIChatTab: View {
     }
 
     private func approvalContext(for session: AISessionState) -> PermissionContext? {
-        if case .waitingForApproval(let ctx) = session.phase { return ctx }
+        if case let .waitingForApproval(ctx) = session.phase { return ctx }
         return nil
     }
 
     private func subagentTools(for message: ChatMessage, session: AISessionState) -> [SubagentToolCall]? {
-        guard let toolName = message.toolName, ["Task", "Agent", "invoke_subagent"].contains(toolName) else { return nil }
+        guard let toolName = message.toolName,
+              ["Task", "Agent", "invoke_subagent"].contains(toolName) else { return nil }
         for (_, task) in session.subagentState.activeTasks {
             if message.id.contains(task.id) {
                 return task.tools

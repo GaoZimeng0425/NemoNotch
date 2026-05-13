@@ -12,8 +12,6 @@ struct SystemTab: View {
 
                 summaryFooter
             }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 12)
         }
         .scrollDisabled(true)
         .activates(systemService)

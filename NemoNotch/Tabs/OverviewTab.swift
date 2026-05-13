@@ -39,7 +39,6 @@ struct OverviewTab: View {
             .animation(.spring(duration: 0.3, bounce: 0.05), value: hasTrack)
             .frame(maxHeight: .infinity)
         }
-        .padding(.bottom, 12)
     }
 }
 
