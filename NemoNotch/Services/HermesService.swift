@@ -23,7 +23,7 @@ final class HermesService: MultiAgentMonitor {
         hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
         isInstalled = FileManager.default.fileExists(atPath: hermesDir)
         isHookInstalled = HermesHookInstaller.isInstalled
-        isOnline = isHookInstalled
+        isOnline = isInstalled
         LogService.info(
             "HermesService initialized, installed=\(isInstalled), hooks=\(isHookInstalled)",
             category: "HermesService"
@@ -56,7 +56,9 @@ final class HermesService: MultiAgentMonitor {
     private func refreshSessions() {
         Task.detached { [weak self] in
             let files = HermesConversationParser.findAllSessionFiles()
-            var updates: [(sessionId: String, messages: [ChatMessage], count: Int)] = []
+            let now = Date()
+            let activeThreshold: TimeInterval = 600 // 10 minutes
+            var updates: [(sessionId: String, messages: [ChatMessage], count: Int, isActive: Bool)] = []
             var currentSessionIds: Set<String> = []
 
             for file in files {
@@ -65,9 +67,19 @@ final class HermesService: MultiAgentMonitor {
                 guard let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
                       let modDate = attrs[.modificationDate] as? Date else { continue }
 
+                let isActive = now.timeIntervalSince(modDate) < activeThreshold
                 let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
+
                 if lastCount > 0 {
-                    guard let lastMod = await self?.lastModDates[file.sessionId], modDate > lastMod else { continue }
+                    guard let lastMod = await self?.lastModDates[file.sessionId], modDate > lastMod else {
+                        // File unchanged but still active — keep existing data
+                        if isActive {
+                            await MainActor.run { [weak self] in
+                                self?.ensureAgentExists(sessionId: file.sessionId)
+                            }
+                        }
+                        continue
+                    }
                 }
 
                 guard let count = HermesConversationParser.readMessageCount(filePath: file.path),
@@ -75,7 +87,7 @@ final class HermesService: MultiAgentMonitor {
 
                 let parsed = HermesConversationParser.parseFull(filePath: file.path)
                 let recent = Array(parsed.messages.suffix(20))
-                updates.append((file.sessionId, recent, count))
+                updates.append((file.sessionId, recent, count, isActive))
             }
 
             await MainActor.run { [weak self] in
@@ -83,6 +95,9 @@ final class HermesService: MultiAgentMonitor {
                 for update in updates {
                     sessionMessages[update.sessionId] = update.messages
                     lastMessageCounts[update.sessionId] = update.count
+                    if update.isActive {
+                        ensureAgentExists(sessionId: update.sessionId)
+                    }
                     if let lastMsg = update.messages.last?.content {
                         updateAgentLastMessage(sessionId: update.sessionId, message: lastMsg)
                     }
@@ -104,6 +119,13 @@ final class HermesService: MultiAgentMonitor {
         }
     }
 
+    /// Ensure a MonitoredAgent exists for a session discovered via file polling.
+    private func ensureAgentExists(sessionId: String) {
+        if agents[sessionId] == nil {
+            upsertAgent(id: sessionId, state: .working)
+        }
+    }
+
     private func updateAgentLastMessage(sessionId: String, message: String) {
         guard var agent = agents[sessionId] else { return }
         agent.lastMessage = String(message.prefix(100))
@@ -116,7 +138,6 @@ final class HermesService: MultiAgentMonitor {
         do {
             try HermesHookInstaller.install()
             isHookInstalled = true
-            isOnline = true
             LogService.info("Hermes hooks installed", category: "HermesService")
         } catch {
             LogService.error("Failed to install Hermes hooks: \(error)", category: "HermesService")
@@ -127,9 +148,6 @@ final class HermesService: MultiAgentMonitor {
         do {
             try HermesHookInstaller.uninstall()
             isHookInstalled = false
-            isOnline = false
-            agents = [:]
-            activeAgent = nil
             LogService.info("Hermes hooks uninstalled", category: "HermesService")
         } catch {
             LogService.error("Failed to uninstall Hermes hooks: \(error)", category: "HermesService")
