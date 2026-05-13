@@ -6,14 +6,17 @@ struct SystemTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                networkSpeedCard
+
                 ForEach(systemService.topProcessesByCPU) { process in
                     processRow(process)
                 }
 
                 summaryFooter
             }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 12)
         }
-        .scrollDisabled(true)
         .activates(systemService)
     }
 
@@ -60,6 +63,47 @@ struct SystemTab: View {
                         .stroke(NotchTheme.stroke, lineWidth: 0.6)
                 )
         )
+    }
+
+    // MARK: - Network Speed Card
+
+    private var networkSpeedCard: some View {
+        HStack {
+            VStack(spacing: 2) {
+                Text("\u{2191}")
+                    .font(.system(size: 10))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                Text(formatSpeed(systemService.uploadSpeed))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(NotchTheme.accent)
+            }
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("\u{2193}")
+                    .font(.system(size: 10))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                Text(formatSpeed(systemService.downloadSpeed))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(NotchTheme.accent)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .notchCard()
+    }
+
+    private func formatSpeed(_ bytesPerSec: Double) -> String {
+        if bytesPerSec < 1024 {
+            return "\(Int(bytesPerSec)) B/s"
+        } else if bytesPerSec < 1_048_576 {
+            return String(format: "%.1f KB/s", bytesPerSec / 1024)
+        } else if bytesPerSec < 1_073_741_824 {
+            return String(format: "%.1f MB/s", bytesPerSec / 1_048_576)
+        } else {
+            return String(format: "%.1f GB/s", bytesPerSec / 1_073_741_824)
+        }
     }
 
     private func cpuColor(_ usage: Double) -> Color {
