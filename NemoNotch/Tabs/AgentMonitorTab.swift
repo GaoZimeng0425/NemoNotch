@@ -3,6 +3,7 @@ import SwiftUI
 struct AgentMonitorTab: View {
     @Environment(OpenClawService.self) var openClawService
     @Environment(HermesService.self) var hermesService
+    @State private var expandedAgentId: String?
 
     private var monitors: [any MultiAgentMonitor] {
         var list: [any MultiAgentMonitor] = []
@@ -60,7 +61,11 @@ struct AgentMonitorTab: View {
         ScrollView {
             LazyVStack(spacing: 8) {
                 ForEach(monitors.filter(\.isOnline), id: \.displayName) { monitor in
-                    AgentMonitorSection(monitor: monitor)
+                    AgentMonitorSection(
+                        monitor: monitor,
+                        expandedAgentId: $expandedAgentId,
+                        sessionMessages: monitor is HermesService ? (monitor as! HermesService).sessionMessages : nil
+                    )
                 }
             }
         }
@@ -74,6 +79,8 @@ struct AgentMonitorTab: View {
 
 struct AgentMonitorSection: View {
     let monitor: any MultiAgentMonitor
+    @Binding var expandedAgentId: String?
+    let sessionMessages: [String: [ChatMessage]]?
 
     private var partitionedAgents: (active: [MonitoredAgent], idle: [MonitoredAgent]) {
         let sorted = monitor.agents.values.sorted { $0.lastEventTime > $1.lastEventTime }
@@ -97,7 +104,20 @@ struct AgentMonitorSection: View {
             let (active, idle) = partitionedAgents
 
             ForEach(active) { agent in
-                AgentRowView(agent: agent)
+                AgentRowView(
+                    agent: agent,
+                    isExpanded: expandedAgentId == agent.id,
+                    messages: sessionMessages?[agent.id]
+                )
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if expandedAgentId == agent.id {
+                            expandedAgentId = nil
+                        } else if sessionMessages?[agent.id] != nil {
+                            expandedAgentId = agent.id
+                        }
+                    }
+                }
             }
 
             if !idle.isEmpty {
@@ -114,8 +134,12 @@ struct AgentMonitorSection: View {
             }
 
             ForEach(idle) { agent in
-                AgentRowView(agent: agent)
-                    .opacity(0.5)
+                AgentRowView(
+                    agent: agent,
+                    isExpanded: false,
+                    messages: nil
+                )
+                .opacity(0.5)
             }
         }
     }
@@ -125,57 +149,71 @@ struct AgentMonitorSection: View {
 
 struct AgentRowView: View {
     let agent: MonitoredAgent
+    let isExpanded: Bool
+    let messages: [ChatMessage]?
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(NotchTheme.surfaceEmphasis)
-                .frame(width: 24, height: 24)
-                .overlay {
-                    Text(agent.emoji)
-                        .font(.system(size: 13))
-                }
-                .modifier(PulseModifier(isActive: agent.state == .working || agent.state == .toolCalling))
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(NotchTheme.surfaceEmphasis)
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Text(agent.emoji)
+                            .font(.system(size: 13))
+                    }
+                    .modifier(PulseModifier(isActive: agent.state == .working || agent.state == .toolCalling))
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(agent.name)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(NotchTheme.textPrimary)
-                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(agent.name)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(NotchTheme.textPrimary)
+                            .lineLimit(1)
 
-                    AgentStateTag(state: agent.state)
-                }
+                        AgentStateTag(state: agent.state)
 
-                if let tool = agent.currentTool, !tool.isEmpty {
-                    Text(tool)
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.accent)
-                        .lineLimit(1)
-                }
+                        if let msgs = messages, !msgs.isEmpty {
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(NotchTheme.textTertiary)
+                        }
+                    }
 
-                if let msg = agent.lastMessage, !msg.isEmpty {
-                    Text(msg)
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.textSecondary)
-                        .lineLimit(2)
-                }
-
-                HStack(spacing: 6) {
-                    if let workspace = agent.workspace {
-                        Text(URL(fileURLWithPath: workspace).lastPathComponent)
+                    if let tool = agent.currentTool, !tool.isEmpty {
+                        Text(tool)
+                            .font(.system(size: 10))
+                            .foregroundStyle(NotchTheme.accent)
                             .lineLimit(1)
                     }
-                    Text(timeAgo(agent.lastEventTime))
-                }
-                .font(.system(size: 9))
-                .foregroundStyle(NotchTheme.textMuted)
-            }
 
-            Spacer(minLength: 0)
+                    if let msg = agent.lastMessage, !msg.isEmpty {
+                        Text(msg)
+                            .font(.system(size: 10))
+                            .foregroundStyle(NotchTheme.textSecondary)
+                            .lineLimit(2)
+                    }
+
+                    HStack(spacing: 6) {
+                        if let workspace = agent.workspace {
+                            Text(URL(fileURLWithPath: workspace).lastPathComponent)
+                                .lineLimit(1)
+                        }
+                        Text(timeAgo(agent.lastEventTime))
+                    }
+                    .font(.system(size: 9))
+                    .foregroundStyle(NotchTheme.textMuted)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+
+            if isExpanded, let messages {
+                AgentMessagePreview(messages: messages)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(NotchTheme.surface)
@@ -192,6 +230,60 @@ struct AgentRowView: View {
         let minutes = Int(interval / 60)
         if minutes < 60 { return String(format: String(localized: "agents.time_minutes_ago"), minutes) }
         return String(format: String(localized: "agents.time_hours_ago"), minutes / 60)
+    }
+}
+
+// MARK: - Agent Message Preview
+
+struct AgentMessagePreview: View {
+    let messages: [ChatMessage]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Divider()
+                .background(NotchTheme.stroke)
+                .padding(.horizontal, 8)
+
+            ForEach(Array(messages.suffix(10)), id: \.id) { msg in
+                HStack(alignment: .top, spacing: 4) {
+                    Text(iconForRole(msg))
+                        .font(.system(size: 9))
+                        .frame(width: 14)
+                    Text(displayContent(for: msg))
+                        .font(.system(size: 9))
+                        .foregroundStyle(colorForRole(msg))
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 12)
+            }
+        }
+        .padding(.bottom, 6)
+    }
+
+    private func iconForRole(_ msg: ChatMessage) -> String {
+        switch msg.role {
+        case .user: "\u{1F464}"
+        case .assistant: msg.toolName != nil ? "\u{1F527}" : "\u{1F916}"
+        case .tool, .toolResult: "\u{1F4CB}"
+        case .system: "\u{2139}\u{FE0F}"
+        }
+    }
+
+    private func colorForRole(_ msg: ChatMessage) -> Color {
+        switch msg.role {
+        case .user: NotchTheme.textPrimary
+        case .assistant: msg.toolName != nil ? NotchTheme.accent : NotchTheme.textSecondary
+        case .tool, .toolResult: NotchTheme.textTertiary
+        case .system: NotchTheme.textMuted
+        }
+    }
+
+    private func displayContent(for msg: ChatMessage) -> String {
+        if let toolName = msg.toolName {
+            let input = msg.toolInput.map { _ in " \u{2026}" } ?? ""
+            return "\(toolName)\(input)"
+        }
+        return String(msg.content.prefix(80))
     }
 }
 
