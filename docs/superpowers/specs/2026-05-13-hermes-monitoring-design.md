@@ -80,6 +80,7 @@ Exact mapping determined during implementation by inspecting actual API response
 
 ### Tab Restructure
 
+Rename Tab enum case `.openclaw` → `.agents`.
 Rename `Tabs/OpenClawTab/` → `Tabs/AgentMonitorTab/`.
 
 The tab shows agents from all `MultiAgentMonitor` services, sectioned by source:
@@ -123,8 +124,8 @@ Both OpenClaw and Hermes sections use the same row component, differing only in 
 - Inject both via `@Environment`
 - Update `autoSelectTab` to check both monitors:
   ```
-  if openClaw.activeAgent != nil → .openclaw
-  if hermes.activeAgent != nil → .openclaw
+  if openClaw.activeAgent != nil → .agents
+  if hermes.activeAgent != nil → .agents
   ```
 - Badge priority updated: Hermes active agents contribute to badge display
 
@@ -132,6 +133,8 @@ Both OpenClaw and Hermes sections use the same row component, differing only in 
 
 ```
 notification > openclaw active > hermes active > ai approval > ai working > media playing > calendar upcoming
+
+All references to `.openclaw` in the codebase (Tab enum, autoSelectTab, badge logic, TabBarView) must be updated to `.agents`.
 ```
 
 ## Implementation Order
@@ -139,7 +142,7 @@ notification > openclaw active > hermes active > ai approval > ai working > medi
 1. Create `MultiAgentMonitor` protocol + shared types (`Models/MultiAgentMonitor.swift`)
 2. `OpenClawService` conform to protocol (add computed mapping, no behavior change)
 3. Extract shared UI components to `Notch/AgentMonitorView.swift`
-4. Rename `OpenClawTab/` → `AgentMonitorTab/`, refactor to use shared components
+4. Rename Tab enum `.openclaw` → `.agents`, rename `OpenClawTab/` → `AgentMonitorTab/`, refactor to use shared components
 5. Implement `HermesService` (`Services/HermesService.swift`)
 6. Wire into `NemoNotchApp` (service creation, environment injection, autoSelect, badge)
 7. Test with Hermes WebUI running, verify state mapping against actual API responses
