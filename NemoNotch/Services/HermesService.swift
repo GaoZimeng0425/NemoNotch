@@ -146,7 +146,7 @@ final class HermesService: MultiAgentMonitor {
 
     /// Remove agents whose session file hasn't been modified recently.
     private func evictStaleAgents() {
-        let threshold: TimeInterval = 600 // 10 minutes since last file event
+        let threshold: TimeInterval = 5
         let now = Date()
         var evicted = 0
         for (id, agent) in agents {
