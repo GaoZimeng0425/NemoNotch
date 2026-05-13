@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-NemoNotch is a macOS notch utility that provides an interactive floating panel in the MacBook notch area, integrating media controls, calendar events, AI CLI monitoring (Claude Code / Gemini CLI), OpenClaw multi-agent monitoring, and an app launcher.
+NemoNotch is a macOS notch utility that provides an interactive floating panel in the MacBook notch area, integrating media controls, calendar events, AI CLI monitoring (Claude Code / Gemini CLI), multi-agent monitoring (OpenClaw / Hermes-agent), and an app launcher.
 
 ### Tech Stack
 
@@ -14,10 +14,10 @@ NemoNotch is a macOS notch utility that provides an interactive floating panel i
 ```
 NemoNotch/
 ├── NemoNotchApp.swift           # Entry point, MenuBarExtra, global hotkeys, service assembly
-├── Models/                      # Data models (Tab, AppSettings, AIProvider, PlaybackState, etc.)
+├── Models/                      # Data models (Tab, AppSettings, AIProvider, PlaybackState, MultiAgentMonitor, etc.)
 ├── Notch/                       # Notch UI core (window, animation, event monitoring, TabBar, HUD)
-├── Tabs/                        # Tab content views (AIChatTab unifies AI sessions)
-├── Services/                    # Background services (media, calendar, AI CLI, launcher, etc.)
+├── Tabs/                        # Tab content views (AIChatTab unifies AI sessions, AgentMonitorTab unifies agents)
+├── Services/                    # Background services (media, calendar, AI CLI, launcher, HermesService, etc.)
 ├── Settings/                    # Settings UI
 └── Helpers/                     # Utilities (MarkdownRenderer, ClaudeCrabIcon, ToolStyles)
 ```
@@ -39,6 +39,7 @@ graph TB
         CCS["ClaudeCodeService<br/>AIProvider impl<br/>HookServer + ConversationParser"]
         GP["GeminiProvider<br/>AIProvider impl<br/>GeminiConversationParser"]
         OCS["OpenClawService<br/>WebSocket client"]
+        HES["HermesService<br/>HTTP API client (MultiAgentMonitor)"]
         CS["CalendarService<br/>EventKit"]
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
@@ -61,7 +62,7 @@ graph TB
         OT["OverviewTab<br/>Media + Calendar + Weather"]
         AT["AIChatTab<br/>Claude + Gemini unified"]
         LT["LauncherTab"]
-        OCT["OpenClawTab"]
+        OCT["AgentMonitorTab<br/>OpenClaw + Hermes unified"]
         ST["SystemTab"]
     end
 
@@ -164,7 +165,7 @@ sequenceDiagram
 ### Badge Priority (when notch is collapsed)
 
 ```
-notification > openclaw active > ai approval > ai working > media playing > calendar upcoming
+notification > openclaw/hermes active > ai approval > ai working > media playing > calendar upcoming
 ```
 
 ## Debug Pitfalls
@@ -281,13 +282,13 @@ Workflow:
 
 ### Protocol-First Extensible Design
 
-Multi-provider scenarios (AI Provider, Conversation Parser, etc.) use a **protocol + concrete implementation** pattern:
+Multi-provider scenarios (AI Provider, Conversation Parser, Multi-Agent Monitor, etc.) use a **protocol + concrete implementation** pattern:
 
-- Define protocols with only **common interfaces** (e.g. `messages`, `tokens`, `findSessionFile`)
+- Define protocols with only **common interfaces** (e.g. `messages`, `tokens`, `findSessionFile`, `agents`, `hasActiveAgents`)
 - Each Provider/Parser keeps **independent Result types and parsing logic**, don't force unified data structures
 - Provider-specific fields (Claude's `cacheRead`, Gemini's `thoughtTokens`) stay in their implementations, accessed via protocol extensions or concrete types
 - Generic consumers use protocol interfaces, specific logic accesses concrete types
-- Adding a new Provider (e.g. DeepSeek, OpenAI) only requires implementing the protocol, no changes to existing code
+- Adding a new Provider (e.g. DeepSeek, OpenAI) or a new Agent Monitor (e.g. HermesService) only requires implementing the protocol, no changes to existing code
 
 ## Reference Projects
 

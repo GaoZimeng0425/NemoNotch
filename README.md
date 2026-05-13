@@ -19,7 +19,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 | **Media** | Real-time playback controls (play/pause/next/previous), album artwork, progress bar. Supports Spotify & Apple Music |
 | **Calendar** | 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs, permission guidance |
 | **AI Chat** | Unified Claude Code & Gemini CLI monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
-| **OpenClaw** | Multi-agent status monitoring, WebSocket real-time connection, agent state tracking |
+| **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
 | **Weather** | Current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
 | **System** | Top 5 process resource ranking (CPU & memory), app icons, system summary footer (CPU / RAM / battery) |
@@ -44,6 +44,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **libproc** — Per-process resource tracking via kernel APIs
 - **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7-day rotation)
 - **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
+- **HTTP API** — Hermes-agent monitoring via localhost:8787
 
 ## Project Structure
 
@@ -63,6 +64,12 @@ NemoNotch/
 1. Open `NemoNotch.xcodeproj` in Xcode
 2. Select the `NemoNotch` target
 3. Build & Run (requires macOS 14+)
+
+> **Note:** If macOS blocks the app on first launch, run the following command to remove the quarantine attribute:
+>
+> ```bash
+> sudo xattr -d com.apple.quarantine /Applications/NemoNotch.app
+> ```
 
 ## Acknowledgements
 
