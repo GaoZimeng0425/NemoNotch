@@ -133,6 +133,7 @@ final class HermesService: MultiAgentMonitor {
     }
 
     /// Remove agents whose session file hasn't been modified recently.
+    /// Keeps lastMessageCounts/lastModDates so polling doesn't re-parse stale files.
     private func evictStaleAgents() {
         let threshold: TimeInterval = 15
         let now = Date()
@@ -141,8 +142,6 @@ final class HermesService: MultiAgentMonitor {
             guard now.timeIntervalSince(agent.lastEventTime) > threshold else { continue }
             agents.removeValue(forKey: id)
             sessionMessages.removeValue(forKey: id)
-            lastMessageCounts.removeValue(forKey: id)
-            lastModDates.removeValue(forKey: id)
             evicted += 1
         }
         if evicted > 0 {
