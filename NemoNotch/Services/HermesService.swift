@@ -189,11 +189,6 @@ final class HermesService: MultiAgentMonitor {
 
                 if lastCount > 0 {
                     guard let lastMod = await self?.lastModDates[file.sessionId], modDate > lastMod else {
-                        if isActive {
-                            await MainActor.run { [weak self] in
-                                self?.ensureAgentExists(sessionId: file.sessionId)
-                            }
-                        }
                         continue
                     }
                 }
