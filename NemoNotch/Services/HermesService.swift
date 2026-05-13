@@ -95,7 +95,7 @@ final class HermesService: MultiAgentMonitor {
         eventStream = stream
 
         // Periodically rescan for new profile directories
-        rescanTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        rescanTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.restartWatchingIfDirectoriesChanged()
             }
