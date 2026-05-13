@@ -1,26 +1,30 @@
 import SwiftUI
 
-struct OpenClawTab: View {
+struct AgentMonitorTab: View {
     @Environment(OpenClawService.self) var openClawService
 
+    private var monitors: [any MultiAgentMonitor] {
+        var list: [any MultiAgentMonitor] = []
+        if openClawService.isInstalled { list.append(openClawService) }
+        return list
+    }
+
     var body: some View {
-        if !openClawService.isInstalled {
+        if monitors.isEmpty {
             notInstalled
-        } else if !openClawService.gatewayOnline {
+        } else if monitors.allSatisfy({ !$0.isOnline }) {
             offlineState
-        } else if openClawService.agents.isEmpty {
-            idleState
         } else {
-            agentList
+            agentSections
         }
     }
 
     private var notInstalled: some View {
         VStack(spacing: 10) {
-            Image(systemName: "ladybug")
+            Image(systemName: "ladybug.fill")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("openclaw.not_installed")
+            Text("agents.not_installed")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             Text("npm install -g openclaw@latest")
@@ -32,17 +36,17 @@ struct OpenClawTab: View {
 
     private var offlineState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "ladybug")
+            Image(systemName: "ladybug.fill")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
-            Text("openclaw.gateway_offline")
+            Text("agents.all_offline")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.orange)
                     .frame(width: 6, height: 6)
-                Text("openclaw.waiting_for_connection")
+                Text("agents.waiting_for_connection")
                     .font(.system(size: 9))
                     .foregroundStyle(NotchTheme.textTertiary)
             }
@@ -50,65 +54,77 @@ struct OpenClawTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var idleState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "ladybug")
-                .font(.system(size: 28))
-                .foregroundStyle(NotchTheme.textTertiary)
-            Text("openclaw.all_agents_idle")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
-                Text("openclaw.gateway_online")
-                    .font(.system(size: 9))
-                    .foregroundStyle(NotchTheme.textTertiary)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var agentList: some View {
+    private var agentSections: some View {
         ScrollView {
-            LazyVStack(spacing: 6) {
-                let (active, idle) = partitionedAgents
-
-                ForEach(active) { agent in
-                    agentRow(agent)
-                }
-
-                if !idle.isEmpty {
-                    HStack {
-                        Text("openclaw.idle")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(NotchTheme.textMuted)
-                        Divider()
-                            .background(NotchTheme.stroke)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, idle.isEmpty ? 0 : 4)
-                }
-
-                ForEach(idle) { agent in
-                    agentRow(agent)
-                        .opacity(0.5)
+            LazyVStack(spacing: 8) {
+                ForEach(monitors.filter(\.isOnline), id: \.displayName) { monitor in
+                    AgentMonitorSection(monitor: monitor)
                 }
             }
         }
         .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
+        .padding(.horizontal, 4)
+        .padding(.bottom, 12)
     }
+}
 
-    private var partitionedAgents: (active: [AgentInfo], idle: [AgentInfo]) {
-        let sorted = openClawService.agents.values.sorted { $0.lastEventTime > $1.lastEventTime }
+// MARK: - Agent Monitor Section
+
+struct AgentMonitorSection: View {
+    let monitor: any MultiAgentMonitor
+
+    private var partitionedAgents: (active: [MonitoredAgent], idle: [MonitoredAgent]) {
+        let sorted = monitor.agents.values.sorted { $0.lastEventTime > $1.lastEventTime }
         let active = sorted.filter { $0.state != .idle }
         let idle = sorted.filter { $0.state == .idle }
         return (active, idle)
     }
 
-    private func agentRow(_ agent: AgentInfo) -> some View {
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(monitor.iconEmoji)
+                    .font(.system(size: 11))
+                Text(monitor.displayName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+
+            let (active, idle) = partitionedAgents
+
+            ForEach(active) { agent in
+                AgentRowView(agent: agent)
+            }
+
+            if !idle.isEmpty {
+                HStack {
+                    Text("agents.idle")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(NotchTheme.textMuted)
+                    Divider()
+                        .background(NotchTheme.stroke)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+            }
+
+            ForEach(idle) { agent in
+                AgentRowView(agent: agent)
+                    .opacity(0.5)
+            }
+        }
+    }
+}
+
+// MARK: - Agent Row
+
+struct AgentRowView: View {
+    let agent: MonitoredAgent
+
+    var body: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(NotchTheme.surfaceEmphasis)
@@ -126,7 +142,7 @@ struct OpenClawTab: View {
                         .foregroundStyle(NotchTheme.textPrimary)
                         .lineLimit(1)
 
-                    stateTag(agent.state)
+                    AgentStateTag(state: agent.state)
                 }
 
                 if let tool = agent.currentTool, !tool.isEmpty {
@@ -168,41 +184,47 @@ struct OpenClawTab: View {
         )
     }
 
-    private func stateTag(_ state: AgentState) -> some View {
-        Text(stateLabel(state))
+    private func timeAgo(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return String(localized: "agents.time_just_now") }
+        let minutes = Int(interval / 60)
+        if minutes < 60 { return String(format: String(localized: "agents.time_minutes_ago"), minutes) }
+        return String(format: String(localized: "agents.time_hours_ago"), minutes / 60)
+    }
+}
+
+// MARK: - Agent State Tag
+
+struct AgentStateTag: View {
+    let state: AgentMonitorState
+
+    var body: some View {
+        Text(label)
             .font(.system(size: 8, weight: .medium, design: .rounded))
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
-            .background(stateColor(state).opacity(0.6))
+            .background(color.opacity(0.6))
             .clipShape(Capsule())
     }
 
-    private func stateLabel(_ state: AgentState) -> String {
+    private var label: String {
         switch state {
-        case .idle: return String(localized: "openclaw.state_idle")
-        case .working: return String(localized: "openclaw.state_working")
-        case .speaking: return String(localized: "openclaw.state_speaking")
-        case .toolCalling: return String(localized: "openclaw.state_tool_calling")
-        case .error: return String(localized: "openclaw.state_error")
+        case .idle: String(localized: "agents.state_idle")
+        case .working: String(localized: "agents.state_working")
+        case .speaking: String(localized: "agents.state_speaking")
+        case .toolCalling: String(localized: "agents.state_tool_calling")
+        case .error: String(localized: "agents.state_error")
         }
     }
 
-    private func stateColor(_ state: AgentState) -> Color {
+    private var color: Color {
         switch state {
-        case .idle: return .gray
-        case .working: return .blue
-        case .speaking: return .green
-        case .toolCalling: return .orange
-        case .error: return .red
+        case .idle: .gray
+        case .working: .blue
+        case .speaking: .green
+        case .toolCalling: .orange
+        case .error: .red
         }
-    }
-
-    private func timeAgo(_ date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return String(localized: "openclaw.time_just_now") }
-        let minutes = Int(interval / 60)
-        if minutes < 60 { return String(format: String(localized: "openclaw.time_minutes_ago"), minutes) }
-        return String(format: String(localized: "openclaw.time_hours_ago"), minutes / 60)
     }
 }

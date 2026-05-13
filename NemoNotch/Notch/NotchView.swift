@@ -293,7 +293,7 @@ struct NotchView: View {
         case .claude:
             AIChatTab()
         case .agents:
-            OpenClawTab()
+            AgentMonitorTab()
         case .launcher:
             LauncherTab {
                 coordinator.notchClose()
