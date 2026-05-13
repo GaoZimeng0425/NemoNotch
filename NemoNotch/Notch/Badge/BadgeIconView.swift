@@ -137,7 +137,8 @@ struct BadgeIconView: View {
                 Image("HermesIcon")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: style == .row ? 11 : 10, height: style == .row ? 11 : 10)
+                    .frame(width: style == .row ? 14 : 13, height: style == .row ? 14 : 13)
+                    .clipShape(RoundedRectangle(cornerRadius: 2))
             } else {
                 Text(emoji)
                     .font(.system(size: style == .row ? 11 : 10))

@@ -96,7 +96,8 @@ struct AgentMonitorSection: View {
                     Image("HermesIcon")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 14, height: 14)
+                        .frame(width: 18, height: 18)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
                 } else {
                     Text(monitor.iconEmoji)
                         .font(.system(size: 11))
@@ -170,7 +171,8 @@ struct AgentRowView: View {
                             Image("HermesIcon")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 16, height: 16)
+                                .frame(width: 20, height: 20)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
                         } else {
                             Text(agent.emoji)
                                 .font(.system(size: 13))
