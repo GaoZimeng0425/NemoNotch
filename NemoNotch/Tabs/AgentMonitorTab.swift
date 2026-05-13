@@ -92,8 +92,17 @@ struct AgentMonitorSection: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack {
-                Text(monitor.iconEmoji)
-                    .font(.system(size: 11))
+                if monitor is HermesService {
+                    Image("HermesIcon")
+                        .resizable()
+                        .renderingMode(.template)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(NotchTheme.textSecondary)
+                } else {
+                    Text(monitor.iconEmoji)
+                        .font(.system(size: 11))
+                }
                 Text(monitor.displayName)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(NotchTheme.textSecondary)
@@ -159,8 +168,17 @@ struct AgentRowView: View {
                     .fill(NotchTheme.surfaceEmphasis)
                     .frame(width: 24, height: 24)
                     .overlay {
-                        Text(agent.emoji)
-                            .font(.system(size: 13))
+                        if agent.emoji.isEmpty, agent.name.hasPrefix("Hermes") {
+                            Image("HermesIcon")
+                                .resizable()
+                                .renderingMode(.template)
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                                .foregroundStyle(NotchTheme.textPrimary)
+                        } else {
+                            Text(agent.emoji)
+                                .font(.system(size: 13))
+                        }
                     }
                     .modifier(PulseModifier(isActive: agent.state == .working || agent.state == .toolCalling))
 

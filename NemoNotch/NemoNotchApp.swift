@@ -121,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let hermes = HermesService()
         hermes.connect()
+        aiMonitor.hermesService = hermes
         hermesService = hermes
 
         appSettings = settings
@@ -187,13 +188,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
            let aiMonitor = aiMonitorService,
            let launcher = launcherService,
            let notification = notificationService,
-           let weather = weatherService {
+           let weather = weatherService,
+           let hermes = hermesService {
             let view = SettingsView()
                 .environment(settings)
                 .environment(aiMonitor)
                 .environment(launcher)
                 .environment(notification)
                 .environment(weather)
+                .environment(hermes)
             let window = SettingsWindow(rootView: view)
             window.delegate = self
             settingsWindow = window

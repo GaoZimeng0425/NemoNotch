@@ -9,7 +9,7 @@ final class HermesService: MultiAgentMonitor {
     var isInstalled = false
     var isHookInstalled = false
     let displayName = "Hermes"
-    let iconEmoji = "🐦"
+    let iconEmoji = ""
 
     private let hermesDir: String
 
@@ -144,19 +144,23 @@ final class HermesService: MultiAgentMonitor {
         evictStaleAgents()
     }
 
-    /// Remove agents whose session file hasn't been modified in 10 minutes.
+    /// Remove agents whose session file hasn't been modified recently.
     private func evictStaleAgents() {
-        let threshold: TimeInterval = 600
+        let threshold: TimeInterval = 600 // 10 minutes since last file event
         let now = Date()
+        var evicted = 0
         for (id, agent) in agents {
             guard now.timeIntervalSince(agent.lastEventTime) > threshold else { continue }
             agents.removeValue(forKey: id)
             sessionMessages.removeValue(forKey: id)
             lastMessageCounts.removeValue(forKey: id)
             lastModDates.removeValue(forKey: id)
-            LogService.debug("Evicted stale agent \(id)", category: "HermesService")
+            evicted += 1
         }
-        updateActiveAgent()
+        if evicted > 0 {
+            updateActiveAgent()
+            LogService.info("Evicted \(evicted) stale agent(s)", category: "HermesService")
+        }
     }
 
     /// Callback from FSEventStream — filter and parse changed session files.
@@ -290,7 +294,10 @@ final class HermesService: MultiAgentMonitor {
     }
 
     private func ensureAgentExists(sessionId: String) {
-        if agents[sessionId] == nil {
+        if var agent = agents[sessionId] {
+            agent.lastEventTime = Date()
+            agents[sessionId] = agent
+        } else {
             upsertAgent(id: sessionId, state: .working)
         }
     }
@@ -378,7 +385,7 @@ final class HermesService: MultiAgentMonitor {
         var agent = agents[id] ?? MonitoredAgent(
             id: id,
             name: "Hermes",
-            emoji: "🐦",
+            emoji: "",
             state: state,
             currentTool: currentTool,
             lastEventTime: Date()

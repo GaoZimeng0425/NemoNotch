@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(LauncherService.self) var launcherService
     @Environment(NotificationService.self) var notificationService
     @Environment(WeatherService.self) var weatherService
+    @Environment(HermesService.self) var hermesService
 
     @State private var selectedTab = 0
     @State private var showAppPicker = false
@@ -259,6 +260,17 @@ struct SettingsView: View {
                 onUninstall: { aiService.geminiProvider.uninstallHooks() }
             )
 
+            Divider()
+
+            // Hermes Agent
+            hookSection(
+                name: "Hermes Agent",
+                icon: "bird",
+                isInstalled: hermesService.isHookInstalled,
+                onInstall: { hermesService.installHooks() },
+                onUninstall: { hermesService.uninstallHooks() }
+            )
+
             Text("settings.hooks_description")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -276,7 +288,13 @@ struct SettingsView: View {
         .padding()
     }
 
-    private func hookSection(name: String, icon: String, isInstalled: Bool, onInstall: @escaping () -> Void, onUninstall: @escaping () -> Void) -> some View {
+    private func hookSection(
+        name: String,
+        icon: String,
+        isInstalled: Bool,
+        onInstall: @escaping () -> Void,
+        onUninstall: @escaping () -> Void
+    ) -> some View {
         VStack(spacing: 8) {
             if isInstalled {
                 Label("settings.hooks_installed \(name)", systemImage: "checkmark.circle.fill")
@@ -333,7 +351,9 @@ struct SettingsView: View {
                 } else {
                     ForEach(appSettings.monitoredApps, id: \.self) { bundleID in
                         HStack {
-                            let icon = NSWorkspace.shared.icon(forFile: NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.path ?? "")
+                            let icon = NSWorkspace.shared
+                                .icon(forFile: NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?
+                                    .path ?? "")
                             Image(nsImage: icon)
                                 .resizable()
                                 .frame(width: 24, height: 24)
@@ -399,7 +419,7 @@ struct SettingsView: View {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
            let bundle = Bundle(url: url),
            let name = bundle.localizedInfoDictionary?["CFBundleName"] as? String
-               ?? bundle.infoDictionary?["CFBundleName"] as? String {
+           ?? bundle.infoDictionary?["CFBundleName"] as? String {
             return name
         }
         return bundleID

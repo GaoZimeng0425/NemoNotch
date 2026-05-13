@@ -7,6 +7,7 @@ final class AICLIMonitorService {
     let claudeProvider: ClaudeProvider
     let geminiProvider: GeminiProvider
     let hookServer: HookServer
+    weak var hermesService: HermesService?
 
     var serverRunning = false
 
@@ -15,9 +16,9 @@ final class AICLIMonitorService {
         let claude = ClaudeProvider(store: store)
         let gemini = GeminiProvider(store: store)
         self.store = store
-        self.claudeProvider = claude
-        self.geminiProvider = gemini
-        self.hookServer = HookServer()
+        claudeProvider = claude
+        geminiProvider = gemini
+        hookServer = HookServer()
 
         claude.setHookServer(hookServer)
         gemini.setHookServer(hookServer)
@@ -36,7 +37,9 @@ final class AICLIMonitorService {
         hookServer.start()
     }
 
-    var activeSession: AISessionState? { store.activeSession }
+    var activeSession: AISessionState? {
+        store.activeSession
+    }
 
     var anyHookInstalled: Bool {
         claudeProvider.isHookInstalled || geminiProvider.isHookInstalled
@@ -59,7 +62,10 @@ final class AICLIMonitorService {
 
     private func routeEvent(_ event: HookEvent) {
         var source = event.cliSource ?? "unknown"
-        LogService.debug("Incoming event: \(event.hookEventName), raw source: \(event.cliSource ?? "nil"), session: \(event.sessionId ?? "nil")", category: "AICLIMonitorService")
+        LogService.debug(
+            "Incoming event: \(event.hookEventName), raw source: \(event.cliSource ?? "nil"), session: \(event.sessionId ?? "nil")",
+            category: "AICLIMonitorService"
+        )
 
         if source == "unknown" {
             let combined = "\(event.message ?? "") \(event.toolName ?? "") \(event.cwd ?? "")".lowercased()
@@ -71,6 +77,8 @@ final class AICLIMonitorService {
         LogService.info("Routing event \(event.hookEventName) to \(source)", category: "AICLIMonitorService")
 
         switch source {
+        case "hermes":
+            hermesService?.handleHookEvent(event)
         case "gemini":
             geminiProvider.handleEvent(event)
         case "claude":
