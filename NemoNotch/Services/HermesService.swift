@@ -80,7 +80,8 @@ final class HermesService: MultiAgentMonitor {
             paths,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
             0,
-            UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
+            UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer |
+                kFSEventStreamCreateFlagUseCFTypes)
         ) else {
             LogService.error("Failed to create FSEventStream", category: "HermesService")
             return
@@ -137,6 +138,22 @@ final class HermesService: MultiAgentMonitor {
             startWatching()
             refreshSessions()
         }
+        evictStaleAgents()
+    }
+
+    /// Remove agents whose session file hasn't been modified in 10 minutes.
+    private func evictStaleAgents() {
+        let threshold: TimeInterval = 600
+        let now = Date()
+        for (id, agent) in agents {
+            guard now.timeIntervalSince(agent.lastEventTime) > threshold else { continue }
+            agents.removeValue(forKey: id)
+            sessionMessages.removeValue(forKey: id)
+            lastMessageCounts.removeValue(forKey: id)
+            lastModDates.removeValue(forKey: id)
+            LogService.debug("Evicted stale agent \(id)", category: "HermesService")
+        }
+        updateActiveAgent()
     }
 
     /// Callback from FSEventStream — parse changed session files.
