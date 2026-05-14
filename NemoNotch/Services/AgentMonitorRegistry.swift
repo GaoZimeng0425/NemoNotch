@@ -13,12 +13,8 @@ final class AgentMonitorRegistry {
         monitors.filter(\.isInstalled)
     }
 
-    var onlineMonitors: [any MultiAgentMonitor] {
-        monitors.filter { $0.isInstalled && $0.isOnline }
-    }
-
     var anyActiveAgent: MonitoredAgent? {
-        monitors.lazy.compactMap(\.activeAgent).first
+        installedMonitors.lazy.compactMap(\.activeAgent).first
     }
 
     var hasAnyActiveAgent: Bool {
