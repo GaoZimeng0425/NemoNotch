@@ -12,6 +12,7 @@ struct NotchView: View {
     @Environment(NotificationService.self) var notificationService
     @Environment(OpenClawService.self) var openClawService
     @Environment(HermesService.self) var hermesService
+    @Environment(AgentMonitorRegistry.self) var agentRegistry
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
 
@@ -172,8 +173,7 @@ struct NotchView: View {
             calendarService: calendarService,
             aiService: aiService,
             notificationService: notificationService,
-            openClawService: openClawService,
-            hermesService: hermesService
+            agentRegistry: agentRegistry
         )
         vm.initialize()
         badgeViewModel = vm
