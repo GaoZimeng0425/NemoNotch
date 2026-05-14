@@ -90,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
     private var hermesService: HermesService?
+    private var agentRegistry: AgentMonitorRegistry?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
     private var hotkeyService: HotkeyService?
@@ -124,6 +125,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         aiMonitor.hermesService = hermes
         hermesService = hermes
 
+        let registry = AgentMonitorRegistry()
+        registry.register(openClaw)
+        registry.register(hermes)
+        agentRegistry = registry
+
         appSettings = settings
         mediaService = media
         calendarService = calendar
@@ -155,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(aiMonitor)
                     .environment(openClaw)
                     .environment(hermes)
+                    .environment(registry)
                     .environment(launcher)
                     .environment(notification)
                     .environment(weather)
