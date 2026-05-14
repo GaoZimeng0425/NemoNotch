@@ -32,16 +32,7 @@
     "%lld" : {
 
     },
-    "%lld%%" : {
-
-    },
     "%lld°" : {
-
-    },
-    "↑ %@" : {
-
-    },
-    "↓ %@" : {
 
     },
     "+%lld more" : {
@@ -564,9 +555,6 @@
           }
         }
       }
-    },
-    "CPU %lld%%" : {
-
     },
     "ctx" : {
 
@@ -1098,16 +1086,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等待连接..."
-          }
-        }
-      }
-    },
-    "RAM %@/%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "RAM %1$@/%2$@"
           }
         }
       }

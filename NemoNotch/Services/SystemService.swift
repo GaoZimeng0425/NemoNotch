@@ -290,8 +290,8 @@ final class SystemService: LifecycleAware {
         let ownPID = ProcessInfo.processInfo.processIdentifier
         processes = processes.filter { $0.id != ownPID && $0.id != 0 }
 
-        topProcessesByCPU = processes.sorted { $0.cpuUsage > $1.cpuUsage }.prefix(5).map(\.self)
-        topProcessesByMemory = processes.sorted { $0.memoryUsed > $1.memoryUsed }.prefix(5).map(\.self)
+        topProcessesByCPU = processes.sorted { $0.cpuUsage > $1.cpuUsage }.prefix(15).map(\.self)
+        topProcessesByMemory = processes.sorted { $0.memoryUsed > $1.memoryUsed }.prefix(15).map(\.self)
     }
 
     private func extractName(from pid: Int32) -> String {
