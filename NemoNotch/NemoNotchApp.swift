@@ -174,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if let session = aiMonitorService?.activeSession, session.status == .working {
                 return .claude
             }
-            if openClawService?.activeAgent != nil || hermesService?.activeAgent != nil { return .agents }
+            if agentRegistry?.hasAnyActiveAgent == true { return .agents }
             if mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }
