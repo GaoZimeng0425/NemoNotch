@@ -4,7 +4,7 @@ struct SystemTab: View {
     @Environment(SystemService.self) var systemService
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(systemService.topProcessesByCPU) { process in
@@ -69,30 +69,79 @@ struct SystemTab: View {
     // MARK: - Info Footer
 
     private var infoFooter: some View {
-        VStack(spacing: 4) {
-            HStack {
-                VStack(spacing: 1) {
-                    Text("\u{2191} \(formatSpeed(systemService.uploadSpeed))")
-                    Text("\u{2193} \(formatSpeed(systemService.downloadSpeed))")
-                }
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(NotchTheme.accent)
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("CPU \(Int(systemService.cpuUsage))%")
-                    Text("RAM \(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
-                }
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(NotchTheme.textTertiary)
-            }
-
-            Text("\(systemService.batteryLevel)%")
-                .font(.system(size: 10))
-                .foregroundStyle(NotchTheme.textTertiary)
+        VStack(spacing: 0) {
+            networkHero
+            Rectangle()
+                .fill(NotchTheme.stroke)
+                .frame(height: 0.6)
+                .padding(.horizontal, 10)
+            statusStrip
         }
         .notchCard()
+    }
+
+    private var networkHero: some View {
+        HStack(spacing: 0) {
+            speedCell(systemImage: "arrow.up", label: "Upload", value: systemService.uploadSpeed)
+            Rectangle()
+                .fill(NotchTheme.stroke)
+                .frame(width: 0.6, height: 26)
+            speedCell(systemImage: "arrow.down", label: "Download", value: systemService.downloadSpeed)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func speedCell(systemImage: String, label: String, value: Double) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 9, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .foregroundStyle(NotchTheme.textTertiary)
+
+            Text(formatSpeed(value))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(NotchTheme.accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 0) {
+            statusChip(systemImage: "cpu", value: "\(Int(systemService.cpuUsage))%")
+            statusChip(
+                systemImage: "memorychip",
+                value: "\(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))G"
+            )
+            statusChip(systemImage: batteryIcon, value: "\(systemService.batteryLevel)%")
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+    }
+
+    private func statusChip(systemImage: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10))
+            Text(value)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+        }
+        .foregroundStyle(NotchTheme.textSecondary)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var batteryIcon: String {
+        switch systemService.batteryLevel {
+        case 90...: return "battery.100"
+        case 60 ..< 90: return "battery.75"
+        case 35 ..< 60: return "battery.50"
+        case 10 ..< 35: return "battery.25"
+        default: return "battery.0"
+        }
     }
 
     private func formatSpeed(_ bytesPerSec: Double) -> String {
