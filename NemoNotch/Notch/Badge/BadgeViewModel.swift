@@ -7,8 +7,7 @@ final class BadgeViewModel {
     private let calendarService: CalendarService
     private let aiService: AICLIMonitorService
     private let notificationService: NotificationService
-    private let openClawService: OpenClawService
-    private let hermesService: HermesService
+    private let agentRegistry: AgentMonitorRegistry
 
     var shownHasActiveBadge: Bool = false
     var displayedBadgeItems: [BadgeItem] = []
@@ -20,15 +19,13 @@ final class BadgeViewModel {
         calendarService: CalendarService,
         aiService: AICLIMonitorService,
         notificationService: NotificationService,
-        openClawService: OpenClawService,
-        hermesService: HermesService
+        agentRegistry: AgentMonitorRegistry
     ) {
         self.mediaService = mediaService
         self.calendarService = calendarService
         self.aiService = aiService
         self.notificationService = notificationService
-        self.openClawService = openClawService
-        self.hermesService = hermesService
+        self.agentRegistry = agentRegistry
     }
 
     // MARK: - Computed
@@ -54,11 +51,7 @@ final class BadgeViewModel {
             items.append(.notification(bundleID: top.bundleID, count: top.count))
         }
 
-        for agent in openClawService.agents.values.filter({ $0.state != .idle }) {
-            items.append(.agents(state: agent.state, emoji: agent.emoji))
-        }
-
-        for agent in hermesService.agents.values.filter({ $0.state != .idle }) {
+        for agent in agentRegistry.activeAgents {
             items.append(.agents(state: agent.state, emoji: agent.emoji))
         }
 

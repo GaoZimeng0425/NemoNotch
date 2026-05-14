@@ -53,12 +53,8 @@ final class AgentMonitorRegistry {
         monitors.filter { $0.isInstalled }
     }
 
-    var onlineMonitors: [any MultiAgentMonitor] {
-        monitors.filter { $0.isInstalled && $0.isOnline }
-    }
-
     var anyActiveAgent: MonitoredAgent? {
-        monitors.lazy.compactMap(\.activeAgent).first
+        installedMonitors.lazy.compactMap(\.activeAgent).first
     }
 
     var hasAnyActiveAgent: Bool { anyActiveAgent != nil }
@@ -197,5 +193,5 @@ After each migration step:
 ## Completion Criteria
 
 - All smoke checks pass.
-- `grep -rn "OpenClawService\|HermesService" NemoNotch/ | grep -v "Service.swift\|AppDelegate"` returns only `Settings/SettingsView.swift` and `Services/AICLIMonitorService.swift` (the two intentional out-of-scope sites).
+- `grep -rn "OpenClawService\|HermesService" NemoNotch/ | grep -v "Service.swift\|NemoNotchApp.swift"` returns only `Settings/SettingsView.swift` and `Services/AICLIMonitorService.swift` (the two intentional out-of-scope sites). `NemoNotchApp.swift` is excluded because AppDelegate still owns and instantiates the concrete services — Registry doesn't replace ownership, only aggregates references.
 - Adding a hypothetical third monitor would require changes only in: the new monitor's own files plus `NemoNotchApp.swift` (one `registry.register(...)` line).
