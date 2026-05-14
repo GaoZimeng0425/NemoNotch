@@ -159,8 +159,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     .environment(media)
                     .environment(calendar)
                     .environment(aiMonitor)
-                    .environment(openClaw)
-                    .environment(hermes)
                     .environment(registry)
                     .environment(launcher)
                     .environment(notification)
