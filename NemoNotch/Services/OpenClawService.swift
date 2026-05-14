@@ -4,8 +4,8 @@ import Foundation
 @MainActor
 @Observable
 final class OpenClawService {
-    var internalAgents: [String: AgentInfo] = [:]
-    var internalActiveAgent: AgentInfo?
+    var agents: [String: MonitoredAgent] = [:]
+    var activeAgent: MonitoredAgent?
     var gatewayOnline = false
     var isInstalled = false
 
@@ -408,12 +408,12 @@ final class OpenClawService {
             }
             if !toolNames.isEmpty {
                 let key = sessionKey.isEmpty ? nil : sessionKey
-                let targetKey = key ?? internalAgents.filter({ $0.value.state != .idle })
+                let targetKey = key ?? agents.filter({ $0.value.state != .idle })
                     .sorted(by: { $0.value.lastEventTime > $1.value.lastEventTime }).first?.key
-                if let targetKey, internalAgents[targetKey] != nil {
-                    internalAgents[targetKey]?.state = .toolCalling
-                    internalAgents[targetKey]?.currentTool = toolNames.first
-                    internalAgents[targetKey]?.lastEventTime = Date()
+                if let targetKey, agents[targetKey] != nil {
+                    agents[targetKey]?.state = .toolCalling
+                    agents[targetKey]?.currentTool = toolNames.first
+                    agents[targetKey]?.lastEventTime = Date()
                     updateActiveAgent()
                 }
                 return
@@ -425,12 +425,12 @@ final class OpenClawService {
             let roleLC = role.lowercased()
             if roleLC.contains("tool") || roleLC.contains("assistant") {
                 let key = sessionKey.isEmpty ? nil : sessionKey
-                let targetKey = key ?? internalAgents.filter({ $0.value.state != .idle })
+                let targetKey = key ?? agents.filter({ $0.value.state != .idle })
                     .sorted(by: { $0.value.lastEventTime > $1.value.lastEventTime }).first?.key
-                if let targetKey, internalAgents[targetKey] != nil {
-                    internalAgents[targetKey]?.state = .toolCalling
-                    internalAgents[targetKey]?.currentTool = toolName
-                    internalAgents[targetKey]?.lastEventTime = Date()
+                if let targetKey, agents[targetKey] != nil {
+                    agents[targetKey]?.state = .toolCalling
+                    agents[targetKey]?.currentTool = toolName
+                    agents[targetKey]?.lastEventTime = Date()
                     updateActiveAgent()
                 }
                 return
@@ -452,15 +452,15 @@ final class OpenClawService {
 
         // Update the matching agent's last message
         let targetKey = sessionKey.isEmpty ? nil : sessionKey
-        if let key = targetKey, internalAgents[key] != nil {
-            internalAgents[key]?.lastMessage = String(message.prefix(120))
-            internalAgents[key]?.lastEventTime = Date()
+        if let key = targetKey, agents[key] != nil {
+            agents[key]?.lastMessage = String(message.prefix(120))
+            agents[key]?.lastEventTime = Date()
         } else {
             // Try to match by updating the most recent active agent
-            if let activeKey = internalAgents.filter({ $0.value.state != .idle })
+            if let activeKey = agents.filter({ $0.value.state != .idle })
                 .sorted(by: { $0.value.lastEventTime > $1.value.lastEventTime }).first?.key {
-                internalAgents[activeKey]?.lastMessage = String(message.prefix(120))
-                internalAgents[activeKey]?.lastEventTime = Date()
+                agents[activeKey]?.lastMessage = String(message.prefix(120))
+                agents[activeKey]?.lastEventTime = Date()
             }
         }
     }
@@ -488,14 +488,14 @@ final class OpenClawService {
 
         // Determine state from stream + phase (already extracted above for logging)
         let kind = data["kind"] as? String ?? ""
-        let state: AgentState = if stream == "item", kind == "tool" {
+        let state: AgentMonitorState = if stream == "item", kind == "tool" {
             // Tool call item events: stream=item, kind=tool, phase=start|end
             switch phase {
             case "start": .toolCalling
             case "end":
                 // Tool completed — keep speaking if assistant is still streaming,
                 // otherwise stay working (lifecycle will set idle when run ends)
-                internalAgents[agentId]?.state == .speaking ? .speaking : .working
+                agents[agentId]?.state == .speaking ? .speaking : .working
             default: .toolCalling
             }
         } else if stream == "lifecycle" {
@@ -524,18 +524,18 @@ final class OpenClawService {
             data["text"] as? String
         let workspace = data["workspace"] as? String ?? data["cwd"] as? String
 
-        if internalAgents[agentId] == nil {
-            internalAgents[agentId] = AgentInfo(id: agentId, name: displayName, emoji: emoji, state: state)
+        if agents[agentId] == nil {
+            agents[agentId] = MonitoredAgent(id: agentId, name: displayName, emoji: emoji, state: state)
         }
 
-        let prevState = internalAgents[agentId]?.state
-        internalAgents[agentId]?.state = state
-        internalAgents[agentId]?.name = displayName
-        internalAgents[agentId]?.emoji = emoji
-        if let tool { internalAgents[agentId]?.currentTool = tool }
-        if let message { internalAgents[agentId]?.lastMessage = message }
-        if let workspace { internalAgents[agentId]?.workspace = workspace }
-        internalAgents[agentId]?.lastEventTime = Date()
+        let prevState = agents[agentId]?.state
+        agents[agentId]?.state = state
+        agents[agentId]?.name = displayName
+        agents[agentId]?.emoji = emoji
+        if let tool { agents[agentId]?.currentTool = tool }
+        if let message { agents[agentId]?.lastMessage = message }
+        if let workspace { agents[agentId]?.workspace = workspace }
+        agents[agentId]?.lastEventTime = Date()
 
         if state != prevState {
             LogService.info(
@@ -547,7 +547,7 @@ final class OpenClawService {
     }
 
     private func updateActiveAgent() {
-        internalActiveAgent = internalAgents.values
+        activeAgent = agents.values
             .filter { $0.state != .idle }
             .sorted { $0.lastEventTime > $1.lastEventTime }
             .first
@@ -566,14 +566,14 @@ final class OpenClawService {
 
     private func cleanupStaleAgents() {
         let idleThreshold = Date().addingTimeInterval(-15)
-        for (id, agent) in internalAgents {
+        for (id, agent) in agents {
             if agent.lastEventTime < idleThreshold, agent.state != .idle {
-                internalAgents[id]?.state = .idle
-                internalAgents[id]?.currentTool = nil
+                agents[id]?.state = .idle
+                agents[id]?.currentTool = nil
             }
         }
         let removeThreshold = Date().addingTimeInterval(-1800)
-        internalAgents = internalAgents.filter { $0.value.lastEventTime >= removeThreshold }
+        agents = agents.filter { $0.value.lastEventTime >= removeThreshold }
         updateActiveAgent()
     }
 
@@ -593,36 +593,6 @@ final class OpenClawService {
 // MARK: - MultiAgentMonitor
 
 extension OpenClawService: MultiAgentMonitor {
-    var agents: [String: MonitoredAgent] {
-        internalAgents.mapValues { info in
-            MonitoredAgent(
-                id: info.id,
-                name: info.name,
-                emoji: info.emoji,
-                state: AgentMonitorState(rawValue: info.state.rawValue) ?? .idle,
-                currentTool: info.currentTool,
-                lastMessage: info.lastMessage,
-                workspace: info.workspace,
-                lastEventTime: info.lastEventTime
-            )
-        }
-    }
-
-    var activeAgent: MonitoredAgent? {
-        internalActiveAgent.map { info in
-            MonitoredAgent(
-                id: info.id,
-                name: info.name,
-                emoji: info.emoji,
-                state: AgentMonitorState(rawValue: info.state.rawValue) ?? .idle,
-                currentTool: info.currentTool,
-                lastMessage: info.lastMessage,
-                workspace: info.workspace,
-                lastEventTime: info.lastEventTime
-            )
-        }
-    }
-
     var isOnline: Bool {
         gatewayOnline
     }

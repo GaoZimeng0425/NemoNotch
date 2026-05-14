@@ -64,7 +64,7 @@ struct AgentMonitorTab: View {
                     AgentMonitorSection(
                         monitor: monitor,
                         expandedAgentId: $expandedAgentId,
-                        sessionMessages: monitor is HermesService ? (monitor as! HermesService).sessionMessages : nil
+                        sessionMessages: monitor.sessionMessages
                     )
                 }
             }
@@ -80,7 +80,7 @@ struct AgentMonitorTab: View {
 struct AgentMonitorSection: View {
     let monitor: any MultiAgentMonitor
     @Binding var expandedAgentId: String?
-    let sessionMessages: [String: [ChatMessage]]?
+    let sessionMessages: [String: [ChatMessage]]
 
     private var partitionedAgents: (active: [MonitoredAgent], idle: [MonitoredAgent]) {
         let sorted = monitor.agents.values.sorted { $0.lastEventTime > $1.lastEventTime }
@@ -92,8 +92,8 @@ struct AgentMonitorSection: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack {
-                if monitor is HermesService {
-                    Image("HermesIcon")
+                if let asset = monitor.iconAssetName {
+                    Image(asset)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 18, height: 18)
@@ -115,13 +115,13 @@ struct AgentMonitorSection: View {
                 AgentRowView(
                     agent: agent,
                     isExpanded: expandedAgentId == agent.id,
-                    messages: sessionMessages?[agent.id]
+                    messages: sessionMessages[agent.id]
                 )
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         if expandedAgentId == agent.id {
                             expandedAgentId = nil
-                        } else if sessionMessages?[agent.id] != nil {
+                        } else if sessionMessages[agent.id] != nil {
                             expandedAgentId = agent.id
                         }
                     }
@@ -167,8 +167,8 @@ struct AgentRowView: View {
                     .fill(NotchTheme.surfaceEmphasis)
                     .frame(width: 24, height: 24)
                     .overlay {
-                        if agent.emoji.isEmpty, agent.name.hasPrefix("Hermes") {
-                            Image("HermesIcon")
+                        if let asset = agent.iconAssetName {
+                            Image(asset)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 20, height: 20)

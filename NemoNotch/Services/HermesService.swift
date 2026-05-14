@@ -10,13 +10,13 @@ final class HermesService: MultiAgentMonitor {
     var isHookInstalled = false
     let displayName = "Hermes"
     let iconEmoji = ""
+    let iconAssetName: String? = "HermesIcon"
 
     private let hermesDir: String
 
     /// sessionId → recently parsed messages (max 20)
     var sessionMessages: [String: [ChatMessage]] = [:]
     private var lastMessageCounts: [String: Int] = [:]
-    private var lastModDates: [String: Date] = [:]
 
     /// FSEvent stream for instant file change notifications
     private var eventStream: FSEventStreamRef?
@@ -53,7 +53,6 @@ final class HermesService: MultiAgentMonitor {
         pollTimer = nil
         sessionMessages = [:]
         lastMessageCounts = [:]
-        lastModDates = [:]
         isOnline = false
         LogService.info("Disconnected from Hermes monitoring", category: "HermesService")
     }
@@ -132,13 +131,14 @@ final class HermesService: MultiAgentMonitor {
         return dirs
     }
 
-    /// Remove agents whose session file hasn't been modified recently.
-    /// Keeps lastMessageCounts/lastModDates so polling doesn't re-parse stale files.
+    /// Evict agents based on last parsed message role:
+    /// - tool call / user message → agent likely mid-work → 120s grace
+    /// - complete assistant reply → agent likely done → 15s grace
     private func evictStaleAgents() {
-        let threshold: TimeInterval = 15
         let now = Date()
         var evicted = 0
         for (id, agent) in agents {
+            let threshold = evictionThreshold(for: id)
             guard now.timeIntervalSince(agent.lastEventTime) > threshold else { continue }
             agents.removeValue(forKey: id)
             sessionMessages.removeValue(forKey: id)
@@ -147,6 +147,16 @@ final class HermesService: MultiAgentMonitor {
         if evicted > 0 {
             updateActiveAgent()
             LogService.info("Evicted \(evicted) stale agent(s)", category: "HermesService")
+        }
+    }
+
+    private func evictionThreshold(for sessionId: String) -> TimeInterval {
+        guard let msgs = sessionMessages[sessionId], let last = msgs.last else { return 15 }
+        switch last.role {
+        case .assistant where last.toolName != nil: return 120
+        case .user: return 120
+        case .toolResult: return 60
+        default: return 15
         }
     }
 
@@ -175,6 +185,8 @@ final class HermesService: MultiAgentMonitor {
             let now = Date()
             let activeThreshold: TimeInterval = 600
             var updates: [(sessionId: String, messages: [ChatMessage], count: Int, isActive: Bool)] = []
+            // Keep active agents alive using file mod date (not Date()) so tool calls don't cause eviction
+            var keepAlive: [(sessionId: String, modDate: Date)] = []
             var currentSessionIds: Set<String> = []
 
             for file in files {
@@ -184,13 +196,9 @@ final class HermesService: MultiAgentMonitor {
                       let modDate = attrs[.modificationDate] as? Date else { continue }
 
                 let isActive = now.timeIntervalSince(modDate) < activeThreshold
-                let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
+                if isActive { keepAlive.append((file.sessionId, modDate)) }
 
-                if lastCount > 0 {
-                    guard let lastMod = await self?.lastModDates[file.sessionId], modDate > lastMod else {
-                        continue
-                    }
-                }
+                let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
 
                 guard let count = HermesConversationParser.readMessageCount(filePath: file.path),
                       count > lastCount else { continue }
@@ -202,6 +210,14 @@ final class HermesService: MultiAgentMonitor {
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
+
+                for ka in keepAlive {
+                    if var agent = agents[ka.sessionId] {
+                        agent.lastEventTime = ka.modDate
+                        agents[ka.sessionId] = agent
+                    }
+                }
+
                 for update in updates {
                     sessionMessages[update.sessionId] = update.messages
                     lastMessageCounts[update.sessionId] = update.count
@@ -222,7 +238,6 @@ final class HermesService: MultiAgentMonitor {
                 let stale = lastMessageCounts.keys.filter { !currentSessionIds.contains($0) }
                 for id in stale {
                     lastMessageCounts.removeValue(forKey: id)
-                    lastModDates.removeValue(forKey: id)
                     sessionMessages.removeValue(forKey: id)
                 }
             }
@@ -368,6 +383,7 @@ final class HermesService: MultiAgentMonitor {
             id: id,
             name: "Hermes",
             emoji: "",
+            iconAssetName: "HermesIcon",
             state: state,
             currentTool: currentTool,
             lastEventTime: Date()

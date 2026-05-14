@@ -44,6 +44,8 @@ struct MonitoredAgent: Identifiable {
     let id: String
     var name: String
     var emoji: String
+    /// Asset catalog image name. When non-nil, UI prefers it over `emoji`.
+    var iconAssetName: String?
     var state: AgentMonitorState
     var currentTool: String?
     var lastMessage: String?
@@ -54,6 +56,7 @@ struct MonitoredAgent: Identifiable {
         id: String,
         name: String = "Agent",
         emoji: String = "🤖",
+        iconAssetName: String? = nil,
         state: AgentMonitorState = .idle,
         currentTool: String? = nil,
         lastMessage: String? = nil,
@@ -63,6 +66,7 @@ struct MonitoredAgent: Identifiable {
         self.id = id
         self.name = name
         self.emoji = emoji
+        self.iconAssetName = iconAssetName
         self.state = state
         self.currentTool = currentTool
         self.lastMessage = lastMessage
@@ -79,6 +83,21 @@ protocol MultiAgentMonitor: AnyObject {
     var isInstalled: Bool { get }
     var displayName: String { get }
     var iconEmoji: String { get }
+    /// Optional asset catalog image name. When non-nil, UI prefers it over `iconEmoji`. Default: nil.
+    var iconAssetName: String? { get }
+    /// Optional per-session recent messages, keyed by session id. Default: empty.
+    var sessionMessages: [String: [ChatMessage]] { get }
     func connect()
     func disconnect()
+}
+
+@MainActor
+extension MultiAgentMonitor {
+    var iconAssetName: String? {
+        nil
+    }
+
+    var sessionMessages: [String: [ChatMessage]] {
+        [:]
+    }
 }
