@@ -1,5 +1,6 @@
-@preconcurrency import Foundation
 import AppKit
+@preconcurrency import Darwin
+@preconcurrency import Foundation
 import IOKit.ps
 
 @MainActor
@@ -16,6 +17,10 @@ final class SystemService: LifecycleAware {
     var diskFree: UInt64 = 0
     var diskTotal: UInt64 = 0
 
+    // Network metrics
+    var uploadSpeed: Double = 0
+    var downloadSpeed: Double = 0
+
     // Process-level metrics
     var topProcessesByCPU: [ProcessEntry] = []
     var topProcessesByMemory: [ProcessEntry] = []
@@ -31,6 +36,12 @@ final class SystemService: LifecycleAware {
     private var prevProcessTicks: [Int32: UInt64] = [:]
     private var isFirstProcessUpdate = true
     private var lastUpdateTime: Date = .now
+
+    // Network delta tracking
+    private var lastTotalIBytes: UInt64 = 0
+    private var lastTotalOBytes: UInt64 = 0
+    private var lastNetworkSampleTime: Date = .now
+    private var isFirstNetworkUpdate = true
 
     init() {
         // No timer until a view becomes visible — see setActive(_:).
@@ -62,6 +73,7 @@ final class SystemService: LifecycleAware {
         updateMemory()
         updateBattery()
         updateDisk()
+        updateNetwork()
         updateProcesses()
     }
 
@@ -74,12 +86,12 @@ final class SystemService: LifecycleAware {
             host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, numCPUPtr, &cpuInfo, &numCPUInfo)
         }
 
-        guard result == KERN_SUCCESS, let cpuInfo = cpuInfo else { return }
+        guard result == KERN_SUCCESS, let cpuInfo else { return }
 
         var total: Double = 0
         var idle: Double = 0
         let numCores = Int(numCPU)
-        for i in 0..<numCores {
+        for i in 0 ..< numCores {
             let idx = Int32(i) * Int32(CPU_STATE_MAX)
             let user = Double(cpuInfo[Int(idx + Int32(CPU_STATE_USER))])
             let system = Double(cpuInfo[Int(idx + Int32(CPU_STATE_SYSTEM))])
@@ -109,7 +121,12 @@ final class SystemService: LifecycleAware {
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
         let statsPtr = UnsafeMutablePointer<vm_statistics64>.allocate(capacity: 1)
         defer { statsPtr.deallocate() }
-        let result = host_statistics64(mach_host_self(), HOST_VM_INFO64, UnsafeMutableRawPointer(statsPtr).bindMemory(to: integer_t.self, capacity: Int(count)), &count)
+        let result = host_statistics64(
+            mach_host_self(),
+            HOST_VM_INFO64,
+            UnsafeMutableRawPointer(statsPtr).bindMemory(to: integer_t.self, capacity: Int(count)),
+            &count
+        )
         guard result == KERN_SUCCESS else { return }
         let stats = statsPtr.pointee
 
@@ -123,7 +140,8 @@ final class SystemService: LifecycleAware {
         guard let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any] else { continue }
+            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
+            else { continue }
             if let capacity = info[kIOPSCurrentCapacityKey] as? Int {
                 batteryLevel = capacity
             }
@@ -138,9 +156,62 @@ final class SystemService: LifecycleAware {
 
     private func updateDisk() {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let values = try? home.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey])
+        let values = try? home.resourceValues(forKeys: [
+            .volumeTotalCapacityKey,
+            .volumeAvailableCapacityForImportantUsageKey,
+        ])
         diskTotal = UInt64(values?.volumeTotalCapacity ?? 0)
         diskFree = UInt64(values?.volumeAvailableCapacityForImportantUsage ?? 0)
+    }
+
+    // MARK: - Network Monitoring
+
+    private func updateNetwork() {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return }
+        defer { freeifaddrs(ifaddr) }
+
+        var totalIBytes: UInt64 = 0
+        var totalOBytes: UInt64 = 0
+
+        var ptr = firstAddr
+        while true {
+            let addr = ptr.pointee
+            let name = String(cString: addr.ifa_name)
+
+            if name != "lo0", addr.ifa_addr.pointee.sa_family == AF_LINK {
+                if let data = addr.ifa_data {
+                    let networkData = data.assumingMemoryBound(to: if_data.self)
+                    totalIBytes += UInt64(networkData.pointee.ifi_ibytes)
+                    totalOBytes += UInt64(networkData.pointee.ifi_obytes)
+                }
+            }
+
+            guard let next = addr.ifa_next else { break }
+            ptr = next
+        }
+
+        if isFirstNetworkUpdate {
+            lastTotalIBytes = totalIBytes
+            lastTotalOBytes = totalOBytes
+            lastNetworkSampleTime = .now
+            isFirstNetworkUpdate = false
+            return
+        }
+
+        let now = Date.now
+        let elapsed = now.timeIntervalSince(lastNetworkSampleTime)
+        guard elapsed > 0 else { return }
+
+        let deltaI = totalIBytes > lastTotalIBytes ? totalIBytes - lastTotalIBytes : 0
+        let deltaO = totalOBytes > lastTotalOBytes ? totalOBytes - lastTotalOBytes : 0
+
+        downloadSpeed = Double(deltaI) / elapsed
+        uploadSpeed = Double(deltaO) / elapsed
+
+        lastTotalIBytes = totalIBytes
+        lastTotalOBytes = totalOBytes
+        lastNetworkSampleTime = now
     }
 
     // MARK: - Process Listing (libproc)
@@ -172,7 +243,7 @@ final class SystemService: LifecycleAware {
         var newProcessTicks: [Int32: UInt64] = [:]
         var processes: [ProcessEntry] = []
 
-        for i in 0..<actualCount {
+        for i in 0 ..< actualCount {
             let pid = pids[i]
             guard pid > 0 else { continue }
 
@@ -219,8 +290,8 @@ final class SystemService: LifecycleAware {
         let ownPID = ProcessInfo.processInfo.processIdentifier
         processes = processes.filter { $0.id != ownPID && $0.id != 0 }
 
-        topProcessesByCPU = processes.sorted { $0.cpuUsage > $1.cpuUsage }.prefix(5).map { $0 }
-        topProcessesByMemory = processes.sorted { $0.memoryUsed > $1.memoryUsed }.prefix(5).map { $0 }
+        topProcessesByCPU = processes.sorted { $0.cpuUsage > $1.cpuUsage }.prefix(5).map(\.self)
+        topProcessesByMemory = processes.sorted { $0.memoryUsed > $1.memoryUsed }.prefix(5).map(\.self)
     }
 
     private func extractName(from pid: Int32) -> String {

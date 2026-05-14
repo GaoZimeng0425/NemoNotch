@@ -66,27 +66,29 @@ final class AppSettings {
 
     init() {
         let storedTab = UserDefaults.standard.string(forKey: "defaultTab").flatMap { Tab(rawValue: $0) }
-        self.defaultTab = storedTab ?? .overview
+        defaultTab = storedTab ?? .overview
 
-        let storedTabs = UserDefaults.standard.stringArray(forKey: "enabledTabs")?.compactMap { Tab(rawValue: $0) }
+        // Migrate old "openclaw" → "agents" tab rename
+        let rawTabs = UserDefaults.standard.stringArray(forKey: "enabledTabs")?
+            .map { $0 == "openclaw" ? Tab.agents.rawValue : $0 }
+        let storedTabs = rawTabs?.compactMap { Tab(rawValue: $0) }
         var tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
         if storedTabs != nil { tabs.insert(.overview) }
 
-        self.enabledTabs = tabs
+        enabledTabs = tabs
 
         if let data = UserDefaults.standard.data(forKey: "launcherApps"),
-           let apps = try? JSONDecoder().decode([AppItem].self, from: data)
-        {
-            self.launcherApps = apps
+           let apps = try? JSONDecoder().decode([AppItem].self, from: data) {
+            launcherApps = apps
         } else {
-            self.launcherApps = Self.defaultApps
+            launcherApps = Self.defaultApps
         }
 
-        self.monitoredApps = UserDefaults.standard.stringArray(forKey: "monitoredApps") ?? []
-        self.weatherCity = UserDefaults.standard.string(forKey: "weatherCity") ?? ""
+        monitoredApps = UserDefaults.standard.stringArray(forKey: "monitoredApps") ?? []
+        weatherCity = UserDefaults.standard.string(forKey: "weatherCity") ?? ""
 
         let storedLang = UserDefaults.standard.string(forKey: "language").flatMap { AppLanguage(rawValue: $0) }
-        self.language = storedLang ?? .system
+        language = storedLang ?? .system
     }
 
     private static let defaultApps: [AppItem] = [

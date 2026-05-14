@@ -4,16 +4,20 @@ struct SystemTab: View {
     @Environment(SystemService.self) var systemService
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(systemService.topProcessesByCPU) { process in
-                    processRow(process)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(systemService.topProcessesByCPU) { process in
+                        processRow(process)
+                    }
                 }
-
-                summaryFooter
+                .padding(.horizontal, 4)
             }
+
+            infoFooter
+                .padding(.horizontal, 4)
+                .padding(.bottom, 8)
         }
-        .scrollDisabled(true)
         .activates(systemService)
     }
 
@@ -62,26 +66,51 @@ struct SystemTab: View {
         )
     }
 
+    // MARK: - Info Footer
+
+    private var infoFooter: some View {
+        VStack(spacing: 4) {
+            HStack {
+                VStack(spacing: 1) {
+                    Text("\u{2191} \(formatSpeed(systemService.uploadSpeed))")
+                    Text("\u{2193} \(formatSpeed(systemService.downloadSpeed))")
+                }
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(NotchTheme.accent)
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("CPU \(Int(systemService.cpuUsage))%")
+                    Text("RAM \(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
+                }
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(NotchTheme.textTertiary)
+            }
+
+            Text("\(systemService.batteryLevel)%")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textTertiary)
+        }
+        .notchCard()
+    }
+
+    private func formatSpeed(_ bytesPerSec: Double) -> String {
+        if bytesPerSec < 1024 {
+            return "\(Int(bytesPerSec)) B/s"
+        } else if bytesPerSec < 1_048_576 {
+            return String(format: "%.1f KB/s", bytesPerSec / 1024)
+        } else if bytesPerSec < 1_073_741_824 {
+            return String(format: "%.1f MB/s", bytesPerSec / 1_048_576)
+        } else {
+            return String(format: "%.1f GB/s", bytesPerSec / 1_073_741_824)
+        }
+    }
+
     private func cpuColor(_ usage: Double) -> Color {
         if usage > 80 { return .red }
         if usage > 50 { return .yellow }
         return NotchTheme.textPrimary
-    }
-
-    // MARK: - Summary Footer
-
-    private var summaryFooter: some View {
-        HStack(spacing: 6) {
-            Text("CPU \(Int(systemService.cpuUsage))%")
-            Text("·")
-            Text("RAM \(formatGB(systemService.memoryUsed))/\(formatGB(systemService.memoryTotal))")
-            Text("·")
-            Text("\(systemService.batteryLevel)%")
-        }
-        .font(.system(size: 10))
-        .foregroundStyle(NotchTheme.textTertiary)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 2)
     }
 
     // MARK: - Helpers

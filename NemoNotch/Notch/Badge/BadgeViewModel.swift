@@ -8,6 +8,7 @@ final class BadgeViewModel {
     private let aiService: AICLIMonitorService
     private let notificationService: NotificationService
     private let openClawService: OpenClawService
+    private let hermesService: HermesService
 
     var shownHasActiveBadge: Bool = false
     var displayedBadgeItems: [BadgeItem] = []
@@ -19,13 +20,15 @@ final class BadgeViewModel {
         calendarService: CalendarService,
         aiService: AICLIMonitorService,
         notificationService: NotificationService,
-        openClawService: OpenClawService
+        openClawService: OpenClawService,
+        hermesService: HermesService
     ) {
         self.mediaService = mediaService
         self.calendarService = calendarService
         self.aiService = aiService
         self.notificationService = notificationService
         self.openClawService = openClawService
+        self.hermesService = hermesService
     }
 
     // MARK: - Computed
@@ -37,7 +40,13 @@ final class BadgeViewModel {
 
         for session in activeSessions {
             if session.phase.isWaitingForApproval {
-                items.append(.ai(source: session.source, status: .waiting, tool: session.phase.approvalToolName, waitingApproval: true, sessionID: session.id))
+                items.append(.ai(
+                    source: session.source,
+                    status: .waiting,
+                    tool: session.phase.approvalToolName,
+                    waitingApproval: true,
+                    sessionID: session.id
+                ))
             }
         }
 
@@ -46,12 +55,22 @@ final class BadgeViewModel {
         }
 
         for agent in openClawService.agents.values.filter({ $0.state != .idle }) {
-            items.append(.openclaw(state: agent.state, emoji: agent.emoji))
+            items.append(.agents(state: agent.state, emoji: agent.emoji))
+        }
+
+        for agent in hermesService.agents.values.filter({ $0.state != .idle }) {
+            items.append(.agents(state: agent.state, emoji: agent.emoji))
         }
 
         for session in activeSessions {
-            if !session.phase.isWaitingForApproval && session.status == .working {
-                items.append(.ai(source: session.source, status: session.status, tool: session.currentTool, waitingApproval: false, sessionID: session.id))
+            if !session.phase.isWaitingForApproval, session.status == .working {
+                items.append(.ai(
+                    source: session.source,
+                    status: session.status,
+                    tool: session.currentTool,
+                    waitingApproval: false,
+                    sessionID: session.id
+                ))
             }
         }
 
@@ -66,8 +85,13 @@ final class BadgeViewModel {
         }
     }
 
-    var hasActiveBadge: Bool { !activeBadgeItems.isEmpty }
-    var hasMultipleBadges: Bool { displayedBadgeItems.count >= 2 }
+    var hasActiveBadge: Bool {
+        !activeBadgeItems.isEmpty
+    }
+
+    var hasMultipleBadges: Bool {
+        displayedBadgeItems.count >= 2
+    }
 
     // MARK: - Lifecycle
 
@@ -82,7 +106,10 @@ final class BadgeViewModel {
         badgeTypeUpdateTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
+            withAnimation(.spring(
+                duration: NotchConstants.badgeSpringDuration,
+                bounce: NotchConstants.badgeSpringBounce
+            )) {
                 displayedBadgeItems = newTypes
             }
         }
@@ -96,7 +123,7 @@ final class BadgeViewModel {
 
     func checkApprovalSound(isOpen: Bool) {
         let isWaiting = aiService.activeSession?.phase.isWaitingForApproval == true
-        if isWaiting && !wasWaitingForApproval && !TerminalDetector.isTerminalFrontmost && !isOpen {
+        if isWaiting, !wasWaitingForApproval, !TerminalDetector.isTerminalFrontmost, !isOpen {
             NSSound(named: "Pop")?.play()
         }
         wasWaitingForApproval = isWaiting

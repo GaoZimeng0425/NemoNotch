@@ -11,6 +11,7 @@ struct NotchView: View {
     @Environment(AICLIMonitorService.self) var aiService
     @Environment(NotificationService.self) var notificationService
     @Environment(OpenClawService.self) var openClawService
+    @Environment(HermesService.self) var hermesService
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
 
@@ -171,7 +172,8 @@ struct NotchView: View {
             calendarService: calendarService,
             aiService: aiService,
             notificationService: notificationService,
-            openClawService: openClawService
+            openClawService: openClawService,
+            hermesService: hermesService
         )
         vm.initialize()
         badgeViewModel = vm
@@ -292,8 +294,8 @@ struct NotchView: View {
             OverviewTab()
         case .claude:
             AIChatTab()
-        case .openclaw:
-            OpenClawTab()
+        case .agents:
+            AgentMonitorTab()
         case .launcher:
             LauncherTab {
                 coordinator.notchClose()
