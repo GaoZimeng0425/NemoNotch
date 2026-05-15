@@ -91,31 +91,40 @@ guard FileManager.default.fileExists(atPath: outputDir.path) else {
 
 // MARK: - Render & write
 
-for (filename, pixels) in targets {
-    let renderer = ImageRenderer(content: AppIconView(side: pixels))
-    renderer.scale = 1 // view side already equals output pixel count
+@MainActor func renderAll() {
+    for (filename, pixels) in targets {
+        let renderer = ImageRenderer(content: AppIconView(side: pixels))
+        renderer.scale = 1 // view side already equals output pixel count
 
-    guard
-        let nsImage = renderer.nsImage,
-        let tiff = nsImage.tiffRepresentation,
-        let rep = NSBitmapImageRep(data: tiff),
-        let png = rep.representation(using: .png, properties: [:])
-    else {
-        FileHandle.standardError.write(
-            Data("error: render failed for \(filename)\n".utf8)
-        )
-        exit(1)
+        guard
+            let nsImage = renderer.nsImage,
+            let tiff = nsImage.tiffRepresentation,
+            let rep = NSBitmapImageRep(data: tiff),
+            let png = rep.representation(using: .png, properties: [:])
+        else {
+            FileHandle.standardError.write(
+                Data("error: render failed for \(filename)\n".utf8)
+            )
+            exit(1)
+        }
+
+        let outURL = outputDir.appendingPathComponent(filename)
+        do {
+            try png.write(to: outURL)
+        } catch {
+            FileHandle.standardError.write(
+                Data("error: write failed for \(filename): \(error)\n".utf8)
+            )
+            exit(1)
+        }
     }
 
-    let outURL = outputDir.appendingPathComponent(filename)
-    do {
-        try png.write(to: outURL)
-    } catch {
-        FileHandle.standardError.write(
-            Data("error: write failed for \(filename): \(error)\n".utf8)
-        )
-        exit(1)
-    }
+    print("Wrote \(targets.count) PNGs to NemoNotch/Assets.xcassets/AppIcon.appiconset/")
+    exit(0)
 }
 
-print("Wrote \(targets.count) PNGs to NemoNotch/Assets.xcassets/AppIcon.appiconset/")
+Task { @MainActor in
+    renderAll()
+}
+
+RunLoop.main.run()
