@@ -516,7 +516,7 @@ NotificationCenter.default.addObserver(
 
 ## 6. Event capture & hotkeys
 
-NemoNotch listens for mouse approach/leave via paired global+local `NSEvent` monitors, registers global keyboard shortcuts via Carbon, shows a right-click context menu via `NSMenu.popUp`, and triggers haptic feedback on open.
+NemoNotch listens for mouse approach/leave via paired global+local `NSEvent` monitors, registers global keyboard shortcuts via the `KeyboardShortcuts` library, shows a right-click context menu via `NSMenu.popUp`, and triggers haptic feedback on open.
 
 ### 6.1 — Paired global + local `NSEvent` monitors
 
@@ -586,69 +586,68 @@ private func handleMouseMove(_ location: NSPoint) {
 
 **Gotcha:** `isContextMenuVisible` short-circuits at the top — without this, moving the cursor into a popped-up `NSMenu` (which sits outside `contentRect`) would immediately fire `notchClose()`. See §6.6.
 
-### 6.4 — Carbon `RegisterEventHotKey` global hotkeys
+### 6.4 — User-customizable global hotkeys via `KeyboardShortcuts`
 
-**`register(...)` — `NemoNotch/Services/HotkeyService.swift:12-26  register(keyCode:modifiers:action:)`** and **`installEventHandlerIfNeeded()` — `HotkeyService.swift:46-81  installEventHandlerIfNeeded()`**
-
-```swift
-func register(keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) {
-    let id = nextID
-    nextID += 1
-    actionMap[id] = action
-    let hotKeyID = EventHotKeyID(signature: FourCharCode(id), id: id)
-    let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, nil)
-    // … installEventHandlerIfNeeded() lazily wires the C callback once
-}
-
-private func installEventHandlerIfNeeded() {
-    guard handler == nil else { return }
-    var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-    let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-    InstallEventHandler(GetApplicationEventTarget(), { _, event, userData -> OSStatus in
-        guard let userData else { return OSStatus(eventNotHandledErr) }
-        let service = Unmanaged<HotkeyService>.fromOpaque(userData).takeUnretainedValue()
-        var hotKeyID = EventHotKeyID()
-        // … GetEventParameter(event, kEventParamDirectObject, typeEventHotKeyID, ..., &hotKeyID)
-        service.actionMap[hotKeyID.id]?()
-        return noErr
-    }, 1, &eventType, selfPtr, &handler)
-}
-```
-
-**Gotcha:** The C callback receives a raw `EventHotKeyID` only — there's no per-hotkey context slot. The service threads its `[UInt32: () -> Void]` map through `Unmanaged.passUnretained(self).toOpaque()`, then `takeUnretainedValue()` inside the callback recovers `self`. Use `passUnretained` — **never `passRetained`** (you'd leak the service for the process lifetime).
-
-**Gotcha:** `kEventClassKeyboard` + `kEventHotKeyPressed` fires on **key-down only**. If you want key-up too, subscribe `kEventHotKeyReleased` as a second `EventTypeSpec`.
-
-**Gotcha:** A single `EventHandlerRef` and a single `EventTypeSpec` cover all registered hotkeys — Carbon dispatches every press through the same callback and the `id` field discriminates. The `installEventHandlerIfNeeded` guard (`guard handler == nil`) prevents stacking duplicate handlers if `register` is called many times.
-
-### 6.5 — Hotkey bindings (Cmd+Opt+N, Cmd+Opt+1-5)
-
-**`setupHotkeys(...)` — `NemoNotch/NemoNotchApp.swift:234-252  setupHotkeys(coordinator:settings:)`**
+**Hotkey name registry — `NemoNotch/Services/Hotkeys.swift`**
 
 ```swift
-private func setupHotkeys(coordinator: NotchCoordinator, settings: AppSettings) {
-    let hotkeys = HotkeyService()
-    hotkeyService = hotkeys
+import AppKit
+import KeyboardShortcuts
 
-    hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
-        switch coordinator.status {
-        case .closed: coordinator.notchOpen()
-        case .opened: coordinator.notchClose()
-        }
-    }
-    let tabs = Tab.sorted(settings.enabledTabs)
-    for (i, tab) in tabs.enumerated() {
-        let keyCode = UInt32(18 + i)  // 18..22 == ANSI 1..5
-        hotkeys.register(keyCode: keyCode, modifiers: UInt32(optionKey | cmdKey)) {
-            coordinator.notchOpen(tab: tab)
+extension KeyboardShortcuts.Name {
+    static let toggleNotch = Self("toggleNotch")  // no default — user-configured
+    static let openOverview = Self("openOverview", default: .init(.one, modifiers: [.option, .command]))
+    static let openAI       = Self("openAI",       default: .init(.two, modifiers: [.option, .command]))
+    // … one Name per Tab, with default Cmd+Opt+<digit>
+}
+
+extension Tab {
+    var hotkeyName: KeyboardShortcuts.Name {
+        switch self {
+        case .overview: return .openOverview
+        case .claude:   return .openAI
+        // …
         }
     }
 }
 ```
 
-**Gotcha:** Carbon uses **ANSI hardware keycodes**, not Unicode. `45 = kVK_ANSI_N`, `18 = kVK_ANSI_1` … `22 = kVK_ANSI_5`. The full table lives in `HIToolbox/Events.h`. Modifier flags come from `Carbon`'s `cmdKey | optionKey | shiftKey | controlKey` — not from `NSEvent.ModifierFlags`.
+**Gotcha:** The string passed to `Self("…")` is the UserDefaults key under which `KeyboardShortcuts` persists the binding. Treat it as a stable API surface — renaming `"openAI"` resets every user's saved binding for that action. Add new names, don't rename old ones.
 
-**Gotcha:** Hotkey bindings live in `applicationDidFinishLaunching` because they need a fully-initialized `coordinator` and `settings`. Registering earlier risks the closure capturing a half-built coordinator.
+**Gotcha:** `import AppKit` is **required** even though it looks unused. `[.option, .command]` resolves to `NSEvent.ModifierFlags` (defined in AppKit). With Swift 6's `MemberImportVisibility` upcoming feature, transitive imports from `KeyboardShortcuts` don't expose these symbols, so the omission produces `error: static property 'option' is not available due to missing import of defining module 'AppKit'`.
+
+**Gotcha:** `KeyboardShortcuts.Recorder` is a SwiftUI control — not a global event monitor. The library handles registration and unregistration internally; callers only register `onKeyDown` callbacks. Compare to Carbon's `RegisterEventHotKey` (replaced in this redesign), which required manually unbalanced `Unmanaged.passUnretained(self).toOpaque()` userdata threading through C callbacks — about 80 lines of bridging the library renders unnecessary.
+
+### 6.5 — Hotkey registration in `applicationDidFinishLaunching`
+
+**`setupHotkeys(...)` — `NemoNotch/NemoNotchApp.swift  setupHotkeys(coordinator:)`**
+
+```swift
+private func setupHotkeys(coordinator: NotchCoordinator) {
+    KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
+        guard let c = coordinator else { return }
+        switch c.status {
+        case .closed: c.notchOpen()
+        case .opened: c.notchClose()
+        }
+    }
+
+    for tab in Tab.allCases {
+        KeyboardShortcuts.onKeyDown(for: tab.hotkeyName) { [weak coordinator] in
+            guard let c = coordinator else { return }
+            c.notchOpen(tab: tab)
+        }
+    }
+}
+```
+
+**Gotcha:** `[weak coordinator]` captures are defensive — `AppDelegate.coordinator` is set once in `applicationDidFinishLaunching` and never cleared. The library retains its callbacks for the app lifetime, so strong captures would be acceptable too; `weak` keeps the dependency direction one-way.
+
+**Gotcha:** User-customizable defaults flow through `KeyboardShortcuts.Name(_:default:)`. Where the previous Carbon path hardcoded each binding inline, this redesign moves all defaults into `Hotkeys.swift` so the Settings → Hotkeys recorder can display and override them.
+
+**Gotcha:** Settings exposes each `Name` via `KeyboardShortcuts.Recorder("…", name: .openOverview)` — see `NemoNotch/Settings/HotkeysSettingsView.swift`. The recorder displays the current binding, lets the user re-record, and persists to UserDefaults. No extra code paths.
+
+**Gotcha:** Tabs use a fixed per-case `KeyboardShortcuts.Name` (via `Tab.hotkeyName`). The previous Carbon code assigned hotkeys by index over `Tab.sorted(settings.enabledTabs)`, so disabling a tab shifted others' shortcuts. The fixed mapping makes per-tab bindings stable; a disabled tab's binding sits idle until re-enabled.
 
 ### 6.6 — Right-click context menu via `NSMenu.popUp`
 
@@ -705,7 +704,8 @@ NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: 
 ### 6.8 — Reference projects
 
 - *NotchDrop* — original global `NSEvent` monitor pattern for detecting cursor approach to the notch.
-- *Peninsula* — Carbon `RegisterEventHotKey` packaged as a reusable service, including the `Unmanaged.passUnretained(self).toOpaque()` userdata pattern.
+- *sindresorhus/KeyboardShortcuts* — User-customizable global hotkeys with a SwiftUI `Recorder` control and built-in UserDefaults persistence. Replaces the previous in-tree Carbon `RegisterEventHotKey` wrapper.
+- *Peninsula* — Carbon `RegisterEventHotKey` packaged as a reusable service (historical reference; superseded by KeyboardShortcuts in this codebase).
 
 ---
 
@@ -1910,7 +1910,7 @@ How NemoNotch satisfies Swift 6's strict-concurrency checker without sacrificing
 
 ### 15.1 Default service shape: `@MainActor @Observable final class`
 
-Sixteen services follow this shape: `AICLIMonitorService`, `AISessionStore`, `CalendarService`, `ClaudeCodeService`, `GeminiProvider`, `HermesService`, `HookServer`, `HotkeyService`, `HUDService`, `LauncherService`, `MediaService`, `NotificationService`, `OpenClawService`, `SystemService`, `WeatherService`, `AgentMonitorRegistry`.
+Fifteen services follow this shape: `AICLIMonitorService`, `AISessionStore`, `CalendarService`, `ClaudeCodeService`, `GeminiProvider`, `HermesService`, `HookServer`, `HUDService`, `LauncherService`, `MediaService`, `NotificationService`, `OpenClawService`, `SystemService`, `WeatherService`, `AgentMonitorRegistry`.
 
 ```swift
 @MainActor
@@ -2102,7 +2102,7 @@ func applicationDidFinishLaunching(_ notification: Notification) {
 }
 ```
 
-**Gotcha:** Order matters. `HotkeyService` captures `notchCoordinator` by value in its closures — wire the coordinator *first*, then attach hotkeys. Reversing the order silently captures a nil coordinator and hotkeys become inert with no compile-time signal.
+**Gotcha:** Order matters. `setupHotkeys(coordinator:)` registers `KeyboardShortcuts.onKeyDown` callbacks that capture `coordinator` weakly — wire the coordinator *first*, then attach hotkeys. Reversing the order means the captured `weak coordinator` is `nil` when the user presses the hotkey, and the action silently no-ops. No compile-time signal.
 
 **Gotcha:** Each closure passed to `NotchCoordinator` (the content builder, `autoSelectTab`, `restoreSuppressionCheck`, `onShowSettings`) captures `self` or the local services. Use `[weak self]` on the AppDelegate-facing ones to avoid a cycle through `coordinator → closure → self → coordinator`.
 
@@ -2247,7 +2247,7 @@ Mirror of CLAUDE.md's "Reference Projects" table — kept here so the cookbook i
 | Notch window management, tri-state machine | **Peninsula** | NSPanel subclass, notch positioning, closed/popping/opened state machine, NotchBackgroundView notch shape rendering |
 | Notch animation, auto-collapse | **DynamicNotchKit** | Spring animation .bouncy(duration: 0.4), Timer auto-dismiss, NSScreen extensions (hasNotch/notchSize/notchFrame) |
 | Mouse event monitoring | **NotchDrop** | Global NSEvent monitor for mouse approach/leave detection |
-| Global hotkeys | **Peninsula** | Carbon RegisterEventHotKey global hotkey registration |
+| Global hotkeys | **KeyboardShortcuts** | User-customizable bindings via `KeyboardShortcuts.Name` registry in `Hotkeys.swift`; SwiftUI `Recorder` for rebinding |
 | Now Playing info retrieval | **PlayStatus** / **Tuneful** | MediaPlayer framework, MPNowPlayingInfoCenter polling |
 | Media key interception | **PlayStatus** | sendEvent override intercepting NX_KEYTYPE_PLAY etc. |
 | CLI now playing info | **nowplaying-cli** | daemon connection → legacy callback → MRNowPlayingController three-tier fallback, dylib path search |
