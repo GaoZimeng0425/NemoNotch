@@ -18,6 +18,8 @@ final class NotchCoordinator {
     private var contextMenuDelegate: ContextMenuDelegate?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
+    var restoreSuppressionCheck: (() -> Bool)?
+    var onShowSettings: (() -> Void)?
 
     /// Unified across all screens — derived once from the built-in display's
     /// physical notch, or a default fallback for headless / external-only setups.
@@ -226,7 +228,7 @@ final class NotchCoordinator {
     }
 
     private func restorePreviousApp() {
-        if AppDelegate.shared.shouldSuppressPreviousAppRestore {
+        if restoreSuppressionCheck?() == true {
             previousApp = nil
             return
         }
@@ -325,7 +327,7 @@ final class NotchCoordinator {
         let menu = NSMenu()
         let delegate = ContextMenuDelegate(
             onClose: { [weak self] in self?.isContextMenuVisible = false },
-            onSettings: { @MainActor in AppDelegate.shared.showSettings() },
+            onSettings: { @MainActor [weak self] in self?.onShowSettings?() },
             onQuit: { NSApp.terminate(nil) }
         )
         contextMenuDelegate = delegate
