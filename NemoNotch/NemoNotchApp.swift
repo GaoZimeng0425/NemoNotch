@@ -11,6 +11,7 @@ struct NemoNotchApp: App {
         MenuBarExtra {
             MenuContent(
                 coordinator: appDelegate.coordinator,
+                appSettings: appDelegate.appSettings,
                 onOpenSettings: { appDelegate.showSettings() }
             )
             .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
@@ -32,6 +33,7 @@ struct NemoNotchApp: App {
 struct MenuContent: View {
     @Environment(AICLIMonitorService.self) var aiService
     let coordinator: NotchCoordinator?
+    let appSettings: AppSettings?
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -177,6 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return nil
         }
         notchCoordinator.appSettings = settings
+        notchCoordinator.restoreSuppressionCheck = { [weak self] in
+            self?.shouldSuppressPreviousAppRestore ?? false
+        }
+        notchCoordinator.onShowSettings = { [weak self] in
+            self?.showSettings()
+        }
         coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator, settings: settings)

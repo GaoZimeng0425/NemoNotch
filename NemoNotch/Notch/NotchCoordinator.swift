@@ -18,6 +18,8 @@ final class NotchCoordinator {
     private var contextMenuDelegate: ContextMenuDelegate?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
+    var restoreSuppressionCheck: (() -> Bool)?
+    var onShowSettings: (() -> Void)?
 
     /// Unified across all screens — derived once from the built-in display's
     /// physical notch, or a default fallback for headless / external-only setups.
