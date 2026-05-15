@@ -1,5 +1,5 @@
-import Carbon
 import Darwin
+import KeyboardShortcuts
 import SwiftUI
 
 @main
@@ -93,7 +93,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var agentRegistry: AgentMonitorRegistry?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
-    private var hotkeyService: HotkeyService?
     private var weatherService: WeatherService?
     private var hudService: HUDService?
     private var systemService: SystemService?
@@ -232,21 +231,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func setupHotkeys(coordinator: NotchCoordinator, settings: AppSettings) {
-        let hotkeys = HotkeyService()
-        hotkeyService = hotkeys
-
-        hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
-            switch coordinator.status {
-            case .closed: coordinator.notchOpen()
-            case .opened: coordinator.notchClose()
+        _ = settings
+        KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
+            guard let c = coordinator else { return }
+            switch c.status {
+            case .closed: c.notchOpen()
+            case .opened: c.notchClose()
             }
         }
 
-        let tabs = Tab.sorted(settings.enabledTabs)
-        for (i, tab) in tabs.enumerated() {
-            let keyCode = UInt32(18 + i)
-            hotkeys.register(keyCode: keyCode, modifiers: UInt32(optionKey | cmdKey)) {
-                coordinator.notchOpen(tab: tab)
+        for tab in Tab.allCases {
+            KeyboardShortcuts.onKeyDown(for: tab.hotkeyName) { [weak coordinator] in
+                coordinator?.notchOpen(tab: tab)
             }
         }
     }
