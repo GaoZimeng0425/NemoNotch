@@ -31,47 +31,17 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    @Environment(AICLIMonitorService.self) var aiService
     let coordinator: NotchCoordinator?
     let appSettings: AppSettings?
     let onOpenSettings: () -> Void
 
     var body: some View {
         Group {
-            Button("menu.open_notch") {
-                coordinator?.notchOpen()
-            }
-
+            NowPlayingSection()
+            OpenNotchSubmenu(coordinator: coordinator, appSettings: appSettings)
             Divider()
-
-            if aiService.claudeProvider.isHookInstalled {
-                Text("menu.claude_hooks_installed")
-            } else {
-                Button("menu.install_claude_hooks") {
-                    aiService.claudeProvider.installHooks()
-                }
-            }
-            if aiService.geminiProvider.isHookInstalled {
-                Text("menu.gemini_hooks_installed")
-            } else {
-                Button("menu.install_gemini_hooks") {
-                    aiService.geminiProvider.installHooks()
-                }
-            }
-
-            Divider()
-
-            Button("menu.preferences") {
-                onOpenSettings()
-            }
-
-            Button("menu.about") {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.orderFrontStandardAboutPanel(nil)
-            }
-            Button("menu.quit") {
-                NSApplication.shared.terminate(nil)
-            }
+            HooksSection()
+            AppSection(onOpenSettings: onOpenSettings)
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
