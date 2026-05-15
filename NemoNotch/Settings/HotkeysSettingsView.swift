@@ -15,6 +15,7 @@ struct HotkeysSettingsView: View {
                 KeyboardShortcuts.Recorder("models.tab.system", name: .openSystem)
             }
         }
+        .formStyle(.grouped)
         .padding()
     }
 }
