@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         coordinator = notchCoordinator
 
-        setupHotkeys(coordinator: notchCoordinator, settings: settings)
+        setupHotkeys(coordinator: notchCoordinator)
     }
 
     @MainActor
@@ -230,8 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func setupHotkeys(coordinator: NotchCoordinator, settings: AppSettings) {
-        _ = settings
+    private func setupHotkeys(coordinator: NotchCoordinator) {
         KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
             guard let c = coordinator else { return }
             switch c.status {
@@ -242,7 +241,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         for tab in Tab.allCases {
             KeyboardShortcuts.onKeyDown(for: tab.hotkeyName) { [weak coordinator] in
-                coordinator?.notchOpen(tab: tab)
+                guard let c = coordinator else { return }
+                c.notchOpen(tab: tab)
             }
         }
     }
