@@ -704,6 +704,22 @@
         }
       }
     },
+    "menu.open_notch_submenu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Notch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开灵动岛"
+          }
+        }
+      }
+    },
     "menu.play_pause" : {
       "localizations" : {
         "en" : {
