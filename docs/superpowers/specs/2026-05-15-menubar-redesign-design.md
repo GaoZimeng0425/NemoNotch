@@ -87,9 +87,9 @@ Drop the existing `.fill` vs non-`.fill` distinction for hook installation.
 ```
 Now Playing                                  (only when isPlaying)
   ♫ Song Title — Artist                      (disabled, info-only)
-  Previous Track                              (uses MediaService.previous())
+  Previous Track                              (uses MediaService.previousTrack())
   Play / Pause                                (uses MediaService.togglePlayPause())
-  Next Track                                  (uses MediaService.next())
+  Next Track                                  (uses MediaService.nextTrack())
 ─────────
 Open Notch ›                                 (submenu, generated from Tab.sorted(enabledTabs))
   Overview                   ⌥⌘ 1
