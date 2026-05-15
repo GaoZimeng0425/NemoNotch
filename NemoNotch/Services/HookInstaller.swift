@@ -14,13 +14,13 @@ enum HookTarget {
     var hookEvents: [String] {
         switch self {
         case .claude: return [
-            "PreToolUse", "PostToolUse", "Stop", "SessionStart",
-            "SessionEnd", "Notification", "UserPromptSubmit", "PermissionRequest",
-        ]
+                "PreToolUse", "PostToolUse", "Stop", "SessionStart",
+                "SessionEnd", "Notification", "UserPromptSubmit", "PermissionRequest",
+            ]
         case .gemini: return [
-            "SessionStart", "SessionEnd", "Notification",
-            "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
-        ]
+                "SessionStart", "SessionEnd", "Notification",
+                "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
+            ]
         }
     }
 }
@@ -28,10 +28,13 @@ enum HookTarget {
 enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.nemonotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
-    private static var hookCommand: String { "~/.nemonotch/hooks/hook-sender.sh" }
+    private static var hookCommand: String {
+        "~/.nemonotch/hooks/hook-sender.sh"
+    }
+
     private static let socketPath = NotchConstants.hookSocketPath
 
-    private static let scriptVersion = "# version: 9"
+    private static let scriptVersion = "# version: 10"
 
     static func isInstalled(_ target: HookTarget) -> Bool {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
@@ -61,7 +64,7 @@ enum HookInstaller {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        
+
         // 1. Clean up ALL existing nemonotch hooks from ALL events first
         for (event, entries) in hooks {
             if var eventEntries = entries as? [[String: Any]] {

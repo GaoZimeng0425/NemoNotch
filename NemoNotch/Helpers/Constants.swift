@@ -44,8 +44,10 @@ enum NotchConstants {
     static let openedShadowRadius: CGFloat = 14
     static let openedShadowOpacity: CGFloat = 0.34
 
-    /// Hook server
-    static let hookSocketPath = "/tmp/nemonotch.sock"
+    /// Hook server. Lives under the user's home directory (not /tmp) because
+    /// /tmp writes from Xcode-launched apps get redirected to a per-app
+    /// container path, making the socket invisible to external hook scripts.
+    static let hookSocketPath = NSHomeDirectory() + "/.nemonotch/socket"
 
     // Tab content
     static let tabContentPadding: CGFloat = 12

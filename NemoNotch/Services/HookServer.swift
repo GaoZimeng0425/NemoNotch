@@ -4,11 +4,11 @@ import Foundation
 @Observable
 final class HookServer {
     private(set) var isRunning = false
-    @ObservationIgnored nonisolated(unsafe) private var socketFd: Int32 = -1
-    @ObservationIgnored nonisolated(unsafe) private var acceptSource: DispatchSourceRead?
+    @ObservationIgnored private nonisolated(unsafe) var socketFd: Int32 = -1
+    @ObservationIgnored private nonisolated(unsafe) var acceptSource: DispatchSourceRead?
     private let socketQueue = DispatchQueue(label: "com.nemonotch.hookserver", qos: .userInitiated)
 
-    @ObservationIgnored nonisolated(unsafe) private var responseWaiters: [String: (String) -> Void] = [:]
+    @ObservationIgnored private nonisolated(unsafe) var responseWaiters: [String: (String) -> Void] = [:]
 
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: (() -> Void)?
@@ -20,7 +20,12 @@ final class HookServer {
         }
     }
 
-    nonisolated private func doStart(socketPath: String) {
+    private nonisolated func doStart(socketPath: String) {
+        let socketDir = (socketPath as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(
+            atPath: socketDir,
+            withIntermediateDirectories: true
+        )
         unlink(socketPath)
 
         socketFd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -69,7 +74,7 @@ final class HookServer {
         LogService.info("Hook server listening on \(socketPath)", category: "HookServer")
     }
 
-    nonisolated private func acceptConnection() {
+    private nonisolated func acceptConnection() {
         var addr = sockaddr_un()
         var addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
         let clientFd = withUnsafeMutablePointer(to: &addr) { ptr in
@@ -81,7 +86,7 @@ final class HookServer {
         readRequest(fd: clientFd)
     }
 
-    nonisolated private func readRequest(fd: Int32) {
+    private nonisolated func readRequest(fd: Int32) {
         var buffer = Data()
         var tempBuf = [UInt8](repeating: 0, count: 4096)
 
@@ -136,7 +141,7 @@ final class HookServer {
         }
     }
 
-    nonisolated private func handlePermissionRequest(_ event: HookEvent, fd: Int32) {
+    private nonisolated func handlePermissionRequest(_ event: HookEvent, fd: Int32) {
         guard let sessionId = event.sessionId else {
             sendResponse(fd: fd, response: #"{"decision":"deny","reason":"no session id"}"#)
             return
@@ -158,8 +163,8 @@ final class HookServer {
         let response = #"{"decision":"\#(approved ? "allow" : "deny")"}"#
         socketQueue.async { [weak self] in
             guard let self else { return }
-            if let key = self.responseWaiters.keys.first(where: { $0.hasPrefix(sessionId + ":") }) {
-                self.responseWaiters.removeValue(forKey: key)?(response)
+            if let key = responseWaiters.keys.first(where: { $0.hasPrefix(sessionId + ":") }) {
+                responseWaiters.removeValue(forKey: key)?(response)
             }
         }
     }
@@ -167,14 +172,14 @@ final class HookServer {
     func cancelPendingPermissions(sessionId: String) {
         socketQueue.async { [weak self] in
             guard let self else { return }
-            let matching = self.responseWaiters.keys.filter { $0.hasPrefix(sessionId + ":") }
+            let matching = responseWaiters.keys.filter { $0.hasPrefix(sessionId + ":") }
             for key in matching {
-                self.responseWaiters.removeValue(forKey: key)?(#"{"decision":"deny","reason":"session ended"}"#)
+                responseWaiters.removeValue(forKey: key)?(#"{"decision":"deny","reason":"session ended"}"#)
             }
         }
     }
 
-    nonisolated private func sendResponse(fd: Int32, response: String) {
+    private nonisolated func sendResponse(fd: Int32, response: String) {
         let data = (response + "\n").data(using: .utf8) ?? Data()
         _ = data.withUnsafeBytes { ptr in
             write(fd, ptr.baseAddress, data.count)
@@ -190,7 +195,7 @@ final class HookServer {
         }
     }
 
-    nonisolated private func doStop() {
+    private nonisolated func doStop() {
         acceptSource?.cancel()
         acceptSource = nil
         if socketFd >= 0 {
