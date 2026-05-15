@@ -228,7 +228,7 @@ final class NotchCoordinator {
     }
 
     private func restorePreviousApp() {
-        if AppDelegate.shared.shouldSuppressPreviousAppRestore {
+        if restoreSuppressionCheck?() == true {
             previousApp = nil
             return
         }
@@ -327,7 +327,7 @@ final class NotchCoordinator {
         let menu = NSMenu()
         let delegate = ContextMenuDelegate(
             onClose: { [weak self] in self?.isContextMenuVisible = false },
-            onSettings: { @MainActor in AppDelegate.shared.showSettings() },
+            onSettings: { @MainActor [weak self] in self?.onShowSettings?() },
             onQuit: { NSApp.terminate(nil) }
         )
         contextMenuDelegate = delegate

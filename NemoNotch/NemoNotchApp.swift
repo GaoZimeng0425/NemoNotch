@@ -71,7 +71,7 @@ struct MenuContent: View {
         Button("menu.quit") {
             NSApplication.shared.terminate(nil)
         }
-        .environment(\.locale, AppDelegate.shared.appSettings?.currentLocale ?? Locale.current)
+        .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
 }
 
