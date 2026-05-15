@@ -2,7 +2,7 @@ import AppKit
 import KeyboardShortcuts
 
 extension KeyboardShortcuts.Name {
-    static let toggleNotch = Self("toggleNotch", default: .init(.space, modifiers: [.option, .command]))
+    static let toggleNotch = Self("toggleNotch")
     static let openOverview = Self("openOverview", default: .init(.one, modifiers: [.option, .command]))
     static let openAI = Self("openAI", default: .init(.two, modifiers: [.option, .command]))
     static let openAgents = Self("openAgents", default: .init(.three, modifiers: [.option, .command]))

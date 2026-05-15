@@ -28,7 +28,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
 - **Multi-AI Provider** — Unified interface for Claude Code and Gemini CLI with hook event listening, session tracking, and permission interception
-- **Global Shortcuts** — `⌥⌘Space` toggle panel, `⌥⌘1-5` switch tabs; all bindings are user-customizable in Settings → Hotkeys (powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts))
+- **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
 - **Menu Bar Entry** — State-driven icon (AI approval / agent active / AI working / media playing / idle); menu shows Now Playing controls (previous / play-pause / next) when media is active, plus an Open Notch submenu listing each enabled tab with its current hotkey hint
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars

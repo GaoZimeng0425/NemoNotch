@@ -4,7 +4,7 @@ struct NowPlayingSection: View {
     @Environment(MediaService.self) private var mediaService
 
     var body: some View {
-        if mediaService.playbackState.isPlaying {
+        if mediaService.playbackState.isPlaying, !mediaService.playbackState.isEmpty {
             Text(nowPlayingTitle)
                 .disabled(true)
             Button("menu.previous_track") {
