@@ -9,13 +9,11 @@ struct NemoNotchApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuContent(
-                coordinator: appDelegate.coordinator,
                 appSettings: appDelegate.appSettings,
                 onOpenSettings: { appDelegate.showSettings() }
             )
-            .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
-            .environment(appDelegate.agentRegistry ?? AgentMonitorRegistry())
             .environment(appDelegate.mediaService ?? MediaService())
+            .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
         } label: {
             MenuBarLabel()
                 .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
@@ -31,15 +29,12 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    let coordinator: NotchCoordinator?
     let appSettings: AppSettings?
     let onOpenSettings: () -> Void
 
     var body: some View {
         Group {
             NowPlayingSection()
-            OpenNotchSubmenu(coordinator: coordinator, appSettings: appSettings)
-            Divider()
             HooksSection()
             AppSection(onOpenSettings: onOpenSettings)
         }

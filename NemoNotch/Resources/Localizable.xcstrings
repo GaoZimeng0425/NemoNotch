@@ -656,34 +656,34 @@
         }
       }
     },
-    "menu.open_notch_submenu" : {
+    "menu.pause" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Notch"
+            "value" : "Pause"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开灵动岛"
+            "value" : "暂停"
           }
         }
       }
     },
-    "menu.play_pause" : {
+    "menu.play" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play / Pause"
+            "value" : "Play"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放 / 暂停"
+            "value" : "播放"
           }
         }
       }

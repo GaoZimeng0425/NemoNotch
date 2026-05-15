@@ -4,13 +4,13 @@ struct NowPlayingSection: View {
     @Environment(MediaService.self) private var mediaService
 
     var body: some View {
-        if mediaService.playbackState.isPlaying, !mediaService.playbackState.isEmpty {
+        if !mediaService.playbackState.isEmpty {
             Text(nowPlayingTitle)
                 .disabled(true)
             Button("menu.previous_track") {
                 mediaService.previousTrack()
             }
-            Button("menu.play_pause") {
+            Button(playPauseLabel) {
                 mediaService.togglePlayPause()
             }
             Button("menu.next_track") {
@@ -18,6 +18,10 @@ struct NowPlayingSection: View {
             }
             Divider()
         }
+    }
+
+    private var playPauseLabel: LocalizedStringKey {
+        mediaService.playbackState.isPlaying ? "menu.pause" : "menu.play"
     }
 
     private var nowPlayingTitle: String {
