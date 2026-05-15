@@ -5,7 +5,6 @@ import SwiftUI
 @main
 struct NemoNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var appDelegateRef: AppDelegate?
 
     var body: some Scene {
         MenuBarExtra {
@@ -25,8 +24,6 @@ struct NemoNotchApp: App {
 
     init() {
         signal(SIGPIPE, SIG_IGN)
-        let delegate = AppDelegate.shared
-        _appDelegateRef = State(initialValue: delegate)
     }
 }
 
@@ -79,7 +76,6 @@ struct MenuContent: View {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
     private var suppressRestoreUntil: Date = .distantPast
-    nonisolated(unsafe) static var shared = AppDelegate()
 
     override nonisolated init() {
         super.init()
@@ -105,7 +101,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
 
         _ = LogService.shared
