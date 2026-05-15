@@ -672,6 +672,22 @@
         }
       }
     },
+    "menu.next_track" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Track"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一曲"
+          }
+        }
+      }
+    },
     "menu.open_notch" : {
       "localizations" : {
         "en" : {
@@ -688,6 +704,22 @@
         }
       }
     },
+    "menu.play_pause" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play / Pause"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放 / 暂停"
+          }
+        }
+      }
+    },
     "menu.preferences" : {
       "localizations" : {
         "en" : {
@@ -700,6 +732,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "偏好设置..."
+          }
+        }
+      }
+    },
+    "menu.previous_track" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous Track"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一曲"
           }
         }
       }
