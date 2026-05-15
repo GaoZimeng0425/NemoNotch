@@ -215,7 +215,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         for tab in Tab.allCases {
             KeyboardShortcuts.onKeyDown(for: tab.hotkeyName) { [weak coordinator] in
                 guard let c = coordinator else { return }
-                c.notchOpen(tab: tab)
+                switch c.status {
+                case .closed:
+                    c.notchOpen(tab: tab)
+                case .opened:
+                    if c.selectedTab == tab {
+                        c.notchClose()
+                    } else {
+                        c.selectedTab = tab
+                    }
+                }
             }
         }
     }
