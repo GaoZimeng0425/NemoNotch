@@ -1,5 +1,5 @@
-import Carbon
 import Darwin
+import KeyboardShortcuts
 import SwiftUI
 
 @main
@@ -14,10 +14,13 @@ struct NemoNotchApp: App {
                 onOpenSettings: { appDelegate.showSettings() }
             )
             .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+            .environment(appDelegate.agentRegistry ?? AgentMonitorRegistry())
+            .environment(appDelegate.mediaService ?? MediaService())
         } label: {
-            Image(systemName: appDelegate.aiMonitorService?.anyHookInstalled == true
-                ? "menubar.rectangle.fill"
-                : "menubar.rectangle")
+            MenuBarLabel()
+                .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+                .environment(appDelegate.agentRegistry ?? AgentMonitorRegistry())
+                .environment(appDelegate.mediaService ?? MediaService())
         }
         .menuBarExtraStyle(.menu)
     }
@@ -28,47 +31,17 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    @Environment(AICLIMonitorService.self) var aiService
     let coordinator: NotchCoordinator?
     let appSettings: AppSettings?
     let onOpenSettings: () -> Void
 
     var body: some View {
         Group {
-            Button("menu.open_notch") {
-                coordinator?.notchOpen()
-            }
-
+            NowPlayingSection()
+            OpenNotchSubmenu(coordinator: coordinator, appSettings: appSettings)
             Divider()
-
-            if aiService.claudeProvider.isHookInstalled {
-                Text("menu.claude_hooks_installed")
-            } else {
-                Button("menu.install_claude_hooks") {
-                    aiService.claudeProvider.installHooks()
-                }
-            }
-            if aiService.geminiProvider.isHookInstalled {
-                Text("menu.gemini_hooks_installed")
-            } else {
-                Button("menu.install_gemini_hooks") {
-                    aiService.geminiProvider.installHooks()
-                }
-            }
-
-            Divider()
-
-            Button("menu.preferences") {
-                onOpenSettings()
-            }
-
-            Button("menu.about") {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.orderFrontStandardAboutPanel(nil)
-            }
-            Button("menu.quit") {
-                NSApplication.shared.terminate(nil)
-            }
+            HooksSection()
+            AppSection(onOpenSettings: onOpenSettings)
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
@@ -85,15 +58,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
-    private var mediaService: MediaService?
+    private(set) var mediaService: MediaService?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
     private var hermesService: HermesService?
-    private var agentRegistry: AgentMonitorRegistry?
+    private(set) var agentRegistry: AgentMonitorRegistry?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
-    private var hotkeyService: HotkeyService?
     private var weatherService: WeatherService?
     private var hudService: HUDService?
     private var systemService: SystemService?
@@ -184,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         coordinator = notchCoordinator
 
-        setupHotkeys(coordinator: notchCoordinator, settings: settings)
+        setupHotkeys(coordinator: notchCoordinator)
     }
 
     @MainActor
@@ -231,22 +203,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func setupHotkeys(coordinator: NotchCoordinator, settings: AppSettings) {
-        let hotkeys = HotkeyService()
-        hotkeyService = hotkeys
-
-        hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
-            switch coordinator.status {
-            case .closed: coordinator.notchOpen()
-            case .opened: coordinator.notchClose()
+    private func setupHotkeys(coordinator: NotchCoordinator) {
+        KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
+            guard let c = coordinator else { return }
+            switch c.status {
+            case .closed: c.notchOpen()
+            case .opened: c.notchClose()
             }
         }
 
-        let tabs = Tab.sorted(settings.enabledTabs)
-        for (i, tab) in tabs.enumerated() {
-            let keyCode = UInt32(18 + i)
-            hotkeys.register(keyCode: keyCode, modifiers: UInt32(optionKey | cmdKey)) {
-                coordinator.notchOpen(tab: tab)
+        for tab in Tab.allCases {
+            KeyboardShortcuts.onKeyDown(for: tab.hotkeyName) { [weak coordinator] in
+                guard let c = coordinator else { return }
+                c.notchOpen(tab: tab)
             }
         }
     }

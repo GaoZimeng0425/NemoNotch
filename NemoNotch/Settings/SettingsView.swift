@@ -30,6 +30,10 @@ struct SettingsView: View {
             notificationListView
                 .tabItem { Label("settings.notifications", systemImage: "bell.badge") }
                 .tag(3)
+
+            HotkeysSettingsView()
+                .tabItem { Label("settings.hotkeys", systemImage: "keyboard") }
+                .tag(4)
         }
         .frame(width: 430, height: 460)
         .environment(\.locale, appSettings.currentLocale)

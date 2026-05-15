@@ -28,9 +28,9 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
 - **Multi-AI Provider** — Unified interface for Claude Code and Gemini CLI with hook event listening, session tracking, and permission interception
-- **Global Shortcuts** — `⌥⌘N` toggle panel, `⌥⌘1-7` switch tabs
+- **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
-- **Menu Bar Entry** — Control panel visibility and AI CLI Hooks installation from the menu bar
+- **Menu Bar Entry** — State-driven icon (AI approval / agent active / AI working / media playing / idle); menu shows Now Playing controls (previous / play-pause / next) when media is active, plus an Open Notch submenu listing each enabled tab with its current hotkey hint
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
 
@@ -43,6 +43,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **IOKit** — System monitoring (CPU, memory, battery, disk)
 - **libproc** — Per-process resource tracking via kernel APIs
 - **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7-day rotation)
+- **KeyboardShortcuts** — User-customizable global hotkeys (replaces Carbon `RegisterEventHotKey`)
 - **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
 - **HTTP API** — Hermes-agent monitoring via localhost:8787
 
