@@ -6,7 +6,7 @@ NemoNotch is a macOS notch utility that provides an interactive floating panel i
 
 ### Tech Stack
 
-- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack
+- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack, KeyboardShortcuts
 - Key frameworks: AppKit (NSWindow), MediaPlayer, ScriptingBridge, EventKit, IOKit
 
 ### Project Structure
@@ -45,7 +45,7 @@ graph TB
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
-        HK["HotkeyService<br/>Carbon global hotkeys"]
+        HK["Hotkeys.swift<br/>KeyboardShortcuts registration (AppDelegate.setupHotkeys)"]
     end
 
     subgraph NotchUI["Notch UI Layer"]
@@ -308,7 +308,7 @@ All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check the
 | Notch window management, tri-state machine | **Peninsula** | NSPanel subclass, notch positioning, closed/popping/opened state machine, NotchBackgroundView notch shape rendering |
 | Notch animation, auto-collapse | **DynamicNotchKit** | Spring animation .bouncy(duration: 0.4), Timer auto-dismiss, NSScreen extensions (hasNotch/notchSize/notchFrame) |
 | Mouse event monitoring | **NotchDrop** | Global NSEvent monitor for mouse approach/leave detection |
-| Global hotkeys | **Peninsula** | Carbon RegisterEventHotKey global hotkey registration |
+| Global hotkeys | **KeyboardShortcuts** | User-customizable bindings via `Hotkeys.swift` name registry; registered in `AppDelegate.setupHotkeys` |
 | Now Playing info retrieval | **PlayStatus** / **Tuneful** | MediaPlayer framework, MPNowPlayingInfoCenter polling |
 | Media key interception | **PlayStatus** | sendEvent override intercepting NX_KEYTYPE_PLAY etc. |
 | CLI now playing info | **nowplaying-cli** | daemon connection → legacy callback → MRNowPlayingController three-tier fallback, dylib path search |
