@@ -14,10 +14,13 @@ struct NemoNotchApp: App {
                 onOpenSettings: { appDelegate.showSettings() }
             )
             .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+            .environment(appDelegate.agentRegistry ?? AgentMonitorRegistry())
+            .environment(appDelegate.mediaService ?? MediaService())
         } label: {
-            Image(systemName: appDelegate.aiMonitorService?.anyHookInstalled == true
-                ? "menubar.rectangle.fill"
-                : "menubar.rectangle")
+            MenuBarLabel()
+                .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+                .environment(appDelegate.agentRegistry ?? AgentMonitorRegistry())
+                .environment(appDelegate.mediaService ?? MediaService())
         }
         .menuBarExtraStyle(.menu)
     }
@@ -85,12 +88,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
-    private var mediaService: MediaService?
+    private(set) var mediaService: MediaService?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
     private var hermesService: HermesService?
-    private var agentRegistry: AgentMonitorRegistry?
+    private(set) var agentRegistry: AgentMonitorRegistry?
     private var launcherService: LauncherService?
     private var notificationService: NotificationService?
     private var weatherService: WeatherService?
