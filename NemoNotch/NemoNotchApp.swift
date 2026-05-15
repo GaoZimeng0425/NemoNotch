@@ -5,12 +5,12 @@ import SwiftUI
 @main
 struct NemoNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var appDelegateRef: AppDelegate?
 
     var body: some Scene {
         MenuBarExtra {
             MenuContent(
                 coordinator: appDelegate.coordinator,
+                appSettings: appDelegate.appSettings,
                 onOpenSettings: { appDelegate.showSettings() }
             )
             .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
@@ -24,52 +24,53 @@ struct NemoNotchApp: App {
 
     init() {
         signal(SIGPIPE, SIG_IGN)
-        let delegate = AppDelegate.shared
-        _appDelegateRef = State(initialValue: delegate)
     }
 }
 
 struct MenuContent: View {
     @Environment(AICLIMonitorService.self) var aiService
     let coordinator: NotchCoordinator?
+    let appSettings: AppSettings?
     let onOpenSettings: () -> Void
 
     var body: some View {
-        Button("menu.open_notch") {
-            coordinator?.notchOpen()
-        }
+        Group {
+            Button("menu.open_notch") {
+                coordinator?.notchOpen()
+            }
 
-        Divider()
+            Divider()
 
-        if aiService.claudeProvider.isHookInstalled {
-            Text("menu.claude_hooks_installed")
-        } else {
-            Button("menu.install_claude_hooks") {
-                aiService.claudeProvider.installHooks()
+            if aiService.claudeProvider.isHookInstalled {
+                Text("menu.claude_hooks_installed")
+            } else {
+                Button("menu.install_claude_hooks") {
+                    aiService.claudeProvider.installHooks()
+                }
+            }
+            if aiService.geminiProvider.isHookInstalled {
+                Text("menu.gemini_hooks_installed")
+            } else {
+                Button("menu.install_gemini_hooks") {
+                    aiService.geminiProvider.installHooks()
+                }
+            }
+
+            Divider()
+
+            Button("menu.preferences") {
+                onOpenSettings()
+            }
+
+            Button("menu.about") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.orderFrontStandardAboutPanel(nil)
+            }
+            Button("menu.quit") {
+                NSApplication.shared.terminate(nil)
             }
         }
-        if aiService.geminiProvider.isHookInstalled {
-            Text("menu.gemini_hooks_installed")
-        } else {
-            Button("menu.install_gemini_hooks") {
-                aiService.geminiProvider.installHooks()
-            }
-        }
-
-        Divider()
-
-        Button("menu.preferences") {
-            onOpenSettings()
-        }
-
-        Button("menu.about") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.orderFrontStandardAboutPanel(nil)
-        }
-        Button("menu.quit") {
-            NSApplication.shared.terminate(nil)
-        }
-        .environment(\.locale, AppDelegate.shared.appSettings?.currentLocale ?? Locale.current)
+        .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
 }
 
@@ -77,7 +78,6 @@ struct MenuContent: View {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
     private var suppressRestoreUntil: Date = .distantPast
-    nonisolated(unsafe) static var shared = AppDelegate()
 
     override nonisolated init() {
         super.init()
@@ -103,7 +103,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
 
         _ = LogService.shared
@@ -177,6 +176,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return nil
         }
         notchCoordinator.appSettings = settings
+        notchCoordinator.restoreSuppressionCheck = { [weak self] in
+            self?.shouldSuppressPreviousAppRestore ?? false
+        }
+        notchCoordinator.onShowSettings = { [weak self] in
+            self?.showSettings()
+        }
         coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator, settings: settings)

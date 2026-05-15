@@ -22,7 +22,7 @@ struct BadgeIconView: View {
             mediaBadge
         case let .ai(source, status, tool, waitingApproval, _):
             aiBadge(source: source, status: status, tool: tool, waitingApproval: waitingApproval)
-        case let .agents(state, emoji):
+        case let .agents(_, state, emoji):
             agentsBadge(state: state, emoji: emoji)
         case .calendar:
             calendarBadge
