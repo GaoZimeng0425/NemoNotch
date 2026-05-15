@@ -52,7 +52,7 @@ final class BadgeViewModel {
         }
 
         for agent in agentRegistry.activeAgents {
-            items.append(.agents(state: agent.state, emoji: agent.emoji))
+            items.append(.agents(agentID: agent.id, state: agent.state, emoji: agent.emoji))
         }
 
         for session in activeSessions {

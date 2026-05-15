@@ -4,7 +4,7 @@ enum BadgeItem: Identifiable, Equatable {
     case notification(bundleID: String, count: Int)
     case media
     case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool, sessionID: String)
-    case agents(state: AgentMonitorState, emoji: String)
+    case agents(agentID: String, state: AgentMonitorState, emoji: String)
     case calendar
 
     var id: String {
@@ -13,7 +13,7 @@ enum BadgeItem: Identifiable, Equatable {
         case .media: "media"
         case let .ai(source, status, tool, waitingApproval, sessionID):
             "ai:\(sessionID):\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
-        case let .agents(state, emoji): "agents:\(state.rawValue):\(emoji)"
+        case let .agents(agentID, state, emoji): "agents:\(agentID):\(state.rawValue):\(emoji)"
         case .calendar: "calendar"
         }
     }

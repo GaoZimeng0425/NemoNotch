@@ -34,39 +34,41 @@ struct MenuContent: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        Button("menu.open_notch") {
-            coordinator?.notchOpen()
-        }
-
-        Divider()
-
-        if aiService.claudeProvider.isHookInstalled {
-            Text("menu.claude_hooks_installed")
-        } else {
-            Button("menu.install_claude_hooks") {
-                aiService.claudeProvider.installHooks()
+        Group {
+            Button("menu.open_notch") {
+                coordinator?.notchOpen()
             }
-        }
-        if aiService.geminiProvider.isHookInstalled {
-            Text("menu.gemini_hooks_installed")
-        } else {
-            Button("menu.install_gemini_hooks") {
-                aiService.geminiProvider.installHooks()
+
+            Divider()
+
+            if aiService.claudeProvider.isHookInstalled {
+                Text("menu.claude_hooks_installed")
+            } else {
+                Button("menu.install_claude_hooks") {
+                    aiService.claudeProvider.installHooks()
+                }
             }
-        }
+            if aiService.geminiProvider.isHookInstalled {
+                Text("menu.gemini_hooks_installed")
+            } else {
+                Button("menu.install_gemini_hooks") {
+                    aiService.geminiProvider.installHooks()
+                }
+            }
 
-        Divider()
+            Divider()
 
-        Button("menu.preferences") {
-            onOpenSettings()
-        }
+            Button("menu.preferences") {
+                onOpenSettings()
+            }
 
-        Button("menu.about") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.orderFrontStandardAboutPanel(nil)
-        }
-        Button("menu.quit") {
-            NSApplication.shared.terminate(nil)
+            Button("menu.about") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.orderFrontStandardAboutPanel(nil)
+            }
+            Button("menu.quit") {
+                NSApplication.shared.terminate(nil)
+            }
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
