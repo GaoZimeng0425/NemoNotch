@@ -34,7 +34,7 @@ enum HookInstaller {
 
     private static let socketPath = NotchConstants.hookSocketPath
 
-    private static let scriptVersion = "# version: 10"
+    private static let scriptVersion = "# version: 11"
 
     static func isInstalled(_ target: HookTarget) -> Bool {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),

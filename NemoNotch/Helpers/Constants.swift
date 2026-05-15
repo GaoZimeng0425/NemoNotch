@@ -44,10 +44,14 @@ enum NotchConstants {
     static let openedShadowRadius: CGFloat = 14
     static let openedShadowOpacity: CGFloat = 0.34
 
-    /// Hook server. Lives under the user's home directory (not /tmp) because
-    /// /tmp writes from Xcode-launched apps get redirected to a per-app
-    /// container path, making the socket invisible to external hook scripts.
-    static let hookSocketPath = NSHomeDirectory() + "/.nemonotch/socket"
+    /// Hook server. Lives under /Users/Shared/ rather than $HOME because
+    /// any path inside $HOME (including /tmp and ~/.nemonotch/) is subject
+    /// to per-app data containerization when macOS still has a leftover
+    /// sandbox container for this bundle ID — the bind() succeeds and
+    /// lsof reports the requested path, but the file is invisible to
+    /// external hook scripts. /Users/Shared/ is the standard "inter-app
+    /// shared data" location and isn't redirected.
+    static let hookSocketPath = "/Users/Shared/nemonotch-\(NSUserName()).sock"
 
     // Tab content
     static let tabContentPadding: CGFloat = 12
