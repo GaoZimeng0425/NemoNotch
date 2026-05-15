@@ -16,9 +16,6 @@ struct NemoNotchApp: App {
             .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
         } label: {
             MenuBarLabel()
-                .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
-                .environment(appDelegate.agentRegistry ?? AgentMonitorRegistry())
-                .environment(appDelegate.mediaService ?? MediaService())
         }
         .menuBarExtraStyle(.menu)
     }
