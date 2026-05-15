@@ -2,10 +2,9 @@ import Foundation
 
 enum HermesHookInstaller {
     private static let hermesDir = NSHomeDirectory() + "/.hermes"
-    private static let scriptDir = NSHomeDirectory() + "/.nemonotch/hooks"
+    private static let scriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let scriptPath = scriptDir + "/hermes-hook-sender.sh"
-    private static let scriptCommand = "~/.nemonotch/hooks/hermes-hook-sender.sh"
-    private static let socketPath = NotchConstants.hookSocketPath
+    private static let scriptCommand = "~/.NemoNotch/hooks/hermes-hook-sender.sh"
     private static let marker = "# nemonotch-hermes-hook"
 
     private static let hookEvents = [
@@ -23,7 +22,7 @@ enum HermesHookInstaller {
         // Check all possible config locations
         for path in allConfigPaths() {
             if let content = try? String(contentsOfFile: path, encoding: .utf8),
-               content.contains("nemonotch/hooks/hermes-hook-sender.sh") {
+               content.lowercased().contains("nemonotch/hooks/hermes-hook-sender.sh") {
                 return true
             }
         }
@@ -44,6 +43,13 @@ enum HermesHookInstaller {
             try? patchConfig(at: path, install: false)
         }
         LogService.info("Hermes shell hooks uninstalled", category: "HermesHookInstaller")
+    }
+
+    /// Rewrite hermes-hook-sender.sh from the current source template. Used to
+    /// migrate the script's hard-coded SOCKET path on launch when hooks are
+    /// already installed.
+    static func refreshScript() throws {
+        try ensureScriptExists()
     }
 
     // MARK: - Config Path Resolution
@@ -75,15 +81,16 @@ enum HermesHookInstaller {
             withIntermediateDirectories: true
         )
 
+        let port = NotchConstants.hookServerPort
         let script = """
         #!/bin/bash
         \(marker)
-        SOCKET="\(socketPath)"
-        [ -S "$SOCKET" ] || exit 0
+        # port: \(port)
+        URL_BASE="http://127.0.0.1:\(port)"
+        curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || { printf '{}\\n'; exit 0; }
 
         INPUT=$(cat 2>/dev/null || echo '{}')
 
-        # Inject cli_source into the JSON payload
         if command -v python3 &>/dev/null; then
             INPUT=$(echo "$INPUT" | python3 -c "
         import sys, json
@@ -96,7 +103,8 @@ enum HermesHookInstaller {
         " 2>/dev/null || echo "$INPUT")
         fi
 
-        echo "$INPUT" | nc -U -w 1 "$SOCKET" 2>/dev/null || true
+        curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+            "$URL_BASE/hook" --connect-timeout 1 --max-time 2 >/dev/null 2>&1 || true
         printf '{}\\n'
         exit 0
         """
@@ -185,9 +193,10 @@ enum HermesHookInstaller {
     private static func removeNemonotchLines(from lines: [String]) -> [String] {
         var result = lines
 
-        // Remove lines containing our script path
+        // Remove lines containing our script path (case-insensitive — covers both
+        // the older .nemonotch/ and the current .NemoNotch/ casing on APFS).
         result.removeAll { line in
-            line.contains("nemonotch/hooks/hermes-hook-sender.sh")
+            line.lowercased().contains("nemonotch/hooks/hermes-hook-sender.sh")
         }
 
         // Remove empty event entries (e.g. "  pre_llm_call:" with no children)

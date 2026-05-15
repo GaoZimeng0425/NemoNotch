@@ -1,218 +1,261 @@
 import Foundation
+import Network
 
+/// Local hook server. Accepts HTTP POSTs from hook-sender.sh on TCP loopback.
+///
+/// Design follows masko-code/Sources/Services/LocalServer.swift — TCP rather
+/// than AF_UNIX socket because, on this bundle id, macOS hides unix socket
+/// inodes from any process other than NemoNotch itself even when bind()
+/// succeeds. Regular files in the same directory remain visible, so the
+/// filtering is socket-inode-specific. TCP loopback bypasses VFS entirely.
 @MainActor
 @Observable
 final class HookServer {
     private(set) var isRunning = false
-    @ObservationIgnored private nonisolated(unsafe) var socketFd: Int32 = -1
-    @ObservationIgnored private nonisolated(unsafe) var acceptSource: DispatchSourceRead?
-    private let socketQueue = DispatchQueue(label: "com.nemonotch.hookserver", qos: .userInitiated)
+    private(set) var port: UInt16 = NotchConstants.hookServerDefaultPort
 
-    @ObservationIgnored private nonisolated(unsafe) var responseWaiters: [String: (String) -> Void] = [:]
+    @ObservationIgnored private var listener: NWListener?
+    @ObservationIgnored private var pendingPermissions: [String: NWConnection] = [:]
+    @ObservationIgnored private var hasReadied = false
 
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: (() -> Void)?
 
     func start() {
-        let socketPath = NotchConstants.hookSocketPath
-        socketQueue.async { [weak self] in
-            self?.doStart(socketPath: socketPath)
-        }
+        hasReadied = false
+        port = NotchConstants.hookServerDefaultPort
+        attemptStart()
     }
 
-    private nonisolated func doStart(socketPath: String) {
-        let socketDir = (socketPath as NSString).deletingLastPathComponent
-        try? FileManager.default.createDirectory(
-            atPath: socketDir,
-            withIntermediateDirectories: true
-        )
-        unlink(socketPath)
-
-        socketFd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard socketFd >= 0 else {
-            LogService.error("Failed to create socket: \(String(cString: strerror(errno)))", category: "HookServer")
-            return
-        }
-
-        var optval: Int32 = 1
-        setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, &optval, socklen_t(MemoryLayout.size(ofValue: optval)))
-
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        _ = socketPath.withCString { ptr in
-            strncpy(&addr.sun_path.0, ptr, 103)
-        }
-
-        let bindResult = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 }
-        }
-        guard bind(socketFd, bindResult, socklen_t(MemoryLayout<sockaddr_un>.size)) == 0 else {
-            LogService.error("Failed to bind socket: \(String(cString: strerror(errno)))", category: "HookServer")
-            close(socketFd)
-            socketFd = -1
-            return
-        }
-
-        guard listen(socketFd, 10) == 0 else {
-            LogService.error("Failed to listen on socket: \(String(cString: strerror(errno)))", category: "HookServer")
-            close(socketFd)
-            socketFd = -1
-            return
-        }
-
-        DispatchQueue.main.async { [weak self] in
-            self?.isRunning = true
-            self?.onReady?()
-        }
-
-        acceptSource = DispatchSource.makeReadSource(fileDescriptor: socketFd, queue: socketQueue)
-        acceptSource?.setEventHandler { [weak self] in
-            self?.acceptConnection()
-        }
-        acceptSource?.resume()
-
-        LogService.info("Hook server listening on \(socketPath)", category: "HookServer")
+    func stop() {
+        listener?.cancel()
+        listener = nil
+        isRunning = false
     }
 
-    private nonisolated func acceptConnection() {
-        var addr = sockaddr_un()
-        var addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
-        let clientFd = withUnsafeMutablePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { rebased in
-                accept(socketFd, rebased, &addrLen)
+    private func attemptStart() {
+        listener?.cancel()
+        listener = nil
+
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        params.acceptLocalOnly = true
+        params.includePeerToPeer = false
+
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            LogService.error("Invalid hook port \(port)", category: "HookServer")
+            return
+        }
+
+        let newListener: NWListener
+        do {
+            newListener = try NWListener(using: params, on: nwPort)
+        } catch {
+            LogService.warn("Failed to create NWListener on \(port): \(error)", category: "HookServer")
+            tryNextPort()
+            return
+        }
+        listener = newListener
+
+        newListener.newConnectionHandler = { [weak self] connection in
+            Task { @MainActor in
+                self?.handleConnection(connection)
             }
         }
-        guard clientFd >= 0 else { return }
-        readRequest(fd: clientFd)
+
+        newListener.stateUpdateHandler = { [weak self] state in
+            Task { @MainActor in
+                self?.handleListenerState(state)
+            }
+        }
+
+        newListener.start(queue: .global(qos: .userInitiated))
     }
 
-    private nonisolated func readRequest(fd: Int32) {
-        var buffer = Data()
-        var tempBuf = [UInt8](repeating: 0, count: 4096)
-
-        while true {
-            let bytesRead = read(fd, &tempBuf, tempBuf.count)
-            if bytesRead > 0 {
-                buffer.append(tempBuf, count: bytesRead)
-                if let str = String(data: buffer, encoding: .utf8), str.hasSuffix("\n") {
-                    break
-                }
+    private func handleListenerState(_ state: NWListener.State) {
+        switch state {
+        case .ready:
+            isRunning = true
+            hasReadied = true
+            LogService.info("Hook server listening on 127.0.0.1:\(port)", category: "HookServer")
+            // If we landed on a non-default port, persist it and rewrite the
+            // hook script so external callers find the right port.
+            if port != NotchConstants.hookServerDefaultPort {
+                NotchConstants.setHookServerPort(port)
+                try? HookInstaller.ensureScriptExists()
+                try? HermesHookInstaller.refreshScript()
             } else {
-                break
+                NotchConstants.setHookServerPort(port)
+            }
+            onReady?()
+        case let .failed(error):
+            LogService.warn("Hook server failed on \(port): \(error)", category: "HookServer")
+            isRunning = false
+            listener?.cancel()
+            listener = nil
+            if !hasReadied {
+                tryNextPort()
+            }
+        case let .waiting(error):
+            // Port unavailable (already in use, etc.) — try next
+            LogService.warn("Hook server waiting on \(port): \(error)", category: "HookServer")
+            isRunning = false
+            listener?.cancel()
+            listener = nil
+            if !hasReadied {
+                tryNextPort()
+            }
+        case .cancelled:
+            isRunning = false
+        default:
+            break
+        }
+    }
+
+    private func tryNextPort() {
+        let base = NotchConstants.hookServerDefaultPort
+        let max = base + NotchConstants.hookServerMaxPortAttempts
+        let next = port + 1
+        if next < max {
+            port = next
+            attemptStart()
+        } else {
+            LogService.error("Hook server exhausted ports \(base)..<\(max)", category: "HookServer")
+        }
+    }
+
+    // MARK: - Connection handling
+
+    private func handleConnection(_ connection: NWConnection) {
+        connection.start(queue: .global(qos: .userInitiated))
+        receive(connection: connection, accumulated: Data())
+    }
+
+    private func receive(connection: NWConnection, accumulated: Data) {
+        connection
+            .receive(minimumIncompleteLength: 1, maximumLength: 65536) {
+                [weak self] data, _, isComplete, error in
+                var buf = accumulated
+                if let data { buf.append(data) }
+                if Self.hasCompleteHTTPRequest(buf) || isComplete || error != nil {
+                    Task { @MainActor in
+                        self?.processRequest(buf, connection: connection)
+                    }
+                } else {
+                    Task { @MainActor in
+                        self?.receive(connection: connection, accumulated: buf)
+                    }
+                }
+            }
+    }
+
+    private static func hasCompleteHTTPRequest(_ data: Data) -> Bool {
+        guard let str = String(data: data, encoding: .utf8),
+              let separator = str.range(of: "\r\n\r\n") else { return false }
+        let headers = str[..<separator.lowerBound]
+        let body = str[separator.upperBound...]
+        if let clRange = headers.range(of: "Content-Length:", options: .caseInsensitive) {
+            let after = headers[clRange.upperBound...]
+            if let lineEnd = after.firstIndex(of: "\r") {
+                let value = after[..<lineEnd].trimmingCharacters(in: .whitespaces)
+                if let cl = Int(value) {
+                    return body.utf8.count >= cl
+                }
             }
         }
+        return true
+    }
 
-        guard let message = String(data: buffer, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !message.isEmpty else {
-            close(fd)
+    private func processRequest(_ data: Data, connection: NWConnection) {
+        guard let httpString = String(data: data, encoding: .utf8) else {
+            sendHTTP(connection, status: "400 Bad Request", body: "Bad Request")
+            return
+        }
+        let firstLine = httpString.components(separatedBy: "\r\n").first ?? ""
+
+        if firstLine.hasPrefix("GET /health") {
+            sendHTTP(connection, status: "200 OK", body: "ok")
             return
         }
 
-        // Avoid logging the full payload — it can contain conversation text,
-        // file paths, or other sensitive content. Log size only.
-        LogService.debug("Received hook message: \(message.utf8.count) bytes", category: "HookServer")
-
-        guard let data = message.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            LogService.error("Failed to parse JSON from message", category: "HookServer")
-            sendResponse(fd: fd, response: #"{"error":"invalid json"}"#)
-            return
-        }
-
-        if json["type"] as? String == "health" {
-            sendResponse(fd: fd, response: #"{"status":"ok"}"#)
-            return
-        }
-
-        let decoder = JSONDecoder()
-        if let event = try? decoder.decode(HookEvent.self, from: data) {
-            DispatchQueue.main.async { [weak self] in
-                self?.onEventReceived?(event)
-            }
-
-            if event.hookEventName == "PermissionRequest" {
-                handlePermissionRequest(event, fd: fd)
+        if firstLine.hasPrefix("POST /hook") {
+            guard let bodyRange = httpString.range(of: "\r\n\r\n") else {
+                sendHTTP(connection, status: "400 Bad Request", body: "No body")
                 return
             }
+            let bodyString = String(httpString[bodyRange.upperBound...])
+            guard let bodyData = bodyString.data(using: .utf8) else {
+                sendHTTP(connection, status: "400 Bad Request", body: "Invalid body")
+                return
+            }
+            LogService.debug("Received hook message: \(bodyData.count) bytes", category: "HookServer")
 
-            sendResponse(fd: fd, response: #"{"status":"ok"}"#)
-        } else {
-            sendResponse(fd: fd, response: #"{"status":"ok"}"#)
-        }
-    }
-
-    private nonisolated func handlePermissionRequest(_ event: HookEvent, fd: Int32) {
-        guard let sessionId = event.sessionId else {
-            sendResponse(fd: fd, response: #"{"decision":"deny","reason":"no session id"}"#)
+            let decoder = JSONDecoder()
+            if let event = try? decoder.decode(HookEvent.self, from: bodyData) {
+                onEventReceived?(event)
+                if event.hookEventName == "PermissionRequest" {
+                    handlePermissionRequest(event, connection: connection)
+                    return
+                }
+                sendHTTP(connection, status: "200 OK", body: #"{"status":"ok"}"#)
+            } else {
+                LogService.error("Failed to decode HookEvent", category: "HookServer")
+                sendHTTP(connection, status: "200 OK", body: #"{"status":"ok"}"#)
+            }
             return
         }
 
-        let waitKey = sessionId + ":" + (event.toolUseId ?? UUID().uuidString)
-        responseWaiters[waitKey] = { [weak self] response in
-            self?.sendResponse(fd: fd, response: response)
-        }
+        sendHTTP(connection, status: "404 Not Found", body: "Not Found")
+    }
 
-        socketQueue.asyncAfter(deadline: .now() + 120) { [weak self] in
-            if let waiter = self?.responseWaiters.removeValue(forKey: waitKey) {
-                waiter(#"{"decision":"deny","reason":"timeout"}"#)
+    private func handlePermissionRequest(_ event: HookEvent, connection: NWConnection) {
+        guard let sessionId = event.sessionId else {
+            sendHTTP(connection, status: "200 OK", body: #"{"decision":"deny","reason":"no session id"}"#)
+            return
+        }
+        let waitKey = sessionId + ":" + (event.toolUseId ?? UUID().uuidString)
+        pendingPermissions[waitKey] = connection
+
+        // Timeout fallback: deny after 120s of no user response.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
+            guard let self else { return }
+            if let conn = pendingPermissions.removeValue(forKey: waitKey) {
+                sendHTTP(conn, status: "200 OK", body: #"{"decision":"deny","reason":"timeout"}"#)
             }
         }
     }
 
     func respondToPermission(sessionId: String, approved: Bool) {
-        let response = #"{"decision":"\#(approved ? "allow" : "deny")"}"#
-        socketQueue.async { [weak self] in
-            guard let self else { return }
-            if let key = responseWaiters.keys.first(where: { $0.hasPrefix(sessionId + ":") }) {
-                responseWaiters.removeValue(forKey: key)?(response)
-            }
+        let body = #"{"decision":"\#(approved ? "allow" : "deny")"}"#
+        if let key = pendingPermissions.keys.first(where: { $0.hasPrefix(sessionId + ":") }),
+           let conn = pendingPermissions.removeValue(forKey: key) {
+            sendHTTP(conn, status: "200 OK", body: body)
         }
     }
 
     func cancelPendingPermissions(sessionId: String) {
-        socketQueue.async { [weak self] in
-            guard let self else { return }
-            let matching = responseWaiters.keys.filter { $0.hasPrefix(sessionId + ":") }
-            for key in matching {
-                responseWaiters.removeValue(forKey: key)?(#"{"decision":"deny","reason":"session ended"}"#)
+        let matching = pendingPermissions.keys.filter { $0.hasPrefix(sessionId + ":") }
+        for key in matching {
+            if let conn = pendingPermissions.removeValue(forKey: key) {
+                sendHTTP(conn, status: "200 OK", body: #"{"decision":"deny","reason":"session ended"}"#)
             }
         }
     }
 
-    private nonisolated func sendResponse(fd: Int32, response: String) {
-        let data = (response + "\n").data(using: .utf8) ?? Data()
-        _ = data.withUnsafeBytes { ptr in
-            write(fd, ptr.baseAddress, data.count)
-        }
-        close(fd)
-    }
-
-    func stop() {
-        // Tear down on socketQueue so we don't race with doStart/acceptConnection,
-        // which read/mutate socketFd and acceptSource on that same queue.
-        socketQueue.async { [weak self] in
-            self?.doStop()
-        }
-    }
-
-    private nonisolated func doStop() {
-        acceptSource?.cancel()
-        acceptSource = nil
-        if socketFd >= 0 {
-            close(socketFd)
-            socketFd = -1
-        }
-        unlink(NotchConstants.hookSocketPath)
-        DispatchQueue.main.async { [weak self] in
-            self?.isRunning = false
-        }
+    private func sendHTTP(_ connection: NWConnection, status: String, body: String) {
+        let bodyBytes = body.data(using: .utf8) ?? Data()
+        let header = "HTTP/1.1 \(status)\r\n" +
+            "Content-Type: application/json\r\n" +
+            "Content-Length: \(bodyBytes.count)\r\n" +
+            "Connection: close\r\n\r\n"
+        var response = header.data(using: .utf8) ?? Data()
+        response.append(bodyBytes)
+        connection.send(content: response, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
     }
 
     deinit {
-        // Synchronously tear down to ensure the socket fd is closed before
-        // the instance is released; doStop is nonisolated so this is safe.
-        socketQueue.sync { [self] in
-            doStop()
-        }
+        listener?.cancel()
     }
 }
