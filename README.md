@@ -3,7 +3,11 @@
 An interactive floating panel for the MacBook notch area, turning the notch into a multi-purpose information hub.
 
 <p align="center">
-  <img src="docs/images/screenshot.png" alt="NemoNotch Screenshot" width="700">
+  <img src="docs/images/nemo-notch.png" alt="NemoNotch Screenshot" width="700">
+</p>
+
+<p align="center">
+  <img src="docs/images/nemo-notch-2.png" alt="NemoNotch Screenshot" width="700">
 </p>
 
 <p align="center">

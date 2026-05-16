@@ -3,7 +3,11 @@
 macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块多功能信息中心。
 
 <p align="center">
-  <img src="docs/images/screenshot.png" alt="NemoNotch 截图" width="700">
+  <img src="docs/images/nemo-notch.png" alt="NemoNotch Screenshot" width="700">
+</p>
+
+<p align="center">
+  <img src="docs/images/nemo-notch-2.png" alt="NemoNotch Screenshot" width="700">
 </p>
 
 <p align="center">
