@@ -25,6 +25,17 @@ final class AICLIMonitorService {
         claude.scanExistingSessions()
         gemini.scanExistingSessions()
 
+        // Refresh hook-sender.sh on launch when hooks are installed, so socket
+        // path / script version migrations take effect without requiring the
+        // user to click Reinstall in Settings.
+        if claude.isHookInstalled || gemini.isHookInstalled {
+            do {
+                try HookInstaller.ensureScriptExists()
+            } catch {
+                LogService.warn("Failed to refresh hook script: \(error)", category: "AICLIMonitorService")
+            }
+        }
+
         hookServer.onEventReceived = { [weak self] event in
             self?.routeEvent(event)
         }

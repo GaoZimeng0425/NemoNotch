@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022F9363C40037E18E /* CocoaLumberjackSwift */; };
+		AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000042F9363C40037E18E /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */,
+				AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +74,7 @@
 			name = NemoNotch;
 			packageProductDependencies = (
 				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
+				AA0000042F9363C40037E18E /* KeyboardShortcuts */,
 			);
 			productName = NemoNotch;
 			productReference = 45DDDF802F9363C40037E18E /* NemoNotch.app */;
@@ -104,6 +107,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
+				AA0000032F9363C40037E18E /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45DDDF812F9363C40037E18E /* Products */;
@@ -416,6 +420,14 @@
 				minimumVersion = 3.8.0;
 			};
 		};
+		AA0000032F9363C40037E18E /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -423,6 +435,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
 			productName = CocoaLumberjackSwift;
+		};
+		AA0000042F9363C40037E18E /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000032F9363C40037E18E /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -6,7 +6,7 @@ NemoNotch is a macOS notch utility that provides an interactive floating panel i
 
 ### Tech Stack
 
-- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack
+- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack, KeyboardShortcuts
 - Key frameworks: AppKit (NSWindow), MediaPlayer, ScriptingBridge, EventKit, IOKit
 
 ### Project Structure
@@ -45,7 +45,7 @@ graph TB
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
-        HK["HotkeyService<br/>Carbon global hotkeys"]
+        HK["Hotkeys.swift<br/>KeyboardShortcuts registration (AppDelegate.setupHotkeys)"]
     end
 
     subgraph NotchUI["Notch UI Layer"]
@@ -290,6 +290,14 @@ Multi-provider scenarios (AI Provider, Conversation Parser, Multi-Agent Monitor,
 - Generic consumers use protocol interfaces, specific logic accesses concrete types
 - Adding a new Provider (e.g. DeepSeek, OpenAI) or a new Agent Monitor (e.g. HermesService) only requires implementing the protocol, no changes to existing code
 
+## macOS Cookbook
+
+A consolidated reference of every macOS-specific technique used in this codebase lives at `docs/macos-cookbook.md`. Organized by subsystem, anchored to `file:line` in real source. Use it before re-deriving how to do `dlopen`, MediaRemote, Carbon hotkeys, AX, IPC, etc.
+
+**Top-level sections:** 1) How to use · 2) Critical pitfalls · 3) Build & release · 4) Private API loading · 5) Notch & window · 6) Event capture & hotkeys · 7) Media · 8) System sensing · 9) ScriptingBridge & AppleScript · 10) Accessibility & Dock badges · 11) Permissions · 12) IPC & subprocess · 13) Hook installers · 14) Keychain · 15) Swift 6 concurrency · 16) SwiftUI patterns · 17) Architecture · 18) Logging · 19) Reference projects index.
+
+**When to update:** Any commit that adds a new private API call, a new system-framework integration, or a new `@unchecked Sendable` / `nonisolated(unsafe)` boundary must add a matching technique entry in the same commit.
+
 ## Reference Projects
 
 All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check these first when facing implementation questions.
@@ -300,7 +308,7 @@ All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check the
 | Notch window management, tri-state machine | **Peninsula** | NSPanel subclass, notch positioning, closed/popping/opened state machine, NotchBackgroundView notch shape rendering |
 | Notch animation, auto-collapse | **DynamicNotchKit** | Spring animation .bouncy(duration: 0.4), Timer auto-dismiss, NSScreen extensions (hasNotch/notchSize/notchFrame) |
 | Mouse event monitoring | **NotchDrop** | Global NSEvent monitor for mouse approach/leave detection |
-| Global hotkeys | **Peninsula** | Carbon RegisterEventHotKey global hotkey registration |
+| Global hotkeys | **KeyboardShortcuts** | User-customizable bindings via `Hotkeys.swift` name registry; registered in `AppDelegate.setupHotkeys` |
 | Now Playing info retrieval | **PlayStatus** / **Tuneful** | MediaPlayer framework, MPNowPlayingInfoCenter polling |
 | Media key interception | **PlayStatus** | sendEvent override intercepting NX_KEYTYPE_PLAY etc. |
 | CLI now playing info | **nowplaying-cli** | daemon connection → legacy callback → MRNowPlayingController three-tier fallback, dylib path search |

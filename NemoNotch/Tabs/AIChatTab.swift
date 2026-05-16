@@ -117,6 +117,8 @@ struct AIChatTab: View {
                     .frame(width: 6, height: 6)
                     .modifier(PulseModifier(isActive: session
                             .status == .working || approvalContext(for: session) != nil))
+                    .padding(.top, 4)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -268,6 +270,8 @@ struct AIChatTab: View {
                         .fill(dotColor(session.status))
                         .frame(width: 6, height: 6)
                         .modifier(PulseModifier(isActive: session.status == .working))
+                        .padding(.top, 4)
+                        .frame(maxHeight: .infinity, alignment: .top)
                 }
             }
         }

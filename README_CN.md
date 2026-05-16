@@ -3,7 +3,11 @@
 macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块多功能信息中心。
 
 <p align="center">
-  <img src="docs/images/screenshot.png" alt="NemoNotch 截图" width="700">
+  <img src="docs/images/nemo-notch.png" alt="NemoNotch Screenshot" width="700">
+</p>
+
+<p align="center">
+  <img src="docs/images/nemo-notch-2.png" alt="NemoNotch Screenshot" width="700">
 </p>
 
 <p align="center">
@@ -28,9 +32,9 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 - **Notch 浮动面板** — 窗口悬浮在刘海区域，自动检测屏幕 Notch 尺寸
 - **多 AI 提供商** — 统一界面支持 Claude Code 和 Gemini CLI，集成 Hook 事件监听、会话追踪和权限拦截
-- **全局快捷键** — `⌥⌘N` 切换面板开关，`⌥⌘1-7` 快速切换标签页
+- **全局快捷键** — 切换面板开关：在设置 → 快捷键里自行配置（默认无）。切换标签页默认 `⌥⌘1-5`。所有快捷键均可自定义，基于 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **自动切换** — 智能检测活跃服务（AI 工作中、音乐播放中）自动切到对应标签
-- **菜单栏入口** — 通过菜单栏图标控制面板展开和 AI CLI Hooks 安装
+- **菜单栏入口** — 固定刘海图标（状态从刘海面板查看）；媒体播放时菜单显示正在播放控制区（上一曲 / 播放暂停 / 下一曲）
 - **HUD 叠加层** — 音量、亮度、电池电量的分段条指示器
 - **国际化** — 支持中文和英文，可在设置中切换
 
@@ -43,6 +47,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 - **IOKit** — 系统状态监控（CPU、内存、电池、磁盘）
 - **libproc** — 通过内核 API 实现进程级资源追踪
 - **CocoaLumberjack** — 日志系统（`~/.NemoNotch/logs/`，7 天轮转）
+- **KeyboardShortcuts** — 用户可自定义全局快捷键（替代 Carbon `RegisterEventHotKey`）
 - **WebSocket / Unix Socket** — AI CLI Hooks 和 OpenClaw 通信
 - **HTTP API** — 通过 localhost:8787 监控 Hermes-agent
 

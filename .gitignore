@@ -10,3 +10,4 @@ build/
 build.log
 .ralph-tui/
 .worktrees/
+.superpowers/

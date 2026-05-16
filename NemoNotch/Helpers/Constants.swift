@@ -44,8 +44,33 @@ enum NotchConstants {
     static let openedShadowRadius: CGFloat = 14
     static let openedShadowOpacity: CGFloat = 0.34
 
-    /// Hook server
-    static let hookSocketPath = "/tmp/nemonotch.sock"
+    /// Hook server: TCP loopback (HTTP) on this default port.
+    ///
+    /// AF_UNIX socket files were previously used but proved unworkable on this
+    /// system — bind() succeeded inside NemoNotch but the socket inode was
+    /// filtered out of every other process's view of the same directory
+    /// (regular files in the same directory remained visible). The mechanism
+    /// is some macOS-side per-process filtering of socket inodes for this
+    /// bundle id; no path change escaped it. TCP loopback bypasses VFS
+    /// entirely. See reference: masko-code/Sources/Services/LocalServer.swift.
+    static let hookServerDefaultPort: UInt16 = 45831
+    static let hookServerMaxPortAttempts: UInt16 = 10
+    private static let hookServerPortKey = "hookServerPort"
+
+    /// Port the HookServer last successfully bound to. Falls back to default
+    /// when not yet persisted. HookInstaller reads this to embed the right
+    /// port in hook-sender.sh.
+    static var hookServerPort: UInt16 {
+        let stored = UserDefaults.standard.integer(forKey: hookServerPortKey)
+        if stored > 0, stored <= 65535 {
+            return UInt16(stored)
+        }
+        return hookServerDefaultPort
+    }
+
+    static func setHookServerPort(_ port: UInt16) {
+        UserDefaults.standard.set(Int(port), forKey: hookServerPortKey)
+    }
 
     // Tab content
     static let tabContentPadding: CGFloat = 12

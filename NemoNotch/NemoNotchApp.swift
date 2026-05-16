@@ -1,5 +1,5 @@
-import Carbon
 import Darwin
+import KeyboardShortcuts
 import SwiftUI
 
 @main
@@ -8,18 +8,17 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(
-                coordinator: appDelegate.coordinator,
-                appSettings: appDelegate.appSettings,
-                onOpenSettings: { appDelegate.showSettings() }
-            )
-            .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+            MenuContent(appSettings: appDelegate.appSettings)
+                .environment(appDelegate.mediaService ?? MediaService())
+                .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
         } label: {
-            Image(systemName: appDelegate.aiMonitorService?.anyHookInstalled == true
-                ? "menubar.rectangle.fill"
-                : "menubar.rectangle")
+            MenuBarLabel()
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsSceneRoot(appDelegate: appDelegate)
+        }
     }
 
     init() {
@@ -28,55 +27,48 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    @Environment(AICLIMonitorService.self) var aiService
-    let coordinator: NotchCoordinator?
     let appSettings: AppSettings?
-    let onOpenSettings: () -> Void
 
     var body: some View {
         Group {
-            Button("menu.open_notch") {
-                coordinator?.notchOpen()
-            }
-
-            Divider()
-
-            if aiService.claudeProvider.isHookInstalled {
-                Text("menu.claude_hooks_installed")
-            } else {
-                Button("menu.install_claude_hooks") {
-                    aiService.claudeProvider.installHooks()
-                }
-            }
-            if aiService.geminiProvider.isHookInstalled {
-                Text("menu.gemini_hooks_installed")
-            } else {
-                Button("menu.install_gemini_hooks") {
-                    aiService.geminiProvider.installHooks()
-                }
-            }
-
-            Divider()
-
-            Button("menu.preferences") {
-                onOpenSettings()
-            }
-
-            Button("menu.about") {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.orderFrontStandardAboutPanel(nil)
-            }
-            Button("menu.quit") {
-                NSApplication.shared.terminate(nil)
-            }
+            NowPlayingSection()
+            HooksSection()
+            AppSection()
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
 }
 
+struct SettingsSceneRoot: View {
+    let appDelegate: AppDelegate
+
+    var body: some View {
+        Group {
+            if let settings = appDelegate.appSettings,
+               let aiMonitor = appDelegate.aiMonitorService,
+               let launcher = appDelegate.launcherService,
+               let notification = appDelegate.notificationService,
+               let weather = appDelegate.weatherService,
+               let hermes = appDelegate.hermesService {
+                SettingsView()
+                    .environment(settings)
+                    .environment(aiMonitor)
+                    .environment(launcher)
+                    .environment(notification)
+                    .environment(weather)
+                    .environment(hermes)
+            } else {
+                ProgressView()
+                    .frame(width: 430, height: 460)
+            }
+        }
+        .onAppear { appDelegate.handleSettingsAppear() }
+        .onDisappear { appDelegate.handleSettingsDisappear() }
+    }
+}
+
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private var settingsWindow: NSWindow?
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressRestoreUntil: Date = .distantPast
 
     override nonisolated init() {
@@ -85,16 +77,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
-    private var mediaService: MediaService?
+    private(set) var mediaService: MediaService?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
-    private var hermesService: HermesService?
-    private var agentRegistry: AgentMonitorRegistry?
-    private var launcherService: LauncherService?
-    private var notificationService: NotificationService?
-    private var hotkeyService: HotkeyService?
-    private var weatherService: WeatherService?
+    private(set) var hermesService: HermesService?
+    private(set) var agentRegistry: AgentMonitorRegistry?
+    private(set) var launcherService: LauncherService?
+    private(set) var notificationService: NotificationService?
+    private(set) var weatherService: WeatherService?
     private var hudService: HUDService?
     private var systemService: SystemService?
 
@@ -179,74 +170,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         notchCoordinator.restoreSuppressionCheck = { [weak self] in
             self?.shouldSuppressPreviousAppRestore ?? false
         }
-        notchCoordinator.onShowSettings = { [weak self] in
-            self?.showSettings()
-        }
         coordinator = notchCoordinator
 
-        setupHotkeys(coordinator: notchCoordinator, settings: settings)
+        setupHotkeys(coordinator: notchCoordinator)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        LogService.info("applicationWillTerminate received", category: "AppDelegate")
     }
 
     @MainActor
-    func showSettings() {
+    func handleSettingsAppear() {
         suppressRestoreUntil = Date().addingTimeInterval(1.2)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-
-        if settingsWindow == nil,
-           let settings = appSettings,
-           let aiMonitor = aiMonitorService,
-           let launcher = launcherService,
-           let notification = notificationService,
-           let weather = weatherService,
-           let hermes = hermesService {
-            let view = SettingsView()
-                .environment(settings)
-                .environment(aiMonitor)
-                .environment(launcher)
-                .environment(notification)
-                .environment(weather)
-                .environment(hermes)
-            let window = SettingsWindow(rootView: view)
-            window.delegate = self
-            settingsWindow = window
-        }
-
-        settingsWindow?.center()
-        settingsWindow?.orderFrontRegardless()
-        settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
-    func windowDidBecomeKey(_ notification: Notification) {
-        if let window = notification.object as? NSWindow, window === settingsWindow {
-            suppressRestoreUntil = Date().addingTimeInterval(0.6)
-        }
+    @MainActor
+    func handleSettingsDisappear() {
+        LogService.info("Settings window closed", category: "AppDelegate")
+        suppressRestoreUntil = .distantPast
+        NSApp.setActivationPolicy(.accessory)
     }
 
-    func windowWillClose(_ notification: Notification) {
-        if let window = notification.object as? NSWindow, window === settingsWindow {
-            settingsWindow = nil
-            suppressRestoreUntil = .distantPast
-            NSApp.setActivationPolicy(.accessory)
-        }
-    }
-
-    private func setupHotkeys(coordinator: NotchCoordinator, settings: AppSettings) {
-        let hotkeys = HotkeyService()
-        hotkeyService = hotkeys
-
-        hotkeys.register(keyCode: 45, modifiers: UInt32(optionKey | cmdKey)) {
-            switch coordinator.status {
-            case .closed: coordinator.notchOpen()
-            case .opened: coordinator.notchClose()
+    private func setupHotkeys(coordinator: NotchCoordinator) {
+        KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
+            guard let c = coordinator else { return }
+            switch c.status {
+            case .closed: c.notchOpen()
+            case .opened: c.notchClose()
             }
         }
 
-        let tabs = Tab.sorted(settings.enabledTabs)
-        for (i, tab) in tabs.enumerated() {
-            let keyCode = UInt32(18 + i)
-            hotkeys.register(keyCode: keyCode, modifiers: UInt32(optionKey | cmdKey)) {
-                coordinator.notchOpen(tab: tab)
+        for tab in Tab.allCases {
+            KeyboardShortcuts.onKeyDown(for: tab.hotkeyName) { [weak coordinator] in
+                guard let c = coordinator else { return }
+                switch c.status {
+                case .closed:
+                    c.notchOpen(tab: tab)
+                case .opened:
+                    if c.selectedTab == tab {
+                        c.notchClose()
+                    } else {
+                        c.selectedTab = tab
+                    }
+                }
             }
         }
     }

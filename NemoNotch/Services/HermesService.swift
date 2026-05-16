@@ -32,6 +32,16 @@ final class HermesService: MultiAgentMonitor {
             "HermesService initialized, installed=\(isInstalled), hooks=\(isHookInstalled)",
             category: "HermesService"
         )
+
+        // Refresh hermes-hook-sender.sh on launch when hooks are installed, so
+        // socket path migrations take effect without requiring re-install.
+        if isHookInstalled {
+            do {
+                try HermesHookInstaller.refreshScript()
+            } catch {
+                LogService.warn("Failed to refresh hermes hook script: \(error)", category: "HermesService")
+            }
+        }
     }
 
     func connect() {

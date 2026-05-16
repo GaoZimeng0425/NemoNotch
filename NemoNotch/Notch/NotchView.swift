@@ -162,6 +162,15 @@ struct NotchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .environment(\.locale, appSettings.currentLocale)
+        .contextMenu {
+            SettingsLink {
+                Text("notch.context.settings")
+            }
+            Divider()
+            Button("notch.context.quit") {
+                NSApp.terminate(nil)
+            }
+        }
     }
 
     private func initializeBadgeViewModel() {

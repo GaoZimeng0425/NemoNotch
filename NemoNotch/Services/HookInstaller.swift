@@ -14,24 +14,33 @@ enum HookTarget {
     var hookEvents: [String] {
         switch self {
         case .claude: return [
-            "PreToolUse", "PostToolUse", "Stop", "SessionStart",
-            "SessionEnd", "Notification", "UserPromptSubmit", "PermissionRequest",
-        ]
+                "PreToolUse", "PostToolUse", "Stop", "SessionStart",
+                "SessionEnd", "Notification", "UserPromptSubmit", "PermissionRequest",
+            ]
         case .gemini: return [
-            "SessionStart", "SessionEnd", "Notification",
-            "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
-        ]
+                "SessionStart", "SessionEnd", "Notification",
+                "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
+            ]
         }
     }
 }
 
 enum HookInstaller {
-    private static let hookScriptDir = NSHomeDirectory() + "/.nemonotch/hooks"
+    private static let hookScriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
-    private static var hookCommand: String { "~/.nemonotch/hooks/hook-sender.sh" }
-    private static let socketPath = NotchConstants.hookSocketPath
+    private static var hookCommand: String {
+        "~/.NemoNotch/hooks/hook-sender.sh"
+    }
 
-    private static let scriptVersion = "# version: 9"
+    private static let scriptVersion = "# version: 13"
+
+    /// Case-insensitive suffix match so we recognize both the older
+    /// "~/.nemonotch/hooks/hook-sender.sh" and the current
+    /// "~/.NemoNotch/hooks/hook-sender.sh" forms as ours.
+    private static func isOurHookCommand(_ command: String?) -> Bool {
+        guard let command else { return false }
+        return command.lowercased().hasSuffix("nemonotch/hooks/hook-sender.sh")
+    }
 
     static func isInstalled(_ target: HookTarget) -> Bool {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
@@ -43,7 +52,7 @@ enum HookInstaller {
             if let entries = hooks[event] as? [[String: Any]],
                entries.contains(where: { entry in
                    guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                   return innerHooks.contains { ($0["command"] as? String) == hookCommand }
+                   return innerHooks.contains { isOurHookCommand($0["command"] as? String) }
                }) {
                 return true
             }
@@ -61,13 +70,13 @@ enum HookInstaller {
         }
 
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        
+
         // 1. Clean up ALL existing nemonotch hooks from ALL events first
         for (event, entries) in hooks {
             if var eventEntries = entries as? [[String: Any]] {
                 eventEntries.removeAll { entry in
                     guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                    return innerHooks.contains { ($0["command"] as? String) == hookCommand }
+                    return innerHooks.contains { isOurHookCommand($0["command"] as? String) }
                 }
                 if eventEntries.isEmpty {
                     hooks.removeValue(forKey: event)
@@ -104,7 +113,7 @@ enum HookInstaller {
             guard var entries = hooks[event] as? [[String: Any]] else { continue }
             entries.removeAll { entry in
                 guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                return innerHooks.contains { ($0["command"] as? String) == hookCommand }
+                return innerHooks.contains { isOurHookCommand($0["command"] as? String) }
             }
             if entries.isEmpty {
                 hooks.removeValue(forKey: event)
@@ -124,10 +133,15 @@ enum HookInstaller {
 
     static func ensureScriptExists() throws {
         let scriptURL = URL(fileURLWithPath: hookScriptPath)
+        let port = NotchConstants.hookServerPort
+        let portMarker = "# port: \(port)"
 
+        // Re-write if version OR port has changed (HookServer may have fallen
+        // back to a non-default port; we need the script to match).
         if FileManager.default.fileExists(atPath: hookScriptPath),
            let contents = try? String(contentsOf: scriptURL, encoding: .utf8),
-           contents.contains(scriptVersion) {
+           contents.contains(scriptVersion),
+           contents.contains(portMarker) {
             return
         }
 
@@ -139,8 +153,11 @@ enum HookInstaller {
         let script = """
         #!/bin/bash
         \(scriptVersion)
-        SOCKET="\(socketPath)"
-        [ -S "$SOCKET" ] || exit 0
+        \(portMarker)
+        # hook-sender.sh — forwards Claude Code / Gemini CLI hook events to NemoNotch over TCP loopback.
+        # Bails instantly when the desktop server isn't running, so the CLI never blocks waiting for nc.
+        URL_BASE="http://127.0.0.1:\(port)"
+        curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || exit 0
 
         # Detect which CLI invoked this hook
         if [ -n "$GEMINI_SESSION_ID" ]; then
@@ -148,15 +165,14 @@ enum HookInstaller {
         elif [ -n "$CLAUDE_SESSION_ID" ]; then
             CLI_SOURCE="claude"
         else
-            # Try to peek into node/bun arguments
             PARENT_PID=$PPID
-            COMMAND_LINE=$(ps -o args= -p $PARENT_PID 2>/dev/null || echo "")
+            COMMAND_LINE=$(ps -o args= -p "$PARENT_PID" 2>/dev/null || echo "")
             if echo "$COMMAND_LINE" | grep -q "gemini"; then
                 CLI_SOURCE="gemini"
             elif echo "$COMMAND_LINE" | grep -q "claude"; then
                 CLI_SOURCE="claude"
             else
-                PARENT=$(ps -o comm= -p $PARENT_PID 2>/dev/null || echo "")
+                PARENT=$(ps -o comm= -p "$PARENT_PID" 2>/dev/null || echo "")
                 case "$PARENT" in
                     *gemini*)  CLI_SOURCE="gemini" ;;
                     *claude*)  CLI_SOURCE="claude" ;;
@@ -175,19 +191,31 @@ enum HookInstaller {
             d = json.load(sys.stdin)
             d['cli_source'] = '$CLI_SOURCE'
             json.dump(d, sys.stdout)
-        except Exception as e:
-            with open('/tmp/nemonotch_hook_error.log', 'a') as f:
-                f.write(str(e) + '\\n')
+        except Exception:
             sys.exit(1)
         " 2>/dev/null || echo "$INPUT")
         fi
 
-        if echo "$INPUT" | grep -q '"PermissionRequest"'; then
-            echo "$INPUT" | nc -U -w 120 "$SOCKET" 2>/dev/null
+        EVENT_NAME=$(echo "$INPUT" | grep -o '"hook_event_name":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+        if [ "$EVENT_NAME" = "PermissionRequest" ]; then
+            # Blocking: hold the connection until NemoNotch returns a decision (up to 120s).
+            # Run curl in background so the script can clean it up if Claude Code kills us.
+            TMPFILE=$(mktemp /tmp/nemonotch-hook.XXXXXX)
+            curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+                "$URL_BASE/hook" --connect-timeout 2 --max-time 120 >"$TMPFILE" 2>/dev/null &
+            CURL_PID=$!
+            trap 'kill $CURL_PID 2>/dev/null; rm -f "$TMPFILE"; exit 0' TERM HUP INT
+            wait $CURL_PID
+            BODY=$(cat "$TMPFILE")
+            rm -f "$TMPFILE"
+            [ -n "$BODY" ] && echo "$BODY"
+            exit 0
         else
-            echo "$INPUT" | nc -U -w 1 "$SOCKET" 2>/dev/null || true
+            curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+                "$URL_BASE/hook" --connect-timeout 1 --max-time 2 >/dev/null 2>&1 || true
+            exit 0
         fi
-        exit 0
         """
 
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
