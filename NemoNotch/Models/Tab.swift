@@ -21,13 +21,13 @@ enum Tab: String, CaseIterable, Identifiable {
         }
     }
 
-    var title: String {
+    var title: LocalizedStringKey {
         switch self {
-        case .overview: String(localized: "models.tab.overview")
-        case .claude: String(localized: "models.tab.ai")
-        case .agents: String(localized: "models.tab.agents")
-        case .launcher: String(localized: "models.tab.launcher")
-        case .system: String(localized: "models.tab.system")
+        case .overview: "models.tab.overview"
+        case .claude: "models.tab.ai"
+        case .agents: "models.tab.agents"
+        case .launcher: "models.tab.launcher"
+        case .system: "models.tab.system"
         }
     }
 }
