@@ -14,12 +14,9 @@ final class NotchCoordinator {
     /// reflects the opened state; others remain collapsed but stay visible
     /// to display badges. `nil` outside of an open session.
     private(set) var activeScreen: NSScreen?
-    private var isContextMenuVisible = false
-    private var contextMenuDelegate: ContextMenuDelegate?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
-    var onShowSettings: (() -> Void)?
 
     /// Unified across all screens — derived once from the built-in display's
     /// physical notch, or a default fallback for headless / external-only setups.
@@ -261,9 +258,6 @@ final class NotchCoordinator {
         monitor.onMouseDown = { [weak self] in
             self?.handleMouseDown()
         }
-        monitor.onRightMouseDown = { [weak self] point in
-            self?.handleRightMouseDown(point)
-        }
     }
 
     /// Locate the screen currently under the given mouse point. Used to
@@ -273,8 +267,6 @@ final class NotchCoordinator {
     }
 
     private func handleMouseMove(_ location: NSPoint) {
-        guard !isContextMenuVisible else { return }
-
         switch status {
         case .closed:
             guard let screen = screen(at: location) else { return }
@@ -291,7 +283,6 @@ final class NotchCoordinator {
     }
 
     private func handleMouseDown() {
-        guard !isContextMenuVisible else { return }
         let location = NSEvent.mouseLocation
 
         if status == .closed {
@@ -308,46 +299,6 @@ final class NotchCoordinator {
                 notchClose()
             }
         }
-    }
-
-    private func handleRightMouseDown(_ point: NSPoint) {
-        let isInNotch: Bool
-        switch status {
-        case .closed:
-            guard let screen = screen(at: point) else { return }
-            isInNotch = NSMouseInRect(point, hitboxRect(for: screen), false)
-        case .opened:
-            guard let active = activeScreen else { return }
-            let contentHit = contentRect(for: active, hitInset: NotchConstants.clickHitboxInset)
-            isInNotch = NSMouseInRect(point, contentHit, false)
-        }
-        guard isInNotch else { return }
-
-        isContextMenuVisible = true
-        let menu = NSMenu()
-        let delegate = ContextMenuDelegate(
-            onClose: { [weak self] in self?.isContextMenuVisible = false },
-            onSettings: { @MainActor [weak self] in self?.onShowSettings?() },
-            onQuit: { NSApp.terminate(nil) }
-        )
-        contextMenuDelegate = delegate
-        menu.delegate = delegate
-        let settingsItem = NSMenuItem(
-            title: String(localized: "notch.context.settings"),
-            action: #selector(ContextMenuDelegate.openSettings),
-            keyEquivalent: ","
-        )
-        settingsItem.target = delegate
-        menu.addItem(settingsItem)
-        menu.addItem(NSMenuItem.separator())
-        let quitItem = NSMenuItem(
-            title: String(localized: "notch.context.quit"),
-            action: #selector(ContextMenuDelegate.quitApp),
-            keyEquivalent: "q"
-        )
-        quitItem.target = delegate
-        menu.addItem(quitItem)
-        menu.popUp(positioning: nil, at: point, in: nil)
     }
 }
 
@@ -394,28 +345,5 @@ final class NotchWindowSlot {
     func close() {
         window.orderOut(nil)
         window.close()
-    }
-}
-
-private final class ContextMenuDelegate: NSObject, NSMenuDelegate {
-    let onClose: () -> Void
-    let onSettings: () -> Void
-    let onQuit: () -> Void
-    init(onClose: @escaping () -> Void, onSettings: @escaping () -> Void, onQuit: @escaping () -> Void) {
-        self.onClose = onClose
-        self.onSettings = onSettings
-        self.onQuit = onQuit
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        onClose()
-    }
-
-    @objc func openSettings() {
-        onSettings()
-    }
-
-    @objc func quitApp() {
-        onQuit()
     }
 }

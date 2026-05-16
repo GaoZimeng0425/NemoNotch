@@ -1,29 +1,27 @@
+import AppKit
 import SwiftUI
 
-/// Fixed pixel-art notch shape rendered live for the menubar. Geometry mirrors
-/// scripts/generate-app-icon.swift — same 12 × 12 grid, three horizontal bars.
-/// State information lives on the notch panel above the menubar, not here.
+/// Fixed pixel-art notch shape rendered as an explicit template NSImage.
+/// Geometry mirrors scripts/generate-app-icon.swift — same 12 × 12 grid,
+/// three horizontal bars. MenuBarExtra requires a template image to render
+/// correctly in the menubar (SwiftUI Shape views are not part of the
+/// supported MenuBarExtra label contract on macOS 14+).
 struct MenuBarLabel: View {
     var body: some View {
-        NotchPixelShape()
-            .fill(.primary)
-            .frame(width: 18, height: 18)
+        Image(nsImage: Self.iconImage)
     }
-}
 
-/// Three horizontal bars on a 12 × 12 grid. Rendered as a Shape (not a
-/// Canvas) so the fill style participates in `.foregroundStyle` /
-/// `.fill(.primary)` and adapts to the menubar's effective appearance.
-private struct NotchPixelShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let cell = rect.width / 12
-        var path = Path()
-        // display top edge (cols 0–11)
-        path.addRect(CGRect(x: 0, y: 4 * cell, width: 12 * cell, height: cell))
-        // notch body (cols 2–9)
-        path.addRect(CGRect(x: 2 * cell, y: 5 * cell, width: 8 * cell, height: cell))
-        // chamfer (cols 3–8)
-        path.addRect(CGRect(x: 3 * cell, y: 6 * cell, width: 6 * cell, height: cell))
-        return path
-    }
+    private static let iconImage: NSImage = {
+        let side: CGFloat = 18
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { rect in
+            let cell = rect.width / 12
+            NSColor.black.setFill()
+            NSRect(x: 0, y: 4 * cell, width: 12 * cell, height: cell).fill()
+            NSRect(x: 2 * cell, y: 5 * cell, width: 8 * cell, height: cell).fill()
+            NSRect(x: 3 * cell, y: 6 * cell, width: 6 * cell, height: cell).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }()
 }

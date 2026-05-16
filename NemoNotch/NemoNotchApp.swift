@@ -13,7 +13,6 @@ struct NemoNotchApp: App {
                 .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
         } label: {
             MenuBarLabel()
-                .background(OpenSettingsBridge(appDelegate: appDelegate))
         }
         .menuBarExtraStyle(.menu)
 
@@ -37,19 +36,6 @@ struct MenuContent: View {
             AppSection()
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
-    }
-}
-
-private struct OpenSettingsBridge: View {
-    @Environment(\.openSettings) private var openSettings
-    let appDelegate: AppDelegate
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .onAppear {
-                appDelegate.openSettingsAction = { openSettings() }
-            }
     }
 }
 
@@ -89,7 +75,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
 
-    var openSettingsAction: (() -> Void)?
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
     private(set) var mediaService: MediaService?
@@ -185,9 +170,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notchCoordinator.restoreSuppressionCheck = { [weak self] in
             self?.shouldSuppressPreviousAppRestore ?? false
         }
-        notchCoordinator.onShowSettings = { [weak self] in
-            self?.showSettings()
-        }
         coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator)
@@ -195,18 +177,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         LogService.info("applicationWillTerminate received", category: "AppDelegate")
-    }
-
-    @MainActor
-    func showSettings() {
-        LogService.info("showSettings invoked", category: "AppDelegate")
-        handleSettingsAppear()
-        if let action = openSettingsAction {
-            action()
-        } else {
-            LogService.warn("openSettingsAction not yet captured, falling back to selector", category: "AppDelegate")
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        }
     }
 
     @MainActor
