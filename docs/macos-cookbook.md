@@ -1545,6 +1545,49 @@ UNUserNotificationCenter.current().getNotificationSettings { settings in
 
 **Universal gotcha:** for any permission, the prompt only fires on the **first call after first launch**. Subsequent denials are silent. Always have a recovery UI path that opens the relevant Settings pane via `NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:...")!)` or surfaces manual instructions.
 
+### 11.6 Reactive permission state (immediate UI update)
+
+§11.1–§11.3 each describe a different *detection* mechanism. The "UI refreshes the moment the user toggles permission in System Settings" effect comes from a separate layer: `@Observable` + SwiftUI. macOS has no unified "permission granted" notification — bridging detection to the UI is on you, and the bridge differs per permission.
+
+The pattern is the same shape every time:
+
+1. The Service is `@Observable` with the permission state as a **stored property** (`authorizationStatus`, `isAXTrusted`, …).
+2. The detection mechanism writes to that property (NotificationCenter handler, Timer tick, or async delegate callback).
+3. Views inject the Service via `@Environment` — SwiftUI's dependency tracking re-renders them when the property changes.
+
+Per-permission bridges:
+
+| Permission | What writes the `@Observable` property | Latency | Anchor |
+|---|---|---|---|
+| Calendar | `.EKEventStoreChanged` NotificationCenter handler → `authorizationStatus` | ~immediate | `CalendarService.swift:9, 37-42` |
+| Accessibility | 2 s Timer re-reads `AXIsProcessTrusted()` → `isAXTrusted` | ≤ 2 s | `NotificationService.swift:14, 84` |
+| Automation | `SBApplicationDelegate.eventDidFail` (`-1743`) → `MediaBridge.notifyPermissionDenied()` | on next AS call | `MediaBridge.swift:35-43` |
+
+```swift
+// Calendar — system pushes a notification, handler writes the @Observable property
+@Observable final class CalendarService {
+    var authorizationStatus: EKAuthorizationStatus = .notDetermined
+    init() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(eventsChanged),
+            name: .EKEventStoreChanged, object: nil)
+    }
+}
+
+// Accessibility — no notification exists; poll into the @Observable property
+@Observable final class NotificationService {
+    var isAXTrusted: Bool = AXIsProcessTrusted()
+    private func pollDock() {
+        isAXTrusted = AXIsProcessTrusted()   // re-read each 2 s tick
+        // …
+    }
+}
+```
+
+- **Gotcha:** Accessibility has *no* NotificationCenter event for "granted" (called out in §11.3) — polling is the only way to surface a grant without relaunch. Pick a cadence the user perceives as immediate (≤ 2 s) but doesn't burn cycles.
+- **Gotcha:** Don't keep permission state outside the `@Observable` class (e.g. as a `static let` cache or a global enum). SwiftUI's tracking only sees stored properties on the observed instance — writes elsewhere don't trigger re-render and the UI stays stale.
+- **Why this matters:** Without the `@Observable` bridge, every dependent View has to poll on its own or listen to a custom notification. Funnelling all permission state through Service properties keeps detection logic in one place and lets the UI stay declarative.
+
 ---
 
 ## 12. IPC & subprocess
