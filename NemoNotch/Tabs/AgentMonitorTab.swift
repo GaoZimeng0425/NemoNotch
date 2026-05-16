@@ -55,7 +55,7 @@ struct AgentMonitorTab: View {
 
     private var agentSections: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 14) {
                 ForEach(monitors.filter(\.isOnline), id: \.displayName) { monitor in
                     AgentMonitorSection(
                         monitor: monitor,
@@ -65,9 +65,9 @@ struct AgentMonitorTab: View {
                 }
             }
         }
-        .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
-        .padding(.horizontal, 4)
-        .padding(.bottom, 12)
+        .notchScrollEdgeShadow(.vertical, thickness: 16, intensity: 0.30)
+        .padding(.horizontal, 2)
+        .padding(.bottom, 14)
     }
 }
 
@@ -85,27 +85,26 @@ struct AgentMonitorSection: View {
         return (active, idle)
     }
 
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                if let asset = monitor.iconAssetName {
-                    Image(asset)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 18, height: 18)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                } else {
-                    Text(monitor.iconEmoji)
-                        .font(.system(size: 11))
-                }
-                Text(monitor.displayName)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
+    private var summaryText: String {
+        let working = monitor.agents.values.count(where: { $0.state == .working || $0.state == .toolCalling })
+        let speaking = monitor.agents.values.count(where: { $0.state == .speaking })
+        let idle = monitor.agents.values.count(where: { $0.state == .idle })
+        let parts = [
+            working > 0 ? "\(working) working" : nil,
+            speaking > 0 ? "\(speaking) speaking" : nil,
+            idle > 0 && working + speaking == 0 ? "\(idle) idle" : nil,
+        ].compactMap(\.self)
 
+        if parts.isEmpty {
+            return "\(monitor.agents.count) agents"
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
             let (active, idle) = partitionedAgents
+            monitorHeader(activeCount: active.count)
 
             ForEach(active) { agent in
                 AgentRowView(
@@ -147,6 +146,64 @@ struct AgentMonitorSection: View {
             }
         }
     }
+
+    private func monitorHeader(activeCount: Int) -> some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [NotchTheme.accent, NotchTheme.accentHot],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 44, height: 44)
+                .overlay {
+                    if let asset = monitor.iconAssetName {
+                        Image(asset)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 26, height: 26)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    } else {
+                        Text(monitor.iconEmoji)
+                            .font(.system(size: 24))
+                    }
+                }
+                .shadow(color: NotchTheme.accent.opacity(0.32), radius: 16, y: 8)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(monitor.displayName)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+                Text(summaryText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            if activeCount > 0 {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(NotchTheme.accentText)
+                        .frame(width: 7, height: 7)
+                        .shadow(color: NotchTheme.accent.opacity(0.8), radius: 8)
+                    Text("\(activeCount)")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(NotchTheme.accentText)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(NotchTheme.surfaceWarm)
+                .clipShape(Capsule(style: .continuous))
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
+    }
 }
 
 // MARK: - Agent Row
@@ -158,28 +215,17 @@ struct AgentRowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 11) {
                 Circle()
-                    .fill(NotchTheme.surfaceEmphasis)
-                    .frame(width: 24, height: 24)
-                    .overlay {
-                        if let asset = agent.iconAssetName {
-                            Image(asset)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 20, height: 20)
-                                .clipShape(RoundedRectangle(cornerRadius: 3))
-                        } else {
-                            Text(agent.emoji)
-                                .font(.system(size: 13))
-                        }
-                    }
+                    .fill(stateColor)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: stateColor.opacity(0.82), radius: 8)
                     .modifier(PulseModifier(isActive: agent.state == .working || agent.state == .toolCalling))
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(agent.name)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(NotchTheme.textPrimary)
                             .lineLimit(1)
 
@@ -187,15 +233,25 @@ struct AgentRowView: View {
 
                         if let msgs = messages, !msgs.isEmpty {
                             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(NotchTheme.textTertiary)
                         }
+
+                        Spacer(minLength: 0)
+
+                        Text(timeAgo(agent.lastEventTime))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(NotchTheme.textTertiary)
                     }
 
                     if let tool = agent.currentTool, !tool.isEmpty {
                         Text(tool)
-                            .font(.system(size: 10))
-                            .foregroundStyle(NotchTheme.accent)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(NotchTheme.accentText)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(NotchTheme.accentSoft)
+                            .clipShape(Capsule(style: .continuous))
                             .lineLimit(1)
                     }
 
@@ -211,7 +267,6 @@ struct AgentRowView: View {
                             Text(URL(fileURLWithPath: workspace).lastPathComponent)
                                 .lineLimit(1)
                         }
-                        Text(timeAgo(agent.lastEventTime))
                     }
                     .font(.system(size: 9))
                     .foregroundStyle(NotchTheme.textMuted)
@@ -219,21 +274,33 @@ struct AgentRowView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
 
             if isExpanded, let messages {
                 AgentMessagePreview(messages: messages)
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(NotchTheme.surface)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(agent.state == .idle ? NotchTheme.surfaceSubtle : NotchTheme.surfaceWarm)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(
+                            agent.state == .idle ? NotchTheme.strokeStrong : NotchTheme.accentStroke,
+                            lineWidth: agent.state == .idle ? 0.7 : 1
+                        )
                 )
         )
+        .shadow(color: agent.state == .idle ? .clear : NotchTheme.accent.opacity(0.12), radius: 14, y: 6)
+    }
+
+    private var stateColor: Color {
+        switch agent.state {
+        case .idle: NotchTheme.textTertiary
+        case .working, .toolCalling, .speaking: NotchTheme.accentText
+        case .error: .red
+        }
     }
 
     private func timeAgo(_ date: Date) -> String {
@@ -258,8 +325,9 @@ struct AgentMessagePreview: View {
 
             ForEach(Array(messages.suffix(10)), id: \.id) { msg in
                 HStack(alignment: .top, spacing: 4) {
-                    Text(iconForRole(msg))
-                        .font(.system(size: 9))
+                    Image(systemName: symbolForRole(msg))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(colorForRole(msg))
                         .frame(width: 14)
                     Text(displayContent(for: msg))
                         .font(.system(size: 9))
@@ -272,12 +340,12 @@ struct AgentMessagePreview: View {
         .padding(.bottom, 6)
     }
 
-    private func iconForRole(_ msg: ChatMessage) -> String {
+    private func symbolForRole(_ msg: ChatMessage) -> String {
         switch msg.role {
-        case .user: "\u{1F464}"
-        case .assistant: msg.toolName != nil ? "\u{1F527}" : "\u{1F916}"
-        case .tool, .toolResult: "\u{1F4CB}"
-        case .system: "\u{2139}\u{FE0F}"
+        case .user: "person.fill"
+        case .assistant: msg.toolName != nil ? "wrench.and.screwdriver.fill" : "cpu"
+        case .tool, .toolResult: "doc.text.fill"
+        case .system: "info.circle.fill"
         }
     }
 
@@ -306,11 +374,11 @@ struct AgentStateTag: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 8, weight: .medium, design: .rounded))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.6))
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.16))
             .clipShape(Capsule())
     }
 
@@ -326,10 +394,10 @@ struct AgentStateTag: View {
 
     private var color: Color {
         switch state {
-        case .idle: .gray
-        case .working: .blue
-        case .speaking: .green
-        case .toolCalling: .orange
+        case .idle: NotchTheme.textTertiary
+        case .working: NotchTheme.accentText
+        case .speaking: NotchTheme.accentText
+        case .toolCalling: NotchTheme.accentText
         case .error: .red
         }
     }

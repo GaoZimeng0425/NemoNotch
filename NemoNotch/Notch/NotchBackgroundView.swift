@@ -16,23 +16,59 @@ struct NotchBackgroundView: View {
     }
 
     private var notchedShape: some View {
-        Rectangle()
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [.black.opacity(0.95), .black],
-                    startPoint: .top,
-                    endPoint: .bottom
+        ZStack {
+            Rectangle()
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            NotchTheme.panelRaised,
+                            NotchTheme.panelBase,
+                            .black,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-            )
-            .mask(notchBackgroundMaskGroup)
-            .frame(
-                width: notchSize.width + cornerRadius * 2,
-                height: notchSize.height
-            )
-            .shadow(
-                color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
-                radius: NotchConstants.openedShadowRadius
-            )
+
+            if showShadow {
+                Rectangle()
+                    .foregroundStyle(
+                        RadialGradient(
+                            colors: [
+                                NotchTheme.accent.opacity(0.10),
+                                .clear,
+                            ],
+                            center: .topLeading,
+                            startRadius: 20,
+                            endRadius: notchSize.width * 0.72
+                        )
+                    )
+
+                Rectangle()
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.11),
+                                .clear,
+                                NotchTheme.accent.opacity(0.04),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .blendMode(.screen)
+                    .opacity(0.48)
+            }
+        }
+        .mask(notchBackgroundMaskGroup)
+        .frame(
+            width: notchSize.width + cornerRadius * 2,
+            height: notchSize.height
+        )
+        .shadow(
+            color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
+            radius: NotchConstants.openedShadowRadius
+        )
     }
 
     private var notchBackgroundMaskGroup: some View {

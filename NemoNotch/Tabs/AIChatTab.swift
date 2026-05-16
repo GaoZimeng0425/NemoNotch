@@ -12,6 +12,56 @@ struct AIChatTab: View {
         aiService.anyHookInstalled
     }
 
+    private var workingCount: Int {
+        allSessions.count(where: { $0.status == .working })
+    }
+
+    private var waitingCount: Int {
+        allSessions.count(where: { $0.status == .waiting })
+    }
+
+    private var idleCount: Int {
+        allSessions.count(where: { $0.status == .idle })
+    }
+
+    private var dominantSource: AISource? {
+        guard let first = allSessions.first?.source,
+              allSessions.allSatisfy({ $0.source == first }) else {
+            return nil
+        }
+        return first
+    }
+
+    private var consoleTitle: String {
+        switch dominantSource {
+        case .claude: "Claude Code"
+        case .gemini: "Gemini CLI"
+        case .none: "AI Sessions"
+        }
+    }
+
+    private var consoleSummary: String {
+        let activeParts = [
+            waitingCount > 0 ? "\(waitingCount) waiting" : nil,
+            workingCount > 0 ? "\(workingCount) working" : nil,
+            idleCount > 0 && workingCount + waitingCount == 0 ? "\(idleCount) idle" : nil,
+        ].compactMap(\.self)
+
+        if activeParts.isEmpty {
+            return "\(allSessions.count) sessions"
+        }
+        return activeParts.joined(separator: " · ")
+    }
+
+    private var headerMeterSessions: [AISessionState] {
+        Array(
+            allSessions
+                .filter { $0.lastContextTokens > 0 }
+                .sorted { $0.contextPercent > $1.contextPercent }
+                .prefix(2)
+        )
+    }
+
     var body: some View {
         if !anyHookInstalled {
             installPrompt
@@ -66,14 +116,117 @@ struct AIChatTab: View {
     }
 
     private var sessionList: some View {
-        ScrollView {
-            LazyVStack(spacing: 6) {
-                ForEach(allSessions) { session in
-                    sessionRow(session)
+        VStack(spacing: 12) {
+            aiConsoleHeader
+
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(allSessions) { session in
+                        sessionRow(session)
+                    }
+                }
+                .padding(.bottom, 10)
+            }
+            .notchScrollEdgeShadow(.vertical, thickness: 16, intensity: 0.30)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var aiConsoleHeader: some View {
+        HStack(alignment: .top, spacing: 14) {
+            consoleIcon
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(consoleTitle)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+                Text(consoleSummary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            VStack(alignment: .trailing, spacing: 7) {
+                if headerMeterSessions.isEmpty {
+                    serverStatus
+                } else {
+                    ForEach(headerMeterSessions) { session in
+                        compactContextMeter(session)
+                    }
                 }
             }
+            .padding(.top, 2)
         }
-        .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
+    }
+
+    private var consoleIcon: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [NotchTheme.accent, NotchTheme.accentHot],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 44, height: 44)
+            .overlay {
+                if let dominantSource {
+                    switch dominantSource {
+                    case .claude:
+                        ClaudeCrabIcon(size: 22, color: .white)
+                    case .gemini:
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 19, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                } else {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 19, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            }
+            .shadow(color: NotchTheme.accent.opacity(0.32), radius: 16, y: 8)
+    }
+
+    private func compactContextMeter(_ session: AISessionState) -> some View {
+        HStack(spacing: 8) {
+            Text(meterLabel(for: session))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .frame(width: 34, alignment: .trailing)
+                .lineLimit(1)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(NotchTheme.rail)
+                    Capsule(style: .continuous)
+                        .fill(NotchTheme.accentText)
+                        .frame(width: max(geo.size.width * CGFloat(session.contextPercent), 4))
+                }
+            }
+            .frame(width: 68, height: 7)
+
+            Text(String(format: "%.0f%%", session.contextPercent * 100))
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(NotchTheme.accentText)
+                .frame(width: 34, alignment: .trailing)
+        }
+    }
+
+    private func meterLabel(for session: AISessionState) -> String {
+        if let model = session.displayModel {
+            let parts = model.split(separator: " ")
+            if let last = parts.last {
+                return String(last.prefix(5))
+            }
+        }
+        return "ctx"
     }
 
     private func chatDetail(session: AISessionState) -> some View {
@@ -192,33 +345,46 @@ struct AIChatTab: View {
     }
 
     private func sessionRow(_ session: AISessionState) -> some View {
-        Button {
+        let approval = approvalContext(for: session)
+
+        return Button {
             selectedSessionId = session.id
         } label: {
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 11) {
                 Circle()
-                    .fill(ToolStyle.color(session.currentTool).opacity(0.2))
-                    .frame(width: 24, height: 24)
-                    .overlay {
-                        sourceIcon(session.source, size: 12)
-                    }
+                    .fill(dotColor(session.status))
+                    .frame(width: 8, height: 8)
+                    .shadow(color: dotColor(session.status).opacity(0.86), radius: 8)
+                    .modifier(PulseModifier(isActive: session.status == .working || approval != nil))
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(session.displayTitle)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(NotchTheme.textPrimary)
                             .lineLimit(1)
+
+                        sessionStatusPill(session)
+
                         if let event = session.lastEventName {
                             eventTag(event)
                         }
+
                         if session.status == .working, let tool = session.currentTool {
-                            Text(tool)
-                                .font(.system(size: 10))
-                                .foregroundStyle(ToolStyle.color(tool))
-                                .lineLimit(1)
+                            toolPill(tool)
                         }
+
+                        if let model = session.displayModel {
+                            modelPill(model)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        Text(timeAgo(session.lastEventTime))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(NotchTheme.textTertiary)
                     }
+
                     if let msg = session.lastUserMessage, !msg.isEmpty {
                         Text(msg)
                             .font(.system(size: 10))
@@ -230,20 +396,11 @@ struct AIChatTab: View {
                             .foregroundStyle(NotchTheme.textSecondary)
                             .lineLimit(2)
                     }
+
                     HStack(spacing: 6) {
                         if let cwd = session.cwd {
                             Text(URL(fileURLWithPath: cwd).lastPathComponent)
                                 .lineLimit(1)
-                        }
-                        Text(timeAgo(session.lastEventTime))
-                        if let model = session.displayModel {
-                            Text(model)
-                                .font(.system(size: 8, weight: .medium, design: .rounded))
-                                .foregroundStyle(NotchTheme.accent.opacity(0.9))
-                                .padding(.horizontal, 3)
-                                .padding(.vertical, 1)
-                                .background(NotchTheme.accentSoft)
-                                .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
                         if session.totalTokens > 0 {
                             Text("· \(session.tokenDisplay)")
@@ -256,43 +413,43 @@ struct AIChatTab: View {
                     }
                     .font(.system(size: 9))
                     .foregroundStyle(NotchTheme.textMuted)
+
                     if session.lastContextTokens > 0 {
                         contextBar(session: session)
+                            .padding(.top, 1)
                     }
                 }
 
                 Spacer(minLength: 0)
 
-                if let ctx = approvalContext(for: session) {
+                if let ctx = approval {
                     approvalButtons(for: session, ctx: ctx)
-                } else {
-                    Circle()
-                        .fill(dotColor(session.status))
-                        .frame(width: 6, height: 6)
-                        .modifier(PulseModifier(isActive: session.status == .working))
-                        .padding(.top, 4)
-                        .frame(maxHeight: .infinity, alignment: .top)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(approvalContext(for: session) != nil ? NotchTheme.accentSoft : NotchTheme.surface)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(approval != nil ? NotchTheme.surfaceWarm : NotchTheme.surfaceSubtle)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(
+                            approval != nil ? NotchTheme.accentStroke : NotchTheme.strokeStrong,
+                            lineWidth: approval != nil ? 1 : 0.7
+                        )
                 )
         )
+        .shadow(color: approval != nil ? NotchTheme.accent.opacity(0.12) : .clear, radius: 14, y: 6)
     }
 
     @ViewBuilder
     private func sourceIcon(_ source: AISource, size: CGFloat) -> some View {
         switch source {
         case .claude:
-            ClaudeCrabIcon(size: size)
+            ClaudeCrabIcon(size: size, color: NotchTheme.accentText)
         case .gemini:
             Image(systemName: "sparkle")
                 .font(.system(size: size * 0.85, weight: .semibold))
@@ -303,11 +460,11 @@ struct AIChatTab: View {
     private func eventTag(_ event: String) -> some View {
         let (label, color) = eventTagStyle(event)
         return Text(label)
-            .font(.system(size: 8, weight: .medium, design: .rounded))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.6))
+            .font(.system(size: 9, weight: .semibold, design: .rounded))
+            .foregroundStyle(color.opacity(0.96))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.16))
             .clipShape(Capsule())
     }
 
@@ -324,10 +481,54 @@ struct AIChatTab: View {
         }
     }
 
+    private func sessionStatusPill(_ session: AISessionState) -> some View {
+        let label: String = {
+            if approvalContext(for: session) != nil { return "Approval" }
+            switch session.status {
+            case .idle: return "Idle"
+            case .working: return "Working"
+            case .waiting: return "Waiting for input"
+            }
+        }()
+
+        return Text(label)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(statusColor(session.status))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(statusColor(session.status).opacity(0.16))
+            .clipShape(Capsule(style: .continuous))
+    }
+
+    private func modelPill(_ model: String) -> some View {
+        Text(model)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(NotchTheme.textSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(NotchTheme.surfaceEmphasis)
+            .clipShape(Capsule(style: .continuous))
+    }
+
+    private func toolPill(_ tool: String) -> some View {
+        Text(tool)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(ToolStyle.color(tool).opacity(0.95))
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(ToolStyle.color(tool).opacity(0.14))
+            .clipShape(Capsule(style: .continuous))
+    }
+
     private func dotColor(_ status: ClaudeStatus) -> Color {
+        statusColor(status)
+    }
+
+    private func statusColor(_ status: ClaudeStatus) -> Color {
         switch status {
-        case .idle: .gray
-        case .working: .green
+        case .idle: NotchTheme.textTertiary
+        case .working: NotchTheme.accentText
         case .waiting: NotchTheme.accent
         }
     }
@@ -402,13 +603,9 @@ struct AIChatTab: View {
 
     private func contextBar(session: AISessionState) -> some View {
         let percent = session.contextPercent
-        let barColor: Color = {
-            if percent > 0.8 { return .red }
-            if percent > 0.5 { return .orange }
-            return .blue
-        }()
+        let barColor: Color = percent > 0.8 ? .red : NotchTheme.accentText
 
-        return VStack(spacing: 3) {
+        return VStack(spacing: 4) {
             HStack {
                 Text("ctx")
                     .foregroundStyle(NotchTheme.textMuted)
@@ -416,20 +613,20 @@ struct AIChatTab: View {
                 Text("\(session.contextTokenDisplay) / \(session.contextLimitDisplay)")
                     .foregroundStyle(NotchTheme.textMuted)
                 Text(String(format: "%.0f%%", percent * 100))
-                    .foregroundStyle(barColor.opacity(0.7))
+                    .foregroundStyle(barColor.opacity(0.85))
             }
-            .font(.system(size: 8, design: .monospaced))
+            .font(.system(size: 8, weight: .medium, design: .monospaced))
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(NotchTheme.surface)
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(barColor.opacity(0.5))
+                    Capsule(style: .continuous)
+                        .fill(NotchTheme.rail)
+                    Capsule(style: .continuous)
+                        .fill(barColor.opacity(0.88))
                         .frame(width: percent > 0 ? max(geo.size.width * CGFloat(percent), 3) : 0)
                 }
             }
-            .frame(height: 3)
+            .frame(height: 5)
         }
     }
 
