@@ -8,16 +8,18 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(
-                appSettings: appDelegate.appSettings,
-                onOpenSettings: { appDelegate.showSettings() }
-            )
-            .environment(appDelegate.mediaService ?? MediaService())
-            .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+            MenuContent(appSettings: appDelegate.appSettings)
+                .environment(appDelegate.mediaService ?? MediaService())
+                .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
         } label: {
             MenuBarLabel()
+                .background(OpenSettingsBridge(appDelegate: appDelegate))
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsSceneRoot(appDelegate: appDelegate)
+        }
     }
 
     init() {
@@ -27,38 +29,78 @@ struct NemoNotchApp: App {
 
 struct MenuContent: View {
     let appSettings: AppSettings?
-    let onOpenSettings: () -> Void
 
     var body: some View {
         Group {
             NowPlayingSection()
             HooksSection()
-            AppSection(onOpenSettings: onOpenSettings)
+            AppSection()
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
     }
 }
 
+private struct OpenSettingsBridge: View {
+    @Environment(\.openSettings) private var openSettings
+    let appDelegate: AppDelegate
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                appDelegate.openSettingsAction = { openSettings() }
+            }
+    }
+}
+
+struct SettingsSceneRoot: View {
+    let appDelegate: AppDelegate
+
+    var body: some View {
+        Group {
+            if let settings = appDelegate.appSettings,
+               let aiMonitor = appDelegate.aiMonitorService,
+               let launcher = appDelegate.launcherService,
+               let notification = appDelegate.notificationService,
+               let weather = appDelegate.weatherService,
+               let hermes = appDelegate.hermesService {
+                SettingsView()
+                    .environment(settings)
+                    .environment(aiMonitor)
+                    .environment(launcher)
+                    .environment(notification)
+                    .environment(weather)
+                    .environment(hermes)
+            } else {
+                ProgressView()
+                    .frame(width: 430, height: 460)
+            }
+        }
+        .onAppear { appDelegate.handleSettingsAppear() }
+        .onDisappear { appDelegate.handleSettingsDisappear() }
+    }
+}
+
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private var settingsWindow: NSWindow?
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressRestoreUntil: Date = .distantPast
 
     override nonisolated init() {
         super.init()
     }
 
+    var openSettingsAction: (() -> Void)?
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
     private(set) var mediaService: MediaService?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
-    private var hermesService: HermesService?
+    private(set) var hermesService: HermesService?
     private(set) var agentRegistry: AgentMonitorRegistry?
-    private var launcherService: LauncherService?
-    private var notificationService: NotificationService?
-    private var weatherService: WeatherService?
+    private(set) var launcherService: LauncherService?
+    private(set) var notificationService: NotificationService?
+    private(set) var weatherService: WeatherService?
     private var hudService: HUDService?
     private var systemService: SystemService?
 
@@ -151,48 +193,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         setupHotkeys(coordinator: notchCoordinator)
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        LogService.info("applicationWillTerminate received", category: "AppDelegate")
+    }
+
     @MainActor
     func showSettings() {
+        LogService.info("showSettings invoked", category: "AppDelegate")
+        handleSettingsAppear()
+        if let action = openSettingsAction {
+            action()
+        } else {
+            LogService.warn("openSettingsAction not yet captured, falling back to selector", category: "AppDelegate")
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+    }
+
+    @MainActor
+    func handleSettingsAppear() {
         suppressRestoreUntil = Date().addingTimeInterval(1.2)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-
-        if settingsWindow == nil,
-           let settings = appSettings,
-           let aiMonitor = aiMonitorService,
-           let launcher = launcherService,
-           let notification = notificationService,
-           let weather = weatherService,
-           let hermes = hermesService {
-            let view = SettingsView()
-                .environment(settings)
-                .environment(aiMonitor)
-                .environment(launcher)
-                .environment(notification)
-                .environment(weather)
-                .environment(hermes)
-            let window = SettingsWindow(rootView: view)
-            window.delegate = self
-            settingsWindow = window
-        }
-
-        settingsWindow?.center()
-        settingsWindow?.orderFrontRegardless()
-        settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
-    func windowDidBecomeKey(_ notification: Notification) {
-        if let window = notification.object as? NSWindow, window === settingsWindow {
-            suppressRestoreUntil = Date().addingTimeInterval(0.6)
-        }
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        if let window = notification.object as? NSWindow, window === settingsWindow {
-            settingsWindow = nil
-            suppressRestoreUntil = .distantPast
-            NSApp.setActivationPolicy(.accessory)
-        }
+    @MainActor
+    func handleSettingsDisappear() {
+        LogService.info("Settings window closed", category: "AppDelegate")
+        suppressRestoreUntil = .distantPast
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func setupHotkeys(coordinator: NotchCoordinator) {

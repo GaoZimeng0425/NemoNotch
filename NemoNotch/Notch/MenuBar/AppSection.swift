@@ -1,11 +1,9 @@
 import SwiftUI
 
 struct AppSection: View {
-    let onOpenSettings: () -> Void
-
     var body: some View {
-        Button("menu.preferences") {
-            onOpenSettings()
+        SettingsLink {
+            Text("menu.preferences")
         }
         .keyboardShortcut(",", modifiers: .command)
 

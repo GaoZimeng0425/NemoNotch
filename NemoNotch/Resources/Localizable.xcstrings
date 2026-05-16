@@ -1266,6 +1266,54 @@
         }
       }
     },
+    "settings.hooks_description" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hooks allow NemoNotch to monitor AI CLI session status in real time."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hooks 允许 NemoNotch 实时监控 AI CLI 的会话状态。"
+          }
+        }
+      }
+    },
+    "settings.hooks_installed %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Hooks: Installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Hooks: 已安装"
+          }
+        }
+      }
+    },
+    "settings.hooks_not_installed %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Hooks: Not Installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Hooks: 未安装"
+          }
+        }
+      }
+    },
     "settings.hotkeys" : {
       "localizations" : {
         "en" : {
@@ -1326,54 +1374,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开/关闭灵动岛"
-          }
-        }
-      }
-    },
-    "settings.hooks_description" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hooks allow NemoNotch to monitor AI CLI session status in real time."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hooks 允许 NemoNotch 实时监控 AI CLI 的会话状态。"
-          }
-        }
-      }
-    },
-    "settings.hooks_installed %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Hooks: Installed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Hooks: 已安装"
-          }
-        }
-      }
-    },
-    "settings.hooks_not_installed %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Hooks: Not Installed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Hooks: 未安装"
           }
         }
       }
@@ -1603,6 +1603,7 @@
       }
     },
     "settings.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
