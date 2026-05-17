@@ -4,6 +4,8 @@ struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
     @State private var selectedSessionId: String?
 
+    private static let scrollAnchorID = "ai-chat-bottom-anchor"
+
     private var allSessions: [AISessionState] {
         aiService.store.sortedSessions
     }
@@ -277,6 +279,12 @@ struct AIChatTab: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(NotchTheme.textPrimary)
                             .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Circle()
+                            .fill(dotColor(session.status))
+                            .frame(width: 6, height: 6)
+                            .modifier(PulseModifier(isActive: session
+                                    .status == .working || approvalContext(for: session) != nil))
                     }
                     HStack(spacing: 4) {
                         Text(session.projectFolder ?? "")
@@ -292,24 +300,15 @@ struct AIChatTab: View {
                     }
                     .font(.system(size: 9))
                 }
-
-                Spacer(minLength: 0)
-
-                Circle()
-                    .fill(dotColor(session.status))
-                    .frame(width: 6, height: 6)
-                    .modifier(PulseModifier(isActive: session
-                            .status == .working || approvalContext(for: session) != nil))
-                    .padding(.top, 4)
-                    .frame(maxHeight: .infinity, alignment: .top)
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.top, 6)
+            .padding(.bottom, session.lastContextTokens > 0 ? 2 : 6)
 
             if session.lastContextTokens > 0 {
                 contextBar(session: session)
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, 4)
             }
 
             Divider().background(NotchTheme.stroke)
@@ -332,17 +331,23 @@ struct AIChatTab: View {
                                 ChatMessageView(message: msg, subagentTools: subagentTools(for: msg, session: session))
                                     .id(msg.id)
                             }
+                            Color.clear
+                                .frame(height: 1)
+                                .id(Self.scrollAnchorID)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                     }
                     .notchScrollEdgeShadow(.vertical, thickness: 12, intensity: 0.36)
+                    .task(id: session.id) {
+                        proxy.scrollTo(Self.scrollAnchorID, anchor: .bottom)
+                    }
                     .onChange(of: session.messages.count) { _, _ in
                         withAnimation(.spring(
                             duration: NotchConstants.tabSwitchSpringDuration,
                             bounce: NotchConstants.tabSwitchSpringBounce
                         )) {
-                            proxy.scrollTo(session.messages.last?.id, anchor: .bottom)
+                            proxy.scrollTo(Self.scrollAnchorID, anchor: .bottom)
                         }
                     }
                 }
