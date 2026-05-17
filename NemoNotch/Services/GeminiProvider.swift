@@ -186,6 +186,7 @@ final class GeminiProvider: AIProvider {
 
         let fm = FileManager.default
         let threshold = Date().addingTimeInterval(-3600)
+        var discovered = 0
 
         for (cwd, projectName) in projects {
             let chatsDir = NSHomeDirectory() + "/.gemini/tmp/\(projectName)/chats"
@@ -224,9 +225,16 @@ final class GeminiProvider: AIProvider {
                 sessionFiles[sid] = filePath
 
                 applyParsedContent(to: &state, filePath: filePath)
+                state.phase = .idle // Resurrected sessions start idle — phase will be promoted by future hook events.
                 store.upsert(state)
                 watcherManager.startWatching(sessionId: sid, cwd: cwd)
+                discovered += 1
             }
+        }
+
+        if discovered > 0 {
+            LogService.info("Gemini: discovered \(discovered) existing session(s)", category: "GeminiProvider")
+            scheduleTimeoutCleanup()
         }
     }
 

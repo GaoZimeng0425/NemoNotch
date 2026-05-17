@@ -81,6 +81,7 @@ final class ClaudeProvider: AIProvider {
 
         if discovered > 0 {
             LogService.info("Claude: discovered \(discovered) existing session(s)", category: "ClaudeProvider")
+            scheduleTimeoutCleanup()
         }
     }
 
