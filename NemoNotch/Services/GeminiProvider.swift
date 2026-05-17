@@ -341,9 +341,16 @@ final class GeminiProvider: AIProvider {
 
     // MARK: - Timeout
 
+    private static let cleanupTickInterval: TimeInterval = 60
+    private static let silentDemoteThreshold: TimeInterval = 300 // 5 min → clear badge
+    private static let removeStaleThreshold: TimeInterval = 1800 // 30 min → drop session
+
     private func scheduleTimeoutCleanup() {
-        timeoutTimer?.invalidate()
-        timeoutTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+        guard timeoutTimer == nil else { return }
+        timeoutTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.cleanupTickInterval,
+            repeats: true
+        ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.cleanupStaleSessions()
             }
@@ -351,11 +358,33 @@ final class GeminiProvider: AIProvider {
     }
 
     private func cleanupStaleSessions() {
-        let threshold = Date().addingTimeInterval(-1800)
-        let stale = store.sessions(for: .gemini).filter { $0.lastEventTime < threshold }
-        for session in stale {
+        let now = Date()
+        let demoteCutoff = now.addingTimeInterval(-Self.silentDemoteThreshold)
+        let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
+
+        for session in store.sessions(for: .gemini) where session.lastEventTime < demoteCutoff {
+            if case .waitingForInput = session.phase {
+                store.mutate(session.id) { s in
+                    s.phase = s.phase.transition(to: .idle)
+                }
+                LogService.info(
+                    "Demoted silent session \(session.id.prefix(8)) to idle (\(Int(now.timeIntervalSince(session.lastEventTime)))s silent)",
+                    category: "GeminiProvider"
+                )
+            }
+        }
+
+        for session in store.sessions(for: .gemini) where session.lastEventTime < removeCutoff {
             watcherManager.stopWatching(sessionId: session.id)
+            agentWatcherManager.stopAll(sessionId: session.id)
+            sessionFiles.removeValue(forKey: session.id)
             store.remove(session.id)
+            LogService.info("Removed stale session \(session.id.prefix(8))", category: "GeminiProvider")
+        }
+
+        if store.sessions(for: .gemini).isEmpty {
+            timeoutTimer?.invalidate()
+            timeoutTimer = nil
         }
     }
 }

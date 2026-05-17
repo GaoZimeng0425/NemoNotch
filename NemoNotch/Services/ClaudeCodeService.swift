@@ -181,7 +181,10 @@ final class ClaudeProvider: AIProvider {
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
             }
-            LogService.info("Permission request: \(ctx.toolName) (\(ctx.toolUseId)) for session \(sessionId.prefix(8))", category: "ClaudeProvider")
+            LogService.info(
+                "Permission request: \(ctx.toolName) (\(ctx.toolUseId)) for session \(sessionId.prefix(8))",
+                category: "ClaudeProvider"
+            )
 
         case "Stop":
             guard store.contains(sessionId) else { return }
@@ -243,9 +246,10 @@ final class ClaudeProvider: AIProvider {
         let flatPath = "\(dir)/agent-\(agentId).jsonl"
         let filePath = FileManager.default.fileExists(atPath: nestedPath) ? nestedPath : flatPath
 
-        agentWatcherManager.startWatching(sessionId: sessionId, taskToolId: taskToolId, agentFilePath: filePath) { [weak self] tools in
-            self?.updateSubagentTools(sessionId: sessionId, taskToolId: taskToolId, tools: tools)
-        }
+        agentWatcherManager
+            .startWatching(sessionId: sessionId, taskToolId: taskToolId, agentFilePath: filePath) { [weak self] tools in
+                self?.updateSubagentTools(sessionId: sessionId, taskToolId: taskToolId, tools: tools)
+            }
     }
 
     // MARK: - Interrupt & Clear
@@ -318,9 +322,16 @@ final class ClaudeProvider: AIProvider {
 
     // MARK: - Timeout
 
+    private static let cleanupTickInterval: TimeInterval = 60
+    private static let silentDemoteThreshold: TimeInterval = 300 // 5 min → clear badge
+    private static let removeStaleThreshold: TimeInterval = 1800 // 30 min → drop session
+
     private func scheduleTimeoutCleanup() {
-        timeoutTimer?.invalidate()
-        timeoutTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+        guard timeoutTimer == nil else { return }
+        timeoutTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.cleanupTickInterval,
+            repeats: true
+        ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.cleanupStaleSessions()
             }
@@ -328,11 +339,31 @@ final class ClaudeProvider: AIProvider {
     }
 
     private func cleanupStaleSessions() {
-        let threshold = Date().addingTimeInterval(-1800)
-        let stale = store.sessions(for: .claude).filter { $0.lastEventTime < threshold }
-        for session in stale {
+        let now = Date()
+        let demoteCutoff = now.addingTimeInterval(-Self.silentDemoteThreshold)
+        let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
+
+        for session in store.sessions(for: .claude) where session.lastEventTime < demoteCutoff {
+            if case .waitingForInput = session.phase {
+                store.mutate(session.id) { s in
+                    s.phase = s.phase.transition(to: .idle)
+                }
+                LogService.info(
+                    "Demoted silent session \(session.id.prefix(8)) to idle (\(Int(now.timeIntervalSince(session.lastEventTime)))s silent)",
+                    category: "ClaudeProvider"
+                )
+            }
+        }
+
+        for session in store.sessions(for: .claude) where session.lastEventTime < removeCutoff {
             watcherManager.stopWatching(sessionId: session.id)
             store.remove(session.id)
+            LogService.info("Removed stale session \(session.id.prefix(8))", category: "ClaudeProvider")
+        }
+
+        if store.sessions(for: .claude).isEmpty {
+            timeoutTimer?.invalidate()
+            timeoutTimer = nil
         }
     }
 }
