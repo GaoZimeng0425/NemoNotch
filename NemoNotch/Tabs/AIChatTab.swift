@@ -24,6 +24,18 @@ struct AIChatTab: View {
         allSessions.count(where: { $0.status == .idle })
     }
 
+    private var claudeCount: Int {
+        allSessions.count(where: { $0.source == .claude })
+    }
+
+    private var geminiCount: Int {
+        allSessions.count(where: { $0.source == .gemini })
+    }
+
+    private var hasMixedSources: Bool {
+        claudeCount > 0 && geminiCount > 0
+    }
+
     private var dominantSource: AISource? {
         guard let first = allSessions.first?.source,
               allSessions.allSatisfy({ $0.source == first }) else {
@@ -41,23 +53,28 @@ struct AIChatTab: View {
     }
 
     private var consoleSummary: String {
+        let sourceParts = hasMixedSources ? [
+            claudeCount > 0 ? "Claude \(claudeCount)" : nil,
+            geminiCount > 0 ? "Gemini \(geminiCount)" : nil,
+        ].compactMap(\.self) : []
+
         let activeParts = [
             waitingCount > 0 ? "\(waitingCount) waiting" : nil,
             workingCount > 0 ? "\(workingCount) working" : nil,
             idleCount > 0 && workingCount + waitingCount == 0 ? "\(idleCount) idle" : nil,
         ].compactMap(\.self)
 
-        if activeParts.isEmpty {
+        let parts = sourceParts + activeParts
+        if parts.isEmpty {
             return "\(allSessions.count) sessions"
         }
-        return activeParts.joined(separator: " · ")
+        return parts.joined(separator: " · ")
     }
 
     private var headerMeterSessions: [AISessionState] {
         Array(
             allSessions
-                .filter { $0.lastContextTokens > 0 }
-                .sorted { $0.contextPercent > $1.contextPercent }
+                .sorted { $0.lastEventTime > $1.lastEventTime }
                 .prefix(2)
         )
     }
@@ -185,9 +202,12 @@ struct AIChatTab: View {
                             .foregroundStyle(.white)
                     }
                 } else {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 19, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                    HStack(spacing: 0) {
+                        ClaudeCrabIcon(size: 18, color: .white)
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
             .shadow(color: NotchTheme.accent.opacity(0.32), radius: 16, y: 8)
@@ -198,7 +218,7 @@ struct AIChatTab: View {
             Text(meterLabel(for: session))
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: 54, alignment: .trailing)
                 .lineLimit(1)
 
             GeometryReader { geo in
@@ -220,13 +240,20 @@ struct AIChatTab: View {
     }
 
     private func meterLabel(for session: AISessionState) -> String {
-        if let model = session.displayModel {
-            let parts = model.split(separator: " ")
-            if let last = parts.last {
-                return String(last.prefix(5))
-            }
-        }
-        return "ctx"
+        let source = sourceShortLabel(session.source)
+        let duration = sessionDurationText(session.sessionStart)
+        return "\(source) \(duration)"
+    }
+
+    private func sessionDurationText(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return "now" }
+        let minutes = Int(interval / 60)
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = Int(minutes / 60)
+        if hours < 24 { return "\(hours)h" }
+        let days = Int(hours / 24)
+        return "\(days)d"
     }
 
     private func chatDetail(session: AISessionState) -> some View {
@@ -244,10 +271,13 @@ struct AIChatTab: View {
                 sourceIcon(session.source, size: 16)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.displayTitle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(NotchTheme.textPrimary)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        sourceBadge(session.source)
+                        Text(session.displayTitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(NotchTheme.textPrimary)
+                            .lineLimit(1)
+                    }
                     HStack(spacing: 4) {
                         Text(session.projectFolder ?? "")
                             .foregroundStyle(NotchTheme.textMuted)
@@ -350,12 +380,8 @@ struct AIChatTab: View {
         return Button {
             selectedSessionId = session.id
         } label: {
-            HStack(alignment: .center, spacing: 11) {
-                Circle()
-                    .fill(dotColor(session.status))
-                    .frame(width: 8, height: 8)
-                    .shadow(color: dotColor(session.status).opacity(0.86), radius: 8)
-                    .modifier(PulseModifier(isActive: session.status == .working || approval != nil))
+            HStack(alignment: .top, spacing: 11) {
+                sourceMark(session)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -449,11 +475,82 @@ struct AIChatTab: View {
     private func sourceIcon(_ source: AISource, size: CGFloat) -> some View {
         switch source {
         case .claude:
-            ClaudeCrabIcon(size: size, color: NotchTheme.accentText)
+            ClaudeCrabIcon(size: size, color: sourceTint(source))
         case .gemini:
             Image(systemName: "sparkle")
                 .font(.system(size: size * 0.85, weight: .semibold))
-                .foregroundStyle(.blue)
+                .foregroundStyle(sourceTint(source))
+        }
+    }
+
+    private func sourceMark(_ session: AISessionState) -> some View {
+        let statusColor = dotColor(session.status)
+        let active = session.status == .working || approvalContext(for: session) != nil
+
+        return RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(sourceTint(session.source).opacity(0.16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(sourceTint(session.source).opacity(0.34), lineWidth: 0.8)
+            )
+            .frame(width: 34, height: 34)
+            .overlay {
+                sourceIcon(session.source, size: 17)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                statusDot(color: statusColor, active: active)
+                    .offset(x: 3, y: 3)
+            }
+            .frame(width: 40, height: 40, alignment: .topLeading)
+    }
+
+    private func statusDot(color: Color, active: Bool) -> some View {
+        ZStack {
+            if active {
+                Circle()
+                    .fill(color.opacity(0.18))
+                    .frame(width: 14, height: 14)
+            }
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .overlay(Circle().stroke(NotchTheme.panelBase.opacity(0.92), lineWidth: 1.5))
+                .shadow(color: color.opacity(0.55), radius: 5)
+        }
+        .frame(width: 14, height: 14)
+    }
+
+    private func sourceBadge(_ source: AISource) -> some View {
+        HStack(spacing: 4) {
+            sourceIcon(source, size: 10)
+            Text(sourceLabel(source))
+        }
+        .font(.system(size: 10, weight: .bold, design: .rounded))
+        .foregroundStyle(sourceTint(source))
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(sourceTint(source).opacity(0.14))
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    private func sourceLabel(_ source: AISource) -> String {
+        switch source {
+        case .claude: "Claude"
+        case .gemini: "Gemini"
+        }
+    }
+
+    private func sourceShortLabel(_ source: AISource) -> String {
+        switch source {
+        case .claude: "C"
+        case .gemini: "G"
+        }
+    }
+
+    private func sourceTint(_ source: AISource) -> Color {
+        switch source {
+        case .claude: NotchTheme.accentText
+        case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
         }
     }
 

@@ -7,15 +7,22 @@ final class GeminiProvider: AIProvider {
     var isHookInstalled = false
 
     private let store: AISessionStore
+    private let watcherManager = GeminiWatcherManager()
+    private let agentWatcherManager = AgentFileWatcherManager()
     private var timeoutTimer: Timer?
     private var sessionFiles: [String: String] = [:]
-    private var fileMonitoredSessions: Set<String> = []
-    private var fileMonitorTimer: Timer?
     private weak var hookServer: HookServer?
 
     init(store: AISessionStore) {
         self.store = store
         isHookInstalled = HookInstaller.isInstalled(.gemini)
+
+        watcherManager.onChanged = { [weak self] sessionId in
+            self?.parseConversation(for: sessionId)
+        }
+        watcherManager.onClear = { [weak self] sessionId in
+            self?.handleClear(sessionId: sessionId)
+        }
     }
 
     func setHookServer(_ server: HookServer) {
@@ -53,25 +60,20 @@ final class GeminiProvider: AIProvider {
         guard let sessionId = event.sessionId else { return }
         let now = Date()
 
-        // If we were file-monitoring this session, hooks have taken over
-        if fileMonitoredSessions.remove(sessionId) != nil {
-            if fileMonitoredSessions.isEmpty { stopFileMonitoring() }
-        }
-
         switch event.hookEventName {
         case "SessionStart":
             var session = AISessionState(sessionId: sessionId, source: .gemini)
             session.phase = .idle
             applyContext(to: &session, event: event)
-            if let cwd = event.cwd {
-                sessionFiles[sessionId] = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd)
-            }
             store.upsert(session)
+            if let cwd = event.cwd {
+                watcherManager.startWatching(sessionId: sessionId, cwd: cwd)
+            }
             parseConversation(for: sessionId)
 
         case "BeforeAgent":
             store.mutateOrCreate(sessionId, source: .gemini) { session in
-                session.phase = .processing
+                session.phase = session.phase.transition(to: .processing)
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
             }
@@ -79,16 +81,13 @@ final class GeminiProvider: AIProvider {
 
         case "BeforeTool":
             store.mutateOrCreate(sessionId, source: .gemini) { session in
-                session.phase = .processing
+                session.phase = session.phase.transition(to: .processing)
                 session.currentTool = event.toolName
                 session.isPreToolUse = true
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
-                if let toolName = event.toolName, toolName == "invoke_subagent" {
-                    session.subagentState.startTask(
-                        taskToolId: event.toolUseId ?? UUID().uuidString,
-                        description: "Subagent"
-                    )
+                if let toolName = event.toolName, ["invoke_subagent", "Task", "Agent"].contains(toolName) {
+                    self.applySubagentStart(to: &session, event: event)
                 }
             }
             parseConversation(for: sessionId)
@@ -99,15 +98,18 @@ final class GeminiProvider: AIProvider {
                 session.isPreToolUse = false
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
-                if let toolName = event.toolName, toolName == "invoke_subagent" {
+                if let toolName = event.toolName, ["invoke_subagent", "Task", "Agent"].contains(toolName) {
                     session.subagentState.stopTask(taskToolId: event.toolUseId ?? "")
                 }
+            }
+            if let toolName = event.toolName, ["invoke_subagent", "Task", "Agent"].contains(toolName) {
+                agentWatcherManager.stopWatching(sessionId: sessionId, taskToolId: event.toolUseId ?? "")
             }
             parseConversation(for: sessionId)
 
         case "Notification":
             store.mutateOrCreate(sessionId, source: .gemini) { session in
-                session.phase = .waitingForInput
+                session.phase = session.phase.transition(to: .waitingForInput)
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
             }
@@ -116,7 +118,7 @@ final class GeminiProvider: AIProvider {
         case "AfterAgent":
             guard store.contains(sessionId) else { return }
             store.mutate(sessionId) { session in
-                session.phase = .waitingForInput
+                session.phase = session.phase.transition(to: .waitingForInput)
                 session.currentTool = nil
                 session.isPreToolUse = false
                 self.applyContext(to: &session, event: event)
@@ -125,6 +127,8 @@ final class GeminiProvider: AIProvider {
             parseConversation(for: sessionId)
 
         case "SessionEnd":
+            watcherManager.stopWatching(sessionId: sessionId)
+            agentWatcherManager.stopAll(sessionId: sessionId)
             sessionFiles.removeValue(forKey: sessionId)
             store.remove(sessionId)
 
@@ -133,6 +137,41 @@ final class GeminiProvider: AIProvider {
         }
 
         scheduleTimeoutCleanup()
+    }
+
+    private func applySubagentStart(to session: inout AISessionState, event: HookEvent) {
+        let taskToolId = event.toolUseId ?? UUID().uuidString
+        var description: String?
+        var agentId: String?
+        if let input = event.message,
+           let data = input.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            description = json["description"] as? String ?? json["prompt"] as? String
+            agentId = json["agentId"] as? String ?? json["subagent_id"] as? String
+        }
+        session.subagentState.startTask(taskToolId: taskToolId, description: description)
+
+        if let agentId, let cwd = session.cwd {
+            let sessionId = session.id
+            // Gemini subagent files are JSONL in the same tmp dir
+            let projectName = GeminiConversationParser.projectName(for: cwd) ?? ""
+            let filePath = NSHomeDirectory() + "/.gemini/tmp/\(projectName)/chats/agent-\(agentId).jsonl"
+
+            agentWatcherManager
+                .startWatching(
+                    sessionId: sessionId,
+                    taskToolId: taskToolId,
+                    agentFilePath: filePath
+                ) { [weak self] tools in
+                    self?.updateSubagentTools(sessionId: sessionId, taskToolId: taskToolId, tools: tools)
+                }
+        }
+    }
+
+    func updateSubagentTools(sessionId: String, taskToolId: String, tools: [SubagentToolCall]) {
+        store.mutate(sessionId) { session in
+            session.subagentState.updateTools(taskToolId: taskToolId, tools: tools)
+        }
     }
 
     // MARK: - Startup Scan
@@ -152,46 +191,70 @@ final class GeminiProvider: AIProvider {
             let chatsDir = NSHomeDirectory() + "/.gemini/tmp/\(projectName)/chats"
             guard let files = try? fm.contentsOfDirectory(atPath: chatsDir) else { continue }
 
-            for file in files where file.hasSuffix(".json") {
+            for file in files where file.hasSuffix(".json") || file.hasSuffix(".jsonl") {
                 let filePath = chatsDir + "/" + file
 
                 guard let attrs = try? fm.attributesOfItem(atPath: filePath),
                       let modDate = attrs[.modificationDate] as? Date,
                       modDate > threshold else { continue }
 
-                guard let fileData = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
-                      let sessionJson = try? JSONSerialization.jsonObject(with: fileData) as? [String: Any],
-                      let sessionId = sessionJson["sessionId"] as? String else { continue }
+                var sessionId: String?
+                if file.hasSuffix(".jsonl") {
+                    if let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)),
+                       let firstLineData = try? handle.read(upToCount: 1024),
+                       let firstLine = String(data: firstLineData, encoding: .utf8)?.components(separatedBy: "\n")
+                       .first,
+                       let firstJson = try? JSONSerialization
+                       .jsonObject(with: firstLine.data(using: .utf8) ?? Data()) as? [String: Any] {
+                        sessionId = firstJson["sessionId"] as? String
+                        try? handle.close()
+                    }
+                } else {
+                    guard let fileData = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
+                          let sessionJson = try? JSONSerialization.jsonObject(with: fileData) as? [String: Any]
+                    else { continue }
+                    sessionId = sessionJson["sessionId"] as? String
+                }
 
-                if store.contains(sessionId) { continue }
+                guard let sid = sessionId, !store.contains(sid) else { continue }
 
-                var state = AISessionState(sessionId: sessionId, source: .gemini)
+                var state = AISessionState(sessionId: sid, source: .gemini)
                 state.cwd = cwd
                 state.lastEventTime = modDate
-                sessionFiles[sessionId] = filePath
-                fileMonitoredSessions.insert(sessionId)
+                sessionFiles[sid] = filePath
 
                 applyParsedContent(to: &state, filePath: filePath)
                 store.upsert(state)
+                watcherManager.startWatching(sessionId: sid, cwd: cwd)
             }
-        }
-
-        if !fileMonitoredSessions.isEmpty {
-            LogService.info("Gemini: discovered \(fileMonitoredSessions.count) existing session(s)", category: "GeminiProvider")
-            startFileMonitoring()
         }
     }
 
     private func applyParsedContent(to session: inout AISessionState, filePath: String) {
-        guard let result = GeminiConversationParser.parseDetailed(filePath: filePath) else { return }
+        if filePath.hasSuffix(".jsonl") {
+            let res = GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: 0)
+            for msg in res.common.messages {
+                session.upsertMessage(msg)
+            }
+            session.inputTokens = res.common.inputTokens
+            session.outputTokens = res.common.outputTokens
+            session.thoughtTokens = res.thoughtTokens
+            session.cacheReadTokens = res.cachedTokens
+            if let model = res.common.lastModel { session.model = model }
+            session.lastContextTokens = res.lastContextTokens
+            session.lastParsedOffset = res.newOffset
+        } else {
+            guard let result = GeminiConversationParser.parseDetailed(filePath: filePath) else { return }
+            session.messages = result.common.messages
+            session.inputTokens = result.common.inputTokens
+            session.outputTokens = result.common.outputTokens
+            session.thoughtTokens = result.thoughtTokens
+            session.cacheReadTokens = result.cachedTokens
+            session.lastContextTokens = result.lastContextTokens
+            if let model = result.common.lastModel { session.model = model }
+        }
 
-        session.messages = result.common.messages
-        session.inputTokens = result.common.inputTokens
-        session.outputTokens = result.common.outputTokens
-        session.cacheReadTokens = result.cachedTokens
-        if let model = result.common.lastModel { session.model = model }
-
-        let userMessages = result.common.messages.filter { $0.role == .user }
+        let userMessages = session.messages.filter { $0.role == .user }
         if let first = userMessages.first, session.firstUserMessage == nil {
             session.firstUserMessage = String(first.content.prefix(80))
         }
@@ -199,83 +262,22 @@ final class GeminiProvider: AIProvider {
             session.lastUserMessage = String(last.content.prefix(80))
         }
 
-        let meaningful = result.common.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
+        let meaningful = session.messages.filter { ![.tool, .toolResult, .system].contains($0.role) }
         if let lastMsg = meaningful.last {
             switch lastMsg.role {
-            case .user: session.phase = .processing
+            case .user, .thought: session.phase = .processing
             case .assistant: session.phase = .waitingForInput
             default: session.phase = .idle
             }
-        } else {
-            session.phase = .idle
         }
     }
 
-    private func startFileMonitoring() {
-        guard fileMonitorTimer == nil else { return }
-        fileMonitorTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.pollFileChanges()
-            }
-        }
-    }
-
-    private func stopFileMonitoring() {
-        fileMonitorTimer?.invalidate()
-        fileMonitorTimer = nil
-    }
-
-    private func pollFileChanges() {
-        let monitored = fileMonitoredSessions
-        var staleIds: Set<String> = []
-        var changedSessions: [(String, Date)] = []
-        var degradedIds: Set<String> = []
-
-        for sessionId in monitored {
-            guard let filePath = sessionFiles[sessionId],
-                  let session = store.get(sessionId) else { continue }
-
-            if !FileManager.default.fileExists(atPath: filePath) {
-                staleIds.insert(sessionId)
-                continue
-            }
-
-            if session.phase == .processing || session.phase == .waitingForInput {
-                if let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
-                   let modDate = attrs[.modificationDate] as? Date,
-                   Date().timeIntervalSince(modDate) > 120 {
-                    degradedIds.insert(sessionId)
-                    continue
-                }
-            }
-
-            guard let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
-                  let modDate = attrs[.modificationDate] as? Date,
-                  modDate > session.lastEventTime else { continue }
-
-            changedSessions.append((sessionId, modDate))
-        }
-
-        for id in staleIds {
-            fileMonitoredSessions.remove(id)
-            sessionFiles.removeValue(forKey: id)
-            store.remove(id)
-        }
-
-        for id in degradedIds {
-            store.mutate(id) { session in session.phase = .idle }
-        }
-
-        for (sessionId, modDate) in changedSessions {
-            guard let filePath = sessionFiles[sessionId] else { continue }
-            store.mutate(sessionId) { session in
-                session.lastEventTime = modDate
-                self.applyParsedContent(to: &session, filePath: filePath)
-            }
-        }
-
-        if fileMonitoredSessions.isEmpty {
-            stopFileMonitoring()
+    private func handleClear(sessionId: String) {
+        guard store.contains(sessionId) else { return }
+        store.mutate(sessionId) { session in
+            session.messages = []
+            session.lastParsedOffset = 0
+            session.phase = session.phase.transition(to: .idle)
         }
     }
 
@@ -290,51 +292,51 @@ final class GeminiProvider: AIProvider {
     // MARK: - Conversation Parsing
 
     private func parseConversation(for sessionId: String) {
-        if sessionFiles[sessionId] == nil {
-            if let filePath = resolveFile(for: sessionId) {
-                sessionFiles[sessionId] = filePath
-            }
-        }
+        guard let session = store.get(sessionId),
+              let cwd = session.cwd,
+              let filePath = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
-        guard let filePath = sessionFiles[sessionId] else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.parseConversation(for: sessionId)
-            }
-            return
-        }
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let result = GeminiConversationParser.parseDetailed(filePath: filePath)
-
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.store.mutateOrCreate(sessionId, source: .gemini) { session in
-                    if let result {
-                        LogService.info("Gemini parsed \(result.common.messages.count) messages for \(sessionId.prefix(8))", category: "GeminiProvider")
-                        session.messages = result.common.messages
-                        session.inputTokens = result.common.inputTokens
-                        session.outputTokens = result.common.outputTokens
-                        session.cacheReadTokens = result.cachedTokens
-                        if let model = result.common.lastModel { session.model = model }
-
-                        let userMessages = result.common.messages.filter { $0.role == .user }
-                        if let first = userMessages.first, session.firstUserMessage == nil {
-                            session.firstUserMessage = String(first.content.prefix(80))
-                        }
-                        if let last = userMessages.last {
-                            session.lastUserMessage = String(last.content.prefix(80))
-                        }
-                    } else {
-                        LogService.error("Gemini failed to parse result for \(sessionId.prefix(8))", category: "GeminiProvider")
+        let offset = session.lastParsedOffset
+        Task {
+            if filePath.hasSuffix(".jsonl") {
+                let result = GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: offset)
+                guard self.store.contains(sessionId) else { return }
+                self.store.mutate(sessionId) { session in
+                    if result.cleared { session.messages = [] }
+                    for msg in result.common.messages {
+                        session.upsertMessage(msg)
                     }
+                    session.lastParsedOffset = result.newOffset
+                    session.inputTokens += result.common.inputTokens
+                    session.outputTokens += result.common.outputTokens
+                    session.thoughtTokens += result.thoughtTokens
+                    session.cacheReadTokens += result.cachedTokens
+                    session.lastContextTokens = result.lastContextTokens
+                    if let model = result.common.lastModel { session.model = model }
+
+                    let userMessages = result.common.messages.filter { $0.role == .user }
+                    if let first = userMessages.first, session.firstUserMessage == nil {
+                        session.firstUserMessage = String(first.content.prefix(80))
+                    }
+                    if let last = userMessages.last {
+                        session.lastUserMessage = String(last.content.prefix(80))
+                    }
+                }
+            } else {
+                // Legacy .json - always parse full
+                guard let result = GeminiConversationParser.parseDetailed(filePath: filePath) else { return }
+                guard self.store.contains(sessionId) else { return }
+                self.store.mutate(sessionId) { session in
+                    session.messages = result.common.messages
+                    session.inputTokens = result.common.inputTokens
+                    session.outputTokens = result.common.outputTokens
+                    session.thoughtTokens = result.thoughtTokens
+                    session.cacheReadTokens = result.cachedTokens
+                    session.lastContextTokens = result.lastContextTokens
+                    if let model = result.common.lastModel { session.model = model }
                 }
             }
         }
-    }
-
-    private func resolveFile(for sessionId: String) -> String? {
-        guard let cwd = store.get(sessionId)?.cwd else { return nil }
-        return GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd)
     }
 
     // MARK: - Timeout
@@ -352,8 +354,79 @@ final class GeminiProvider: AIProvider {
         let threshold = Date().addingTimeInterval(-1800)
         let stale = store.sessions(for: .gemini).filter { $0.lastEventTime < threshold }
         for session in stale {
-            sessionFiles.removeValue(forKey: session.id)
+            watcherManager.stopWatching(sessionId: session.id)
             store.remove(session.id)
         }
+    }
+}
+
+// MARK: - GeminiWatcher
+
+final class GeminiWatcher: @unchecked Sendable {
+    private var source: DispatchSourceFileSystemObject?
+    private var fileHandle: FileHandle?
+    private let filePath: String
+    private let sessionId: String
+    private let queue = DispatchQueue(label: "com.nemonotch.geminiwatcher", qos: .utility)
+
+    var onChanged: ((String) -> Void)?
+    var onClear: ((String) -> Void)?
+
+    init(sessionId: String, filePath: String) {
+        self.sessionId = sessionId
+        self.filePath = filePath
+    }
+
+    func start() {
+        guard FileManager.default.fileExists(atPath: filePath) else { return }
+        guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return }
+        fileHandle = handle
+
+        let fd = handle.fileDescriptor
+        source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .extend],
+            queue: queue
+        )
+        source?.setEventHandler { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async { self.onChanged?(self.sessionId) }
+        }
+        source?.resume()
+    }
+
+    func stop() {
+        source?.cancel()
+        source = nil
+        try? fileHandle?.close()
+        fileHandle = nil
+    }
+}
+
+final class GeminiWatcherManager {
+    private var watchers: [String: GeminiWatcher] = [:]
+    var onChanged: ((String) -> Void)?
+    var onClear: ((String) -> Void)?
+
+    func startWatching(sessionId: String, cwd: String) {
+        guard let filePath = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
+        guard watchers[sessionId] == nil else { return }
+        let watcher = GeminiWatcher(sessionId: sessionId, filePath: filePath)
+        watcher.onChanged = { [weak self] sessionId in self?.onChanged?(sessionId) }
+        watcher.onClear = { [weak self] sessionId in self?.onClear?(sessionId) }
+        watchers[sessionId] = watcher
+        watcher.start()
+    }
+
+    func stopWatching(sessionId: String) {
+        watchers[sessionId]?.stop()
+        watchers.removeValue(forKey: sessionId)
+    }
+
+    func stopAll() {
+        for (_, watcher) in watchers {
+            watcher.stop()
+        }
+        watchers.removeAll()
     }
 }

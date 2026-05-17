@@ -30,7 +30,7 @@ final class HUDService {
     // Battery
     private var batteryRunLoopSource: CFRunLoopSource?
     private var lastBatteryLevel: Int = -1
-    private var lastChargingState: Bool? = nil
+    private var lastChargingState: Bool?
 
     init() {
         LogService.info("HUDService init start", category: "HUD")
@@ -107,7 +107,10 @@ final class HUDService {
         var diagVolume: Float = 0
         var diagSize = UInt32(MemoryLayout<Float>.size)
         let diagStatus = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &diagSize, &diagVolume)
-        LogService.info("Volume diagnostic: status=\(diagStatus), value=\(diagVolume), device=\(deviceID)", category: "HUD")
+        LogService.info(
+            "Volume diagnostic: status=\(diagStatus), value=\(diagVolume), device=\(deviceID)",
+            category: "HUD"
+        )
 
         // Also listen for default device changes
         var devChangeAddr = AudioObjectPropertyAddress(
@@ -115,7 +118,11 @@ final class HUDService {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &devChangeAddr, DispatchQueue.main) { [weak self] _, _ in
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &devChangeAddr,
+            DispatchQueue.main
+        ) { [weak self] _, _ in
             DispatchQueue.main.async {
                 self?.rebindVolumeListener()
             }
@@ -160,7 +167,10 @@ final class HUDService {
 
     private func getBrightness() -> Float? {
         if displayServicesHandle == nil {
-            displayServicesHandle = dlopen("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_LAZY | RTLD_NOW)
+            displayServicesHandle = dlopen(
+                "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices",
+                RTLD_LAZY | RTLD_NOW
+            )
         }
         guard let handle = displayServicesHandle else {
             LogService.warn("Failed to load DisplayServices framework", category: "HUD")
@@ -240,7 +250,8 @@ final class HUDService {
               let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any] else { continue }
+            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
+            else { continue }
             let capacity = (info[kIOPSCurrentCapacityKey] as? Int) ?? 0
             let charging = info[kIOPSIsChargingKey] as? Bool ?? false
 
@@ -252,9 +263,11 @@ final class HUDService {
             lastChargingState = charging
             LogService.info("Battery changed: \(capacity)% charging=\(charging)", category: "HUD")
 
-            // Only show HUD at 10% intervals
+            // Only show HUD at 10% intervals or when charging changes
             if capacity % 10 == 0 || chargingChanged {
-                showHUD(.battery(charging: charging), value: Float(capacity) / 100.0)
+                // Round to nearest 10 for consistent look
+                let displayLevel = Int((Double(capacity) / 10.0).rounded()) * 10
+                showHUD(.battery(charging: charging), value: Float(min(max(displayLevel, 0), 100)) / 100.0)
             }
         }
     }
