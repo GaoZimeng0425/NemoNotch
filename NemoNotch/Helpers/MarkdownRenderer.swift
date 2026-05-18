@@ -1,7 +1,6 @@
 import SwiftUI
 
 enum MarkdownRenderer {
-
     static func render(_ markdown: String) -> Text {
         var result = Text("")
         let lines = markdown.components(separatedBy: "\n")
@@ -28,7 +27,10 @@ enum MarkdownRenderer {
                 continue
             }
 
-            if line.isEmpty { continue }
+            if line.isEmpty {
+                result = result + Text("\n")
+                continue
+            }
 
             if line.hasPrefix("### ") {
                 result = result + renderInline(String(line.dropFirst(4)))
@@ -72,7 +74,7 @@ enum MarkdownRenderer {
 
     static func renderInline(_ text: String) -> Text {
         var result = Text("")
-        let pattern = #"(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*|`[^`]+`)"#
+        let pattern = #"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return Text(text)
         }
@@ -85,19 +87,19 @@ enum MarkdownRenderer {
             let range = Range(match.range, in: text)!
 
             if lastEnd < range.lowerBound {
-                let before = String(text[lastEnd..<range.lowerBound])
+                let before = String(text[lastEnd ..< range.lowerBound])
                 result = result + Text(before)
             }
 
             let matched = String(text[range])
 
-            if matched.hasPrefix("**") && matched.hasSuffix("**") {
+            if matched.hasPrefix("**"), matched.hasSuffix("**") {
                 let content = String(matched.dropFirst(2).dropLast(2))
                 result = result + Text(content).bold()
-            } else if matched.hasPrefix("*") && matched.hasSuffix("*") {
+            } else if matched.hasPrefix("*"), matched.hasSuffix("*") {
                 let content = String(matched.dropFirst(1).dropLast(1))
                 result = result + Text(content).italic()
-            } else if matched.hasPrefix("`") && matched.hasSuffix("`") {
+            } else if matched.hasPrefix("`"), matched.hasSuffix("`") {
                 let content = String(matched.dropFirst(1).dropLast(1))
                 result = result + Text(content)
                     .font(.system(size: 10, design: .monospaced))
