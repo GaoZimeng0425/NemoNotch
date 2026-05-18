@@ -4,17 +4,31 @@
     "" : {
 
     },
-    "\n" : {
-
-    },
-    "  %@" : {
-
-    },
-    "  • " : {
-
-    },
     "· %@" : {
 
+    },
+    "%@\n" : {
+
+    },
+    "%@  %@%@\n" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@  %2$@%3$@\n"
+          }
+        }
+      }
+    },
+    "%@  • %@\n" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@  • %2$@\n"
+          }
+        }
+      }
     },
     "%@ / %@" : {
       "localizations" : {
@@ -28,6 +42,26 @@
     },
     "%@ 自动化权限被拒绝" : {
 
+    },
+    "%@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@"
+          }
+        }
+      }
+    },
+    "%@%@\n" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@\n"
+          }
+        }
+      }
     },
     "%lld" : {
 
