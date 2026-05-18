@@ -18,8 +18,15 @@ struct NotchView: View {
         coordinator.notchSize
     }
 
+    /// Horizontal center of this screen's hosting view in the view's LOCAL
+    /// coordinate space (SwiftUI `.position` is local, not global). The hosting
+    /// view is sized to `screen.frame.size` and offset within its window so
+    /// that local-center aligns with the screen's physical notch — so the
+    /// notch's local x is simply `width / 2`. Using global `screen.frame.midX`
+    /// here only happens to work on the main screen at origin 0 and pushes
+    /// every `.position`-anchored element offscreen on secondary displays.
     private var notchCenterX: CGFloat {
-        screen.frame.midX
+        screen.frame.width / 2
     }
 
     private var notchLeftEdge: CGFloat {
