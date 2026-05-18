@@ -195,6 +195,26 @@ jobs:
 
 **Gotcha:** `MACOSX_DEPLOYMENT_TARGET=26.2` must match the project's minimum; if the workflow value is older than the project setting, the archive links against newer-SDK symbols and fails at runtime on the deployment-target OS.
 
+### SwiftFormat build phase
+
+What/why: Source is auto-formatted on every Xcode build via a Run Script phase. The script degrades gracefully — missing `swiftformat` becomes a warning, not a build failure.
+
+**Run Script body** — `NemoNotch.xcodeproj/project.pbxproj:148  (build phase — no function)`
+
+```bash
+if which swiftformat >/dev/null;
+  then swiftformat "$SRCROOT" --cache quiet 2>/dev/null || true
+else
+  echo "warning: swiftformat not installed, run: brew install swiftformat"
+fi
+```
+
+Rules live in `.swiftformat` at the repo root: `--swiftversion 6.0`, 4-space indent, 120-col max, `--self remove`, `--importgrouping alpha`, `--stripunusedargs closure-only`, plus disables for `redundantReturn`, `trailingClosures`, `wrapMultilineStatementBraces`.
+
+**Gotcha:** The `2>/dev/null` suffix is **load-bearing**. Without it, Xcode parses SwiftFormat's normal progress output on stderr as build errors and the build fails with a red banner full of misleading "errors". The trailing `|| true` covers SwiftFormat's exit code 1 (no-op runs) for the same reason. Removing either causes flaky CI that's hard to diagnose because the formatting itself succeeded.
+
+**Gotcha:** `which swiftformat` gates the call so contributors without `brew install swiftformat` still build — they just skip auto-formatting. CI installs it explicitly. Don't replace this with a hard error: it makes first-time clones miserable.
+
 ---
 
 ## 4. Private API loading
@@ -506,7 +526,58 @@ NotificationCenter.default.addObserver(
 
 **Gotcha:** If the previously-active screen disappears (laptop lid closes with external attached), failing to null out `activeScreen` and force `status = .closed` leaves a dangling reference to a removed `NSScreen`. Subsequent calls to `isActiveScreen(_:)` would never match any current screen and the user appears stuck in a half-open state. The explicit collapse on lines 248-251 is the recovery.
 
-### 5.7 — Reference projects
+### 5.7 — Activation policy + previous-app restoration
+
+What/why: NemoNotch normally runs as `.accessory` (no Dock icon, absent from ⌘+Tab). The settings window needs **standard** AppKit activation behavior, and closing the notch should return focus to whatever app was foreground before the user invoked the notch.
+
+**Launch + settings-window policy toggle** — `NemoNotch/NemoNotchApp.swift:97 + 182-194  handleSettingsAppear/Disappear()`
+
+```swift
+// applicationDidFinishLaunching:
+NSApp.setActivationPolicy(.accessory)
+
+@MainActor func handleSettingsAppear() {
+    suppressRestoreUntil = Date().addingTimeInterval(1.2)
+    NSApp.setActivationPolicy(.regular)
+    NSApp.activate(ignoringOtherApps: true)
+}
+
+@MainActor func handleSettingsDisappear() {
+    suppressRestoreUntil = .distantPast
+    NSApp.setActivationPolicy(.accessory)
+}
+```
+
+**Frontmost-app capture/restore around notch open/close** — `NemoNotch/Notch/NotchCoordinator.swift:29 + 220-239  captureFrontmostApp/restorePreviousApp()`
+
+```swift
+private var previousApp: NSRunningApplication?
+
+private func captureFrontmostApp() {
+    let frontmost = NSWorkspace.shared.frontmostApplication
+    if frontmost?.bundleIdentifier != Self.ourBundleIdentifier {
+        previousApp = frontmost
+    }
+}
+
+private func restorePreviousApp() {
+    if restoreSuppressionCheck?() == true { previousApp = nil; return }
+    guard let app = previousApp else { return }
+    previousApp = nil
+    let currentFront = NSWorkspace.shared.frontmostApplication
+    if currentFront == nil || currentFront?.bundleIdentifier == Self.ourBundleIdentifier {
+        app.activate()
+    }
+}
+```
+
+**Gotcha:** `.accessory` apps can't host a normal-feeling window — text fields lose key-event routing, ⌘+Q targets the wrong app, the window decoration looks off. The transient `.regular` switch is what makes the settings window behave like a real window. Forgetting to flip back to `.accessory` on dismiss leaves a phantom Dock icon and inserts NemoNotch into ⌘+Tab permanently.
+
+**Gotcha:** Without `previousApp` capture/restore, opening the notch over (e.g.) Xcode and closing it again leaves the user stuck in NemoNotch — they then ⌘+Tab to get back to their work, which is the bad UX we paid for. The `frontmost?.bundleIdentifier != Self.ourBundleIdentifier` guard prevents capturing ourselves when the user toggles the notch via global hotkey while NemoNotch is already foreground.
+
+**Gotcha:** `suppressRestoreUntil` (1.2s window) is set on **settings appear** so the notch-close path skips the restore. Without it, if the user opens settings (which auto-closes the notch), restore would yank focus back to Xcode and instantly dismiss the settings window the user just opened. The coordinator consults this via the injected `restoreSuppressionCheck` closure rather than holding an `AppDelegate.shared` reference — see [§17.2].
+
+### 5.8 — Reference projects
 
 - *NotchDrop* — original NSPanel subclass + `.statusBar` level discovery and global mouse-monitor patterns.
 - *Peninsula* — tri-state machine (closed / popping / opened), Carbon-based global hotkey approach, `NotchBackgroundView` for rounded notch corners.
@@ -1239,7 +1310,27 @@ while true {
 
 **Gotcha:** Counters are **cumulative since boot**, not per-interval — compute deltas yourself (store `lastTotalIBytes` / `lastTotalOBytes` + sample time, subtract per tick). Skip the very first sample (no baseline) or you'll report a gigabyte-per-second spike. On rare 32-bit counter wraparound the delta goes negative; clamp to zero rather than trusting the math. And **always** `freeifaddrs` (the `defer` above) — the linked list is heap-allocated and the leak grows with every call.
 
-### 8.9 Reference projects
+### 8.9 Disk capacity — `URLResourceValues`
+
+**Volume total + "important usage" free space** — `NemoNotch/Services/SystemService.swift:157-165  updateDisk()`
+
+```swift
+private func updateDisk() {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let values = try? home.resourceValues(forKeys: [
+        .volumeTotalCapacityKey,
+        .volumeAvailableCapacityForImportantUsageKey,
+    ])
+    diskTotal = UInt64(values?.volumeTotalCapacity ?? 0)
+    diskFree = UInt64(values?.volumeAvailableCapacityForImportantUsage ?? 0)
+}
+```
+
+**Gotcha:** Use `.volumeAvailableCapacityForImportantUsageKey`, **not** `.volumeAvailableCapacityKey`. The former is what "About This Mac → Storage" shows: it excludes purgeable caches the OS will reclaim under pressure. The latter is the raw filesystem free count and is always smaller — sometimes by tens of GB — which alarms users into thinking the disk is full when it isn't.
+
+**Gotcha:** Pass a URL on the **data volume** (home directory works). On Apple Silicon, passing `/` queries the signed system volume (SSV), which is read-only and reports near-zero free space — a confusing zero rather than a sensible number.
+
+### 8.10 Reference projects
 
 - *eul* — reference for `host_processor_info` / `host_statistics64` and the system-monitor menubar UI style; their per-core CPU sampling is the direct ancestor of [§8.1].
 - *MonitorControl* — original discovery of `DisplayServicesGetBrightness()` private API + the `dlopen` recipe used in [§4.1] and [§8.6].
@@ -1544,6 +1635,49 @@ UNUserNotificationCenter.current().getNotificationSettings { settings in
 | Notifications | (none) | `UNUserNotificationCenter.requestAuthorization` | `getNotificationSettings` callback | `Privacy_Notifications` URL |
 
 **Universal gotcha:** for any permission, the prompt only fires on the **first call after first launch**. Subsequent denials are silent. Always have a recovery UI path that opens the relevant Settings pane via `NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:...")!)` or surfaces manual instructions.
+
+### 11.6 Reactive permission state (immediate UI update)
+
+§11.1–§11.3 each describe a different *detection* mechanism. The "UI refreshes the moment the user toggles permission in System Settings" effect comes from a separate layer: `@Observable` + SwiftUI. macOS has no unified "permission granted" notification — bridging detection to the UI is on you, and the bridge differs per permission.
+
+The pattern is the same shape every time:
+
+1. The Service is `@Observable` with the permission state as a **stored property** (`authorizationStatus`, `isAXTrusted`, …).
+2. The detection mechanism writes to that property (NotificationCenter handler, Timer tick, or async delegate callback).
+3. Views inject the Service via `@Environment` — SwiftUI's dependency tracking re-renders them when the property changes.
+
+Per-permission bridges:
+
+| Permission | What writes the `@Observable` property | Latency | Anchor |
+|---|---|---|---|
+| Calendar | `.EKEventStoreChanged` NotificationCenter handler → `authorizationStatus` | ~immediate | `CalendarService.swift:9, 37-42` |
+| Accessibility | 2 s Timer re-reads `AXIsProcessTrusted()` → `isAXTrusted` | ≤ 2 s | `NotificationService.swift:14, 84` |
+| Automation | `SBApplicationDelegate.eventDidFail` (`-1743`) → `MediaBridge.notifyPermissionDenied()` | on next AS call | `MediaBridge.swift:35-43` |
+
+```swift
+// Calendar — system pushes a notification, handler writes the @Observable property
+@Observable final class CalendarService {
+    var authorizationStatus: EKAuthorizationStatus = .notDetermined
+    init() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(eventsChanged),
+            name: .EKEventStoreChanged, object: nil)
+    }
+}
+
+// Accessibility — no notification exists; poll into the @Observable property
+@Observable final class NotificationService {
+    var isAXTrusted: Bool = AXIsProcessTrusted()
+    private func pollDock() {
+        isAXTrusted = AXIsProcessTrusted()   // re-read each 2 s tick
+        // …
+    }
+}
+```
+
+- **Gotcha:** Accessibility has *no* NotificationCenter event for "granted" (called out in §11.3) — polling is the only way to surface a grant without relaunch. Pick a cadence the user perceives as immediate (≤ 2 s) but doesn't burn cycles.
+- **Gotcha:** Don't keep permission state outside the `@Observable` class (e.g. as a `static let` cache or a global enum). SwiftUI's tracking only sees stored properties on the observed instance — writes elsewhere don't trigger re-render and the UI stays stale.
+- **Why this matters:** Without the `@Observable` bridge, every dependent View has to poll on its own or listen to a custom notification. Funnelling all permission state through Service properties keeps detection logic in one place and lets the UI stay declarative.
 
 ---
 
@@ -2065,6 +2199,31 @@ withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) { … }    
 
 **Gotcha:** These encode the design system. **Adding new ad-hoc `.background(Color…)` or `.font(.system(size: …))` inline in a tab view is a code smell** — extend the shared modifier or token instead. Reviewers should reject inline styling that duplicates an existing modifier.
 
+### 16.5 Cancellable auto-dismiss via `Task` (HUD pattern)
+
+**Restartable dismiss timer** — `NemoNotch/Services/HUDService.swift:20 + 283-292  restartDismissTimer()`
+
+```swift
+private var dismissTask: Task<Void, Never>?
+
+private func restartDismissTimer() {
+    dismissTask?.cancel()
+    dismissTask = Task { @MainActor in
+        try? await Task.sleep(for: .seconds(NotchConstants.hudDismissDelay))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: NotchConstants.hudDismissDuration)) {
+            activeHUD = nil
+        }
+    }
+}
+```
+
+`restartDismissTimer()` is called on every volume/brightness/battery change. Tapping the volume key rapidly cancels the previous in-flight `Task` and starts a fresh one — the HUD only fades after the user actually stops nudging.
+
+**Gotcha:** Two layers of cancel protection are both required. `dismissTask?.cancel()` before reassigning kills the in-flight task; the `guard !Task.isCancelled` after the sleep catches the rare race where cancellation lands between `Task.sleep` returning and the `withAnimation` block. Without the post-sleep guard, a rapid sequence of changes occasionally flickers the HUD to nil mid-animation.
+
+**Gotcha:** The `Task { @MainActor in }` annotation is non-optional — without it the `withAnimation` block runs off the main actor and the animation silently does nothing (the UI snaps instead of fading). Prefer this idiom over `DispatchQueue.main.asyncAfter(deadline:)`, which is **not cancelable** and forces an awkward boolean-flag dance instead.
+
 ---
 
 ## 17. Architecture patterns
@@ -2167,6 +2326,44 @@ extension View {
 ```
 
 **Gotcha:** Apply `.activates(service)` on the **leaf consumer view**, not a container. Containers stay mounted even when their content is offscreen — putting the modifier there means the service runs whenever the notch is open, defeating the purpose. The contract is also idempotent: redundant `setActive(true)` calls must be no-ops in the implementation.
+
+### 17.5 Settings persistence: `@Observable` + `didSet` → `UserDefaults`
+
+What/why: `AppSettings` is a `@MainActor @Observable` value injected as an `@Environment`. Each user-facing property carries its own `didSet` that writes the new value straight to `UserDefaults`. No separate persistence layer, no Combine pipeline, no Codable ceremony beyond what `JSONEncoder` requires for the `[AppItem]` launcher list.
+
+**Pattern** — `NemoNotch/Models/AppSettings.swift:19-52`
+
+```swift
+@MainActor @Observable
+final class AppSettings {
+    var defaultTab: Tab {
+        didSet { UserDefaults.standard.set(defaultTab.rawValue, forKey: "defaultTab") }
+    }
+    var enabledTabs: Set<Tab> {
+        didSet {
+            let raw = enabledTabs.map(\.rawValue)
+            UserDefaults.standard.set(raw, forKey: "enabledTabs")
+        }
+    }
+    var launcherApps: [AppItem] {
+        didSet {
+            if let data = try? JSONEncoder().encode(launcherApps) {
+                UserDefaults.standard.set(data, forKey: "launcherApps")
+            }
+        }
+    }
+    var weatherCity: String {
+        didSet { UserDefaults.standard.set(weatherCity, forKey: "weatherCity") }
+    }
+    // … init() reads each key from UserDefaults and assigns the stored value.
+}
+```
+
+**Gotcha:** Swift skips `didSet` during `init`, so the constructor's reads-from-`UserDefaults` assignments don't trigger write-backs — no infinite loop. If you ever refactor to assign through a property setter from `init` (e.g. via a helper method), the loop comes back; keep init body simple and direct.
+
+**Gotcha:** `didSet` fires on **every** write, including reassigning the same value. SwiftUI bindings during a drag-reorder produce a stream of writes per second. `UserDefaults` is in-memory with lazy disk flush so it's cheap; **never** put network calls or expensive serialization in `didSet` — they will fire dozens of times per second. The `JSONEncoder().encode(launcherApps)` path above is borderline acceptable because the list is small; if it grew to hundreds of items, debounce before persisting.
+
+**Gotcha:** Don't mix this pattern with `@Published` (Combine-era). The new `@Observable` macro synthesizes change tracking on bare stored properties; wrapping them in `@Published` confuses the synthesis and silently breaks the `@Environment` injection in [§16.1].
 
 ---
 

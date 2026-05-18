@@ -116,6 +116,10 @@ NemoNotch draws inspiration from the following open-source projects:
 - [**Vibe Notch**](https://github.com/farouqaldori/vibe-notch) — Claude Code notch notifications, session monitoring, permission approval UI
 - [**masko-code**](https://github.com/RousselPaul/masko-code) — Claude Code status monitoring & desktop overlay concept
 
+### UI & Design
+
+- [**Notch Pilot**](https://notchpilot.app/) — Visual reference for the notch panel's layout, tab structure, and console-style header treatment
+
 ## License
 
 MIT

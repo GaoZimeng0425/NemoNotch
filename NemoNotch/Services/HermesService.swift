@@ -107,7 +107,7 @@ final class HermesService: MultiAgentMonitor {
             return
         }
 
-        FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        FSEventStreamSetDispatchQueue(stream, .main)
         FSEventStreamStart(stream)
         eventStream = stream
 

@@ -4,9 +4,9 @@ enum NotchConstants {
     // Notch geometry
     static let defaultNotchWidth: CGFloat = 200
     static let defaultNotchHeight: CGFloat = 32
-    static let openedWidth: CGFloat = 500
+    static let openedWidth: CGFloat = 560
     static let overviewOpenedWidth: CGFloat = 700
-    static let openedHeight: CGFloat = 260
+    static let openedHeight: CGFloat = 328
     static let hitboxPadding: CGFloat = 10
     static let closeHitboxInset: CGFloat = 20
     static let clickHitboxInset: CGFloat = 10
@@ -73,7 +73,7 @@ enum NotchConstants {
     }
 
     // Tab content
-    static let tabContentPadding: CGFloat = 12
+    static let tabContentPadding: CGFloat = 16
     static let tabBarTopPadding: CGFloat = 10
     static let cornerRadiusClosed: CGFloat = 8
     static let cornerRadiusOpened: CGFloat = 24

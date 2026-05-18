@@ -116,6 +116,10 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 - [**Vibe Notch**](https://github.com/farouqaldori/vibe-notch) — Claude Code 刘海通知、会话监控、权限审批交互
 - [**masko-code**](https://github.com/nicepkg/masko-code) — Claude Code 状态监控与桌面覆盖层概念
 
+### UI 与设计
+
+- [**Notch Pilot**](https://notchpilot.app/) — 刘海面板布局、Tab 结构、控制台风格头部的视觉参考
+
 ## License
 
 MIT

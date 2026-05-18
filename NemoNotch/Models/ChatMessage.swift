@@ -3,12 +3,13 @@ import Foundation
 enum ChatMessageRole: String, Codable {
     case user
     case assistant
+    case thought
     case tool
     case toolResult
     case system
 }
 
-struct ChatMessage: Identifiable, Sendable {
+struct ChatMessage: Identifiable {
     let id: String
     let role: ChatMessageRole
     let content: String
@@ -16,7 +17,14 @@ struct ChatMessage: Identifiable, Sendable {
     let toolInput: String?
     let timestamp: Date
 
-    init(id: String, role: ChatMessageRole, content: String, toolName: String? = nil, toolInput: String? = nil, timestamp: Date = Date()) {
+    init(
+        id: String,
+        role: ChatMessageRole,
+        content: String,
+        toolName: String? = nil,
+        toolInput: String? = nil,
+        timestamp: Date = Date()
+    ) {
         self.id = id
         self.role = role
         self.content = content

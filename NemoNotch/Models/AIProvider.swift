@@ -31,6 +31,7 @@ struct AISessionState: Identifiable {
     var messages: [ChatMessage] = []
     var inputTokens: Int = 0
     var outputTokens: Int = 0
+    var thoughtTokens: Int = 0
     var cacheReadTokens: Int = 0
     var cacheCreationTokens: Int = 0
     var lastContextTokens: Int = 0
@@ -39,10 +40,18 @@ struct AISessionState: Identifiable {
     var subagentState = SubagentState()
 
     init(sessionId: String, source: AISource) {
-        self.id = sessionId
+        id = sessionId
         self.source = source
-        self.sessionStart = Date()
-        self.lastEventTime = Date()
+        sessionStart = Date()
+        lastEventTime = Date()
+    }
+
+    mutating func upsertMessage(_ message: ChatMessage) {
+        if let idx = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[idx] = message
+        } else {
+            messages.append(message)
+        }
     }
 
     var projectFolder: String? {
@@ -65,9 +74,13 @@ struct AISessionState: Identifiable {
         }
     }
 
-    var totalTokens: Int { inputTokens + outputTokens }
+    var totalTokens: Int {
+        inputTokens + outputTokens + thoughtTokens
+    }
 
-    var contextTokens: Int { cacheReadTokens + cacheCreationTokens }
+    var contextTokens: Int {
+        cacheReadTokens + cacheCreationTokens
+    }
 
     var contextPercent: Double {
         guard lastContextTokens > 0 else { return 0 }

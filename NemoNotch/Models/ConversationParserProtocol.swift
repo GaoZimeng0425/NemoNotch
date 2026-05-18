@@ -2,10 +2,10 @@ import Foundation
 
 /// Common parsed conversation data produced by all AI providers.
 struct ParsedConversation {
-    let messages: [ChatMessage]
-    let inputTokens: Int
-    let outputTokens: Int
-    let lastModel: String?
+    var messages: [ChatMessage]
+    var inputTokens: Int
+    var outputTokens: Int
+    var lastModel: String?
 
     init(messages: [ChatMessage] = [], inputTokens: Int = 0, outputTokens: Int = 0, lastModel: String? = nil) {
         self.messages = messages

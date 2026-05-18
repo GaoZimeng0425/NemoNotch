@@ -320,8 +320,8 @@ final class OpenClawService {
             "id": requestId,
             "method": "connect",
             "params": [
-                "minProtocol": 3,
-                "maxProtocol": 3,
+                "minProtocol": 4,
+                "maxProtocol": 4,
                 "role": role,
                 "client": [
                     "id": clientId,

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ChatMessageView: View {
     let message: ChatMessage
-    var subagentTools: [SubagentToolCall]? = nil
+    var subagentTools: [SubagentToolCall]?
 
     var body: some View {
         switch message.role {
@@ -10,6 +10,8 @@ struct ChatMessageView: View {
             userBubble
         case .assistant:
             assistantBubble
+        case .thought:
+            thoughtBubble
         case .tool:
             toolBubble
         case .toolResult:
@@ -43,6 +45,24 @@ struct ChatMessageView: View {
                 .foregroundStyle(NotchTheme.textPrimary)
             Spacer(minLength: 40)
         }
+    }
+
+    private var thoughtBubble: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "lightbulb.mind")
+                .font(.system(size: 9))
+                .foregroundStyle(Color.orange.opacity(0.8))
+                .padding(.top, 2)
+            Text(message.content)
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.orange.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            Spacer(minLength: 40)
+        }
+        .padding(.leading, 12)
     }
 
     private var toolBubble: some View {

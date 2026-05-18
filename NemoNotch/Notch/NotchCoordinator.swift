@@ -29,7 +29,7 @@ final class NotchCoordinator {
     private var previousApp: NSRunningApplication?
     private static let ourBundleIdentifier = Bundle.main.bundleIdentifier
     private static let windowWidth: CGFloat = 800
-    private static let windowHeight: CGFloat = 340
+    private static let windowHeight: CGFloat = 430
 
     // MARK: - Geometry
 
