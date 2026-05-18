@@ -10,13 +10,14 @@ enum MarkdownRenderer {
         for line in lines {
             if line.hasPrefix("```") {
                 if inCodeBlock {
-                    result = result + Text(codeBlockContent.trimmingCharacters(in: .newlines))
+                    let code = Text(codeBlockContent.trimmingCharacters(in: .newlines))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(NotchTheme.textSecondary)
+                    result = Text("\(result)\(code)")
                     codeBlockContent = ""
                     inCodeBlock = false
                 } else {
-                    if !codeBlockContent.isEmpty { result = result + Text("\n") }
+                    if !codeBlockContent.isEmpty { result = Text("\(result)\n") }
                     inCodeBlock = true
                 }
                 continue
@@ -28,45 +29,44 @@ enum MarkdownRenderer {
             }
 
             if line.isEmpty {
-                result = result + Text("\n")
+                result = Text("\(result)\n")
                 continue
             }
 
             if line.hasPrefix("### ") {
-                result = result + renderInline(String(line.dropFirst(4)))
+                let head = renderInline(String(line.dropFirst(4)))
                     .font(.system(size: 11, weight: .semibold))
-                result = result + Text("\n")
+                result = Text("\(result)\(head)\n")
                 continue
             }
             if line.hasPrefix("## ") {
-                result = result + renderInline(String(line.dropFirst(3)))
+                let head = renderInline(String(line.dropFirst(3)))
                     .font(.system(size: 12, weight: .bold))
-                result = result + Text("\n")
+                result = Text("\(result)\(head)\n")
                 continue
             }
             if line.hasPrefix("# ") {
-                result = result + renderInline(String(line.dropFirst(2)))
+                let head = renderInline(String(line.dropFirst(2)))
                     .font(.system(size: 13, weight: .bold))
-                result = result + Text("\n")
+                result = Text("\(result)\(head)\n")
                 continue
             }
 
             if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                result = result + Text("  • ") + renderInline(String(line.dropFirst(2)))
-                result = result + Text("\n")
+                let item = renderInline(String(line.dropFirst(2)))
+                result = Text("\(result)  • \(item)\n")
                 continue
             }
 
             if let match = line.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
-                let prefix = line[match]
-                let content = String(line[match.upperBound...])
-                result = result + Text("  \(prefix)") + renderInline(content)
-                result = result + Text("\n")
+                let prefix = String(line[match])
+                let content = renderInline(String(line[match.upperBound...]))
+                result = Text("\(result)  \(prefix)\(content)\n")
                 continue
             }
 
-            result = result + renderInline(line)
-            result = result + Text("\n")
+            let inline = renderInline(line)
+            result = Text("\(result)\(inline)\n")
         }
 
         return result
@@ -88,29 +88,31 @@ enum MarkdownRenderer {
 
             if lastEnd < range.lowerBound {
                 let before = String(text[lastEnd ..< range.lowerBound])
-                result = result + Text(before)
+                result = Text("\(result)\(before)")
             }
 
             let matched = String(text[range])
 
             if matched.hasPrefix("**"), matched.hasSuffix("**") {
                 let content = String(matched.dropFirst(2).dropLast(2))
-                result = result + Text(content).bold()
+                result = Text("\(result)\(Text(content).bold())")
             } else if matched.hasPrefix("*"), matched.hasSuffix("*") {
                 let content = String(matched.dropFirst(1).dropLast(1))
-                result = result + Text(content).italic()
+                result = Text("\(result)\(Text(content).italic())")
             } else if matched.hasPrefix("`"), matched.hasSuffix("`") {
                 let content = String(matched.dropFirst(1).dropLast(1))
-                result = result + Text(content)
+                let code = Text(content)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(NotchTheme.accent.opacity(0.9))
+                result = Text("\(result)\(code)")
             }
 
             lastEnd = range.upperBound
         }
 
         if lastEnd < text.endIndex {
-            result = result + Text(String(text[lastEnd...]))
+            let tail = String(text[lastEnd...])
+            result = Text("\(result)\(tail)")
         }
 
         return result
