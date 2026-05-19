@@ -58,6 +58,7 @@ struct BadgeIconView: View {
         case .compactRight:
             Image(systemName: "bell.fill")
                 .foregroundStyle(.red.opacity(0.9))
+                .frame(width: 14, height: 14)
                 .modifier(PulseModifier(isActive: true))
         }
     }
@@ -104,11 +105,13 @@ struct BadgeIconView: View {
                 Image(systemName: "questionmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 18, height: 18)
                     .modifier(PulseModifier(isActive: true))
             } else {
                 Circle()
                     .fill((source == .claude ? ToolStyle.color(tool) : Color.blue).opacity(0.7))
                     .frame(width: 8, height: 8)
+                    .frame(width: 18, height: 18)
             }
         case .row:
             aiSourceIcon(source: source, status: status)
@@ -147,6 +150,7 @@ struct BadgeIconView: View {
             Image(systemName: state.icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(agentMonitorStateColor(state))
+                .frame(width: 14, height: 14)
                 .modifier(PulseModifier(isActive: state == .working || state == .toolCalling))
         }
     }
@@ -173,6 +177,7 @@ struct BadgeIconView: View {
         case .compactRight:
             Image(systemName: "clock.fill")
                 .foregroundStyle(NotchTheme.textPrimary)
+                .frame(width: 14, height: 14)
         }
     }
 }
