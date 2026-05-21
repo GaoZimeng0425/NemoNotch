@@ -99,7 +99,10 @@ final class NotificationService {
 
         let dockApp = AXUIElementCreateApplication(dockPID)
         let allElements = getSubElements(root: dockApp)
-        LogService.debug("NotificationService: found \(allElements.count) AX elements in Dock", category: "Notification")
+        LogService.debug(
+            "NotificationService: found \(allElements.count) AX elements in Dock",
+            category: "Notification"
+        )
 
         // Build a map: normalized localizedName -> bundleID for monitored apps
         var nameToBundleID: [String: String] = [:]
@@ -108,9 +111,15 @@ final class NotificationService {
                let name = app.localizedName {
                 let normalized = normalizeName(name)
                 nameToBundleID[normalized] = bundleID
-                LogService.debug("NotificationService: mapped \"\(normalized)\" (from \"\(name)\") -> \(bundleID)", category: "Notification")
+                LogService.debug(
+                    "NotificationService: mapped \"\(normalized)\" (from \"\(name)\") -> \(bundleID)",
+                    category: "Notification"
+                )
             } else {
-                LogService.debug("NotificationService: \(bundleID) not running or no localizedName", category: "Notification")
+                LogService.debug(
+                    "NotificationService: \(bundleID) not running or no localizedName",
+                    category: "Notification"
+                )
             }
         }
 
@@ -136,16 +145,22 @@ final class NotificationService {
             var statusLabel: AnyObject?
             AXUIElementCopyAttributeValue(element, "AXStatusLabel" as CFString, &statusLabel)
             let label = statusLabel as? String ?? ""
-            LogService.debug("NotificationService: matched tile \"\(titleStr)\" (normalized: \"\(normalized)\") -> \(bundleID), statusLabel=\"\(label)\"", category: "Notification")
+            LogService.debug(
+                "NotificationService: matched tile \"\(titleStr)\" (normalized: \"\(normalized)\") -> \(bundleID), statusLabel=\"\(label)\"",
+                category: "Notification"
+            )
 
-            guard let count = parseBadgeCount(label) else {
+            guard let count = Self.parseBadgeCount(label) else {
                 continue
             }
             let icon = appIcon(for: bundleID)
             updatedBadges[bundleID] = DockBadge(bundleID: bundleID, count: count, icon: icon)
         }
 
-        LogService.debug("NotificationService: final badges = \(updatedBadges.mapValues { $0.count })", category: "Notification")
+        LogService.debug(
+            "NotificationService: final badges = \(updatedBadges.mapValues { $0.count })",
+            category: "Notification"
+        )
         badges = updatedBadges
     }
 
@@ -153,7 +168,7 @@ final class NotificationService {
 
     /// Parse a Dock badge label into an integer count.
     /// - "3" -> 3, "12" -> 12, "•" -> 0 (dot indicator), "" or nil -> nil (no badge)
-    private func parseBadgeCount(_ label: String) -> Int? {
+    static func parseBadgeCount(_ label: String) -> Int? {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return nil
@@ -191,7 +206,8 @@ final class NotificationService {
 
         var children: CFArray?
         let copyErr = AXUIElementCopyAttributeValues(
-            root, "AXChildren" as CFString, 0, count, &children)
+            root, "AXChildren" as CFString, 0, count, &children
+        )
         guard copyErr == .success, let elements = children as? [AXUIElement] else {
             return []
         }
