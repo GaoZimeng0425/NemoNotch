@@ -242,6 +242,24 @@ final class HookServer {
         }
     }
 
+    private func sendJSON(
+        _ connection: NWConnection,
+        status: String = "200 OK",
+        payload: HookResponse
+    ) {
+        do {
+            let data = try JSONEncoder().encode(payload)
+            let bodyString = String(data: data, encoding: .utf8) ?? "{}"
+            sendHTTP(connection, status: status, body: bodyString)
+        } catch {
+            LogService.error(
+                "HookServer: failed to encode response \(payload): \(error)",
+                category: "HookServer"
+            )
+            sendHTTP(connection, status: "500 Internal Server Error", body: #"{"status":"error"}"#)
+        }
+    }
+
     private func sendHTTP(_ connection: NWConnection, status: String, body: String) {
         let bodyBytes = body.data(using: .utf8) ?? Data()
         let header = "HTTP/1.1 \(status)\r\n" +
