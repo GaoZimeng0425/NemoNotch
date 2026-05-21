@@ -271,6 +271,13 @@ Workflow:
 2. After development, merge back to develop. After testing, merge develop to main
 3. Release: tag from main (`vX.Y.Z`)
 
+### Testing
+
+- Unit tests live in `NemoNotchTests/`, written with **Swift Testing** (`import Testing`, `@Test`, `#expect`). Do not use XCTest for new code.
+- Test pure logic — parsers, encoders, state transitions. Skip ScriptingBridge / AX / NSWindow integration tests (they need real macOS permissions and are flaky in CI).
+- Run locally: `xcodebuild test -project NemoNotch.xcodeproj -scheme NemoNotch -destination 'platform=macOS'`.
+- New tests must pass before merging to `develop`.
+
 ### Coding Conventions
 
 - Design docs go in `docs/plans/`, implemented plans are auto-archived, commit plan docs alongside code
