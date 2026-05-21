@@ -197,10 +197,10 @@ final class HookServer {
                     handlePermissionRequest(event, connection: connection)
                     return
                 }
-                sendHTTP(connection, status: "200 OK", body: #"{"status":"ok"}"#)
+                sendJSON(connection, payload: .ack)
             } else {
                 LogService.error("Failed to decode HookEvent", category: "HookServer")
-                sendHTTP(connection, status: "200 OK", body: #"{"status":"ok"}"#)
+                sendJSON(connection, payload: .ack)
             }
             return
         }
@@ -210,7 +210,7 @@ final class HookServer {
 
     private func handlePermissionRequest(_ event: HookEvent, connection: NWConnection) {
         guard let sessionId = event.sessionId else {
-            sendHTTP(connection, status: "200 OK", body: #"{"decision":"deny","reason":"no session id"}"#)
+            sendJSON(connection, payload: .decision(.deny(reason: .noSessionId)))
             return
         }
         let waitKey = sessionId + ":" + (event.toolUseId ?? UUID().uuidString)
@@ -220,16 +220,16 @@ final class HookServer {
         DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
             guard let self else { return }
             if let conn = pendingPermissions.removeValue(forKey: waitKey) {
-                sendHTTP(conn, status: "200 OK", body: #"{"decision":"deny","reason":"timeout"}"#)
+                sendJSON(conn, payload: .decision(.deny(reason: .timeout)))
             }
         }
     }
 
     func respondToPermission(sessionId: String, approved: Bool) {
-        let body = #"{"decision":"\#(approved ? "allow" : "deny")"}"#
+        let decision: HookResponse.Decision = approved ? .allow : .deny(reason: nil)
         if let key = pendingPermissions.keys.first(where: { $0.hasPrefix(sessionId + ":") }),
            let conn = pendingPermissions.removeValue(forKey: key) {
-            sendHTTP(conn, status: "200 OK", body: body)
+            sendJSON(conn, payload: .decision(decision))
         }
     }
 
@@ -237,7 +237,7 @@ final class HookServer {
         let matching = pendingPermissions.keys.filter { $0.hasPrefix(sessionId + ":") }
         for key in matching {
             if let conn = pendingPermissions.removeValue(forKey: key) {
-                sendHTTP(conn, status: "200 OK", body: #"{"decision":"deny","reason":"session ended"}"#)
+                sendJSON(conn, payload: .decision(.deny(reason: .sessionEnded)))
             }
         }
     }
