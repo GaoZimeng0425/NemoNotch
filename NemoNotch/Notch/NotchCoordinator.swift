@@ -263,7 +263,7 @@ final class NotchCoordinator {
     /// Locate the screen currently under the given mouse point. Used to
     /// scope event handling to the correct slot.
     private func screen(at point: NSPoint) -> NSScreen? {
-        NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+        NSScreen.screen(containing: point)
     }
 
     private func handleMouseMove(_ location: NSPoint) {
