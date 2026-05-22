@@ -48,4 +48,4 @@ read_when:
 [2026-05-20 设计文档](../../specs/2026-05-20-peekaboo-macos-playbook-design.md)
 
 ---
-*Last verified against Peekaboo @ `bae941f4`*
+*Last verified against Peekaboo @ `881ef3cf`*
