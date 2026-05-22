@@ -14,6 +14,11 @@ final class MediaService {
     /// Automation permission for this player in System Settings.
     var permissionDeniedPlayer: KnownPlayer?
 
+    /// Forwarder fired alongside the internal `permissionDeniedPlayer` update.
+    /// AppDelegate wires this to `MediaAutomationPermissionMonitor.recordDenied`
+    /// so the monitor's per-bundle state machine and probe loop stay in sync.
+    var permissionDeniedHandler: ((String) -> Void)?
+
     private var pollTimer: Timer?
     private var progressTimer: Timer?
     private var reconcileTask: Task<Void, Never>?
@@ -38,7 +43,9 @@ final class MediaService {
         remote.registerForNotifications()
         remote.setCanBeNowPlayingApplication(false)
         MediaBridge.permissionDeniedCallback = { [weak self] bundleID in
-            guard let self, let player = KnownPlayer(bundleID: bundleID) else { return }
+            guard let self else { return }
+            permissionDeniedHandler?(bundleID)
+            guard let player = KnownPlayer(bundleID: bundleID) else { return }
             permissionDeniedPlayer = player
         }
         setupNotifications()

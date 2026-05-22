@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
     private(set) var mediaService: MediaService?
+    private(set) var automationPermissionMonitor: MediaAutomationPermissionMonitor?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private var openClawService: OpenClawService?
@@ -100,6 +101,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = AppSettings()
         let media = MediaService()
+        let permissionMonitor = MediaAutomationPermissionMonitor(
+            monitoredBundles: KnownPlayer.allCases.map(\.rawValue)
+        )
+        media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
+            permissionMonitor?.recordDenied(bundleID: bundleID)
+        }
+        permissionMonitor.onAuthorized = { [weak media] bundleID in
+            guard let media,
+                  let player = KnownPlayer(bundleID: bundleID),
+                  media.permissionDeniedPlayer == player
+            else { return }
+            media.permissionDeniedPlayer = nil
+        }
+        permissionMonitor.startProbing()
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
@@ -122,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appSettings = settings
         mediaService = media
+        automationPermissionMonitor = permissionMonitor
         calendarService = calendar
         aiMonitorService = aiMonitor
         launcherService = launcher

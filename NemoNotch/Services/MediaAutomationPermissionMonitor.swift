@@ -20,6 +20,10 @@ final class MediaAutomationPermissionMonitor {
 
     private(set) var states: [String: PermissionState] = [:]
 
+    /// Fired when a previously-denied bundle transitions back to authorized
+    /// (via probe). Use to clear any UI banner gated on the denied state.
+    var onAuthorized: ((String) -> Void)?
+
     private let monitoredBundles: [String]
     private var probeTimer: Timer?
 
@@ -63,6 +67,7 @@ final class MediaAutomationPermissionMonitor {
                 category: "Permission"
             )
             states[bundleID] = .authorized
+            onAuthorized?(bundleID)
         }
     }
 
