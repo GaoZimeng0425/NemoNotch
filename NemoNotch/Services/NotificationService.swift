@@ -168,7 +168,7 @@ final class NotificationService {
 
     /// Parse a Dock badge label into an integer count.
     /// - "3" -> 3, "12" -> 12, "•" -> 0 (dot indicator), "" or nil -> nil (no badge)
-    static func parseBadgeCount(_ label: String) -> Int? {
+    nonisolated static func parseBadgeCount(_ label: String) -> Int? {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return nil

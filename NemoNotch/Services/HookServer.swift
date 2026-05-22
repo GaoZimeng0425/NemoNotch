@@ -248,7 +248,9 @@ final class HookServer {
         payload: HookResponse
     ) {
         do {
-            let data = try JSONEncoder().encode(payload)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys // deterministic wire format
+            let data = try encoder.encode(payload)
             let bodyString = String(data: data, encoding: .utf8) ?? "{}"
             sendHTTP(connection, status: status, body: bodyString)
         } catch {

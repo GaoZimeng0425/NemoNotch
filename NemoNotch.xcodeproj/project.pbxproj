@@ -11,11 +11,27 @@
 		AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000042F9363C40037E18E /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		454789622FC058C500A8B535 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 45DDDF782F9363C40037E18E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 45DDDF7F2F9363C40037E18E;
+			remoteInfo = NemoNotch;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		4547895E2FC058C500A8B535 /* NemoNotchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NemoNotchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		45DDDF802F9363C40037E18E /* NemoNotch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NemoNotch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		4547895F2FC058C500A8B535 /* NemoNotchTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NemoNotchTests;
+			sourceTree = "<group>";
+		};
 		45DDDF822F9363C40037E18E /* NemoNotch */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = NemoNotch;
@@ -24,6 +40,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		4547895B2FC058C500A8B535 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		45DDDF7D2F9363C40037E18E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -40,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				45DDDF822F9363C40037E18E /* NemoNotch */,
+				4547895F2FC058C500A8B535 /* NemoNotchTests */,
 				45DDDF812F9363C40037E18E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -48,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				45DDDF802F9363C40037E18E /* NemoNotch.app */,
+				4547895E2FC058C500A8B535 /* NemoNotchTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,6 +80,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		4547895D2FC058C500A8B535 /* NemoNotchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 454789642FC058C500A8B535 /* Build configuration list for PBXNativeTarget "NemoNotchTests" */;
+			buildPhases = (
+				4547895A2FC058C500A8B535 /* Sources */,
+				4547895B2FC058C500A8B535 /* Frameworks */,
+				4547895C2FC058C500A8B535 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				454789632FC058C500A8B535 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				4547895F2FC058C500A8B535 /* NemoNotchTests */,
+			);
+			name = NemoNotchTests;
+			packageProductDependencies = (
+			);
+			productName = NemoNotchTests;
+			productReference = 4547895E2FC058C500A8B535 /* NemoNotchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		45DDDF7F2F9363C40037E18E /* NemoNotch */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 45DDDF8D2F9363C50037E18E /* Build configuration list for PBXNativeTarget "NemoNotch" */;
@@ -87,9 +135,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2640;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
+					4547895D2FC058C500A8B535 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 45DDDF7F2F9363C40037E18E;
+					};
 					45DDDF7F2F9363C40037E18E = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -115,11 +167,19 @@
 			projectRoot = "";
 			targets = (
 				45DDDF7F2F9363C40037E18E /* NemoNotch */,
+				4547895D2FC058C500A8B535 /* NemoNotchTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		4547895C2FC058C500A8B535 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		45DDDF7E2F9363C40037E18E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -150,6 +210,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		4547895A2FC058C500A8B535 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		45DDDF7C2F9363C40037E18E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -159,7 +226,57 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		454789632FC058C500A8B535 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 45DDDF7F2F9363C40037E18E /* NemoNotch */;
+			targetProxy = 454789622FC058C500A8B535 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		454789652FC058C500A8B535 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YHT8FN67G3;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.BrightnessApp.NemoNotchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NemoNotch.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NemoNotch";
+			};
+			name = Debug;
+		};
+		454789662FC058C500A8B535 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YHT8FN67G3;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.BrightnessApp.NemoNotchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NemoNotch.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NemoNotch";
+			};
+			name = Release;
+		};
 		45DDDF8B2F9363C50037E18E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -399,6 +516,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		454789642FC058C500A8B535 /* Build configuration list for PBXNativeTarget "NemoNotchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				454789652FC058C500A8B535 /* Debug */,
+				454789662FC058C500A8B535 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		45DDDF7B2F9363C40037E18E /* Build configuration list for PBXProject "NemoNotch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

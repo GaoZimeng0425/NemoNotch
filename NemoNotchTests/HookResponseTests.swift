@@ -4,45 +4,42 @@ import Testing
 
 @Suite("HookResponse encoding")
 struct HookResponseTests {
+    private static func encode(_ value: HookResponse) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = try encoder.encode(value)
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
     @Test("Ack encodes to {\"status\":\"ok\"}")
     func ack() throws {
-        let data = try JSONEncoder().encode(HookResponse.ack)
-        let json = String(data: data, encoding: .utf8)
-        #expect(json == #"{"status":"ok"}"#)
+        #expect(try Self.encode(.ack) == #"{"status":"ok"}"#)
     }
 
     @Test("Allow decision encodes without reason field")
     func allow() throws {
-        let data = try JSONEncoder().encode(HookResponse.decision(.allow))
-        let json = String(data: data, encoding: .utf8)
-        #expect(json == #"{"decision":"allow"}"#)
+        #expect(try Self.encode(.decision(.allow)) == #"{"decision":"allow"}"#)
     }
 
     @Test("Deny decision encodes with reason field")
     func denyTimeout() throws {
-        let data = try JSONEncoder().encode(HookResponse.decision(.deny(reason: .timeout)))
-        let json = String(data: data, encoding: .utf8)
-        #expect(json == #"{"decision":"deny","reason":"timeout"}"#)
+        #expect(try Self.encode(.decision(.deny(reason: .timeout))) == #"{"decision":"deny","reason":"timeout"}"#)
     }
 
     @Test("Deny with sessionEnded reason")
     func denySessionEnded() throws {
-        let data = try JSONEncoder().encode(HookResponse.decision(.deny(reason: .sessionEnded)))
-        let json = String(data: data, encoding: .utf8)
-        #expect(json == #"{"decision":"deny","reason":"session ended"}"#)
+        #expect(try Self
+            .encode(.decision(.deny(reason: .sessionEnded))) == #"{"decision":"deny","reason":"session ended"}"#)
     }
 
     @Test("Deny with noSessionId reason")
     func denyNoSessionId() throws {
-        let data = try JSONEncoder().encode(HookResponse.decision(.deny(reason: .noSessionId)))
-        let json = String(data: data, encoding: .utf8)
-        #expect(json == #"{"decision":"deny","reason":"no session id"}"#)
+        #expect(try Self
+            .encode(.decision(.deny(reason: .noSessionId))) == #"{"decision":"deny","reason":"no session id"}"#)
     }
 
     @Test("Deny without explicit reason omits reason field")
     func denyNoReason() throws {
-        let data = try JSONEncoder().encode(HookResponse.decision(.deny(reason: nil)))
-        let json = String(data: data, encoding: .utf8)
-        #expect(json == #"{"decision":"deny"}"#)
+        #expect(try Self.encode(.decision(.deny(reason: nil))) == #"{"decision":"deny"}"#)
     }
 }
