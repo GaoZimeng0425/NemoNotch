@@ -16,6 +16,7 @@ final class NotchCoordinator {
     private(set) var activeScreen: NSScreen?
     private var dismissState = HotkeyDismissState()
     private var hotkeyAutoCloseTimer: Timer?
+    private var escMonitor: Any?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
@@ -194,11 +195,13 @@ final class NotchCoordinator {
         slot.passThrough.isBlocking = true
         slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        installEscMonitor()
     }
 
     func notchClose() {
         dismissState.reset()
         cancelHotkeyAutoCloseTimer()
+        uninstallEscMonitor()
         let openedScreen = activeScreen
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
@@ -338,6 +341,30 @@ final class NotchCoordinator {
             "NotchCoordinator: hotkey auto-close cancelled",
             category: "NotchCoordinator"
         )
+    }
+
+    // MARK: - ESC monitor
+
+    private func installEscMonitor() {
+        guard escMonitor == nil else { return }
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // kVK_Escape = 53
+            if event.keyCode == 53 {
+                Task { @MainActor [weak self] in
+                    guard let self, status == .opened else { return }
+                    notchClose()
+                }
+                return nil // swallow event
+            }
+            return event
+        }
+    }
+
+    private func uninstallEscMonitor() {
+        if let monitor = escMonitor {
+            NSEvent.removeMonitor(monitor)
+            escMonitor = nil
+        }
     }
 
     /// Restart the 3-second grace period. Called when the user uses the
