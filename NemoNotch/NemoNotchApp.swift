@@ -107,13 +107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
             permissionMonitor?.recordDenied(bundleID: bundleID)
         }
-        permissionMonitor.onAuthorized = { [weak media] bundleID in
-            guard let media,
-                  let player = KnownPlayer(bundleID: bundleID),
-                  media.permissionDeniedPlayer == player
-            else { return }
-            media.permissionDeniedPlayer = nil
-        }
         permissionMonitor.startProbing()
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
@@ -163,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(coordinator)
                     .environment(settings)
                     .environment(media)
+                    .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
                     .environment(registry)
