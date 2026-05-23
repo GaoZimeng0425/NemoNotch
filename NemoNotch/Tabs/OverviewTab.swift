@@ -54,16 +54,16 @@ private struct OverviewCalendarSection: View {
             case .fullAccess:
                 calendarContent
             default:
-                VStack(spacing: 6) {
-                    Image(systemName: "calendar.badge.lock")
-                        .font(.system(size: 20))
-                        .foregroundStyle(NotchTheme.textTertiary)
-                    Text("calendar.permission_required")
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                PermissionCard(
+                    icon: "calendar.badge.lock",
+                    titleKey: "permission.calendar.title",
+                    detailKey: "permission.calendar.detail",
+                    status: calendarService.authorizationStatus == .denied
+                        ? .denied
+                        : .notDetermined,
+                    primary: .programmatic { calendarService.requestAccess() },
+                    openSettings: { calendarService.openSystemSettings() }
+                )
             }
         }
         .notchCard(radius: 8, fill: NotchTheme.surface)
