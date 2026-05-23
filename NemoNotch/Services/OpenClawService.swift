@@ -9,6 +9,13 @@ final class OpenClawService {
     var gatewayOnline = false
     var isInstalled = false
 
+    /// Populated when the gateway rejects the handshake with NOT_PAIRED.
+    /// UI uses this to surface a copyable + runnable approval command instead
+    /// of the generic "offline" view. Cleared on a successful auth.
+    var pendingApproval: PendingApprovalInfo?
+    /// True while the user-shell subprocess is running.
+    var isApproving = false
+
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
     private var reconnectTimer: Timer?
@@ -365,6 +372,7 @@ final class OpenClawService {
             if ok {
                 LogService.info("Auth successful!", category: "OpenClaw")
                 gatewayOnline = true
+                pendingApproval = nil
                 startTTLTimer()
                 // Parse initial snapshot from hello-ok result
                 if let result = json["result"] as? [String: Any] {
@@ -384,9 +392,27 @@ final class OpenClawService {
                 }
             } else {
                 LogService.error("Auth failed: \(json["error"] ?? "unknown")", category: "OpenClaw")
+                pendingApproval = Self.parsePendingApproval(from: json["error"])
                 scheduleReconnect()
             }
         }
+    }
+
+    /// Parse the gateway's structured auth-failure payload. We only surface a
+    /// pending-approval card when the gateway explicitly says `NOT_PAIRED` so
+    /// the user has actionable next steps; other auth failures stay generic.
+    private static func parsePendingApproval(from raw: Any?) -> PendingApprovalInfo? {
+        guard let error = raw as? [String: Any],
+              (error["code"] as? String) == "NOT_PAIRED",
+              let details = error["details"] as? [String: Any],
+              let requestId = details["requestId"] as? String,
+              let deviceId = details["deviceId"] as? String
+        else { return nil }
+        return PendingApprovalInfo(
+            deviceId: deviceId,
+            requestId: requestId,
+            remediationHint: details["remediationHint"] as? String ?? ""
+        )
     }
 
     // MARK: - Chat Events
@@ -589,6 +615,107 @@ final class OpenClawService {
             }
         }
     }
+
+    // MARK: - Device Approval
+
+    /// Command the user can paste into their own terminal — the same string
+    /// approveSelf() runs internally. Kept exposed so the UI can still offer
+    /// "Copy command" as a fallback when auto-execution doesn't reach the
+    /// user's openclaw/node install.
+    var approveCommandString: String {
+        guard let info = pendingApproval else { return "" }
+        return "openclaw devices approve \(info.requestId) --token \(token ?? "")"
+    }
+
+    /// Spawn the approval command using the user's login shell so it picks up
+    /// the PATH set by rc files (Bun, Homebrew, nvm/fnm/volta, etc.). Reads
+    /// `$SHELL` (always set by launchd from /etc/passwd) instead of hardcoding
+    /// zsh, and uses shell-appropriate flags so it works across bash/zsh/sh,
+    /// fish, and nushell.
+    func approveSelf() {
+        guard !isApproving, !approveCommandString.isEmpty else { return }
+        isApproving = true
+        let cmd = approveCommandString
+        Task.detached { [weak self] in
+            let result = Self.runInUserShell(cmd: cmd)
+            await self?.finishApproval(result: result)
+        }
+    }
+
+    @MainActor
+    private func finishApproval(result: ApprovalResult) {
+        isApproving = false
+        if result.ok {
+            LogService.info("Approval ran successfully, reconnecting", category: "OpenClaw")
+            connect()
+        } else {
+            let stderrTrimmed = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = stderrTrimmed.isEmpty ? "(no stderr)" : stderrTrimmed
+            LogService.error(
+                "Approval shell exec failed (shell=\(result.shell), exit=\(result.exitCode)): \(detail)",
+                category: "OpenClaw"
+            )
+        }
+    }
+
+    private struct ApprovalResult {
+        let ok: Bool
+        let exitCode: Int32
+        let stderr: String
+        let shell: String
+    }
+
+    private nonisolated static func runInUserShell(cmd: String) -> ApprovalResult {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/sh"
+        let shellName = (shell as NSString).lastPathComponent
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+
+        // Flag selection follows each shell's documented behavior for sourcing
+        // rc files under `-c`. fish/nushell auto-load their config under `-c`;
+        // POSIX-family shells require `-i` (interactive) to source .zshrc /
+        // .bashrc where nvm/fnm/bun typically extend PATH.
+        switch shellName {
+        case "fish", "nu", "nushell":
+            process.arguments = ["-c", cmd]
+        default:
+            process.arguments = ["-ilc", cmd]
+        }
+
+        let errPipe = Pipe()
+        process.standardOutput = Pipe()
+        process.standardError = errPipe
+        // Detach stdin — interactive shells will otherwise inherit a tty and
+        // may block on prompt hooks in the user's rc.
+        process.standardInput = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let err = String(data: errData, encoding: .utf8) ?? ""
+            return ApprovalResult(
+                ok: process.terminationStatus == 0,
+                exitCode: process.terminationStatus,
+                stderr: err,
+                shell: shellName
+            )
+        } catch {
+            return ApprovalResult(
+                ok: false,
+                exitCode: -1,
+                stderr: error.localizedDescription,
+                shell: shellName
+            )
+        }
+    }
+}
+
+struct PendingApprovalInfo: Equatable {
+    let deviceId: String
+    let requestId: String
+    let remediationHint: String
 }
 
 // MARK: - MultiAgentMonitor

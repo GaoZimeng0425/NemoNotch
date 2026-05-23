@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AgentMonitorTab: View {
     @Environment(AgentMonitorRegistry.self) var registry
+    @Environment(OpenClawService.self) var openClaw
     @State private var expandedAgentId: String?
 
     private var monitors: [any MultiAgentMonitor] {
@@ -12,8 +13,16 @@ struct AgentMonitorTab: View {
         if monitors.isEmpty {
             notInstalled
         } else if monitors.allSatisfy({ !$0.isOnline }) {
-            offlineState
+            if openClaw.pendingApproval != nil {
+                OpenClawApprovalCard()
+            } else {
+                offlineState
+            }
         } else {
+            // At least one monitor (e.g. Hermes) is online. Show its agents,
+            // but float OpenClaw's approval card on top so the pairing CTA
+            // stays discoverable instead of getting eaten by another online
+            // service.
             agentSections
         }
     }
@@ -56,6 +65,9 @@ struct AgentMonitorTab: View {
     private var agentSections: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
+                if openClaw.pendingApproval != nil {
+                    OpenClawApprovalBanner()
+                }
                 ForEach(monitors.filter(\.isOnline), id: \.displayName) { monitor in
                     AgentMonitorSection(
                         monitor: monitor,
@@ -532,5 +544,138 @@ struct AgentStateTag: View {
         case .toolCalling: tint
         case .error: .red
         }
+    }
+}
+
+// MARK: - OpenClaw Approval — Buttons (shared)
+
+private struct OpenClawRunButton: View {
+    @Environment(OpenClawService.self) var openClaw
+    var compact: Bool = false
+
+    var body: some View {
+        Button {
+            openClaw.approveSelf()
+        } label: {
+            HStack(spacing: 3) {
+                if openClaw.isApproving {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(.black.opacity(0.85))
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: compact ? 8 : 9))
+                }
+                Text(openClaw.isApproving
+                    ? "agents.openclaw.approval.button.running"
+                    : "agents.openclaw.approval.button.run")
+                    .font(.system(size: compact ? 9 : 10, weight: .medium))
+            }
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, compact ? 3 : 4)
+            .background(Capsule().fill(NotchTheme.accent))
+            .foregroundStyle(.black.opacity(0.85))
+        }
+        .buttonStyle(.plain)
+        .disabled(openClaw.isApproving)
+    }
+}
+
+private struct OpenClawCopyButton: View {
+    @Environment(OpenClawService.self) var openClaw
+    @State private var justCopied = false
+    var compact: Bool = false
+
+    var body: some View {
+        Button {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(openClaw.approveCommandString, forType: .string)
+            justCopied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 1_800_000_000)
+                justCopied = false
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: justCopied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: compact ? 8 : 9))
+                Text(justCopied
+                    ? "agents.openclaw.approval.button.copied"
+                    : "agents.openclaw.approval.button.copy")
+                    .font(.system(size: compact ? 9 : 10))
+            }
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, compact ? 3 : 4)
+            .foregroundStyle(NotchTheme.textSecondary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - OpenClaw Approval Banner (compact, inline above agent sections)
+
+private struct OpenClawApprovalBanner: View {
+    @Environment(OpenClawService.self) var openClaw
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(NotchTheme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("agents.openclaw.approval.title")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                if let info = openClaw.pendingApproval {
+                    Text(verbatim: String(info.deviceId.prefix(12)) + "…")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(NotchTheme.textTertiary)
+                }
+            }
+            Spacer(minLength: 4)
+            OpenClawRunButton(compact: true)
+            OpenClawCopyButton(compact: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .notchCard(radius: 8, fill: NotchTheme.surface)
+    }
+}
+
+// MARK: - OpenClaw Approval Card (full-tab, when nothing else is online)
+
+private struct OpenClawApprovalCard: View {
+    @Environment(OpenClawService.self) var openClaw
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(.system(size: 26))
+                .foregroundStyle(NotchTheme.accent)
+            Text("agents.openclaw.approval.title")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text("agents.openclaw.approval.run_in_terminal")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 12)
+            Text(verbatim: openClaw.approveCommandString)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(NotchTheme.surfaceSubtle))
+                .padding(.horizontal, 16)
+            HStack(spacing: 8) {
+                OpenClawRunButton()
+                OpenClawCopyButton()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
