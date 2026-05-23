@@ -14,6 +14,7 @@ final class NotchCoordinator {
     /// reflects the opened state; others remain collapsed but stay visible
     /// to display badges. `nil` outside of an open session.
     private(set) var activeScreen: NSScreen?
+    private var dismissState = HotkeyDismissState()
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
@@ -169,7 +170,7 @@ final class NotchCoordinator {
         activeScreen?.displayID == screen.displayID
     }
 
-    func notchOpen(tab: Tab? = nil, on screen: NSScreen? = nil) {
+    func notchOpen(tab: Tab? = nil, on screen: NSScreen? = nil, viaHotkey: Bool = false) {
         guard status == .closed else { return }
         let target = screen ?? NSScreen.screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         guard let target, let slot = slots[target.displayID] else { return }
@@ -185,12 +186,14 @@ final class NotchCoordinator {
             activeScreen = target
             status = .opened
         }
+        dismissState.didOpen(viaHotkey: viaHotkey)
         slot.passThrough.isBlocking = true
         slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func notchClose() {
+        dismissState.reset()
         let openedScreen = activeScreen
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
@@ -276,8 +279,11 @@ final class NotchCoordinator {
         case .opened:
             guard let active = activeScreen else { return }
             let contentHit = contentRect(for: active, hitInset: NotchConstants.closeHitboxInset)
-            if !NSMouseInRect(location, contentHit, false) {
-                notchClose()
+            let mouseInside = NSMouseInRect(location, contentHit, false)
+            switch dismissState.observe(mouseInside: mouseInside) {
+            case .ignore: break
+            case .markedEntered: break // Timer cancel wired in Task 4
+            case .shouldClose: notchClose()
             }
         }
     }
