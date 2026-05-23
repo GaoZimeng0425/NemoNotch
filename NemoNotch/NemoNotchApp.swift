@@ -107,6 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
             permissionMonitor?.recordDenied(bundleID: bundleID)
         }
+        media.automationAuthorizedHandler = { [weak permissionMonitor] bundleID in
+            permissionMonitor?.recordAuthorized(bundleID: bundleID)
+        }
         permissionMonitor.startProbing()
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()

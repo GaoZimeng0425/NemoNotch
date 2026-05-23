@@ -16,6 +16,11 @@ final class MediaService {
     /// so the monitor's per-bundle state machine and probe loop stay in sync.
     var permissionDeniedHandler: ((String) -> Void)?
 
+    /// Forwarder fired when `requestAutomationAccess` confirms authorization.
+    /// AppDelegate wires this to `MediaAutomationPermissionMonitor.recordAuthorized`
+    /// so the PermissionCard hides as soon as the user grants access.
+    var automationAuthorizedHandler: ((String) -> Void)?
+
     private var pollTimer: Timer?
     private var progressTimer: Timer?
     private var reconcileTask: Task<Void, Never>?
@@ -61,7 +66,14 @@ final class MediaService {
             "Automation permission requested for \(player.rawValue)",
             category: "Permission"
         )
-        _ = MediaBridge.hasAutomationAccess(bundleID: player.rawValue)
+        // hasAutomationAccess is synchronous — it makes an AppleEvent that
+        // blocks during the system dialog and returns true/false based on the
+        // outcome. Forward the success case so the monitor flips to
+        // .authorized; the denied case is already routed via
+        // MediaBridge.permissionDeniedCallback → permissionDeniedHandler.
+        if MediaBridge.hasAutomationAccess(bundleID: player.rawValue) {
+            automationAuthorizedHandler?(player.rawValue)
+        }
     }
 
     // ── Player controls ──────────────────────────────────────────────
