@@ -49,7 +49,8 @@ struct SettingsSceneRoot: View {
                let launcher = appDelegate.launcherService,
                let notification = appDelegate.notificationService,
                let weather = appDelegate.weatherService,
-               let hermes = appDelegate.hermesService {
+               let hermes = appDelegate.hermesService,
+               let notificationPermission = appDelegate.notificationPermissionMonitor {
                 SettingsView()
                     .environment(settings)
                     .environment(aiMonitor)
@@ -57,6 +58,7 @@ struct SettingsSceneRoot: View {
                     .environment(notification)
                     .environment(weather)
                     .environment(hermes)
+                    .environment(notificationPermission)
             } else {
                 ProgressView()
                     .frame(width: 430, height: 460)

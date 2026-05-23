@@ -34,6 +34,10 @@ struct SettingsView: View {
             HotkeysSettingsView()
                 .tabItem { Label("settings.hotkeys", systemImage: "keyboard") }
                 .tag(4)
+
+            PomodoroSettingsView()
+                .tabItem { Label("settings.pomodoro.title", systemImage: "timer") }
+                .tag(5)
         }
         .frame(width: 430, height: 460)
         .environment(\.locale, appSettings.currentLocale)
