@@ -332,18 +332,14 @@ struct SettingsView: View {
         Form {
             if !notificationService.isAXTrusted {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("settings.accessibility_required", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .font(.headline)
-                        Text("settings.accessibility_description")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("settings.open_system_settings") {
-                            notificationService.openAccessibilitySettings()
-                        }
-                        .controlSize(.small)
-                    }
+                    PermissionCard(
+                        icon: "exclamationmark.triangle.fill",
+                        titleKey: "permission.accessibility.title",
+                        detailKey: "permission.accessibility.detail",
+                        status: .notDetermined,
+                        primary: .settingsOnly,
+                        openSettings: { notificationService.openAccessibilitySettings() }
+                    )
                     .padding(.vertical, 4)
                 }
             }
