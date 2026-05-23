@@ -15,6 +15,7 @@ final class NotchCoordinator {
     /// to display badges. `nil` outside of an open session.
     private(set) var activeScreen: NSScreen?
     private var dismissState = HotkeyDismissState()
+    private var hotkeyAutoCloseTimer: Timer?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
@@ -187,6 +188,9 @@ final class NotchCoordinator {
             status = .opened
         }
         dismissState.didOpen(viaHotkey: viaHotkey)
+        if viaHotkey {
+            startHotkeyAutoCloseTimer()
+        }
         slot.passThrough.isBlocking = true
         slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -194,6 +198,7 @@ final class NotchCoordinator {
 
     func notchClose() {
         dismissState.reset()
+        cancelHotkeyAutoCloseTimer()
         let openedScreen = activeScreen
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
@@ -282,7 +287,7 @@ final class NotchCoordinator {
             let mouseInside = NSMouseInRect(location, contentHit, false)
             switch dismissState.observe(mouseInside: mouseInside) {
             case .ignore: break
-            case .markedEntered: break // Timer cancel wired in Task 4
+            case .markedEntered: cancelHotkeyAutoCloseTimer()
             case .shouldClose: notchClose()
             }
         }
@@ -305,6 +310,42 @@ final class NotchCoordinator {
                 notchClose()
             }
         }
+    }
+
+    // MARK: - Hotkey auto-close timer
+
+    private func startHotkeyAutoCloseTimer() {
+        cancelHotkeyAutoCloseTimer()
+        hotkeyAutoCloseTimer = Timer.scheduledTimer(
+            withTimeInterval: NotchConstants.hotkeyAutoCloseDelay,
+            repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.notchClose()
+            }
+        }
+        LogService.debug(
+            "NotchCoordinator: hotkey auto-close armed (\(NotchConstants.hotkeyAutoCloseDelay)s)",
+            category: "NotchCoordinator"
+        )
+    }
+
+    private func cancelHotkeyAutoCloseTimer() {
+        guard hotkeyAutoCloseTimer != nil else { return }
+        hotkeyAutoCloseTimer?.invalidate()
+        hotkeyAutoCloseTimer = nil
+        LogService.debug(
+            "NotchCoordinator: hotkey auto-close cancelled",
+            category: "NotchCoordinator"
+        )
+    }
+
+    /// Restart the 3-second grace period. Called when the user uses the
+    /// keyboard to switch tabs while the notch is still in its "no-mouse-yet"
+    /// phase — treated as continued keyboard engagement.
+    func bumpHotkeyAutoCloseTimerIfActive() {
+        guard dismissState.openedViaHotkey, !dismissState.mouseHasEnteredContent else { return }
+        startHotkeyAutoCloseTimer()
     }
 }
 
