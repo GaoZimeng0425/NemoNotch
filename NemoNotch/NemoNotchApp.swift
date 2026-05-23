@@ -162,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
+                    .environment(openClaw)
                     .environment(registry)
                     .environment(launcher)
                     .environment(notification)
