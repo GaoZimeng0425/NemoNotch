@@ -45,6 +45,7 @@ struct QuickStartFormView: View {
     @State private var mode: Mode = .continuous
     @State private var notes: String = ""
     @State private var showNotesField: Bool = false
+    @State private var durationErrorTrigger: Int = 0
 
     @FocusState private var titleFocused: Bool
 
@@ -64,6 +65,10 @@ struct QuickStartFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if timerService.state.isActive {
+                overrideWarning
+            }
+
             HStack(spacing: 10) {
                 Text("🍅")
                     .font(.system(size: 16))
@@ -77,6 +82,9 @@ struct QuickStartFormView: View {
             HStack(spacing: 8) {
                 priorityPicker
                 durationPicker
+                if showCustomDuration {
+                    customDurationStepper
+                }
                 modeToggle
                 Spacer()
                 Image(systemName: "return")
@@ -84,7 +92,14 @@ struct QuickStartFormView: View {
                     .foregroundStyle(NotchTheme.textTertiary)
             }
 
-            if !showNotesField {
+            if showNotesField {
+                TextEditor(text: $notes)
+                    .font(.system(size: 12))
+                    .frame(height: 56)
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .background(NotchTheme.surface, in: RoundedRectangle(cornerRadius: 6))
+            } else {
                 Button {
                     showNotesField = true
                 } label: {
@@ -100,6 +115,35 @@ struct QuickStartFormView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .onAppear { titleFocused = true }
         .onExitCommand { onDismiss() }
+        .modifier(ShakeOnError(triggerCount: durationErrorTrigger))
+    }
+
+    private var overrideWarning: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+                .font(.system(size: 11))
+            Text("pomodoro.quick.overrideWarning")
+                .font(.system(size: 11))
+                .foregroundStyle(NotchTheme.textSecondary)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var customDurationStepper: some View {
+        HStack(spacing: 4) {
+            Stepper(value: $customDurationMinutes, in: 1 ... 180) {
+                Text("\(customDurationMinutes) min")
+                    .font(.system(size: 11))
+                    .frame(width: 48, alignment: .leading)
+            }
+            .onChange(of: customDurationMinutes) { _, newValue in
+                durationSelection = TimeInterval(newValue * 60)
+            }
+        }
+        .padding(.horizontal, 6)
     }
 
     private var priorityPicker: some View {
@@ -194,6 +238,7 @@ struct QuickStartFormView: View {
 
     private func submit() {
         guard let duration = durationSelection else {
+            durationErrorTrigger += 1
             return
         }
         onConfirm(FormResult(
@@ -203,5 +248,23 @@ struct QuickStartFormView: View {
             mode: mode,
             notes: notes
         ))
+    }
+}
+
+private struct ShakeOnError: ViewModifier {
+    var triggerCount: Int
+    @State private var phase: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: phase)
+            .onChange(of: triggerCount) { _, _ in
+                withAnimation(.easeInOut(duration: 0.06).repeatCount(6, autoreverses: true)) {
+                    phase = 6
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    phase = 0
+                }
+            }
     }
 }
