@@ -37,6 +37,10 @@ enum NotchConstants {
     static let fadeNormalDuration: Double = 0.24
     static let pulseDuration: Double = 1.05
 
+    /// How long the notch stays open after a hotkey-open with no mouse motion
+    /// before auto-collapsing. Cancelled the moment the mouse enters content.
+    static let hotkeyAutoCloseDelay: TimeInterval = 3.0
+
     /// Close animation
     static let closeContentFadeDuration: Double = 0.1
 
