@@ -27,6 +27,11 @@ struct PomodoroTab: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .sheet(item: $editingTask) { task in
+            PomodoroEditSheet(taskID: task.id)
+                .environment(taskStore)
+                .environment(historyStore)
+        }
     }
 
     private var header: some View {
