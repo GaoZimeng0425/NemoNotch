@@ -71,39 +71,40 @@ final class OpenClawService {
     // MARK: - Device Identity
 
     private static func loadOrCreateDeviceIdentity() -> (Curve25519.Signing.PrivateKey, String) {
-        let keychainKey = "ai.openclaw.nemonotch.device-key"
+        // File-based storage instead of Keychain: under ad-hoc dev signing the
+        // Keychain ACL stops matching across rebuilds and surfaces a system
+        // prompt on every launch. The Ed25519 device key here is an identity
+        // for OpenClaw's signed handshake, not a user secret — Application
+        // Support (user-scoped, 0600) is the right home.
+        let fm = FileManager.default
+        let supportDir = (NSString(string: "~/Library/Application Support/NemoNotch").expandingTildeInPath as String)
+        let keyPath = (supportDir as NSString).appendingPathComponent("openclaw-device.key")
 
-        // Try to load existing key from Keychain
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: keychainKey,
-            kSecReturnData as String: true,
-        ]
-        var result: AnyObject?
-        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-           let keyData = result as? Data,
+        if let keyData = try? Data(contentsOf: URL(fileURLWithPath: keyPath)),
            let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: keyData) {
-            let pubKeyData = key.publicKey.rawRepresentation
-            let fingerprint = SHA256.hash(data: pubKeyData)
-            let deviceId = fingerprint.compactMap { String(format: "%02x", $0) }.joined()
+            let deviceId = Self.deviceId(for: key)
+            LogService.info("Loaded device identity from file", category: "OpenClaw")
             return (key, deviceId)
         }
 
-        // Generate new key
         let key = Curve25519.Signing.PrivateKey()
-        let pubKeyData = key.publicKey.rawRepresentation
-        let fingerprint = SHA256.hash(data: pubKeyData)
-        let deviceId = fingerprint.compactMap { String(format: "%02x", $0) }.joined()
+        let deviceId = Self.deviceId(for: key)
 
-        // Save to Keychain
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: keychainKey,
-            kSecValueData as String: key.rawRepresentation,
-        ]
-        SecItemAdd(addQuery as CFDictionary, nil)
+        do {
+            try fm.createDirectory(atPath: supportDir, withIntermediateDirectories: true, attributes: nil)
+            try key.rawRepresentation.write(to: URL(fileURLWithPath: keyPath), options: [.atomic])
+            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyPath)
+            LogService.info("Generated new device identity at \(keyPath)", category: "OpenClaw")
+        } catch {
+            LogService.error("Failed to persist device identity: \(error.localizedDescription)", category: "OpenClaw")
+        }
 
         return (key, deviceId)
+    }
+
+    private static func deviceId(for key: Curve25519.Signing.PrivateKey) -> String {
+        let fingerprint = SHA256.hash(data: key.publicKey.rawRepresentation)
+        return fingerprint.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     private static func parseEmojiFromIdentity(workspace: String) -> String {
