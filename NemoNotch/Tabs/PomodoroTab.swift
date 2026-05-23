@@ -15,6 +15,13 @@ struct PomodoroTab: View {
     var body: some View {
         VStack(spacing: 10) {
             header
+            if timerService.state.isActive {
+                PomodoroActiveBlock(
+                    onPauseResume: handlePauseResume,
+                    onCompleteEarly: handleCompleteEarly,
+                    onAbandon: handleAbandon
+                )
+            }
             Divider().background(NotchTheme.stroke)
             if let pending = pendingFastStartTask {
                 overrideConfirmBanner(for: pending)
@@ -86,6 +93,22 @@ struct PomodoroTab: View {
             .font(.system(size: 11))
             .foregroundStyle(NotchTheme.textSecondary)
         }
+    }
+
+    private func handlePauseResume() {
+        if case .running = timerService.state {
+            timerService.pause()
+        } else if case .paused = timerService.state {
+            timerService.resume()
+        }
+    }
+
+    private func handleCompleteEarly() {
+        timerService.completeEarly()
+    }
+
+    private func handleAbandon() {
+        timerService.abandon()
     }
 
     private func handleStartTask(_ task: TodoTask) {
