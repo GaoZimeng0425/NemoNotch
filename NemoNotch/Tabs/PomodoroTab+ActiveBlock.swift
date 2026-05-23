@@ -9,7 +9,26 @@ struct PomodoroActiveBlock: View {
     let onCompleteEarly: () -> Void
     let onAbandon: () -> Void
 
+    @State private var pendingConfirm: ConfirmKind? = nil
+
+    enum ConfirmKind {
+        case completeEarly
+        case abandon
+    }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            mainRow
+            controlsRow
+            if let kind = pendingConfirm {
+                confirmBanner(kind)
+            }
+        }
+        .padding(12)
+        .background(NotchTheme.surfaceSubtle, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var mainRow: some View {
         HStack(spacing: 14) {
             PomodoroPieView(
                 remainingFraction: remainingFraction,
@@ -26,8 +45,84 @@ struct PomodoroActiveBlock: View {
                 remainingLabel
             }
         }
-        .padding(12)
-        .background(NotchTheme.surfaceSubtle, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var controlsRow: some View {
+        HStack(spacing: 8) {
+            Button {
+                onPauseResume()
+            } label: {
+                Label(pauseResumeLabel, systemImage: pauseResumeIcon)
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button {
+                pendingConfirm = .completeEarly
+            } label: {
+                Label("pomodoro.action.completeEarly", systemImage: "checkmark.circle")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button {
+                pendingConfirm = .abandon
+            } label: {
+                Label("pomodoro.action.abandon", systemImage: "xmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private var pauseResumeLabel: LocalizedStringKey {
+        if case .paused = timerService.state { return "pomodoro.action.resume" }
+        return "pomodoro.action.pause"
+    }
+
+    private var pauseResumeIcon: String {
+        if case .paused = timerService.state { return "play.fill" }
+        return "pause.fill"
+    }
+
+    private func confirmBanner(_ kind: ConfirmKind) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+                .font(.system(size: 11))
+            Text(confirmMessage(kind))
+                .font(.system(size: 11))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Spacer()
+            Button("button.confirm") {
+                switch kind {
+                case .completeEarly: onCompleteEarly()
+                case .abandon: onAbandon()
+                }
+                pendingConfirm = nil
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            Button("button.cancel") { pendingConfirm = nil }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(8)
+        .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func confirmMessage(_ kind: ConfirmKind) -> String {
+        switch kind {
+        case .completeEarly:
+            let remaining = mmss(timerService.remainingSeconds)
+            return String(format: String(localized: "pomodoro.confirm.completeEarly"), remaining)
+        case .abandon:
+            return String(localized: "pomodoro.confirm.abandon")
+        }
     }
 
     private var remainingFraction: Double {
