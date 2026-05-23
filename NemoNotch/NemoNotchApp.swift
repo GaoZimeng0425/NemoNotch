@@ -89,6 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var weatherService: WeatherService?
     private var hudService: HUDService?
     private var systemService: SystemService?
+    private(set) var taskStore: TaskStore?
+    private(set) var historyStore: PomodoroHistoryStore?
+    private(set) var pomodoroTimerService: PomodoroTimerService?
+    private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
 
     var shouldSuppressPreviousAppRestore: Bool {
         Date() < suppressRestoreUntil
@@ -153,6 +157,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let system = SystemService()
         systemService = system
 
+        let tasks = TaskStore()
+        let history = PomodoroHistoryStore()
+        let notificationPermission = NotificationPermissionMonitor()
+        let pomodoro = PomodoroTimerService(
+            taskStore: tasks,
+            historyStore: history,
+            appSettings: settings,
+            permissionMonitor: notificationPermission
+        )
+        taskStore = tasks
+        historyStore = history
+        notificationPermissionMonitor = notificationPermission
+        pomodoroTimerService = pomodoro
+
         let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
                 NotchView(screen: screen)
@@ -168,6 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(weather)
                     .environment(hud)
                     .environment(system)
+                    .environment(tasks)
+                    .environment(history)
+                    .environment(pomodoro)
+                    .environment(notificationPermission)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in
@@ -190,6 +212,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         LogService.info("applicationWillTerminate received", category: "AppDelegate")
+        if let pomodoro = pomodoroTimerService {
+            switch pomodoro.state {
+            case .running, .paused:
+                pomodoro.abandon()
+                LogService.info(
+                    "applicationWillTerminate: abandoned active pomodoro",
+                    category: "AppDelegate"
+                )
+            default:
+                break
+            }
+        }
     }
 
     @MainActor
