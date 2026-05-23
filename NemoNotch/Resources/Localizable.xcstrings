@@ -542,6 +542,7 @@
       }
     },
     "calendar.permission_required" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1141,6 +1142,7 @@
       }
     },
     "permission.accessibility.detail" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1157,6 +1159,7 @@
       }
     },
     "permission.accessibility.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1173,6 +1176,7 @@
       }
     },
     "permission.automation.detail" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1189,6 +1193,7 @@
       }
     },
     "permission.automation.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1237,6 +1242,7 @@
       }
     },
     "permission.denied_explanation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1269,6 +1275,7 @@
       }
     },
     "permission.location.detail" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1285,6 +1292,7 @@
       }
     },
     "permission.location.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1317,6 +1325,7 @@
       }
     },
     "settings.accessibility_description" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1333,6 +1342,7 @@
       }
     },
     "settings.accessibility_required" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1733,6 +1743,7 @@
       }
     },
     "settings.open_system_settings" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
