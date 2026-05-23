@@ -583,6 +583,19 @@ private func restorePreviousApp() {
 - *Peninsula* — tri-state machine (closed / popping / opened), Carbon-based global hotkey approach, `NotchBackgroundView` for rounded notch corners.
 - *DynamicNotchKit* — spring animation parameter choices (`.bouncy(duration: 0.4)`) and `NSScreen` extensions (`hasNotch` / `notchSize` / `notchFrame`).
 
+### 5.9 — Centered draggable `NSPanel` for hotkey-summoned quick-utility windows
+
+A borderless, click-outside-dismissable, all-Spaces `NSPanel` that lives at the screen center (used by the Pomodoro QuickStart window). Pattern:
+
+- `NSPanel` subclass with `styleMask: [.borderless, .nonactivatingPanel]`
+- `isFloatingPanel = true`, `level = .floating`, `collectionBehavior = [.canJoinAllSpaces, .transient]`
+- `isMovableByWindowBackground = true` — entire window is the drag handle (no titlebar needed)
+- `override var canBecomeKey: Bool { true }` — required so embedded `TextField` receives keyboard input
+- Click-outside dismiss via `NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown)`; uninstall on dismiss
+- Restore previous-frontmost app via `previousApp?.activate()` so the user returns to their flow
+
+Example: `NemoNotch/Notch/QuickStartWindow.swift`, controller at `QuickStartWindowController.swift`.
+
 ---
 
 ## 6. Event capture & hotkeys
@@ -2223,6 +2236,33 @@ private func restartDismissTimer() {
 **Gotcha:** Two layers of cancel protection are both required. `dismissTask?.cancel()` before reassigning kills the in-flight task; the `guard !Task.isCancelled` after the sleep catches the rare race where cancellation lands between `Task.sleep` returning and the `withAnimation` block. Without the post-sleep guard, a rapid sequence of changes occasionally flickers the HUD to nil mid-animation.
 
 **Gotcha:** The `Task { @MainActor in }` annotation is non-optional — without it the `withAnimation` block runs off the main actor and the animation silently does nothing (the UI snaps instead of fading). Prefer this idiom over `DispatchQueue.main.asyncAfter(deadline:)`, which is **not cancelable** and forces an awkward boolean-flag dance instead.
+
+### 16.6 Pie chart with SwiftUI `Path.addArc`
+
+`NemoNotch/Notch/Badge/PomodoroPieView.swift`
+
+```swift
+GeometryReader { geo in
+    let radius = min(geo.size.width, geo.size.height) / 2
+    let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+    Path { p in
+        p.move(to: center)
+        p.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(-90),                       // 12 o'clock start
+            endAngle: .degrees(-90 + 360 * remainingFraction),
+            clockwise: false
+        )
+        p.closeSubpath()
+    }
+    .fill(color)
+}
+```
+
+Wrap with a background `Circle().stroke(color.opacity(0.25))` for the empty wedge. Used by both the 14pt notch badge and the 88pt active-block face — same component, different size presets.
+
+**Gotcha:** Don't drive the fraction through the `BadgeItem` `Equatable` case — each-second change would re-trigger the badge spring animation in `BadgeViewModel.updateDisplayedBadges`. Pass identity (e.g. `.pomodoro(phase:)`) through the case; read the live `remainingFraction` inside the view via `@Environment(PomodoroTimerService.self)`.
 
 ---
 
