@@ -64,6 +64,36 @@ final class TaskStore {
         update(id) { $0.completedPomodoros += 1 }
     }
 
+    func pinToTop(_ id: UUID) {
+        let minIdx = tasks.map(\.sortIndex).min() ?? 1.0
+        update(id) { $0.sortIndex = minIdx - 1.0 }
+    }
+
+    /// Reorder `id` to sit between `before` and `after` (either nil → edge).
+    func move(_ id: UUID, between before: UUID?, and after: UUID?) {
+        let beforeIdx = before.flatMap { idx in tasks.first { $0.id == idx }?.sortIndex }
+        let afterIdx = after.flatMap { idx in tasks.first { $0.id == idx }?.sortIndex }
+
+        let newIdx: Double
+        switch (beforeIdx, afterIdx) {
+        case let (b?, a?):
+            newIdx = (b + a) / 2
+            if abs(b - a) < 1e-9 {
+                LogService.warn(
+                    "TaskStore.move: sortIndex underflow risk (b=\(b) a=\(a)); rebalance TODO",
+                    category: "TaskStore"
+                )
+            }
+        case let (b?, nil):
+            newIdx = b + 1.0
+        case let (nil, a?):
+            newIdx = a - 1.0
+        case (nil, nil):
+            newIdx = 1.0
+        }
+        update(id) { $0.sortIndex = newIdx }
+    }
+
     // MARK: - Persistence
 
     private func load() {
