@@ -135,7 +135,7 @@ struct QuickStartFormView: View {
     private var customDurationStepper: some View {
         HStack(spacing: 4) {
             Stepper(value: $customDurationMinutes, in: 1 ... 180) {
-                Text("\(customDurationMinutes) min")
+                Text(verbatim: String(format: String(localized: "settings.pomodoro.minutes"), customDurationMinutes))
                     .font(.system(size: 11))
                     .frame(width: 48, alignment: .leading)
             }
