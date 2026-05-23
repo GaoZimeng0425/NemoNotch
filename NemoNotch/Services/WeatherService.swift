@@ -36,7 +36,12 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
         if active {
             guard timer == nil else { return }
             fetchWeather()
-            locationManager.startMonitoringSignificantLocationChanges()
+            // Significant-location monitoring on .notDetermined would surface
+            // the system authorization dialog at launch. Defer it until the
+            // user grants permission via the in-tab PermissionCard.
+            if locationAuthorizationStatus == .authorizedAlways {
+                locationManager.startMonitoringSignificantLocationChanges()
+            }
             timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.fetchWeather()
@@ -73,6 +78,11 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
             self.locationAuthorizationStatus = manager.authorizationStatus
             if manager.authorizationStatus == .authorizedAlways {
                 manager.requestLocation()
+                // setActive(true) earlier may have skipped this because the
+                // status was .notDetermined. Start it now that the user granted.
+                if self.timer != nil {
+                    manager.startMonitoringSignificantLocationChanges()
+                }
             }
         }
     }
