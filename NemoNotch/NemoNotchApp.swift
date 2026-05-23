@@ -213,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
             guard let c = coordinator else { return }
             switch c.status {
-            case .closed: c.notchOpen()
+            case .closed: c.notchOpen(viaHotkey: true)
             case .opened: c.notchClose()
             }
         }
@@ -223,12 +223,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let c = coordinator else { return }
                 switch c.status {
                 case .closed:
-                    c.notchOpen(tab: tab)
+                    c.notchOpen(tab: tab, viaHotkey: true)
                 case .opened:
                     if c.selectedTab == tab {
                         c.notchClose()
                     } else {
                         c.selectedTab = tab
+                        c.bumpHotkeyAutoCloseTimerIfActive()
                     }
                 }
             }
