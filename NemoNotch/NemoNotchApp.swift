@@ -95,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var historyStore: PomodoroHistoryStore?
     private(set) var pomodoroTimerService: PomodoroTimerService?
     private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
+    private(set) var quickStartController: QuickStartWindowController?
 
     var shouldSuppressPreviousAppRestore: Bool {
         Date() < suppressRestoreUntil
@@ -172,6 +173,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyStore = history
         notificationPermissionMonitor = notificationPermission
         pomodoroTimerService = pomodoro
+        quickStartController = QuickStartWindowController(
+            timerService: pomodoro,
+            taskStore: tasks,
+            appSettings: settings,
+            notificationMonitor: notificationPermission
+        )
 
         let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
