@@ -274,5 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+
+        KeyboardShortcuts.onKeyDown(for: .openQuickStart) { [weak self] in
+            self?.quickStartController?.toggle()
+        }
     }
 }
