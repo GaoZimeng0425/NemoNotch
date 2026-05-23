@@ -54,16 +54,16 @@ private struct OverviewCalendarSection: View {
             case .fullAccess:
                 calendarContent
             default:
-                VStack(spacing: 6) {
-                    Image(systemName: "calendar.badge.lock")
-                        .font(.system(size: 20))
-                        .foregroundStyle(NotchTheme.textTertiary)
-                    Text("calendar.permission_required")
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                PermissionCard(
+                    icon: "calendar.badge.lock",
+                    titleKey: "permission.calendar.title",
+                    detailKey: "permission.calendar.detail",
+                    status: calendarService.authorizationStatus == .denied
+                        ? .denied
+                        : .notDetermined,
+                    primary: .programmatic { calendarService.requestAccess() },
+                    openSettings: { calendarService.openSystemSettings() }
+                )
             }
         }
         .notchCard(radius: 8, fill: NotchTheme.surface)
@@ -204,15 +204,33 @@ private struct CalendarMeetingIcon: View {
 
 private struct OverviewMediaSection: View {
     @Environment(MediaService.self) var mediaService
+    @Environment(MediaAutomationPermissionMonitor.self) var automationMonitor
 
     private var state: PlaybackState {
         mediaService.playbackState
     }
 
+    private var automationCardPlayer: KnownPlayer? {
+        guard let bundleID = mediaService.playbackState.appBundleIdentifier,
+              let player = KnownPlayer(bundleID: bundleID) else { return nil }
+        return automationMonitor.state(for: bundleID) == .authorized ? nil : player
+    }
+
     var body: some View {
         VStack(spacing: 6) {
-            if let denied = mediaService.permissionDeniedPlayer {
-                permissionBanner(player: denied)
+            if let player = automationCardPlayer {
+                PermissionCard(
+                    icon: "lock.shield",
+                    titleKey: "permission.automation.title",
+                    detailKey: "permission.automation.detail",
+                    status: automationMonitor.state(for: player.rawValue) == .denied
+                        ? .denied
+                        : .notDetermined,
+                    primary: .programmatic {
+                        mediaService.requestAutomationAccess(for: player)
+                    },
+                    openSettings: { mediaService.openAutomationSettings() }
+                )
             } else {
                 artwork
                 trackInfo
@@ -223,41 +241,6 @@ private struct OverviewMediaSection: View {
         .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
         .notchCard(radius: 8, fill: NotchTheme.surface)
-    }
-
-    private func permissionBanner(player: KnownPlayer) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: "lock.shield")
-                .font(.system(size: 20))
-                .foregroundStyle(NotchTheme.accent)
-            Text("\(player.displayName) 自动化权限被拒绝")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-                .multilineTextAlignment(.center)
-            Text("在 系统设置 → 隐私与安全 → 自动化 中开启")
-                .font(.system(size: 9))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-            HStack(spacing: 6) {
-                Button("打开设置") { mediaService.openAutomationSettings() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .medium))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(NotchTheme.accent))
-                    .foregroundStyle(Color.black.opacity(0.85))
-
-                Button("忽略") { mediaService.dismissPermissionBanner() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-            }
-        }
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var artwork: some View {
@@ -439,16 +422,30 @@ private struct ProgressScrubber: View {
 
 private struct OverviewWeatherSection: View {
     @Environment(WeatherService.self) var weatherService
+    @Environment(AppSettings.self) var appSettings
 
     var body: some View {
         Group {
-            if !weatherService.isLoaded {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(NotchTheme.textSecondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !appSettings.weatherCity.isEmpty || weatherService.locationAuthorizationStatus == .authorizedAlways {
+                if !weatherService.isLoaded {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(NotchTheme.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    weatherContent
+                }
             } else {
-                weatherContent
+                PermissionCard(
+                    icon: "location.slash",
+                    titleKey: "permission.location.title",
+                    detailKey: "permission.location.detail",
+                    status: weatherService.locationAuthorizationStatus == .denied
+                        ? .denied
+                        : .notDetermined,
+                    primary: .programmatic { weatherService.requestLocationAccess() },
+                    openSettings: { weatherService.openLocationSettings() }
+                )
             }
         }
         .notchCard(radius: 8, fill: NotchTheme.surface)

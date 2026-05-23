@@ -162,6 +162,10 @@ sequenceDiagram
     NC->>NV: Show Settings / Quit
 ```
 
+**Hotkey-aware dismiss:** When the notch is opened via global hotkey, it does NOT close on mouse-move-outside until either (a) the mouse enters the content area at least once, (b) 3 seconds elapse with no mouse entry (`NotchConstants.hotkeyAutoCloseDelay`), or (c) the user presses ESC / hotkey / clicks outside. Mouse-hover open path is unchanged. State machine lives in `HotkeyDismissState`.
+
+**Permission UI pattern:** Calendar, Location, and Automation permissions are NOT auto-requested on launch. Instead the relevant Tab section renders a `PermissionCard` with a "Grant" button. AX uses the same card but only links to System Settings (no programmatic request API). Card lives at `NemoNotch/Helpers/PermissionCard.swift`.
+
 ### Badge Priority (when notch is collapsed)
 
 ```

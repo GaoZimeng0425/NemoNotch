@@ -10,14 +10,16 @@ private struct NowPlayingInfoBox: @unchecked Sendable {
 final class MediaService {
     var playbackState = PlaybackState()
     var appIcon: NSImage?
-    /// When non-nil, UI surfaces a banner prompting the user to grant
-    /// Automation permission for this player in System Settings.
-    var permissionDeniedPlayer: KnownPlayer?
 
-    /// Forwarder fired alongside the internal `permissionDeniedPlayer` update.
+    /// Forwarder fired when `MediaBridge` denies access for a bundle.
     /// AppDelegate wires this to `MediaAutomationPermissionMonitor.recordDenied`
     /// so the monitor's per-bundle state machine and probe loop stay in sync.
     var permissionDeniedHandler: ((String) -> Void)?
+
+    /// Forwarder fired when `requestAutomationAccess` confirms authorization.
+    /// AppDelegate wires this to `MediaAutomationPermissionMonitor.recordAuthorized`
+    /// so the PermissionCard hides as soon as the user grants access.
+    var automationAuthorizedHandler: ((String) -> Void)?
 
     private var pollTimer: Timer?
     private var progressTimer: Timer?
@@ -43,23 +45,35 @@ final class MediaService {
         remote.registerForNotifications()
         remote.setCanBeNowPlayingApplication(false)
         MediaBridge.permissionDeniedCallback = { [weak self] bundleID in
-            guard let self else { return }
-            permissionDeniedHandler?(bundleID)
-            guard let player = KnownPlayer(bundleID: bundleID) else { return }
-            permissionDeniedPlayer = player
+            self?.permissionDeniedHandler?(bundleID)
         }
         setupNotifications()
         startPolling()
         updateNowPlaying()
     }
 
-    func dismissPermissionBanner() {
-        permissionDeniedPlayer = nil
-    }
-
     func openAutomationSettings() {
         MediaBridge.openAutomationSettings()
-        permissionDeniedPlayer = nil
+    }
+
+    /// Probe the bundle's Automation permission. The probe IS the request —
+    /// sending an AppleEvent (which `hasAutomationAccess` does internally) is
+    /// what triggers the system permission dialog when the state is
+    /// `.notDetermined`. If already `.denied`, the system won't re-show the
+    /// dialog; the user must open Settings.
+    func requestAutomationAccess(for player: KnownPlayer) {
+        LogService.info(
+            "Automation permission requested for \(player.rawValue)",
+            category: "Permission"
+        )
+        // hasAutomationAccess is synchronous — it makes an AppleEvent that
+        // blocks during the system dialog and returns true/false based on the
+        // outcome. Forward the success case so the monitor flips to
+        // .authorized; the denied case is already routed via
+        // MediaBridge.permissionDeniedCallback → permissionDeniedHandler.
+        if MediaBridge.hasAutomationAccess(bundleID: player.rawValue) {
+            automationAuthorizedHandler?(player.rawValue)
+        }
     }
 
     // ── Player controls ──────────────────────────────────────────────
@@ -233,15 +247,7 @@ final class MediaService {
             Task { @MainActor [weak self] in
                 LogService.debug("[Media] poll timer", category: "media")
                 self?.updateNowPlaying()
-                self?.recheckPermissionIfBannerShown()
             }
-        }
-    }
-
-    private func recheckPermissionIfBannerShown() {
-        guard let player = permissionDeniedPlayer else { return }
-        if MediaBridge.hasAutomationAccess(bundleID: player.rawValue) {
-            permissionDeniedPlayer = nil
         }
     }
 

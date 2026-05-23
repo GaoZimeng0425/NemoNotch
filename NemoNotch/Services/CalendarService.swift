@@ -7,7 +7,7 @@ final class CalendarService {
     var todayEvents: [CalendarEvent] = []
     var nextEvent: CalendarEvent?
     var authorizationStatus: EKAuthorizationStatus = .notDetermined
-    var selectedDate: Date = Date()
+    var selectedDate: Date = .init()
 
     private(set) var multiDayEvents: [Date: [CalendarEvent]] = [:]
     private nonisolated(unsafe) let eventStore = EKEventStore()
@@ -20,7 +20,7 @@ final class CalendarService {
     var dateRange: [Date] {
         let calendar = Calendar.current
         let today = startOfDay(for: Date())
-        return (-7...7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        return (-7 ... 7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
     }
 
     func monthLabel(locale: Locale = .current) -> String {
@@ -32,7 +32,9 @@ final class CalendarService {
 
     init() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
-        requestAccessIfNeeded()
+        if authorizationStatus == .fullAccess {
+            fetchEvents()
+        }
 
         NotificationCenter.default.addObserver(
             self,
@@ -47,6 +49,7 @@ final class CalendarService {
     }
 
     func requestAccess() {
+        LogService.info("Calendar permission requested by user", category: "Permission")
         Task { @MainActor in
             do {
                 let granted = try await eventStore.requestFullAccessToEvents()
@@ -79,24 +82,14 @@ final class CalendarService {
         fetchEvents()
     }
 
-    private func requestAccessIfNeeded() {
-        switch authorizationStatus {
-        case .notDetermined:
-            requestAccess()
-        case .fullAccess:
-            fetchEvents()
-        default:
-            break
-        }
-    }
-
     private func fetchEvents() {
         guard authorizationStatus == .fullAccess else { return }
 
         let calendar = Calendar.current
         let today = Date()
         guard let rangeStart = calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: today)),
-              let rangeEnd = calendar.date(byAdding: .day, value: 8, to: calendar.startOfDay(for: today)) else { return }
+              let rangeEnd = calendar.date(byAdding: .day, value: 8, to: calendar.startOfDay(for: today))
+        else { return }
 
         let predicate = eventStore.predicateForEvents(
             withStart: rangeStart,

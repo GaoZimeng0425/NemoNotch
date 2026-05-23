@@ -107,12 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
             permissionMonitor?.recordDenied(bundleID: bundleID)
         }
-        permissionMonitor.onAuthorized = { [weak media] bundleID in
-            guard let media,
-                  let player = KnownPlayer(bundleID: bundleID),
-                  media.permissionDeniedPlayer == player
-            else { return }
-            media.permissionDeniedPlayer = nil
+        media.automationAuthorizedHandler = { [weak permissionMonitor] bundleID in
+            permissionMonitor?.recordAuthorized(bundleID: bundleID)
         }
         permissionMonitor.startProbing()
         let calendar = CalendarService()
@@ -163,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(coordinator)
                     .environment(settings)
                     .environment(media)
+                    .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
                     .environment(registry)
@@ -213,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
             guard let c = coordinator else { return }
             switch c.status {
-            case .closed: c.notchOpen()
+            case .closed: c.notchOpen(viaHotkey: true)
             case .opened: c.notchClose()
             }
         }
@@ -223,12 +220,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let c = coordinator else { return }
                 switch c.status {
                 case .closed:
-                    c.notchOpen(tab: tab)
+                    c.notchOpen(tab: tab, viaHotkey: true)
                 case .opened:
                     if c.selectedTab == tab {
                         c.notchClose()
                     } else {
                         c.selectedTab = tab
+                        c.bumpHotkeyAutoCloseTimerIfActive()
                     }
                 }
             }

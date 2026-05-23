@@ -40,9 +40,6 @@
         }
       }
     },
-    "%@ 自动化权限被拒绝" : {
-
-    },
     "%@%@" : {
       "localizations" : {
         "en" : {
@@ -542,6 +539,7 @@
       }
     },
     "calendar.permission_required" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1140,7 +1138,185 @@
         }
       }
     },
+    "permission.accessibility.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used to read Dock badge counts for monitored apps. Enable in System Settings → Privacy & Security → Accessibility."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于读取被监控 App 的 Dock 角标。请在 系统设置 → 隐私与安全 → 辅助功能 中开启。"
+          }
+        }
+      }
+    },
+    "permission.accessibility.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility Permission Required"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要辅助功能权限"
+          }
+        }
+      }
+    },
+    "permission.automation.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used for real playback state and 15-second seek. Click to grant."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于真实播放状态读取和 15 秒快进快退。点击授权。"
+          }
+        }
+      }
+    },
+    "permission.automation.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automation Permission Required"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要自动化权限"
+          }
+        }
+      }
+    },
+    "permission.calendar.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used to show today's events. Click to grant."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于显示日历事件。点击授权。"
+          }
+        }
+      }
+    },
+    "permission.calendar.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendar Access"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日历访问权限"
+          }
+        }
+      }
+    },
+    "permission.denied_explanation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permission denied. Open System Settings to change."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "权限被拒绝。打开系统设置修改。"
+          }
+        }
+      }
+    },
+    "permission.grant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grant"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授权"
+          }
+        }
+      }
+    },
+    "permission.location.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used for automatic weather at your location. You can also type a city manually in Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于按当前位置自动获取天气。也可以在设置中手动输入城市。"
+          }
+        }
+      }
+    },
+    "permission.location.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Location Access"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位置访问权限"
+          }
+        }
+      }
+    },
+    "permission.open_settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开设置"
+          }
+        }
+      }
+    },
     "settings.accessibility_description" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1157,6 +1333,7 @@
       }
     },
     "settings.accessibility_required" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1557,6 +1734,7 @@
       }
     },
     "settings.open_system_settings" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1797,15 +1975,6 @@
           }
         }
       }
-    },
-    "在 系统设置 → 隐私与安全 → 自动化 中开启" : {
-
-    },
-    "忽略" : {
-
-    },
-    "打开设置" : {
-
     }
   },
   "version" : "1.0"
