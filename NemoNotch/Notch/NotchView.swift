@@ -314,6 +314,8 @@ struct NotchView: View {
             LauncherTab {
                 coordinator.notchClose()
             }
+        case .pomodoro:
+            PomodoroTab()
         case .system:
             SystemTab()
         }
