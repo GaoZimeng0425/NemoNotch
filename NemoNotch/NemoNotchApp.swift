@@ -180,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             notificationMonitor: notificationPermission
         )
 
+        let qsController = quickStartController
         let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
                 NotchView(screen: screen)
@@ -199,6 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(history)
                     .environment(pomodoro)
                     .environment(notificationPermission)
+                    .environment(\.quickStartController, qsController)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in

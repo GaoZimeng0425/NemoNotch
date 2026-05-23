@@ -131,3 +131,7 @@ final class QuickStartWindowController {
         dismiss()
     }
 }
+
+extension EnvironmentValues {
+    @Entry var quickStartController: QuickStartWindowController?
+}
