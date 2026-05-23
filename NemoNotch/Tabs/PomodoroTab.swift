@@ -9,12 +9,17 @@ struct PomodoroTab: View {
 
     @State private var showStatsPopover = false
     @State private var showCompleted = false
+    @State private var editingTask: TodoTask?
 
     var body: some View {
         VStack(spacing: 10) {
             header
             Divider().background(NotchTheme.stroke)
-            todoListPlaceholder
+            PomodoroTodoListView(
+                showCompleted: $showCompleted,
+                onEdit: { editingTask = $0 },
+                onStartTask: handleStartTask(_:)
+            )
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -74,11 +79,12 @@ struct PomodoroTab: View {
         }
     }
 
-    private var todoListPlaceholder: some View {
-        Text("(TODO list — Task 26)")
-            .font(.system(size: 11))
-            .foregroundStyle(NotchTheme.textTertiary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private func handleStartTask(_ task: TodoTask) {
+        let duration = timerService.lastUsedDuration > 0
+            ? timerService.lastUsedDuration
+            : appSettings.pomodoroWorkDuration
+        let autoFlow = timerService.lastAutoFlow
+        timerService.start(taskID: task.id, duration: duration, autoFlow: autoFlow)
     }
 
     private func todayCounts() -> (completed: Int, partial: Int) {
