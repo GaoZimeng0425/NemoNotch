@@ -439,16 +439,30 @@ private struct ProgressScrubber: View {
 
 private struct OverviewWeatherSection: View {
     @Environment(WeatherService.self) var weatherService
+    @Environment(AppSettings.self) var appSettings
 
     var body: some View {
         Group {
-            if !weatherService.isLoaded {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(NotchTheme.textSecondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !appSettings.weatherCity.isEmpty || weatherService.locationAuthorizationStatus == .authorizedAlways {
+                if !weatherService.isLoaded {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(NotchTheme.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    weatherContent
+                }
             } else {
-                weatherContent
+                PermissionCard(
+                    icon: "location.slash",
+                    titleKey: "permission.location.title",
+                    detailKey: "permission.location.detail",
+                    status: weatherService.locationAuthorizationStatus == .denied
+                        ? .denied
+                        : .notDetermined,
+                    primary: .programmatic { weatherService.requestLocationAccess() },
+                    openSettings: { weatherService.openLocationSettings() }
+                )
             }
         }
         .notchCard(radius: 8, fill: NotchTheme.surface)
