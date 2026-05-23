@@ -10,11 +10,15 @@ struct PomodoroTab: View {
     @State private var showStatsPopover = false
     @State private var showCompleted = false
     @State private var editingTask: TodoTask?
+    @State private var pendingFastStartTask: TodoTask?
 
     var body: some View {
         VStack(spacing: 10) {
             header
             Divider().background(NotchTheme.stroke)
+            if let pending = pendingFastStartTask {
+                overrideConfirmBanner(for: pending)
+            }
             PomodoroTodoListView(
                 showCompleted: $showCompleted,
                 onEdit: { editingTask = $0 },
@@ -80,11 +84,45 @@ struct PomodoroTab: View {
     }
 
     private func handleStartTask(_ task: TodoTask) {
+        if timerService.state.isActive {
+            pendingFastStartTask = task
+        } else {
+            performStart(task)
+        }
+    }
+
+    private func performStart(_ task: TodoTask) {
         let duration = timerService.lastUsedDuration > 0
             ? timerService.lastUsedDuration
             : appSettings.pomodoroWorkDuration
         let autoFlow = timerService.lastAutoFlow
         timerService.start(taskID: task.id, duration: duration, autoFlow: autoFlow)
+        pendingFastStartTask = nil
+    }
+
+    private func overrideConfirmBanner(for task: TodoTask) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            Text(String(format: String(localized: "pomodoro.confirm.override"), task.title))
+                .font(.system(size: 11))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Spacer()
+            Button("pomodoro.action.start") {
+                performStart(task)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            Button {
+                pendingFastStartTask = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func todayCounts() -> (completed: Int, partial: Int) {
