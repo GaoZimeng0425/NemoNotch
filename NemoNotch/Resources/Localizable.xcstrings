@@ -40,9 +40,6 @@
         }
       }
     },
-    "%@ 自动化权限被拒绝" : {
-
-    },
     "%@%@" : {
       "localizations" : {
         "en" : {
@@ -1142,7 +1139,6 @@
       }
     },
     "permission.accessibility.detail" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1159,7 +1155,6 @@
       }
     },
     "permission.accessibility.title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1176,7 +1171,6 @@
       }
     },
     "permission.automation.detail" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1193,7 +1187,6 @@
       }
     },
     "permission.automation.title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1275,7 +1268,6 @@
       }
     },
     "permission.location.detail" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1292,7 +1284,6 @@
       }
     },
     "permission.location.title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1984,15 +1975,6 @@
           }
         }
       }
-    },
-    "在 系统设置 → 隐私与安全 → 自动化 中开启" : {
-
-    },
-    "忽略" : {
-
-    },
-    "打开设置" : {
-
     }
   },
   "version" : "1.0"
