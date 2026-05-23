@@ -6,6 +6,7 @@ enum BadgeItem: Identifiable, Equatable {
     case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool, sessionID: String)
     case agents(agentID: String, state: AgentMonitorState, emoji: String)
     case calendar
+    case pomodoro(phase: PomodoroPhase)
 
     var id: String {
         switch self {
@@ -15,6 +16,7 @@ enum BadgeItem: Identifiable, Equatable {
             "ai:\(sessionID):\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
         case let .agents(agentID, state, emoji): "agents:\(agentID):\(state.rawValue):\(emoji)"
         case .calendar: "calendar"
+        case let .pomodoro(phase): "pomodoro:\(phase.rawValue)"
         }
     }
 
@@ -25,6 +27,7 @@ enum BadgeItem: Identifiable, Equatable {
         case .ai: .claude
         case .agents: .agents
         case .calendar: .overview
+        case .pomodoro: .pomodoro
         }
     }
 
@@ -35,14 +38,16 @@ enum BadgeItem: Identifiable, Equatable {
             return 0
         case .notification:
             return 1
-        case .agents:
+        case .pomodoro:
             return 2
-        case .ai:
+        case .agents:
             return 3
-        case .media:
+        case .ai:
             return 4
-        case .calendar:
+        case .media:
             return 5
+        case .calendar:
+            return 6
         }
     }
 }

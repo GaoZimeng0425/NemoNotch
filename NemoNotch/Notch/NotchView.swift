@@ -13,6 +13,7 @@ struct NotchView: View {
     @Environment(AgentMonitorRegistry.self) var agentRegistry
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
+    @Environment(PomodoroTimerService.self) var pomodoroService
 
     private var hardwareNotchSize: NSSize {
         coordinator.notchSize
@@ -107,7 +108,8 @@ struct NotchView: View {
                     notchCenterY: hardwareNotchSize.height / 2,
                     onBadgeTap: handleBadgeTap,
                     notificationService: notificationService,
-                    mediaService: mediaService
+                    mediaService: mediaService,
+                    pomodoroService: pomodoroService
                 )
                 .zIndex(1)
 
@@ -118,7 +120,8 @@ struct NotchView: View {
                         notchCenterY: hardwareNotchSize.height + NotchConstants.badgeRowHeight / 2,
                         onBadgeTap: handleBadgeTap,
                         notificationService: notificationService,
-                        mediaService: mediaService
+                        mediaService: mediaService,
+                        pomodoroService: pomodoroService
                     )
                     .zIndex(1)
                     .opacity(shown ? 1 : 0)
@@ -187,7 +190,8 @@ struct NotchView: View {
             calendarService: calendarService,
             aiService: aiService,
             notificationService: notificationService,
-            agentRegistry: agentRegistry
+            agentRegistry: agentRegistry,
+            pomodoroService: pomodoroService
         )
         vm.initialize()
         badgeViewModel = vm

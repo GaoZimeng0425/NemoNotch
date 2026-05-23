@@ -114,6 +114,18 @@ final class PomodoroTimerService {
         }
     }
 
+    var remainingFraction: Double {
+        switch state {
+        case .idle: return 0
+        case let .running(ctx):
+            let elapsed = ctx.accumulatedElapsed + Date().timeIntervalSince(ctx.startedAt)
+            return max(0, min(1, (ctx.plannedDuration - elapsed) / ctx.plannedDuration))
+        case let .paused(ctx):
+            return max(0, min(1, (ctx.plannedDuration - ctx.accumulatedElapsed) / ctx.plannedDuration))
+        case .justFinished: return 0
+        }
+    }
+
     // MARK: - Transitions
 
     func start(taskID: UUID?, duration: TimeInterval, autoFlow: Bool) {
