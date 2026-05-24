@@ -6,6 +6,7 @@ final class QuickStartWindowController {
     private var window: QuickStartWindow?
     private var clickOutsideMonitor: Any?
     private var previousApp: NSRunningApplication?
+    private var editingTaskID: UUID?
 
     private let timerService: PomodoroTimerService
     private let taskStore: TaskStore
@@ -29,33 +30,45 @@ final class QuickStartWindowController {
         if let window, window.isVisible {
             dismiss()
         } else {
-            present()
+            present(editingTask: nil)
         }
     }
 
-    func present() {
-        let w = window ?? makeWindow()
-        window = w
-        captureFrontmostApp()
-        center(w)
-        w.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        installClickOutsideMonitor(for: w)
-        LogService.debug("QuickStartWindow present", category: "QuickStart")
+    func presentEdit(taskID: UUID) {
+        guard let task = taskStore.tasks.first(where: { $0.id == taskID }) else { return }
+        present(editingTask: task)
     }
 
     func dismiss() {
         uninstallClickOutsideMonitor()
         window?.orderOut(nil)
+        editingTaskID = nil
         restorePreviousApp()
         LogService.debug("QuickStartWindow dismiss", category: "QuickStart")
     }
 
-    private func makeWindow() -> QuickStartWindow {
-        let w = QuickStartWindow()
-        let host = NSHostingController(
+    private func present(editingTask: TodoTask?) {
+        editingTaskID = editingTask?.id
+        let w = window ?? QuickStartWindow()
+        window = w
+        w.contentViewController = makeHost(editingTask: editingTask)
+        captureFrontmostApp()
+        center(w)
+        w.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        installClickOutsideMonitor(for: w)
+        LogService.debug(
+            "QuickStartWindow present (\(editingTask == nil ? "create" : "edit"))",
+            category: "QuickStart"
+        )
+    }
+
+    private func makeHost(editingTask: TodoTask?) -> NSHostingController<some View> {
+        NSHostingController(
             rootView: QuickStartFormView(
+                editingTask: editingTask,
                 onConfirm: { [weak self] result in self?.handleConfirm(result) },
+                onDelete: { [weak self] in self?.handleDelete() },
                 onDismiss: { [weak self] in self?.dismiss() }
             )
             .environment(timerService)
@@ -63,8 +76,6 @@ final class QuickStartWindowController {
             .environment(appSettings)
             .environment(notificationMonitor)
         )
-        w.contentViewController = host
-        return w
     }
 
     private func center(_ w: NSWindow) {
@@ -116,6 +127,18 @@ final class QuickStartWindowController {
     }
 
     private func handleConfirm(_ result: QuickStartFormView.FormResult) {
+        if let taskID = editingTaskID {
+            let trimmed = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            taskStore.update(taskID) { task in
+                if !trimmed.isEmpty {
+                    task.title = trimmed
+                }
+                task.priority = result.priority
+                task.notes = result.notes
+            }
+            dismiss()
+            return
+        }
         var taskID: UUID? = nil
         if !result.title.isEmpty {
             taskID = taskStore.add(
@@ -127,7 +150,14 @@ final class QuickStartWindowController {
             )
         }
         let autoFlow = (result.mode == .continuous)
-        timerService.start(taskID: taskID, duration: result.duration, autoFlow: autoFlow)
+        let duration = result.duration ?? appSettings.pomodoroWorkDuration
+        timerService.start(taskID: taskID, duration: duration, autoFlow: autoFlow)
+        dismiss()
+    }
+
+    private func handleDelete() {
+        guard let taskID = editingTaskID else { return }
+        taskStore.delete(taskID)
         dismiss()
     }
 }

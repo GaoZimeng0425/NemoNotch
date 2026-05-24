@@ -9,36 +9,31 @@ struct PomodoroTab: View {
 
     @State private var showStatsPopover = false
     @State private var showCompleted = false
-    @State private var editingTask: TodoTask?
     @State private var pendingFastStartTask: TodoTask?
 
     var body: some View {
         VStack(spacing: 10) {
             header
+            if let pending = pendingFastStartTask {
+                overrideConfirmBanner(for: pending)
+            }
+            PomodoroTodoListView(
+                showCompleted: $showCompleted,
+                onEdit: { quickStartController?.presentEdit(taskID: $0.id) },
+                onStartTask: handleStartTask(_:)
+            )
+            .frame(maxHeight: .infinity)
             if timerService.state.isActive {
+                Divider().background(NotchTheme.stroke)
                 PomodoroActiveBlock(
                     onPauseResume: handlePauseResume,
                     onCompleteEarly: handleCompleteEarly,
                     onAbandon: handleAbandon
                 )
             }
-            Divider().background(NotchTheme.stroke)
-            if let pending = pendingFastStartTask {
-                overrideConfirmBanner(for: pending)
-            }
-            PomodoroTodoListView(
-                showCompleted: $showCompleted,
-                onEdit: { editingTask = $0 },
-                onStartTask: handleStartTask(_:)
-            )
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .sheet(item: $editingTask) { task in
-            PomodoroEditSheet(taskID: task.id)
-                .environment(taskStore)
-                .environment(historyStore)
-        }
     }
 
     private var header: some View {
@@ -63,12 +58,8 @@ struct PomodoroTab: View {
                 quickStartController?.toggle()
             } label: {
                 Label("pomodoro.action.newPomodoro", systemImage: "plus")
-                    .font(.system(size: 11, weight: .medium))
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(NotchTheme.accent.opacity(0.85), in: Capsule())
-                    .foregroundStyle(.black)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPillButtonStyle(prominent: true))
         }
     }
 
@@ -131,26 +122,36 @@ struct PomodoroTab: View {
     private func overrideConfirmBanner(for task: TodoTask) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(NotchTheme.accentText)
             Text(String(format: String(localized: "pomodoro.confirm.override"), task.title))
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer()
             Button("pomodoro.action.start") {
                 performStart(task)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(NotchPillButtonStyle(prominent: true))
             Button {
                 pendingFastStartTask = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(NotchTheme.surface))
+                    .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(NotchTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(NotchTheme.accentStroke, lineWidth: 0.7)
+        )
     }
 
     private func todayCounts() -> (completed: Int, partial: Int) {

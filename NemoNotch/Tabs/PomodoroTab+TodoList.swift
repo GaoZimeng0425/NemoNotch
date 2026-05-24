@@ -16,26 +16,14 @@ struct PomodoroTodoListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack {
-                Text(String(format: String(localized: "pomodoro.todo.countHeader"), visibleTasks.count))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                Spacer()
-                Toggle(isOn: $showCompleted) {
-                    Text("pomodoro.todo.showCompleted")
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.textTertiary)
-                }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-            }
+        VStack(spacing: 8) {
+            listHeader
 
             if visibleTasks.isEmpty {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 4) {
+                    LazyVStack(spacing: 8) {
                         ForEach(visibleTasks) { task in
                             TodoRow(
                                 task: task,
@@ -44,21 +32,57 @@ struct PomodoroTodoListView: View {
                             )
                         }
                     }
+                    .padding(.bottom, 10)
                 }
-                .notchScrollEdgeShadow(.vertical, thickness: 8, intensity: 0.32)
+                .notchScrollEdgeShadow(.vertical, thickness: 16, intensity: 0.30)
             }
         }
+        .padding(.horizontal, 2)
+    }
+
+    private var listHeader: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(NotchTheme.accentText)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        NotchTheme.accent.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    )
+                Text(String(format: String(localized: "pomodoro.todo.countHeader"), visibleTasks.count))
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle(isOn: $showCompleted) {
+                Text("pomodoro.todo.showCompleted")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .lineLimit(1)
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .fixedSize()
+        }
+        .padding(.horizontal, 4)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 9) {
             Image(systemName: "tray")
-                .font(.system(size: 22))
+                .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(NotchTheme.textTertiary)
             Text("pomodoro.todo.empty")
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textTertiary)
                 .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -66,6 +90,7 @@ struct PomodoroTodoListView: View {
 
 private struct TodoRow: View {
     @Environment(TaskStore.self) var taskStore
+    @Environment(PomodoroTimerService.self) var timerService
     let task: TodoTask
     let onEdit: (TodoTask) -> Void
     let onStart: (TodoTask) -> Void
@@ -73,47 +98,33 @@ private struct TodoRow: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                taskStore.markDone(task.id, isDone: !task.isDone)
-            } label: {
-                Image(systemName: task.isDone ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 13))
-                    .foregroundStyle(task.isDone ? NotchTheme.accent : NotchTheme.textTertiary)
+        HStack(alignment: .top, spacing: 11) {
+            completionButton
+
+            detailsButton
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 8) {
+                pomodoroCount
+                startButton
             }
-            .buttonStyle(.plain)
-
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(priorityColor(task.priority))
-                .frame(width: 3, height: 14)
-
-            Text(task.title.isEmpty ? "(untitled)" : task.title)
-                .font(.system(size: 12))
-                .foregroundStyle(task.isDone ? NotchTheme.textTertiary : NotchTheme.textPrimary)
-                .strikethrough(task.isDone)
-                .lineLimit(1)
-
-            Spacer()
-
-            completedDots
-                .frame(width: 50, alignment: .trailing)
-
-            Button {
-                onStart(task)
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(NotchTheme.textPrimary)
-                    .frame(width: 18, height: 18)
-                    .background(NotchTheme.surface, in: Circle())
-            }
-            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
-        .padding(.horizontal, 8).padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(
-            hovering ? NotchTheme.surfaceSubtle : Color.clear,
-            in: RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(rowFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(rowStroke, lineWidth: isActive ? 1 : 0.7)
+                )
         )
+        .shadow(color: isActive ? NotchTheme.accent.opacity(0.12) : .clear, radius: 14, y: 6)
+        .opacity(task.isDone ? 0.68 : 1)
+        .animation(.easeOut(duration: NotchConstants.fadeFastDuration), value: hovering)
+        .animation(.easeOut(duration: NotchConstants.fadeFastDuration), value: isActive)
         .onHover { hovering = $0 }
         .contextMenu {
             Button("pomodoro.todo.edit") { onEdit(task) }
@@ -125,21 +136,166 @@ private struct TodoRow: View {
         }
     }
 
-    @ViewBuilder
-    private var completedDots: some View {
-        let n = min(task.completedPomodoros, 5)
-        HStack(spacing: 2) {
-            ForEach(0 ..< 5, id: \.self) { i in
-                Circle()
-                    .fill(i < n ? NotchTheme.accent : NotchTheme.surfaceEmphasis)
-                    .frame(width: 4, height: 4)
+    private var completionButton: some View {
+        Button {
+            taskStore.markDone(task.id, isDone: !task.isDone)
+        } label: {
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(priorityColor(task.priority).opacity(isActive ? 0.18 : 0.12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(priorityColor(task.priority).opacity(isActive ? 0.46 : 0.28), lineWidth: 0.8)
+                    )
+
+                Image(systemName: task.isDone ? "checkmark" : "circle")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(task.isDone ? NotchTheme.accentText : priorityColor(task.priority))
+
+                if isActive {
+                    Circle()
+                        .fill(NotchTheme.accent)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle()
+                                .stroke(NotchTheme.panelBase.opacity(0.92), lineWidth: 1.5)
+                        )
+                        .shadow(color: NotchTheme.accent.opacity(0.56), radius: 5)
+                        .offset(x: 3, y: 3)
+                }
             }
-            if task.completedPomodoros > 5 {
-                Text("+")
-                    .font(.system(size: 8))
-                    .foregroundStyle(NotchTheme.textTertiary)
-            }
+            .frame(width: 34, height: 34)
+            .frame(width: 40, height: 40, alignment: .topLeading)
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .help(task.isDone ? "pomodoro.todo.markOpen" : "pomodoro.todo.markDone")
+    }
+
+    private var detailsButton: some View {
+        Button {
+            onEdit(task)
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    titleText
+
+                    if isActive {
+                        statusBadge(
+                            text: String(localized: "pomodoro.todo.active"),
+                            foreground: NotchTheme.accentText,
+                            fill: NotchTheme.accentText.opacity(0.16)
+                        )
+                    } else {
+                        priorityBadge
+                    }
+                }
+
+                if !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(task.notes)
+                        .font(.system(size: 10))
+                        .foregroundStyle(task.isDone ? NotchTheme.textMuted : NotchTheme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .padding(.top, 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help("pomodoro.todo.edit")
+    }
+
+    private var titleText: some View {
+        Text(taskTitle)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(task.isDone ? NotchTheme.textTertiary : NotchTheme.textPrimary)
+            .strikethrough(task.isDone)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var priorityBadge: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(priorityColor(task.priority))
+                .frame(width: 5, height: 5)
+            Text(priorityLabel(task.priority))
+                .lineLimit(1)
+        }
+        .font(.system(size: 10, weight: .semibold, design: .rounded))
+        .foregroundStyle(task.isDone ? NotchTheme.textMuted : priorityColor(task.priority))
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(priorityColor(task.priority).opacity(0.14), in: Capsule(style: .continuous))
+        .fixedSize()
+    }
+
+    private func statusBadge(text: String, foreground: Color, fill: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(fill, in: Capsule(style: .continuous))
+            .fixedSize()
+    }
+
+    private var pomodoroCount: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "timer")
+                .font(.system(size: 10, weight: .semibold))
+            Text("\(task.completedPomodoros)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+        }
+        .foregroundStyle(task.completedPomodoros > 0 ? NotchTheme.accentText : NotchTheme.textTertiary)
+        .frame(width: 42, alignment: .trailing)
+        .lineLimit(1)
+    }
+
+    private var startButton: some View {
+        Button {
+            onStart(task)
+        } label: {
+            Image(systemName: "play.fill")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(isActive ? Color.black.opacity(0.86) : NotchTheme.textPrimary)
+                .frame(width: 24, height: 24)
+                .background(isActive ? NotchTheme.accent : NotchTheme.surface, in: Circle())
+                .overlay(Circle().stroke(isActive ? Color.clear : NotchTheme.stroke, lineWidth: 0.6))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("pomodoro.action.start")
+    }
+
+    private var taskTitle: String {
+        task.title.isEmpty ? String(localized: "pomodoro.todo.untitled") : task.title
+    }
+
+    private var isActive: Bool {
+        currentTaskID == task.id
+    }
+
+    private var currentTaskID: UUID? {
+        if case let .running(ctx) = timerService.state { return ctx.taskID }
+        if case let .paused(ctx) = timerService.state { return ctx.taskID }
+        return nil
+    }
+
+    private var rowFill: Color {
+        if isActive { return NotchTheme.surfaceWarm }
+        if hovering { return NotchTheme.surface }
+        return NotchTheme.surfaceSubtle
+    }
+
+    private var rowStroke: Color {
+        isActive ? NotchTheme.accentStroke : NotchTheme.strokeStrong
     }
 
     private func priorityColor(_ p: TodoTask.Priority) -> Color {
@@ -147,6 +303,14 @@ private struct TodoRow: View {
         case .low: return NotchTheme.textTertiary
         case .medium: return Color(red: 0.95, green: 0.78, blue: 0.30)
         case .high: return Color(red: 0.93, green: 0.36, blue: 0.36)
+        }
+    }
+
+    private func priorityLabel(_ p: TodoTask.Priority) -> String {
+        switch p {
+        case .low: return String(localized: "pomodoro.priority.low")
+        case .medium: return String(localized: "pomodoro.priority.medium")
+        case .high: return String(localized: "pomodoro.priority.high")
         }
     }
 }

@@ -136,6 +136,7 @@ struct AgentMonitorSourceIcon: View {
     var body: some View {
         if let asset = style.iconAssetName {
             Image(asset)
+                .renderingMode(.original)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
