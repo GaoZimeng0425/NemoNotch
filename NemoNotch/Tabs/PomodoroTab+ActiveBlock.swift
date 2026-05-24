@@ -48,6 +48,8 @@ struct PomodoroActiveBlock: View {
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(NotchTheme.textPrimary)
                 .monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.snappy(duration: 0.28), value: timerService.remainingSeconds)
 
             iconButton(
                 systemName: pauseResumeIcon,

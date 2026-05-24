@@ -21,15 +21,16 @@ struct PomodoroPieView: View {
 
     private var ringLineWidth: CGFloat {
         switch style {
-        case .badge, .row: return 2
-        case .compact: return 3
+        case .badge: return 2.5
+        case .row: return 2
+        case .compact: return 4
         }
     }
 
     private var color: Color {
         switch phase {
         case .work:
-            return Color(red: 0.93, green: 0.36, blue: 0.36)
+            return Color(red: 0.24, green: 0.70, blue: 0.44)
         case .shortBreak:
             return Color(red: 0.34, green: 0.78, blue: 0.51)
         case .longBreak:
