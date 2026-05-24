@@ -11,3 +11,7 @@ build.log
 .ralph-tui/
 .worktrees/
 .superpowers/
+
+# Tool indexes / IDE
+.codegraph/
+.cursor/
