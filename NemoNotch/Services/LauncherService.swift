@@ -12,19 +12,24 @@ final class LauncherService {
     }
 
     private let settings: AppSettings
-    private var iconCache: [String: NSImage] = [:]
+    private let iconCache = NSCache<NSString, NSImage>()
 
     init(settings: AppSettings) {
         self.settings = settings
-        self.apps = settings.launcherApps
-        self.filteredApps = settings.launcherApps
+        apps = settings.launcherApps
+        filteredApps = settings.launcherApps
     }
 
     func icon(for app: AppItem) -> NSImage? {
-        if let cached = iconCache[app.bundleIdentifier] { return cached }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else { return nil }
+        icon(forBundleID: app.bundleIdentifier)
+    }
+
+    func icon(forBundleID bundleID: String) -> NSImage? {
+        let key = bundleID as NSString
+        if let cached = iconCache.object(forKey: key) { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: url.path)
-        iconCache[app.bundleIdentifier] = icon
+        iconCache.setObject(icon, forKey: key)
         return icon
     }
 
@@ -49,12 +54,13 @@ final class LauncherService {
     var scanSearchText: String = "" {
         didSet { filterScannedApps() }
     }
+
     var filteredScannedApps: [InstalledApp] = []
 
     func scanInstalledApps() {
         let dirs = [
             "/Applications",
-            NSSearchPathForDirectoriesInDomains(.applicationDirectory, .userDomainMask, true).first ?? ""
+            NSSearchPathForDirectoriesInDomains(.applicationDirectory, .userDomainMask, true).first ?? "",
         ]
 
         var seen = Set<String>()
