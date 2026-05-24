@@ -101,7 +101,7 @@ private struct TodoRow: View {
         HStack(alignment: .top, spacing: 11) {
             completionButton
 
-            detailsButton
+            detailsContent
 
             Spacer(minLength: 8)
 
@@ -125,7 +125,10 @@ private struct TodoRow: View {
         .opacity(task.isDone ? 0.68 : 1)
         .animation(.easeOut(duration: NotchConstants.fadeFastDuration), value: hovering)
         .animation(.easeOut(duration: NotchConstants.fadeFastDuration), value: isActive)
+        .contentShape(Rectangle())
         .onHover { hovering = $0 }
+        .onTapGesture { onEdit(task) }
+        .help("pomodoro.todo.edit")
         .contextMenu {
             Button("pomodoro.todo.edit") { onEdit(task) }
             Button("pomodoro.todo.pin") { taskStore.pinToTop(task.id) }
@@ -172,40 +175,32 @@ private struct TodoRow: View {
         .help(task.isDone ? "pomodoro.todo.markOpen" : "pomodoro.todo.markDone")
     }
 
-    private var detailsButton: some View {
-        Button {
-            onEdit(task)
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    titleText
+    private var detailsContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                titleText
 
-                    if isActive {
-                        statusBadge(
-                            text: String(localized: "pomodoro.todo.active"),
-                            foreground: NotchTheme.accentText,
-                            fill: NotchTheme.accentText.opacity(0.16)
-                        )
-                    } else {
-                        priorityBadge
-                    }
-                }
-
-                if !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(task.notes)
-                        .font(.system(size: 10))
-                        .foregroundStyle(task.isDone ? NotchTheme.textMuted : NotchTheme.textTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                if isActive {
+                    statusBadge(
+                        text: String(localized: "pomodoro.todo.active"),
+                        foreground: NotchTheme.accentText,
+                        fill: NotchTheme.accentText.opacity(0.16)
+                    )
+                } else {
+                    priorityBadge
                 }
             }
-            .padding(.top, 1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+
+            if !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(task.notes)
+                    .font(.system(size: 10))
+                    .foregroundStyle(task.isDone ? NotchTheme.textMuted : NotchTheme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.top, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help("pomodoro.todo.edit")
     }
 
     private var titleText: some View {
