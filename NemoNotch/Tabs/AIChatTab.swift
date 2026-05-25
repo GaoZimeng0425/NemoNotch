@@ -8,15 +8,24 @@ struct AIChatTab: View {
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
 
     private var allSessions: [AISessionState] {
-        aiService.store.sortedSessions
+        aiService.store.sortedSessions.filter { session in
+            switch session.source {
+            case .claude: return appSettings.claudeEnabled
+            case .gemini: return appSettings.geminiEnabled
+            }
+        }
     }
 
-    private var anyHookInstalled: Bool {
-        aiService.anyHookInstalled
+    private var needsClaudeInstall: Bool {
+        appSettings.claudeEnabled && !aiService.claudeProvider.isHookInstalled
     }
 
-    private var anyProviderEnabled: Bool {
-        appSettings.claudeEnabled || appSettings.geminiEnabled
+    private var needsGeminiInstall: Bool {
+        appSettings.geminiEnabled && !aiService.geminiProvider.isHookInstalled
+    }
+
+    private var needsAnyInstall: Bool {
+        needsClaudeInstall || needsGeminiInstall
     }
 
     private var workingCount: Int {
@@ -87,7 +96,7 @@ struct AIChatTab: View {
     }
 
     var body: some View {
-        if anyProviderEnabled, !anyHookInstalled {
+        if needsAnyInstall, allSessions.isEmpty {
             installPrompt
         } else if allSessions.isEmpty {
             idleState
@@ -100,18 +109,53 @@ struct AIChatTab: View {
 
     private var installPrompt: some View {
         VStack(spacing: 10) {
-            Image(systemName: "cpu")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Text("ai.hooks_not_installed")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Button("ai.install_hooks") {
-                aiService.installHooks()
+            if needsClaudeInstall {
+                providerInstallCard(
+                    source: .claude,
+                    name: "Claude Code",
+                    onInstall: { aiService.claudeProvider.installHooks() }
+                )
             }
-            .buttonStyle(NotchPillButtonStyle(prominent: true))
+            if needsGeminiInstall {
+                providerInstallCard(
+                    source: .gemini,
+                    name: "Gemini CLI",
+                    onInstall: { aiService.geminiProvider.installHooks() }
+                )
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func providerInstallCard(
+        source: AISource,
+        name: String,
+        onInstall: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 8) {
+            sourceIcon(source, size: 26)
+            Text(name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text("ai.hooks_not_installed")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button(action: onInstall) {
+                Text("ai.install_hooks")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(NotchTheme.accent.opacity(0.18))
+            .clipShape(Capsule())
+            .foregroundStyle(NotchTheme.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
     }
 
     private var idleState: some View {
