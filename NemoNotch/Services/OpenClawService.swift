@@ -16,6 +16,12 @@ final class OpenClawService {
     /// True while the user-shell subprocess is running.
     var isApproving = false
 
+    /// First 8 hex chars of the local device id, for Settings display.
+    /// Returns empty string when the service is not installed (no config file).
+    var deviceIdShort: String {
+        String(deviceId.prefix(8))
+    }
+
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
     private var reconnectTimer: Timer?
