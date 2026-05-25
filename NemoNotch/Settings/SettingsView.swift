@@ -254,8 +254,14 @@ struct SettingsView: View {
                 name: "Claude Code",
                 icon: "cpu",
                 isInstalled: aiService.claudeProvider.isHookInstalled,
-                onInstall: { aiService.claudeProvider.installHooks() },
-                onUninstall: { aiService.claudeProvider.uninstallHooks() }
+                onInstall: {
+                    appSettings.claudeEnabled = true
+                    aiService.claudeProvider.installHooks()
+                },
+                onUninstall: {
+                    appSettings.claudeEnabled = false
+                    aiService.claudeProvider.uninstallHooks()
+                }
             )
 
             Divider()
@@ -265,8 +271,14 @@ struct SettingsView: View {
                 name: "Gemini CLI",
                 icon: "sparkle",
                 isInstalled: aiService.geminiProvider.isHookInstalled,
-                onInstall: { aiService.geminiProvider.installHooks() },
-                onUninstall: { aiService.geminiProvider.uninstallHooks() }
+                onInstall: {
+                    appSettings.geminiEnabled = true
+                    aiService.geminiProvider.installHooks()
+                },
+                onUninstall: {
+                    appSettings.geminiEnabled = false
+                    aiService.geminiProvider.uninstallHooks()
+                }
             )
 
             Divider()
@@ -276,8 +288,14 @@ struct SettingsView: View {
                 name: "Hermes Agent",
                 icon: "bird",
                 isInstalled: hermesService.isHookInstalled,
-                onInstall: { hermesService.installHooks() },
-                onUninstall: { hermesService.uninstallHooks() }
+                onInstall: {
+                    appSettings.hermesEnabled = true
+                    hermesService.installHooks()
+                },
+                onUninstall: {
+                    appSettings.hermesEnabled = false
+                    hermesService.uninstallHooks()
+                }
             )
 
             Divider()
@@ -339,6 +357,10 @@ struct SettingsView: View {
 
     private var openClawSection: some View {
         VStack(spacing: 8) {
+            Label("settings.openclaw.title", systemImage: "ladybug")
+                .font(.title3)
+                .foregroundStyle(.primary)
+
             if openClawService.gatewayOnline {
                 Label(
                     "settings.openclaw.connected \(openClawService.deviceIdShort)",
