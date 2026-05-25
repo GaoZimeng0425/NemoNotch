@@ -13,6 +13,7 @@ struct BadgeIconView: View {
     let style: BadgeRenderStyle
     let notificationService: NotificationService
     let mediaService: MediaService
+    let pomodoroService: PomodoroTimerService
 
     var body: some View {
         switch item {
@@ -26,6 +27,8 @@ struct BadgeIconView: View {
             agentsBadge(state: state, emoji: emoji)
         case .calendar:
             calendarBadge
+        case let .pomodoro(phase):
+            pomodoroBadge(phase: phase)
         }
     }
 
@@ -138,6 +141,7 @@ struct BadgeIconView: View {
         case .compactLeft, .row:
             if emoji.isEmpty {
                 Image("HermesIcon")
+                    .renderingMode(.original)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: style == .row ? 14 : 13, height: style == .row ? 14 : 13)
@@ -180,6 +184,44 @@ struct BadgeIconView: View {
                 .frame(width: 14, height: 14)
         }
     }
+
+    // MARK: - Pomodoro
+
+    @ViewBuilder
+    private func pomodoroBadge(phase: PomodoroPhase) -> some View {
+        switch style {
+        case .compactLeft:
+            Text("🍅")
+                .font(.system(size: 14))
+                .opacity(emojiOpacity)
+                .modifier(PomodoroPulseModifier(token: pomodoroService.pulseToken))
+        case .compactRight:
+            PomodoroPieView(
+                remainingFraction: pomodoroService.remainingFraction,
+                phase: phase,
+                style: .badge
+            )
+            .opacity(piePausedOpacity)
+            .modifier(PomodoroPulseModifier(token: pomodoroService.pulseToken))
+        case .row:
+            PomodoroPieView(
+                remainingFraction: pomodoroService.remainingFraction,
+                phase: phase,
+                style: .row
+            )
+            .opacity(piePausedOpacity)
+        }
+    }
+
+    private var emojiOpacity: Double {
+        if case .paused = pomodoroService.state { return 0.55 }
+        return 1.0
+    }
+
+    private var piePausedOpacity: Double {
+        if case .paused = pomodoroService.state { return 0.7 }
+        return 1.0
+    }
 }
 
 // MARK: - CompactBadgesView
@@ -193,6 +235,7 @@ struct CompactBadgesView: View {
     let onBadgeTap: (BadgeItem) -> Void
     let notificationService: NotificationService
     let mediaService: MediaService
+    let pomodoroService: PomodoroTimerService
 
     private var hasMultipleBadges: Bool {
         items.count >= 2
@@ -209,7 +252,8 @@ struct CompactBadgesView: View {
                     BadgeIconView(
                         item: item, style: .compactLeft,
                         notificationService: notificationService,
-                        mediaService: mediaService
+                        mediaService: mediaService,
+                        pomodoroService: pomodoroService
                     )
                 }
                 .buttonStyle(.plain)
@@ -225,7 +269,8 @@ struct CompactBadgesView: View {
                     BadgeIconView(
                         item: item, style: .compactRight,
                         notificationService: notificationService,
-                        mediaService: mediaService
+                        mediaService: mediaService,
+                        pomodoroService: pomodoroService
                     )
                 }
                 .buttonStyle(.plain)
@@ -257,6 +302,7 @@ struct BadgeRowView: View {
     let onBadgeTap: (BadgeItem) -> Void
     let notificationService: NotificationService
     let mediaService: MediaService
+    let pomodoroService: PomodoroTimerService
 
     var body: some View {
         let secondaryBadges = Array(items.dropFirst())
@@ -268,7 +314,8 @@ struct BadgeRowView: View {
                     BadgeIconView(
                         item: item, style: .row,
                         notificationService: notificationService,
-                        mediaService: mediaService
+                        mediaService: mediaService,
+                        pomodoroService: pomodoroService
                     )
                 }
                 .buttonStyle(.plain)
@@ -279,5 +326,27 @@ struct BadgeRowView: View {
             removal: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.8))
         ))
         .position(x: notchCenterX, y: notchCenterY)
+    }
+}
+
+// MARK: - PomodoroPulseModifier
+
+private struct PomodoroPulseModifier: ViewModifier {
+    let token: UUID
+    @State private var opacity: Double = 1.0
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(opacity)
+            .onChange(of: token) { _, _ in
+                withAnimation(.easeInOut(duration: 0.15).repeatCount(4, autoreverses: true)) {
+                    opacity = 0.3
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        opacity = 1.0
+                    }
+                }
+            }
     }
 }

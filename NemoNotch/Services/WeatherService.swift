@@ -1,3 +1,4 @@
+import AppKit
 @preconcurrency import CoreLocation
 import Foundation
 
@@ -14,6 +15,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
     var cityName: String = ""
     var hourlyForecast: [(time: String, temp: Double, icon: String)] = []
     var isLoaded: Bool = false
+    var locationAuthorizationStatus: CLAuthorizationStatus = .notDetermined
 
     private let locationManager = CLLocationManager()
     private var timer: Timer?
@@ -24,7 +26,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
-        locationManager.requestAlwaysAuthorization()
+        locationAuthorizationStatus = locationManager.authorizationStatus
         // Defer location monitoring + refresh timer until a view becomes
         // visible — see setActive(_:). The first activation triggers the
         // initial fetch.
@@ -34,7 +36,12 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
         if active {
             guard timer == nil else { return }
             fetchWeather()
-            locationManager.startMonitoringSignificantLocationChanges()
+            // Significant-location monitoring on .notDetermined would surface
+            // the system authorization dialog at launch. Defer it until the
+            // user grants permission via the in-tab PermissionCard.
+            if locationAuthorizationStatus == .authorizedAlways {
+                locationManager.startMonitoringSignificantLocationChanges()
+            }
             timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.fetchWeather()
@@ -53,12 +60,29 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
         fetchWeather()
     }
 
+    func requestLocationAccess() {
+        LogService.info("Location permission requested by user", category: "Permission")
+        locationManager.requestAlwaysAuthorization()
+    }
+
+    func openLocationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     deinit { MainActor.assumeIsolated { timer?.invalidate() } }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         MainActor.assumeIsolated {
+            self.locationAuthorizationStatus = manager.authorizationStatus
             if manager.authorizationStatus == .authorizedAlways {
                 manager.requestLocation()
+                // setActive(true) earlier may have skipped this because the
+                // status was .notDetermined. Start it now that the user granted.
+                if self.timer != nil {
+                    manager.startMonitoringSignificantLocationChanges()
+                }
             }
         }
     }
@@ -134,7 +158,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
                 hourlyForecast = allItems.filter { item in
                     let h = Int(item.0.prefix(2)) ?? 0
                     return h >= currentHour
-                }.prefix(3).map { $0 }
+                }.prefix(3).map(\.self)
             }
         }
 

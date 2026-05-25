@@ -6,7 +6,15 @@ final class HermesService: MultiAgentMonitor {
     var agents: [String: MonitoredAgent] = [:]
     var activeAgent: MonitoredAgent?
     var isOnline = false
-    var isInstalled = false
+    /// Returns true when the NemoNotch hook is wired into the user's Hermes
+    /// config (i.e. data can actually flow). Previously this checked whether
+    /// `~/.hermes/` directory exists, but a stale directory shouldn't keep the
+    /// monitor "visible" in the AgentMonitorTab once the user uninstalls the
+    /// hook.
+    var isInstalled: Bool {
+        isHookInstalled
+    }
+
     var isHookInstalled = false
     let displayName = "Hermes"
     let iconEmoji = ""
@@ -25,9 +33,8 @@ final class HermesService: MultiAgentMonitor {
 
     init() {
         hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
-        isInstalled = FileManager.default.fileExists(atPath: hermesDir)
         isHookInstalled = HermesHookInstaller.isInstalled
-        isOnline = isInstalled
+        // isOnline flips to true inside connect() once watching is actually live.
         LogService.info(
             "HermesService initialized, installed=\(isInstalled), hooks=\(isHookInstalled)",
             category: "HermesService"
@@ -55,6 +62,7 @@ final class HermesService: MultiAgentMonitor {
                 self?.evictStaleAgents()
             }
         }
+        isOnline = true
     }
 
     func disconnect() {
@@ -322,6 +330,7 @@ final class HermesService: MultiAgentMonitor {
             try HermesHookInstaller.install()
             isHookInstalled = true
             LogService.info("Hermes hooks installed", category: "HermesService")
+            connect()
         } catch {
             LogService.error("Failed to install Hermes hooks: \(error)", category: "HermesService")
         }

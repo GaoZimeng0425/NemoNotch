@@ -5,6 +5,7 @@ enum Tab: String, CaseIterable, Identifiable {
     case claude
     case agents
     case launcher
+    case pomodoro
     case system
 
     var id: String {
@@ -17,6 +18,7 @@ enum Tab: String, CaseIterable, Identifiable {
         case .claude: "cpu"
         case .agents: "ladybug.fill"
         case .launcher: "square.grid.2x2"
+        case .pomodoro: "timer"
         case .system: "gearshape.2"
         }
     }
@@ -27,6 +29,7 @@ enum Tab: String, CaseIterable, Identifiable {
         case .claude: "models.tab.ai"
         case .agents: "models.tab.agents"
         case .launcher: "models.tab.launcher"
+        case .pomodoro: "models.tab.pomodoro"
         case .system: "models.tab.system"
         }
     }

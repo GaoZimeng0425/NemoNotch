@@ -45,6 +45,10 @@ graph TB
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
+        TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
+        PHS["PomodoroHistoryStore<br/>Append-only history (~/.NemoNotch/pomodoro-history.json)"]
+        PTS["PomodoroTimerService<br/>State machine + tick + end-alert pipeline"]
+        NPM["NotificationPermissionMonitor<br/>UNUserNotificationCenter probe"]
         HK["Hotkeys.swift<br/>KeyboardShortcuts registration (AppDelegate.setupHotkeys)"]
     end
 
@@ -63,6 +67,7 @@ graph TB
         AT["AIChatTab<br/>Claude + Gemini unified"]
         LT["LauncherTab"]
         OCT["AgentMonitorTab<br/>OpenClaw + Hermes unified"]
+        PT["PomodoroTab<br/>Idle stats + TODO list + active pie"]
         ST["SystemTab"]
     end
 
@@ -162,10 +167,16 @@ sequenceDiagram
     NC->>NV: Show Settings / Quit
 ```
 
+**Hotkey-aware dismiss:** When the notch is opened via global hotkey, it does NOT close on mouse-move-outside until either (a) the mouse enters the content area at least once, (b) 3 seconds elapse with no mouse entry (`NotchConstants.hotkeyAutoCloseDelay`), or (c) the user presses ESC / hotkey / clicks outside. Mouse-hover open path is unchanged. State machine lives in `HotkeyDismissState`.
+
+**Permission UI pattern:** Calendar, Location, Automation, and Notification permissions are NOT auto-requested on launch. Instead the relevant Tab/Settings section renders a `PermissionCard` with a "Grant" button. AX uses the same card but only links to System Settings (no programmatic request API). Card lives at `NemoNotch/Helpers/PermissionCard.swift`. Notification permission ships in the Pomodoro settings page (`PomodoroSettingsView`), backed by `NotificationPermissionMonitor`.
+
+**Pomodoro hotkeys:** `openPomodoro` opens the Pomodoro tab; `openQuickStart` toggles the centered draggable `QuickStartWindow` (`NemoNotch/Notch/QuickStartWindow.swift` / `QuickStartWindowController.swift`). Neither has a default binding — users must set them in Settings → Pomodoro.
+
 ### Badge Priority (when notch is collapsed)
 
 ```
-notification > openclaw/hermes active > ai approval > ai working > media playing > calendar upcoming
+ai approval > notification > pomodoro running > agents active > ai working > media playing > calendar upcoming
 ```
 
 ## Debug Pitfalls
@@ -270,6 +281,13 @@ Workflow:
 1. New feature: `git checkout develop && git checkout -b feature/xxx`
 2. After development, merge back to develop. After testing, merge develop to main
 3. Release: tag from main (`vX.Y.Z`)
+
+### Testing
+
+- Unit tests live in `NemoNotchTests/`, written with **Swift Testing** (`import Testing`, `@Test`, `#expect`). Do not use XCTest for new code.
+- Test pure logic — parsers, encoders, state transitions. Skip ScriptingBridge / AX / NSWindow integration tests (they need real macOS permissions and are flaky in CI).
+- Run locally: `xcodebuild test -project NemoNotch.xcodeproj -scheme NemoNotch -destination 'platform=macOS'`.
+- New tests must pass before merging to `develop`.
 
 ### Coding Conventions
 

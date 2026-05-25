@@ -85,18 +85,6 @@ struct PulseModifier: ViewModifier {
     }
 }
 
-struct GlowPulseModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .opacity(0.78)
-            .scaleEffect(1.02)
-            .animation(
-                .easeInOut(duration: NotchConstants.pulseDuration * 0.7).repeatForever(autoreverses: true),
-                value: true
-            )
-    }
-}
-
 struct ScrollEdgeShadowMaskModifier: ViewModifier {
     let axes: Axis.Set
     var thickness: CGFloat = 14

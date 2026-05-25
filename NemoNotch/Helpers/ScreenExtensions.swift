@@ -6,6 +6,14 @@ extension NSScreen {
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
     }
 
+    /// Returns the screen whose frame contains the given point (in global
+    /// AppKit coordinates), or nil if no screen does. Mirrors `screenWithMouse`
+    /// but accepts an explicit point — use this for click/touch events whose
+    /// location is already known.
+    static func screen(containing point: CGPoint) -> NSScreen? {
+        NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+    }
+
     var hasNotch: Bool {
         safeAreaInsets.top > 0
             && (auxiliaryTopLeftArea?.width ?? 0) > 0
@@ -19,17 +27,6 @@ extension NSScreen {
             - (auxiliaryTopLeftArea?.width ?? 0)
             - (auxiliaryTopRightArea?.width ?? 0)
         return .init(width: notchWidth, height: notchHeight)
-    }
-
-    var notchFrame: NSRect {
-        let size = notchSize
-        guard size.width > 0 else { return .zero }
-        return .init(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - size.height,
-            width: size.width,
-            height: size.height
-        )
     }
 
     var displayID: UInt32 {

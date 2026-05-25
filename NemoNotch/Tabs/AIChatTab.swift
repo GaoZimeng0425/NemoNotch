@@ -1,17 +1,55 @@
 import SwiftUI
 
+enum ProviderCardKind: Equatable {
+    case ready // enabled+installed — service contributes to sessions/idle
+    case install // enabled, not installed — active install CTA
+    case reenable // disabled — passive re-enable CTA (handles orphan-installed case too)
+}
+
 struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
+    @Environment(AppSettings.self) var appSettings
     @State private var selectedSessionId: String?
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
 
     private var allSessions: [AISessionState] {
-        aiService.store.sortedSessions
+        aiService.store.sortedSessions.filter { session in
+            switch session.source {
+            case .claude: return appSettings.claudeEnabled
+            case .gemini: return appSettings.geminiEnabled
+            }
+        }
     }
 
-    private var anyHookInstalled: Bool {
-        aiService.anyHookInstalled
+    private var claudeKind: ProviderCardKind {
+        Self.kind(
+            enabled: appSettings.claudeEnabled,
+            installed: aiService.claudeProvider.isHookInstalled
+        )
+    }
+
+    private var geminiKind: ProviderCardKind {
+        Self.kind(
+            enabled: appSettings.geminiEnabled,
+            installed: aiService.geminiProvider.isHookInstalled
+        )
+    }
+
+    private var hasAnyReadyProvider: Bool {
+        claudeKind == .ready || geminiKind == .ready
+    }
+
+    private var hasRecoveryCards: Bool {
+        claudeKind != .ready || geminiKind != .ready
+    }
+
+    private static func kind(enabled: Bool, installed: Bool) -> ProviderCardKind {
+        switch (enabled, installed) {
+        case (true, true): .ready
+        case (true, false): .install
+        case (false, _): .reenable
+        }
     }
 
     private var workingCount: Int {
@@ -82,8 +120,8 @@ struct AIChatTab: View {
     }
 
     var body: some View {
-        if !anyHookInstalled {
-            installPrompt
+        if !hasAnyReadyProvider, hasRecoveryCards, allSessions.isEmpty {
+            recoveryCards
         } else if allSessions.isEmpty {
             idleState
         } else if let sessionId = selectedSessionId, let session = sessionById(sessionId) {
@@ -93,20 +131,76 @@ struct AIChatTab: View {
         }
     }
 
-    private var installPrompt: some View {
+    private var recoveryCards: some View {
         VStack(spacing: 10) {
-            Image(systemName: "cpu")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Text("ai.hooks_not_installed")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Button("ai.install_hooks") {
-                aiService.installHooks()
+            if claudeKind != .ready {
+                providerCard(
+                    source: .claude,
+                    name: "Claude Code",
+                    kind: claudeKind
+                ) {
+                    appSettings.claudeEnabled = true
+                    if !aiService.claudeProvider.isHookInstalled {
+                        aiService.claudeProvider.installHooks()
+                    }
+                }
             }
-            .buttonStyle(NotchPillButtonStyle(prominent: true))
+            if geminiKind != .ready {
+                providerCard(
+                    source: .gemini,
+                    name: "Gemini CLI",
+                    kind: geminiKind
+                ) {
+                    appSettings.geminiEnabled = true
+                    if !aiService.geminiProvider.isHookInstalled {
+                        aiService.geminiProvider.installHooks()
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func providerCard(
+        source: AISource,
+        name: String,
+        kind: ProviderCardKind,
+        onAction: @escaping () -> Void
+    ) -> some View {
+        let isPassive = kind == .reenable
+        return VStack(spacing: 8) {
+            sourceIcon(source, size: isPassive ? 22 : 26)
+                .opacity(isPassive ? 0.65 : 1.0)
+            Text(name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isPassive ? NotchTheme.textSecondary : NotchTheme.textPrimary)
+            Text(isPassive ? "ai.currently_off" : "ai.hooks_not_installed")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button(action: onAction) {
+                Text(isPassive ? "ai.enable" : "ai.install_hooks")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(
+                Group {
+                    if isPassive {
+                        Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1)
+                    } else {
+                        Capsule().fill(NotchTheme.accent.opacity(0.18))
+                    }
+                }
+            )
+            .clipShape(Capsule())
+            .foregroundStyle(NotchTheme.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
     }
 
     private var idleState: some View {

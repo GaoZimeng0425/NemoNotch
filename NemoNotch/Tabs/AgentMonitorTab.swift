@@ -2,6 +2,9 @@ import SwiftUI
 
 struct AgentMonitorTab: View {
     @Environment(AgentMonitorRegistry.self) var registry
+    @Environment(OpenClawService.self) var openClaw
+    @Environment(HermesService.self) var hermesService
+    @Environment(AppSettings.self) var appSettings
     @State private var expandedAgentId: String?
 
     private var monitors: [any MultiAgentMonitor] {
@@ -9,28 +12,46 @@ struct AgentMonitorTab: View {
     }
 
     var body: some View {
-        if monitors.isEmpty {
-            notInstalled
-        } else if monitors.allSatisfy({ !$0.isOnline }) {
-            offlineState
-        } else {
+        switch renderMode {
+        case .agentSections:
             agentSections
+        case .offlineState:
+            offlineState
+        case .approvalCardOnly:
+            OpenClawApprovalCard()
+        case let .setupCards(hermes, openClaw):
+            setupState(hermes: hermes, openClaw: openClaw)
         }
     }
 
-    private var notInstalled: some View {
+    private var renderMode: AgentMonitorRenderDecision.Mode {
+        AgentMonitorRenderDecision.decide(
+            hasOnlineMonitor: monitors.contains(where: \.isOnline),
+            openClawPendingApproval: openClaw.pendingApproval != nil,
+            openClawIsInstalled: openClaw.isInstalled,
+            openClawUserEnabled: appSettings.openClawEnabled,
+            hermesIsInstalled: hermesService.isHookInstalled,
+            hermesUserEnabled: appSettings.hermesEnabled
+        )
+    }
+
+    private func setupState(
+        hermes: AgentMonitorRenderDecision.HermesCardKind,
+        openClaw: AgentMonitorRenderDecision.OpenClawCardKind
+    ) -> some View {
         VStack(spacing: 10) {
-            Image(systemName: "ladybug.fill")
-                .font(.system(size: 28))
-                .foregroundStyle(NotchTheme.textTertiary)
-            Text("agents.not_installed")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Text("npm install -g openclaw@latest")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(NotchTheme.textTertiary)
+            HermesSetupCard(passive: hermes == .reenableCard)
+            switch openClaw {
+            case .approvalCard:
+                OpenClawApprovalCard()
+            case .installHintCard:
+                OpenClawInstallHintCard()
+            case .reenableCard:
+                OpenClawReenableCard()
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var offlineState: some View {
@@ -56,6 +77,9 @@ struct AgentMonitorTab: View {
     private var agentSections: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
+                if openClaw.pendingApproval != nil {
+                    OpenClawApprovalBanner()
+                }
                 ForEach(monitors.filter(\.isOnline), id: \.displayName) { monitor in
                     AgentMonitorSection(
                         monitor: monitor,
@@ -124,6 +148,7 @@ struct AgentMonitorSourceIcon: View {
     var body: some View {
         if let asset = style.iconAssetName {
             Image(asset)
+                .renderingMode(.original)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
@@ -532,5 +557,270 @@ struct AgentStateTag: View {
         case .toolCalling: tint
         case .error: .red
         }
+    }
+}
+
+// MARK: - OpenClaw Approval — Buttons (shared)
+
+private struct OpenClawRunButton: View {
+    @Environment(OpenClawService.self) var openClaw
+    var compact: Bool = false
+
+    var body: some View {
+        Button {
+            openClaw.approveSelf()
+        } label: {
+            HStack(spacing: 3) {
+                if openClaw.isApproving {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(.black.opacity(0.85))
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: compact ? 8 : 9))
+                }
+                Text(openClaw.isApproving
+                    ? "agents.openclaw.approval.button.running"
+                    : "agents.openclaw.approval.button.run")
+                    .font(.system(size: compact ? 9 : 10, weight: .medium))
+            }
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, compact ? 3 : 4)
+            .background(Capsule().fill(NotchTheme.accent))
+            .foregroundStyle(.black.opacity(0.85))
+        }
+        .buttonStyle(.plain)
+        .disabled(openClaw.isApproving)
+    }
+}
+
+private struct OpenClawCopyButton: View {
+    @Environment(OpenClawService.self) var openClaw
+    @State private var justCopied = false
+    var compact: Bool = false
+
+    var body: some View {
+        Button {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(openClaw.approveCommandString, forType: .string)
+            justCopied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 1_800_000_000)
+                justCopied = false
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: justCopied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: compact ? 8 : 9))
+                Text(justCopied
+                    ? "agents.openclaw.approval.button.copied"
+                    : "agents.openclaw.approval.button.copy")
+                    .font(.system(size: compact ? 9 : 10))
+            }
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, compact ? 3 : 4)
+            .foregroundStyle(NotchTheme.textSecondary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - OpenClaw Approval Banner (compact, inline above agent sections)
+
+private struct OpenClawApprovalBanner: View {
+    @Environment(OpenClawService.self) var openClaw
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(NotchTheme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("agents.openclaw.approval.title")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                if let info = openClaw.pendingApproval {
+                    Text(verbatim: String(info.deviceId.prefix(12)) + "…")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(NotchTheme.textTertiary)
+                }
+            }
+            Spacer(minLength: 4)
+            OpenClawRunButton(compact: true)
+            OpenClawCopyButton(compact: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .notchCard(radius: 8, fill: NotchTheme.surface)
+    }
+}
+
+// MARK: - OpenClaw Approval Card (full-tab, when nothing else is online)
+
+private struct OpenClawApprovalCard: View {
+    @Environment(OpenClawService.self) var openClaw
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(.system(size: 26))
+                .foregroundStyle(NotchTheme.accent)
+            Text("agents.openclaw.approval.title")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text("agents.openclaw.approval.run_in_terminal")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 12)
+            Text(verbatim: openClaw.approveCommandString)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(NotchTheme.surfaceSubtle))
+                .padding(.horizontal, 16)
+            HStack(spacing: 8) {
+                OpenClawRunButton()
+                OpenClawCopyButton()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Hermes Setup Card (active install or passive reenable)
+
+private struct HermesSetupCard: View {
+    @Environment(HermesService.self) var hermesService
+    @Environment(AppSettings.self) var appSettings
+    let passive: Bool
+
+    private var sourceStyle: AgentMonitorSourceStyle {
+        AgentMonitorSourceStyle(
+            displayName: hermesService.displayName,
+            iconEmoji: hermesService.iconEmoji,
+            iconAssetName: hermesService.iconAssetName
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            AgentMonitorSourceIcon(style: sourceStyle, size: passive ? 22 : 26)
+                .opacity(passive ? 0.65 : 1.0)
+            Text("Hermes Agent")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(passive ? NotchTheme.textSecondary : NotchTheme.textPrimary)
+            Text(passive ? "agents.currently_off" : statusText)
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                if passive {
+                    appSettings.hermesEnabled = true
+                }
+                if !hermesService.isHookInstalled {
+                    hermesService.installHooks()
+                }
+            } label: {
+                Text(passive ? "agents.enable" : "agents.hermes.install_hook")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(
+                Group {
+                    if passive {
+                        Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1)
+                    } else {
+                        Capsule().fill(NotchTheme.accent.opacity(0.18))
+                    }
+                }
+            )
+            .clipShape(Capsule())
+            .foregroundStyle(NotchTheme.accent)
+            .disabled(!passive && hermesService.isHookInstalled)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
+    }
+
+    private var statusText: LocalizedStringKey {
+        if hermesService.isHookInstalled {
+            return "agents.hermes.status.offline"
+        } else {
+            return "agents.hermes.status.uninstalled"
+        }
+    }
+}
+
+// MARK: - OpenClaw Install Hint Card (shown when OpenClaw is not installed and no pending approval)
+
+private struct OpenClawInstallHintCard: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("🦞")
+                .font(.system(size: 26))
+            Text("OpenClaw")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text("agents.openclaw.not_installed")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Text("npm install -g openclaw@latest")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(NotchTheme.surfaceSubtle))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
+    }
+}
+
+// MARK: - OpenClaw Reenable Card (passive — user disabled, click to enable)
+
+private struct OpenClawReenableCard: View {
+    @Environment(AppSettings.self) var appSettings
+    @Environment(OpenClawService.self) var openClawService
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("🦞")
+                .font(.system(size: 22))
+                .opacity(0.65)
+            Text("OpenClaw")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textSecondary)
+            Text("agents.currently_off")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                appSettings.openClawEnabled = true
+                openClawService.connect()
+            } label: {
+                Text("agents.enable")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1))
+            .clipShape(Capsule())
+            .foregroundStyle(NotchTheme.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
     }
 }

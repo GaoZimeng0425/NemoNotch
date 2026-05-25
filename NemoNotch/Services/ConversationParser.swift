@@ -1,8 +1,7 @@
 import Foundation
 
-enum ConversationParser: ConversationParserProtocol, Sendable {
-
-    struct ParseResult: Sendable {
+enum ConversationParser: ConversationParserProtocol {
+    struct ParseResult {
         var messages: [ChatMessage]
         var inputTokens: Int
         var outputTokens: Int
@@ -15,7 +14,12 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
         var cleared: Bool
 
         var conversation: ParsedConversation {
-            ParsedConversation(messages: messages, inputTokens: inputTokens, outputTokens: outputTokens, lastModel: lastModel)
+            ParsedConversation(
+                messages: messages,
+                inputTokens: inputTokens,
+                outputTokens: outputTokens,
+                lastModel: lastModel
+            )
         }
     }
 
@@ -33,18 +37,23 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
 
     // MARK: - Claude-Specific
 
-    static func conversationFiles(for cwd: String) -> [String] {
-        let dir = claudeProjectsDir(for: cwd)
-        guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return [] }
-        return files.filter { $0.hasSuffix(".jsonl") }.map { "\(dir)/\($0)" }
-    }
-
     static func parseFullResult(filePath: String) -> ParseResult {
         parseIncremental(filePath: filePath, fromOffset: 0)
     }
 
     static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
-        var result = ParseResult(messages: [], inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, lastContextTokens: 0, lastModel: nil, newOffset: fromOffset, interrupted: false, cleared: false)
+        var result = ParseResult(
+            messages: [],
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
+            lastContextTokens: 0,
+            lastModel: nil,
+            newOffset: fromOffset,
+            interrupted: false,
+            cleared: false
+        )
 
         guard let fileHandle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else {
             return result
@@ -106,7 +115,10 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
     // MARK: - Private
 
     private static func claudeProjectsDir(for cwd: String) -> String {
-        let encoded = "-" + cwd.trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(of: "/", with: "-")
+        let encoded = "-" + cwd.trimmingCharacters(in: CharacterSet(charactersIn: "/")).replacingOccurrences(
+            of: "/",
+            with: "-"
+        )
         return NSString(string: "~/.claude/projects/\(encoded)").expandingTildeInPath
     }
 
@@ -136,7 +148,10 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
                 if block["type"] as? String == "tool_use",
                    let toolName = block["name"] as? String {
                     let input = block["input"]
-                    let inputStr = input.flatMap { try? String(data: JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]), encoding: .utf8) }
+                    let inputStr = input.flatMap { try? String(
+                        data: JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]),
+                        encoding: .utf8
+                    ) }
                     return ChatMessage(
                         id: "tool-\(index)",
                         role: .tool,
@@ -150,7 +165,12 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
         }
 
         guard !text.isEmpty else { return nil }
-        return ChatMessage(id: "assistant-\(index)", role: .assistant, content: text, timestamp: parseTimestamp(json) ?? Date())
+        return ChatMessage(
+            id: "assistant-\(index)",
+            role: .assistant,
+            content: text,
+            timestamp: parseTimestamp(json) ?? Date()
+        )
     }
 
     private static func parseToolResult(_ json: [String: Any], index: Int) -> ChatMessage? {
@@ -160,7 +180,9 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
         if let str = content as? String { text = str }
         else if let arr = content as? [[String: Any]] {
             for item in arr {
-                if item["type"] as? String == "text", let t = item["text"] as? String { text = t; break }
+                if item["type"] as? String == "text", let t = item["text"] as? String { text = t
+                    break
+                }
             }
         }
         guard !text.isEmpty else { return nil }
@@ -177,7 +199,8 @@ enum ConversationParser: ConversationParserProtocol, Sendable {
         guard let content = message["content"] else { return "" }
         if let str = content as? String { return str }
         if let array = content as? [[String: Any]] {
-            return array.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined(separator: "\n")
+            return array.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }
+                .joined(separator: "\n")
         }
         return ""
     }

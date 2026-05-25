@@ -49,7 +49,9 @@ struct SettingsSceneRoot: View {
                let launcher = appDelegate.launcherService,
                let notification = appDelegate.notificationService,
                let weather = appDelegate.weatherService,
-               let hermes = appDelegate.hermesService {
+               let hermes = appDelegate.hermesService,
+               let openClaw = appDelegate.openClawService,
+               let notificationPermission = appDelegate.notificationPermissionMonitor {
                 SettingsView()
                     .environment(settings)
                     .environment(aiMonitor)
@@ -57,6 +59,8 @@ struct SettingsSceneRoot: View {
                     .environment(notification)
                     .environment(weather)
                     .environment(hermes)
+                    .environment(openClaw)
+                    .environment(notificationPermission)
             } else {
                 ProgressView()
                     .frame(width: 430, height: 460)
@@ -78,9 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
     private(set) var mediaService: MediaService?
+    private(set) var automationPermissionMonitor: MediaAutomationPermissionMonitor?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
-    private var openClawService: OpenClawService?
+    private(set) var openClawService: OpenClawService?
     private(set) var hermesService: HermesService?
     private(set) var agentRegistry: AgentMonitorRegistry?
     private(set) var launcherService: LauncherService?
@@ -88,6 +93,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var weatherService: WeatherService?
     private var hudService: HUDService?
     private var systemService: SystemService?
+    private(set) var taskStore: TaskStore?
+    private(set) var historyStore: PomodoroHistoryStore?
+    private(set) var pomodoroTimerService: PomodoroTimerService?
+    private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
+    private(set) var quickStartController: QuickStartWindowController?
 
     var shouldSuppressPreviousAppRestore: Bool {
         Date() < suppressRestoreUntil
@@ -100,6 +110,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = AppSettings()
         let media = MediaService()
+        let permissionMonitor = MediaAutomationPermissionMonitor(
+            monitoredBundles: KnownPlayer.allCases.map(\.rawValue)
+        )
+        media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
+            permissionMonitor?.recordDenied(bundleID: bundleID)
+        }
+        media.automationAuthorizedHandler = { [weak permissionMonitor] bundleID in
+            permissionMonitor?.recordAuthorized(bundleID: bundleID)
+        }
+        permissionMonitor.startProbing()
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
@@ -122,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appSettings = settings
         mediaService = media
+        automationPermissionMonitor = permissionMonitor
         calendarService = calendar
         aiMonitorService = aiMonitor
         launcherService = launcher
@@ -141,20 +162,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let system = SystemService()
         systemService = system
 
+        let tasks = TaskStore()
+        let history = PomodoroHistoryStore()
+        let notificationPermission = NotificationPermissionMonitor()
+        let pomodoro = PomodoroTimerService(
+            taskStore: tasks,
+            historyStore: history,
+            appSettings: settings,
+            permissionMonitor: notificationPermission
+        )
+        taskStore = tasks
+        historyStore = history
+        notificationPermissionMonitor = notificationPermission
+        pomodoroTimerService = pomodoro
+        quickStartController = QuickStartWindowController(
+            timerService: pomodoro,
+            taskStore: tasks,
+            appSettings: settings,
+            notificationMonitor: notificationPermission
+        )
+
+        let qsController = quickStartController
         let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
                 NotchView(screen: screen)
                     .environment(coordinator)
                     .environment(settings)
                     .environment(media)
+                    .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
+                    .environment(openClaw)
                     .environment(registry)
+                    .environment(hermes)
                     .environment(launcher)
                     .environment(notification)
                     .environment(weather)
                     .environment(hud)
                     .environment(system)
+                    .environment(tasks)
+                    .environment(history)
+                    .environment(pomodoro)
+                    .environment(notificationPermission)
+                    .environment(\.quickStartController, qsController)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in
@@ -177,6 +227,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         LogService.info("applicationWillTerminate received", category: "AppDelegate")
+        if let pomodoro = pomodoroTimerService {
+            switch pomodoro.state {
+            case .running, .paused:
+                pomodoro.abandon()
+                LogService.info(
+                    "applicationWillTerminate: abandoned active pomodoro",
+                    category: "AppDelegate"
+                )
+            default:
+                break
+            }
+        }
     }
 
     @MainActor
@@ -197,7 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.onKeyDown(for: .toggleNotch) { [weak coordinator] in
             guard let c = coordinator else { return }
             switch c.status {
-            case .closed: c.notchOpen()
+            case .closed: c.notchOpen(viaHotkey: true)
             case .opened: c.notchClose()
             }
         }
@@ -207,15 +269,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let c = coordinator else { return }
                 switch c.status {
                 case .closed:
-                    c.notchOpen(tab: tab)
+                    c.notchOpen(tab: tab, viaHotkey: true)
                 case .opened:
                     if c.selectedTab == tab {
                         c.notchClose()
                     } else {
                         c.selectedTab = tab
+                        c.bumpHotkeyAutoCloseTimerIfActive()
                     }
                 }
             }
+        }
+
+        KeyboardShortcuts.onKeyDown(for: .openQuickStart) { [weak self] in
+            self?.quickStartController?.toggle()
         }
     }
 }

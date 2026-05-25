@@ -14,6 +14,9 @@ final class NotchCoordinator {
     /// reflects the opened state; others remain collapsed but stay visible
     /// to display badges. `nil` outside of an open session.
     private(set) var activeScreen: NSScreen?
+    private var dismissState = HotkeyDismissState()
+    private var hotkeyAutoCloseTimer: Timer?
+    private var escMonitor: Any?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
@@ -169,7 +172,7 @@ final class NotchCoordinator {
         activeScreen?.displayID == screen.displayID
     }
 
-    func notchOpen(tab: Tab? = nil, on screen: NSScreen? = nil) {
+    func notchOpen(tab: Tab? = nil, on screen: NSScreen? = nil, viaHotkey: Bool = false) {
         guard status == .closed else { return }
         let target = screen ?? NSScreen.screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         guard let target, let slot = slots[target.displayID] else { return }
@@ -185,12 +188,20 @@ final class NotchCoordinator {
             activeScreen = target
             status = .opened
         }
+        dismissState.didOpen(viaHotkey: viaHotkey)
+        if viaHotkey {
+            startHotkeyAutoCloseTimer()
+        }
         slot.passThrough.isBlocking = true
         slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        installEscMonitor()
     }
 
     func notchClose() {
+        dismissState.reset()
+        cancelHotkeyAutoCloseTimer()
+        uninstallEscMonitor()
         let openedScreen = activeScreen
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
@@ -201,20 +212,6 @@ final class NotchCoordinator {
         }
         activeScreen = nil
         restorePreviousApp()
-    }
-
-    func selectNextTab() {
-        guard let settings = appSettings else { return }
-        let tabs = Tab.sorted(settings.enabledTabs)
-        guard let index = tabs.firstIndex(of: selectedTab), index + 1 < tabs.count else { return }
-        selectedTab = tabs[index + 1]
-    }
-
-    func selectPreviousTab() {
-        guard let settings = appSettings else { return }
-        let tabs = Tab.sorted(settings.enabledTabs)
-        guard let index = tabs.firstIndex(of: selectedTab), index > 0 else { return }
-        selectedTab = tabs[index - 1]
     }
 
     private func captureFrontmostApp() {
@@ -263,7 +260,7 @@ final class NotchCoordinator {
     /// Locate the screen currently under the given mouse point. Used to
     /// scope event handling to the correct slot.
     private func screen(at point: NSPoint) -> NSScreen? {
-        NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+        NSScreen.screen(containing: point)
     }
 
     private func handleMouseMove(_ location: NSPoint) {
@@ -276,8 +273,11 @@ final class NotchCoordinator {
         case .opened:
             guard let active = activeScreen else { return }
             let contentHit = contentRect(for: active, hitInset: NotchConstants.closeHitboxInset)
-            if !NSMouseInRect(location, contentHit, false) {
-                notchClose()
+            let mouseInside = NSMouseInRect(location, contentHit, false)
+            switch dismissState.observe(mouseInside: mouseInside) {
+            case .ignore: break
+            case .markedEntered: cancelHotkeyAutoCloseTimer()
+            case .shouldClose: notchClose()
             }
         }
     }
@@ -299,6 +299,66 @@ final class NotchCoordinator {
                 notchClose()
             }
         }
+    }
+
+    // MARK: - Hotkey auto-close timer
+
+    private func startHotkeyAutoCloseTimer() {
+        cancelHotkeyAutoCloseTimer()
+        hotkeyAutoCloseTimer = Timer.scheduledTimer(
+            withTimeInterval: NotchConstants.hotkeyAutoCloseDelay,
+            repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.notchClose()
+            }
+        }
+        LogService.debug(
+            "NotchCoordinator: hotkey auto-close armed (\(NotchConstants.hotkeyAutoCloseDelay)s)",
+            category: "NotchCoordinator"
+        )
+    }
+
+    private func cancelHotkeyAutoCloseTimer() {
+        guard hotkeyAutoCloseTimer != nil else { return }
+        hotkeyAutoCloseTimer?.invalidate()
+        hotkeyAutoCloseTimer = nil
+        LogService.debug(
+            "NotchCoordinator: hotkey auto-close cancelled",
+            category: "NotchCoordinator"
+        )
+    }
+
+    // MARK: - ESC monitor
+
+    private func installEscMonitor() {
+        guard escMonitor == nil else { return }
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // kVK_Escape = 53
+            if event.keyCode == 53 {
+                Task { @MainActor [weak self] in
+                    guard let self, status == .opened else { return }
+                    notchClose()
+                }
+                return nil // swallow event
+            }
+            return event
+        }
+    }
+
+    private func uninstallEscMonitor() {
+        if let monitor = escMonitor {
+            NSEvent.removeMonitor(monitor)
+            escMonitor = nil
+        }
+    }
+
+    /// Restart the 3-second grace period. Called when the user uses the
+    /// keyboard to switch tabs while the notch is still in its "no-mouse-yet"
+    /// phase — treated as continued keyboard engagement.
+    func bumpHotkeyAutoCloseTimerIfActive() {
+        guard dismissState.openedViaHotkey, !dismissState.mouseHasEnteredContent else { return }
+        startHotkeyAutoCloseTimer()
     }
 }
 

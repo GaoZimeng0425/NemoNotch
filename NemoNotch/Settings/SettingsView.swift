@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(NotificationService.self) var notificationService
     @Environment(WeatherService.self) var weatherService
     @Environment(HermesService.self) var hermesService
+    @Environment(OpenClawService.self) var openClawService
 
     @State private var selectedTab = 0
     @State private var showAppPicker = false
@@ -24,7 +25,7 @@ struct SettingsView: View {
                 .tag(1)
 
             claudeView
-                .tabItem { Label("AI CLI", systemImage: "cpu") }
+                .tabItem { Label("settings.tab.ai_agents", systemImage: "cpu") }
                 .tag(2)
 
             notificationListView
@@ -34,6 +35,10 @@ struct SettingsView: View {
             HotkeysSettingsView()
                 .tabItem { Label("settings.hotkeys", systemImage: "keyboard") }
                 .tag(4)
+
+            PomodoroSettingsView()
+                .tabItem { Label("settings.pomodoro.title", systemImage: "timer") }
+                .tag(5)
         }
         .frame(width: 430, height: 460)
         .environment(\.locale, appSettings.currentLocale)
@@ -198,8 +203,8 @@ struct SettingsView: View {
             List(launcherService.filteredScannedApps) { app in
                 let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
                 HStack(spacing: 10) {
-                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                    if let icon = launcherService.icon(forBundleID: app.bundleIdentifier) {
+                        Image(nsImage: icon)
                             .resizable()
                             .frame(width: 28, height: 28)
                     }
@@ -249,8 +254,14 @@ struct SettingsView: View {
                 name: "Claude Code",
                 icon: "cpu",
                 isInstalled: aiService.claudeProvider.isHookInstalled,
-                onInstall: { aiService.claudeProvider.installHooks() },
-                onUninstall: { aiService.claudeProvider.uninstallHooks() }
+                onInstall: {
+                    appSettings.claudeEnabled = true
+                    aiService.claudeProvider.installHooks()
+                },
+                onUninstall: {
+                    appSettings.claudeEnabled = false
+                    aiService.claudeProvider.uninstallHooks()
+                }
             )
 
             Divider()
@@ -260,8 +271,14 @@ struct SettingsView: View {
                 name: "Gemini CLI",
                 icon: "sparkle",
                 isInstalled: aiService.geminiProvider.isHookInstalled,
-                onInstall: { aiService.geminiProvider.installHooks() },
-                onUninstall: { aiService.geminiProvider.uninstallHooks() }
+                onInstall: {
+                    appSettings.geminiEnabled = true
+                    aiService.geminiProvider.installHooks()
+                },
+                onUninstall: {
+                    appSettings.geminiEnabled = false
+                    aiService.geminiProvider.uninstallHooks()
+                }
             )
 
             Divider()
@@ -271,9 +288,21 @@ struct SettingsView: View {
                 name: "Hermes Agent",
                 icon: "bird",
                 isInstalled: hermesService.isHookInstalled,
-                onInstall: { hermesService.installHooks() },
-                onUninstall: { hermesService.uninstallHooks() }
+                onInstall: {
+                    appSettings.hermesEnabled = true
+                    hermesService.installHooks()
+                },
+                onUninstall: {
+                    appSettings.hermesEnabled = false
+                    hermesService.uninstallHooks()
+                }
             )
+
+            Divider()
+
+            // OpenClaw — different semantics from hooks (connect/disconnect/revoke),
+            // so it gets its own view shape instead of reusing hookSection.
+            openClawSection
 
             Text("settings.hooks_description")
                 .font(.caption)
@@ -326,24 +355,65 @@ struct SettingsView: View {
         }
     }
 
+    private var openClawSection: some View {
+        VStack(spacing: 8) {
+            Label("settings.openclaw.title", systemImage: "ladybug")
+                .font(.title3)
+                .foregroundStyle(.primary)
+
+            if openClawService.gatewayOnline {
+                Label(
+                    "settings.openclaw.connected \(openClawService.deviceIdShort)",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundStyle(.green)
+                .font(.title3)
+            } else {
+                Label("settings.openclaw.disconnected", systemImage: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .font(.title3)
+            }
+
+            HStack(spacing: 12) {
+                if appSettings.openClawEnabled {
+                    Button("settings.openclaw.disconnect") {
+                        appSettings.openClawEnabled = false
+                        openClawService.disconnect()
+                    }
+                    .controlSize(.large)
+                } else {
+                    Button("settings.openclaw.connect") {
+                        appSettings.openClawEnabled = true
+                        openClawService.connect()
+                    }
+                    .controlSize(.large)
+                }
+
+                if openClawService.gatewayOnline {
+                    Button("settings.openclaw.remove_device", role: .destructive) {
+                        openClawService.removeDeviceSelf()
+                    }
+                    .controlSize(.large)
+                    .disabled(openClawService.isRemovingDevice)
+                }
+            }
+        }
+    }
+
     // MARK: - Notification List
 
     private var notificationListView: some View {
         Form {
             if !notificationService.isAXTrusted {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("settings.accessibility_required", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .font(.headline)
-                        Text("settings.accessibility_description")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("settings.open_system_settings") {
-                            notificationService.openAccessibilitySettings()
-                        }
-                        .controlSize(.small)
-                    }
+                    PermissionCard(
+                        icon: "exclamationmark.triangle.fill",
+                        titleKey: "permission.accessibility.title",
+                        detailKey: "permission.accessibility.detail",
+                        status: .notDetermined,
+                        primary: .settingsOnly,
+                        openSettings: { notificationService.openAccessibilitySettings() }
+                    )
                     .padding(.vertical, 4)
                 }
             }
@@ -355,12 +425,11 @@ struct SettingsView: View {
                 } else {
                     ForEach(appSettings.monitoredApps, id: \.self) { bundleID in
                         HStack {
-                            let icon = NSWorkspace.shared
-                                .icon(forFile: NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?
-                                    .path ?? "")
-                            Image(nsImage: icon)
-                                .resizable()
-                                .frame(width: 24, height: 24)
+                            if let icon = launcherService.icon(forBundleID: bundleID) {
+                                Image(nsImage: icon)
+                                    .resizable()
+                                    .frame(width: 24, height: 24)
+                            }
                             VStack(alignment: .leading) {
                                 Text(appName(for: bundleID))
                                 Text(bundleID)

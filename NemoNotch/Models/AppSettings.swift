@@ -51,6 +51,56 @@ final class AppSettings {
         }
     }
 
+    var pomodoroWorkDuration: TimeInterval {
+        didSet { UserDefaults.standard.set(pomodoroWorkDuration, forKey: "pomodoro.workDuration") }
+    }
+
+    var pomodoroShortBreakDuration: TimeInterval {
+        didSet { UserDefaults.standard.set(pomodoroShortBreakDuration, forKey: "pomodoro.shortBreakDuration") }
+    }
+
+    var pomodoroLongBreakDuration: TimeInterval {
+        didSet { UserDefaults.standard.set(pomodoroLongBreakDuration, forKey: "pomodoro.longBreakDuration") }
+    }
+
+    var pomodoroLongBreakInterval: Int {
+        didSet { UserDefaults.standard.set(pomodoroLongBreakInterval, forKey: "pomodoro.longBreakInterval") }
+    }
+
+    var pomodoroSoundEnabled: Bool {
+        didSet { UserDefaults.standard.set(pomodoroSoundEnabled, forKey: "pomodoro.soundEnabled") }
+    }
+
+    var pomodoroNotificationEnabled: Bool {
+        didSet { UserDefaults.standard.set(pomodoroNotificationEnabled, forKey: "pomodoro.notificationEnabled") }
+    }
+
+    // MARK: - OpenClaw
+
+    static let openClawEnabledKey = "openClawEnabled"
+
+    var openClawEnabled: Bool {
+        didSet { UserDefaults.standard.set(openClawEnabled, forKey: Self.openClawEnabledKey) }
+    }
+
+    // MARK: - Provider enable flags (set false when user uninstalls hooks)
+
+    static let claudeEnabledKey = "claudeEnabled"
+    static let geminiEnabledKey = "geminiEnabled"
+    static let hermesEnabledKey = "hermesEnabled"
+
+    var claudeEnabled: Bool {
+        didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
+    }
+
+    var geminiEnabled: Bool {
+        didSet { UserDefaults.standard.set(geminiEnabled, forKey: Self.geminiEnabledKey) }
+    }
+
+    var hermesEnabled: Bool {
+        didSet { UserDefaults.standard.set(hermesEnabled, forKey: Self.hermesEnabledKey) }
+    }
+
     var currentLocale: Locale {
         language.locale ?? Locale.current
     }
@@ -89,6 +139,28 @@ final class AppSettings {
 
         let storedLang = UserDefaults.standard.string(forKey: "language").flatMap { AppLanguage(rawValue: $0) }
         language = storedLang ?? .system
+
+        let workDefault: TimeInterval = 25 * 60
+        let shortDefault: TimeInterval = 5 * 60
+        let longDefault: TimeInterval = 15 * 60
+        pomodoroWorkDuration = UserDefaults.standard
+            .object(forKey: "pomodoro.workDuration") as? TimeInterval ?? workDefault
+        pomodoroShortBreakDuration = UserDefaults.standard
+            .object(forKey: "pomodoro.shortBreakDuration") as? TimeInterval ?? shortDefault
+        pomodoroLongBreakDuration = UserDefaults.standard
+            .object(forKey: "pomodoro.longBreakDuration") as? TimeInterval ?? longDefault
+        pomodoroLongBreakInterval = UserDefaults.standard.object(forKey: "pomodoro.longBreakInterval") as? Int ?? 4
+        pomodoroSoundEnabled = UserDefaults.standard.object(forKey: "pomodoro.soundEnabled") as? Bool ?? true
+        pomodoroNotificationEnabled = UserDefaults.standard
+            .object(forKey: "pomodoro.notificationEnabled") as? Bool ?? true
+        openClawEnabled = UserDefaults.standard
+            .object(forKey: Self.openClawEnabledKey) as? Bool ?? true
+        claudeEnabled = UserDefaults.standard
+            .object(forKey: Self.claudeEnabledKey) as? Bool ?? true
+        geminiEnabled = UserDefaults.standard
+            .object(forKey: Self.geminiEnabledKey) as? Bool ?? true
+        hermesEnabled = UserDefaults.standard
+            .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
     }
 
     private static let defaultApps: [AppItem] = [

@@ -8,6 +8,8 @@ final class BadgeViewModel {
     private let aiService: AICLIMonitorService
     private let notificationService: NotificationService
     private let agentRegistry: AgentMonitorRegistry
+    private let pomodoroService: PomodoroTimerService
+    private let appSettings: AppSettings
 
     var shownHasActiveBadge: Bool = false
     var displayedBadgeItems: [BadgeItem] = []
@@ -19,13 +21,17 @@ final class BadgeViewModel {
         calendarService: CalendarService,
         aiService: AICLIMonitorService,
         notificationService: NotificationService,
-        agentRegistry: AgentMonitorRegistry
+        agentRegistry: AgentMonitorRegistry,
+        pomodoroService: PomodoroTimerService,
+        appSettings: AppSettings
     ) {
         self.mediaService = mediaService
         self.calendarService = calendarService
         self.aiService = aiService
         self.notificationService = notificationService
         self.agentRegistry = agentRegistry
+        self.pomodoroService = pomodoroService
+        self.appSettings = appSettings
     }
 
     // MARK: - Computed
@@ -33,7 +39,13 @@ final class BadgeViewModel {
     var activeBadgeItems: [BadgeItem] {
         var items: [BadgeItem] = []
 
-        let activeSessions = aiService.store.sortedSessions.filter { $0.phase.isActive || $0.phase.needsAttention }
+        let activeSessions = aiService.store.sortedSessions.filter { session in
+            let providerEnabled: Bool = switch session.source {
+            case .claude: appSettings.claudeEnabled
+            case .gemini: appSettings.geminiEnabled
+            }
+            return providerEnabled && (session.phase.isActive || session.phase.needsAttention)
+        }
 
         for session in activeSessions {
             if session.phase.isWaitingForApproval {
@@ -49,6 +61,10 @@ final class BadgeViewModel {
 
         if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
             items.append(.notification(bundleID: top.bundleID, count: top.count))
+        }
+
+        if pomodoroService.state.isActive {
+            items.append(.pomodoro(phase: pomodoroService.currentPhase))
         }
 
         for agent in agentRegistry.activeAgents {

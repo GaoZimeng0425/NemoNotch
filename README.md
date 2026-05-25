@@ -16,7 +16,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 ## Features
 
-### 7 Functional Tabs
+### 8 Functional Tabs
 
 | Tab | Description |
 |-----|-------------|
@@ -25,6 +25,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 | **AI Chat** | Unified Claude Code & Gemini CLI monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
 | **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
+| **Pomodoro** | Classic 25/5/15 cycle with persistent TODO list, per-task completed-pomodoro counts, hotkey-summoned centered QuickStart panel, end-of-phase sound + system notification, collapsed-notch 🍅 + remaining-time pie |
 | **Weather** | Current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
 | **System** | Top 5 process resource ranking (CPU & memory), app icons, system summary footer (CPU / RAM / battery) |
 
@@ -37,6 +38,8 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Menu Bar Entry** — Fixed pixel-art notch icon (state is visible on the notch panel above the menubar); menu shows Now Playing controls (previous / play-pause / next) when media is active
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
+- **Explicit permission requests.** NemoNotch does not auto-request permissions on launch. Each feature surfaces a "Grant Access" button (Calendar in the Overview tab, Location in the Weather card, Automation in the Media card when controlling Music/Spotify) — click to invoke the system dialog.
+- **ESC closes the notch.** Press ESC any time the notch is opened.
 
 ## Tech Stack
 
