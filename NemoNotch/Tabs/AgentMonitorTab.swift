@@ -700,10 +700,17 @@ private struct HermesSetupCard: View {
     @Environment(AppSettings.self) var appSettings
     let passive: Bool
 
+    private var sourceStyle: AgentMonitorSourceStyle {
+        AgentMonitorSourceStyle(
+            displayName: hermesService.displayName,
+            iconEmoji: hermesService.iconEmoji,
+            iconAssetName: hermesService.iconAssetName
+        )
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            Text("🐦")
-                .font(.system(size: passive ? 22 : 26))
+            AgentMonitorSourceIcon(style: sourceStyle, size: passive ? 22 : 26)
                 .opacity(passive ? 0.65 : 1.0)
             Text("Hermes Agent")
                 .font(.system(size: 12, weight: .semibold))
