@@ -197,7 +197,8 @@ struct NotchView: View {
             aiService: aiService,
             notificationService: notificationService,
             agentRegistry: agentRegistry,
-            pomodoroService: pomodoroService
+            pomodoroService: pomodoroService,
+            appSettings: appSettings
         )
         vm.initialize()
         badgeViewModel = vm
