@@ -175,6 +175,12 @@ final class OpenClawService {
     // MARK: - Connection
 
     func connect() {
+        let enabled = (UserDefaults.standard
+            .object(forKey: AppSettings.openClawEnabledKey) as? Bool) ?? true
+        guard enabled else {
+            LogService.info("User-disabled, skipping connect", category: "OpenClaw")
+            return
+        }
         guard isInstalled else {
             LogService.warn("Not installed, skipping connect", category: "OpenClaw")
             return
