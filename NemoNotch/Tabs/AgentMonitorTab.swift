@@ -680,3 +680,47 @@ private struct OpenClawApprovalCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+// MARK: - Hermes Setup Card (shown in setupState when Hermes hook not installed)
+
+private struct HermesSetupCard: View {
+    @Environment(HermesService.self) var hermesService
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("🐦")
+                .font(.system(size: 26))
+            Text("Hermes Agent")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text(statusText)
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                hermesService.installHooks()
+            } label: {
+                Text("agents.hermes.install_hook")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(NotchTheme.accent.opacity(0.18))
+            .clipShape(Capsule())
+            .foregroundStyle(NotchTheme.accent)
+            .disabled(hermesService.isHookInstalled)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
+    }
+
+    private var statusText: LocalizedStringKey {
+        if hermesService.isHookInstalled {
+            return "agents.hermes.status.offline"
+        } else {
+            return "agents.hermes.status.uninstalled"
+        }
+    }
+}
