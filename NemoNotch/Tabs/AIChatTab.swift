@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
+    @Environment(AppSettings.self) var appSettings
     @State private var selectedSessionId: String?
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
@@ -12,6 +13,10 @@ struct AIChatTab: View {
 
     private var anyHookInstalled: Bool {
         aiService.anyHookInstalled
+    }
+
+    private var anyProviderEnabled: Bool {
+        appSettings.claudeEnabled || appSettings.geminiEnabled
     }
 
     private var workingCount: Int {
@@ -82,7 +87,7 @@ struct AIChatTab: View {
     }
 
     var body: some View {
-        if !anyHookInstalled {
+        if anyProviderEnabled, !anyHookInstalled {
             installPrompt
         } else if allSessions.isEmpty {
             idleState
