@@ -3,6 +3,8 @@ import SwiftUI
 struct AgentMonitorTab: View {
     @Environment(AgentMonitorRegistry.self) var registry
     @Environment(OpenClawService.self) var openClaw
+    @Environment(HermesService.self) var hermesService
+    @Environment(AppSettings.self) var appSettings
     @State private var expandedAgentId: String?
 
     private var monitors: [any MultiAgentMonitor] {
@@ -10,36 +12,47 @@ struct AgentMonitorTab: View {
     }
 
     var body: some View {
-        if monitors.isEmpty {
-            notInstalled
-        } else if monitors.allSatisfy({ !$0.isOnline }) {
-            if openClaw.pendingApproval != nil {
-                OpenClawApprovalCard()
-            } else {
-                offlineState
-            }
-        } else {
-            // At least one monitor (e.g. Hermes) is online. Show its agents,
-            // but float OpenClaw's approval card on top so the pairing CTA
-            // stays discoverable instead of getting eaten by another online
-            // service.
+        switch renderMode {
+        case .agentSections:
             agentSections
+        case .offlineState:
+            offlineState
+        case .approvalCardOnly:
+            OpenClawApprovalCard()
+        case let .setupCards(showHermesCard, openClawKind):
+            setupState(showHermesCard: showHermesCard, openClawKind: openClawKind)
         }
     }
 
-    private var notInstalled: some View {
+    private var renderMode: AgentMonitorRenderDecision.Mode {
+        AgentMonitorRenderDecision.decide(
+            hasOnlineMonitor: monitors.contains(where: \.isOnline),
+            openClawPendingApproval: openClaw.pendingApproval != nil,
+            openClawIsInstalled: openClaw.isInstalled,
+            openClawUserEnabled: appSettings.openClawEnabled,
+            hermesIsInstalled: hermesService.isHookInstalled
+        )
+    }
+
+    private func setupState(
+        showHermesCard: Bool,
+        openClawKind: AgentMonitorRenderDecision.OpenClawCardKind
+    ) -> some View {
         VStack(spacing: 10) {
-            Image(systemName: "ladybug.fill")
-                .font(.system(size: 28))
-                .foregroundStyle(NotchTheme.textTertiary)
-            Text("agents.not_installed")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Text("npm install -g openclaw@latest")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(NotchTheme.textTertiary)
+            if showHermesCard {
+                HermesSetupCard()
+            }
+            switch openClawKind {
+            case .approvalCard:
+                OpenClawApprovalCard()
+            case .installHintCard:
+                OpenClawInstallHintCard()
+            case .hidden:
+                EmptyView()
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var offlineState: some View {
