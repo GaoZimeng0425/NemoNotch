@@ -33,45 +33,55 @@ struct AgentMonitorRenderDecisionTests {
         #expect(decide(openClawPending: true, openClawInstalled: true) == .approvalCardOnly)
     }
 
-    @Test("Nothing online, nothing installed → setupCards with both")
+    @Test("Nothing online, nothing installed → setupCards with both install kinds")
     func freshInstallShowsBothCards() {
         let mode = decide()
-        #expect(mode == .setupCards(showHermesCard: true, openClaw: .installHintCard))
+        #expect(mode == .setupCards(hermes: .installCard, openClaw: .installHintCard))
     }
 
-    @Test("Nothing online, Hermes installed → offlineState (existing path)")
-    func hermesInstalledFallsToOffline() {
+    @Test("Nothing online, Hermes installed AND enabled → offlineState (no-nag: hermes ready)")
+    func hermesInstalledAndEnabledFallsToOffline() {
         #expect(decide(hermesInstalled: true) == .offlineState)
     }
 
-    @Test("Nothing online, OpenClaw installed (no pending) → offlineState")
-    func openClawInstalledFallsToOffline() {
+    @Test("Nothing online, OpenClaw installed AND enabled (no pending) → offlineState")
+    func openClawInstalledAndEnabledFallsToOffline() {
         #expect(decide(openClawInstalled: true) == .offlineState)
     }
 
-    @Test("User disabled OpenClaw + nothing installed → setupCards without OpenClaw")
-    func userDisabledHidesOpenClawCard() {
+    @Test("User disabled OpenClaw + nothing installed → setupCards with openClaw reenable")
+    func userDisabledOpenClawShowsReenable() {
         let mode = decide(openClawEnabled: false)
-        #expect(mode == .setupCards(showHermesCard: true, openClaw: .hidden))
+        #expect(mode == .setupCards(hermes: .installCard, openClaw: .reenableCard))
     }
 
-    @Test("User disabled OpenClaw + pending approval → still hidden (respects user choice)")
+    @Test("User disabled OpenClaw + pending approval → still reenable (respects user choice)")
     func userDisabledOverridesPending() {
-        // Edge case: user disabled OpenClaw while a stale pendingApproval lingers.
-        // Honor the user's disable.
         let mode = decide(openClawPending: true, openClawEnabled: false)
-        #expect(mode == .setupCards(showHermesCard: true, openClaw: .hidden))
+        #expect(mode == .setupCards(hermes: .installCard, openClaw: .reenableCard))
     }
 
-    @Test("User disabled Hermes + nothing installed → setupCards without Hermes card")
-    func userDisabledHidesHermesCard() {
+    @Test("User disabled Hermes + nothing installed → setupCards with hermes reenable")
+    func userDisabledHermesShowsReenable() {
         let mode = decide(hermesEnabled: false)
-        #expect(mode == .setupCards(showHermesCard: false, openClaw: .installHintCard))
+        #expect(mode == .setupCards(hermes: .reenableCard, openClaw: .installHintCard))
     }
 
-    @Test("User disabled both Hermes and OpenClaw → setupCards with neither card")
-    func userDisabledBothHidesEverything() {
+    @Test("User disabled both Hermes and OpenClaw → setupCards with both reenable")
+    func userDisabledBothShowsReenable() {
         let mode = decide(openClawEnabled: false, hermesEnabled: false)
-        #expect(mode == .setupCards(showHermesCard: false, openClaw: .hidden))
+        #expect(mode == .setupCards(hermes: .reenableCard, openClaw: .reenableCard))
+    }
+
+    @Test("User disabled OpenClaw + OpenClaw still installed → reenable (not stuck offline)")
+    func disabledOpenClawWithOrphanInstallShowsReenable() {
+        let mode = decide(openClawInstalled: true, openClawEnabled: false)
+        #expect(mode == .setupCards(hermes: .installCard, openClaw: .reenableCard))
+    }
+
+    @Test("User disabled Hermes + Hermes still installed → reenable (not stuck offline)")
+    func disabledHermesWithOrphanInstallShowsReenable() {
+        let mode = decide(hermesInstalled: true, hermesEnabled: false)
+        #expect(mode == .setupCards(hermes: .reenableCard, openClaw: .installHintCard))
     }
 }

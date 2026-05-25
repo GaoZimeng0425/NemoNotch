@@ -19,8 +19,8 @@ struct AgentMonitorTab: View {
             offlineState
         case .approvalCardOnly:
             OpenClawApprovalCard()
-        case let .setupCards(showHermesCard, openClawKind):
-            setupState(showHermesCard: showHermesCard, openClawKind: openClawKind)
+        case let .setupCards(hermes, openClaw):
+            setupState(hermes: hermes, openClaw: openClaw)
         }
     }
 
@@ -36,20 +36,18 @@ struct AgentMonitorTab: View {
     }
 
     private func setupState(
-        showHermesCard: Bool,
-        openClawKind: AgentMonitorRenderDecision.OpenClawCardKind
+        hermes: AgentMonitorRenderDecision.HermesCardKind,
+        openClaw: AgentMonitorRenderDecision.OpenClawCardKind
     ) -> some View {
         VStack(spacing: 10) {
-            if showHermesCard {
-                HermesSetupCard()
-            }
-            switch openClawKind {
+            HermesSetupCard(passive: hermes == .reenableCard)
+            switch openClaw {
             case .approvalCard:
                 OpenClawApprovalCard()
             case .installHintCard:
                 OpenClawInstallHintCard()
-            case .hidden:
-                EmptyView()
+            case .reenableCard:
+                OpenClawReenableCard()
             }
         }
         .padding(.horizontal, 12)
@@ -695,35 +693,51 @@ private struct OpenClawApprovalCard: View {
     }
 }
 
-// MARK: - Hermes Setup Card (shown in setupState when Hermes hook not installed)
+// MARK: - Hermes Setup Card (active install or passive reenable)
 
 private struct HermesSetupCard: View {
     @Environment(HermesService.self) var hermesService
+    @Environment(AppSettings.self) var appSettings
+    let passive: Bool
 
     var body: some View {
         VStack(spacing: 8) {
             Text("🐦")
-                .font(.system(size: 26))
+                .font(.system(size: passive ? 22 : 26))
+                .opacity(passive ? 0.65 : 1.0)
             Text("Hermes Agent")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-            Text(statusText)
+                .foregroundStyle(passive ? NotchTheme.textSecondary : NotchTheme.textPrimary)
+            Text(passive ? "agents.currently_off" : statusText)
                 .font(.system(size: 10))
                 .foregroundStyle(NotchTheme.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
-                hermesService.installHooks()
+                if passive {
+                    appSettings.hermesEnabled = true
+                }
+                if !hermesService.isHookInstalled {
+                    hermesService.installHooks()
+                }
             } label: {
-                Text("agents.hermes.install_hook")
+                Text(passive ? "agents.enable" : "agents.hermes.install_hook")
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
-            .background(NotchTheme.accent.opacity(0.18))
+            .background(
+                Group {
+                    if passive {
+                        Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1)
+                    } else {
+                        Capsule().fill(NotchTheme.accent.opacity(0.18))
+                    }
+                }
+            )
             .clipShape(Capsule())
             .foregroundStyle(NotchTheme.accent)
-            .disabled(hermesService.isHookInstalled)
+            .disabled(!passive && hermesService.isHookInstalled)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
@@ -759,6 +773,44 @@ private struct OpenClawInstallHintCard: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(RoundedRectangle(cornerRadius: 4).fill(NotchTheme.surfaceSubtle))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
+    }
+}
+
+// MARK: - OpenClaw Reenable Card (passive — user disabled, click to enable)
+
+private struct OpenClawReenableCard: View {
+    @Environment(AppSettings.self) var appSettings
+    @Environment(OpenClawService.self) var openClawService
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("🦞")
+                .font(.system(size: 22))
+                .opacity(0.65)
+            Text("OpenClaw")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textSecondary)
+            Text("agents.currently_off")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                appSettings.openClawEnabled = true
+                openClawService.connect()
+            } label: {
+                Text("agents.enable")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1))
+            .clipShape(Capsule())
+            .foregroundStyle(NotchTheme.accent)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
