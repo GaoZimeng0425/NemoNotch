@@ -50,6 +50,7 @@ struct SettingsSceneRoot: View {
                let notification = appDelegate.notificationService,
                let weather = appDelegate.weatherService,
                let hermes = appDelegate.hermesService,
+               let openClaw = appDelegate.openClawService,
                let notificationPermission = appDelegate.notificationPermissionMonitor {
                 SettingsView()
                     .environment(settings)
@@ -58,6 +59,7 @@ struct SettingsSceneRoot: View {
                     .environment(notification)
                     .environment(weather)
                     .environment(hermes)
+                    .environment(openClaw)
                     .environment(notificationPermission)
             } else {
                 ProgressView()
@@ -83,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var automationPermissionMonitor: MediaAutomationPermissionMonitor?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
-    private var openClawService: OpenClawService?
+    private(set) var openClawService: OpenClawService?
     private(set) var hermesService: HermesService?
     private(set) var agentRegistry: AgentMonitorRegistry?
     private(set) var launcherService: LauncherService?

@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(NotificationService.self) var notificationService
     @Environment(WeatherService.self) var weatherService
     @Environment(HermesService.self) var hermesService
+    @Environment(OpenClawService.self) var openClawService
 
     @State private var selectedTab = 0
     @State private var showAppPicker = false
@@ -24,7 +25,7 @@ struct SettingsView: View {
                 .tag(1)
 
             claudeView
-                .tabItem { Label("AI CLI", systemImage: "cpu") }
+                .tabItem { Label("settings.tab.ai_agents", systemImage: "cpu") }
                 .tag(2)
 
             notificationListView
@@ -279,6 +280,12 @@ struct SettingsView: View {
                 onUninstall: { hermesService.uninstallHooks() }
             )
 
+            Divider()
+
+            // OpenClaw — different semantics from hooks (connect/disconnect/revoke),
+            // so it gets its own view shape instead of reusing hookSection.
+            openClawSection
+
             Text("settings.hooks_description")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -325,6 +332,47 @@ struct SettingsView: View {
                         onUninstall()
                     }
                     .controlSize(.large)
+                }
+            }
+        }
+    }
+
+    private var openClawSection: some View {
+        VStack(spacing: 8) {
+            if openClawService.gatewayOnline {
+                Label(
+                    "settings.openclaw.connected \(openClawService.deviceIdShort)",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundStyle(.green)
+                .font(.title3)
+            } else {
+                Label("settings.openclaw.disconnected", systemImage: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .font(.title3)
+            }
+
+            HStack(spacing: 12) {
+                if appSettings.openClawEnabled {
+                    Button("settings.openclaw.disconnect") {
+                        appSettings.openClawEnabled = false
+                        openClawService.disconnect()
+                    }
+                    .controlSize(.large)
+                } else {
+                    Button("settings.openclaw.connect") {
+                        appSettings.openClawEnabled = true
+                        openClawService.connect()
+                    }
+                    .controlSize(.large)
+                }
+
+                if openClawService.gatewayOnline {
+                    Button("settings.openclaw.remove_device", role: .destructive) {
+                        openClawService.removeDeviceSelf()
+                    }
+                    .controlSize(.large)
+                    .disabled(openClawService.isRemovingDevice)
                 }
             }
         }
