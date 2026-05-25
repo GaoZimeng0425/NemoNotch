@@ -84,6 +84,12 @@
     "🍅" : {
 
     },
+    "🐦" : {
+
+    },
+    "🦞" : {
+
+    },
     "agents.all_offline" : {
       "localizations" : {
         "en" : {
@@ -98,6 +104,24 @@
             "value" : "所有服务离线"
           }
         }
+      }
+    },
+    "agents.hermes.install_hook" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Install Hook" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "安装 Hook" } }
+      }
+    },
+    "agents.hermes.status.offline" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Installed, not running" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已安装，未运行" } }
+      }
+    },
+    "agents.hermes.status.uninstalled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hook not installed" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Hook 未安装" } }
       }
     },
     "agents.idle" : {
@@ -117,6 +141,7 @@
       }
     },
     "agents.not_installed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -226,6 +251,12 @@
             "value" : "等待 OpenClaw 批准"
           }
         }
+      }
+    },
+    "agents.openclaw.not_installed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OpenClaw not installed" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "OpenClaw 未安装" } }
       }
     },
     "agents.state_error" : {
@@ -753,6 +784,9 @@
     "ctx" : {
 
     },
+    "Hermes Agent" : {
+
+    },
     "launcher.search_apps" : {
       "localizations" : {
         "en" : {
@@ -1077,6 +1111,9 @@
       }
     },
     "npm install -g openclaw@latest" : {
+
+    },
+    "OpenClaw" : {
 
     },
     "openclaw.all_agents_idle" : {
@@ -3362,6 +3399,42 @@
             "value" : "体感"
           }
         }
+      }
+    },
+    "settings.openclaw.connected %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connected · device %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已连接 · device %@" } }
+      }
+    },
+    "settings.openclaw.disconnected" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disconnected" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已断开" } }
+      }
+    },
+    "settings.openclaw.connect" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "连接" } }
+      }
+    },
+    "settings.openclaw.disconnect" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disconnect" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "断开" } }
+      }
+    },
+    "settings.openclaw.remove_device" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove device" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "移除设备" } }
+      }
+    },
+    "settings.tab.ai_agents" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AI / Agents" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "AI / Agents" } }
       }
     },
     "weather.humidity" : {
