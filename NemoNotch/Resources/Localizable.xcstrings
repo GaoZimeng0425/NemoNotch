@@ -84,9 +84,6 @@
     "🍅" : {
 
     },
-    "🐦" : {
-
-    },
     "🦞" : {
 
     },
@@ -3087,22 +3084,6 @@
         }
       }
     },
-    "settings.openclaw.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClaw"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenClaw"
-          }
-        }
-      }
-    },
     "settings.openclaw.connect" : {
       "localizations" : {
         "en" : {
@@ -3179,6 +3160,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移除设备"
+          }
+        }
+      }
+    },
+    "settings.openclaw.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
           }
         }
       }
