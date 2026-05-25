@@ -15,6 +15,8 @@ final class OpenClawService {
     var pendingApproval: PendingApprovalInfo?
     /// True while the user-shell subprocess is running.
     var isApproving = false
+    /// True while the user-shell `openclaw devices remove` subprocess is running.
+    var isRemovingDevice = false
 
     /// First 8 hex chars of the local device id, for Settings display.
     /// Returns empty string when the service is not installed (no config file).
@@ -665,6 +667,38 @@ final class OpenClawService {
             let detail = stderrTrimmed.isEmpty ? "(no stderr)" : stderrTrimmed
             LogService.error(
                 "Approval shell exec failed (shell=\(result.shell), exit=\(result.exitCode)): \(detail)",
+                category: "OpenClaw"
+            )
+        }
+    }
+
+    /// Mirrors `approveSelf()` but runs `openclaw devices remove <deviceId>` to
+    /// revoke this device's trust on the gateway. Called from Settings.
+    func removeDeviceSelf() {
+        guard !deviceId.isEmpty else {
+            LogService.warn("No deviceId, skipping remove", category: "OpenClaw")
+            return
+        }
+        guard !isRemovingDevice else { return }
+        isRemovingDevice = true
+        let cmd = "openclaw devices remove \(deviceId)"
+        Task.detached { [weak self] in
+            let result = Self.runInUserShell(cmd: cmd)
+            await self?.finishRemoveDevice(result: result)
+        }
+    }
+
+    @MainActor
+    private func finishRemoveDevice(result: ApprovalResult) {
+        isRemovingDevice = false
+        if result.ok {
+            LogService.info("Device removed via shell, disconnecting", category: "OpenClaw")
+            disconnect()
+        } else {
+            let stderrTrimmed = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = stderrTrimmed.isEmpty ? "(no stderr)" : stderrTrimmed
+            LogService.error(
+                "Remove device failed (shell=\(result.shell), exit=\(result.exitCode)): \(detail)",
                 category: "OpenClaw"
             )
         }
