@@ -75,6 +75,14 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(pomodoroNotificationEnabled, forKey: "pomodoro.notificationEnabled") }
     }
 
+    // MARK: - OpenClaw
+
+    static let openClawEnabledKey = "openClawEnabled"
+
+    var openClawEnabled: Bool {
+        didSet { UserDefaults.standard.set(openClawEnabled, forKey: Self.openClawEnabledKey) }
+    }
+
     var currentLocale: Locale {
         language.locale ?? Locale.current
     }
@@ -127,6 +135,8 @@ final class AppSettings {
         pomodoroSoundEnabled = UserDefaults.standard.object(forKey: "pomodoro.soundEnabled") as? Bool ?? true
         pomodoroNotificationEnabled = UserDefaults.standard
             .object(forKey: "pomodoro.notificationEnabled") as? Bool ?? true
+        openClawEnabled = UserDefaults.standard
+            .object(forKey: Self.openClawEnabledKey) as? Bool ?? true
     }
 
     private static let defaultApps: [AppItem] = [
