@@ -29,17 +29,6 @@ extension NSScreen {
         return .init(width: notchWidth, height: notchHeight)
     }
 
-    var notchFrame: NSRect {
-        let size = notchSize
-        guard size.width > 0 else { return .zero }
-        return .init(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - size.height,
-            width: size.width,
-            height: size.height
-        )
-    }
-
     var displayID: UInt32 {
         let key = NSDeviceDescriptionKey("NSScreenNumber")
         guard let screenNumber = deviceDescription[key] as? NSNumber else { return 0 }

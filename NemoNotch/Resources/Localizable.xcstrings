@@ -69,9 +69,6 @@
     "%lld°" : {
 
     },
-    "+" : {
-
-    },
     "+%lld more" : {
 
     },
@@ -754,9 +751,6 @@
       }
     },
     "ctx" : {
-
-    },
-    "Custom…" : {
 
     },
     "launcher.search_apps" : {
@@ -2095,23 +2089,6 @@
         }
       }
     },
-    "pomodoro.quick.duration.default" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Default"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "默认"
-          }
-        }
-      }
-    },
     "pomodoro.quick.duration" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2125,6 +2102,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "时长"
+          }
+        }
+      }
+    },
+    "pomodoro.quick.duration.default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认"
           }
         }
       }

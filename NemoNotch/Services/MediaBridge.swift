@@ -23,19 +23,24 @@ enum KnownPlayer: String, CaseIterable {
 /// `errAEEventNotPermitted = -1743` — user denied Automation permission).
 private final class PlayerEventDelegate: NSObject, SBApplicationDelegate, @unchecked Sendable {
     static let shared = PlayerEventDelegate()
-    private override init() {}
+    override private init() {}
 
     /// Most recent AppleEvent error code captured by this delegate, or 0 if
     /// no failure has occurred since the last reset. Used for synchronous
     /// probe/grant detection.
     private(set) var lastErrorCode: Int = 0
 
-    func resetLastError() { lastErrorCode = 0 }
+    func resetLastError() {
+        lastErrorCode = 0
+    }
 
     func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
         let code = (error as NSError).code
         lastErrorCode = code
-        LogService.warn("MediaBridge: AppleEvent failed code=\(code) error=\(error.localizedDescription)", category: "media")
+        LogService.warn(
+            "MediaBridge: AppleEvent failed code=\(code) error=\(error.localizedDescription)",
+            category: "media"
+        )
         if code == -1743 {
             MediaBridge.notifyPermissionDenied()
         }
@@ -64,16 +69,16 @@ private enum PlayerHandle {
 
     var position: Double? {
         switch self {
-        case .spotify(let a): return a.playerPosition
-        case .music(let a): return a.playerPosition
+        case let .spotify(a): return a.playerPosition
+        case let .music(a): return a.playerPosition
         }
     }
 
     /// Authoritative play state directly from the player app.
     var isPlaying: Bool? {
         switch self {
-        case .spotify(let a): return a.playerState == .playing
-        case .music(let a):
+        case let .spotify(a): return a.playerState == .playing
+        case let .music(a):
             let s = a.playerState
             return s == .playing || s == .fastForwarding || s == .rewinding
         }
@@ -81,29 +86,29 @@ private enum PlayerHandle {
 
     func togglePlayPause() {
         switch self {
-        case .spotify(let a): a.playpause?()
-        case .music(let a): a.playpause?()
+        case let .spotify(a): a.playpause?()
+        case let .music(a): a.playpause?()
         }
     }
 
     func nextTrack() {
         switch self {
-        case .spotify(let a): a.nextTrack?()
-        case .music(let a): a.nextTrack?()
+        case let .spotify(a): a.nextTrack?()
+        case let .music(a): a.nextTrack?()
         }
     }
 
     func previousTrack() {
         switch self {
-        case .spotify(let a): a.previousTrack?()
-        case .music(let a): a.previousTrack?()
+        case let .spotify(a): a.previousTrack?()
+        case let .music(a): a.previousTrack?()
         }
     }
 
     func setPosition(_ value: Double) {
         switch self {
-        case .spotify(let a): a.setPlayerPosition?(value)
-        case .music(let a): a.setPlayerPosition?(value)
+        case let .spotify(a): a.setPlayerPosition?(value)
+        case let .music(a): a.setPlayerPosition?(value)
         }
     }
 }
@@ -160,10 +165,6 @@ enum MediaBridge {
         permissionRequested.insert(bundleID)
         UserDefaults.standard.set(Array(permissionRequested), forKey: permissionRequestedKey)
         _ = PlayerHandle.resolve(player)?.position
-    }
-
-    static func playerPosition(bundleID: String?) -> Double? {
-        handle(for: bundleID)?.position
     }
 
     /// Query the player's actual play state via ScriptingBridge.

@@ -214,20 +214,6 @@ final class NotchCoordinator {
         restorePreviousApp()
     }
 
-    func selectNextTab() {
-        guard let settings = appSettings else { return }
-        let tabs = Tab.sorted(settings.enabledTabs)
-        guard let index = tabs.firstIndex(of: selectedTab), index + 1 < tabs.count else { return }
-        selectedTab = tabs[index + 1]
-    }
-
-    func selectPreviousTab() {
-        guard let settings = appSettings else { return }
-        let tabs = Tab.sorted(settings.enabledTabs)
-        guard let index = tabs.firstIndex(of: selectedTab), index > 0 else { return }
-        selectedTab = tabs[index - 1]
-    }
-
     private func captureFrontmostApp() {
         let frontmost = NSWorkspace.shared.frontmostApplication
         if frontmost?.bundleIdentifier != Self.ourBundleIdentifier {

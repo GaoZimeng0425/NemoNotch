@@ -21,14 +21,10 @@ final class LogService {
         DDLog.add(fileLogger)
 
         #if DEBUG
-        dynamicLogLevel = .all
+            dynamicLogLevel = .all
         #else
-        dynamicLogLevel = .info
+            dynamicLogLevel = .info
         #endif
-    }
-
-    var currentLogFile: String? {
-        fileLogger.currentLogFileInfo?.filePath
     }
 }
 
