@@ -34,7 +34,7 @@ final class HermesService: MultiAgentMonitor {
     init() {
         hermesDir = NSString(string: "~/.hermes").expandingTildeInPath
         isHookInstalled = HermesHookInstaller.isInstalled
-        isOnline = isHookInstalled
+        // isOnline flips to true inside connect() once watching is actually live.
         LogService.info(
             "HermesService initialized, installed=\(isInstalled), hooks=\(isHookInstalled)",
             category: "HermesService"
@@ -62,6 +62,7 @@ final class HermesService: MultiAgentMonitor {
                 self?.evictStaleAgents()
             }
         }
+        isOnline = true
     }
 
     func disconnect() {
@@ -329,6 +330,7 @@ final class HermesService: MultiAgentMonitor {
             try HermesHookInstaller.install()
             isHookInstalled = true
             LogService.info("Hermes hooks installed", category: "HermesService")
+            connect()
         } catch {
             LogService.error("Failed to install Hermes hooks: \(error)", category: "HermesService")
         }
