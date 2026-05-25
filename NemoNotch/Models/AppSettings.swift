@@ -83,6 +83,24 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(openClawEnabled, forKey: Self.openClawEnabledKey) }
     }
 
+    // MARK: - Provider enable flags (set false when user uninstalls hooks)
+
+    static let claudeEnabledKey = "claudeEnabled"
+    static let geminiEnabledKey = "geminiEnabled"
+    static let hermesEnabledKey = "hermesEnabled"
+
+    var claudeEnabled: Bool {
+        didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
+    }
+
+    var geminiEnabled: Bool {
+        didSet { UserDefaults.standard.set(geminiEnabled, forKey: Self.geminiEnabledKey) }
+    }
+
+    var hermesEnabled: Bool {
+        didSet { UserDefaults.standard.set(hermesEnabled, forKey: Self.hermesEnabledKey) }
+    }
+
     var currentLocale: Locale {
         language.locale ?? Locale.current
     }
@@ -137,6 +155,12 @@ final class AppSettings {
             .object(forKey: "pomodoro.notificationEnabled") as? Bool ?? true
         openClawEnabled = UserDefaults.standard
             .object(forKey: Self.openClawEnabledKey) as? Bool ?? true
+        claudeEnabled = UserDefaults.standard
+            .object(forKey: Self.claudeEnabledKey) as? Bool ?? true
+        geminiEnabled = UserDefaults.standard
+            .object(forKey: Self.geminiEnabledKey) as? Bool ?? true
+        hermesEnabled = UserDefaults.standard
+            .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
     }
 
     private static let defaultApps: [AppItem] = [
