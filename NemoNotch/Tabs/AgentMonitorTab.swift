@@ -724,3 +724,30 @@ private struct HermesSetupCard: View {
         }
     }
 }
+
+// MARK: - OpenClaw Install Hint Card (shown when OpenClaw is not installed and no pending approval)
+
+private struct OpenClawInstallHintCard: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("🦞")
+                .font(.system(size: 26))
+            Text("OpenClaw")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text("agents.openclaw.not_installed")
+                .font(.system(size: 10))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            Text("npm install -g openclaw@latest")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(NotchTheme.surfaceSubtle))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
+    }
+}
