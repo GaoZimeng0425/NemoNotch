@@ -43,6 +43,10 @@ final class PomodoroTimerService {
     private(set) var pulseToken: UUID = .init()
     private(set) var lastUsedDuration: TimeInterval = 25 * 60
     private(set) var lastAutoFlow: Bool = false
+    /// Bumped each second by the tick timer while running. Acts as the observation hook
+    /// so SwiftUI views reading `remainingSeconds` / `remainingFraction` re-render every
+    /// tick — those properties depend on `Date()` which @Observable cannot track.
+    private(set) var displayTick: Int = 0
 
     // MARK: - Dependencies
 
@@ -53,11 +57,13 @@ final class PomodoroTimerService {
 
     // MARK: - Privates
 
-    // nonisolated(unsafe) so deinit (which is nonisolated) can invalidate/remove them
-    // without a concurrency violation. All write access is on MainActor.
-    private nonisolated(unsafe) var tickTimer: Timer?
-    private nonisolated(unsafe) var advanceTimer: Timer?
-    private nonisolated(unsafe) var sleepObserver: NSObjectProtocol?
+    // @ObservationIgnored keeps these out of the @Observable storage wrapper,
+    // so nonisolated(unsafe) applies directly to the real storage (the macro
+    // wrapper otherwise made it ineffective and the compiler warned).
+    // All write access is on MainActor; the nonisolated deinit only invalidates.
+    @ObservationIgnored private nonisolated(unsafe) var tickTimer: Timer?
+    @ObservationIgnored private nonisolated(unsafe) var advanceTimer: Timer?
+    @ObservationIgnored private nonisolated(unsafe) var sleepObserver: NSObjectProtocol?
 
     // MARK: - Init
 
@@ -103,6 +109,7 @@ final class PomodoroTimerService {
     }
 
     var remainingSeconds: Int {
+        _ = displayTick // observation hook — see displayTick docs
         switch state {
         case .idle: return 0
         case let .running(ctx):
@@ -115,6 +122,7 @@ final class PomodoroTimerService {
     }
 
     var remainingFraction: Double {
+        _ = displayTick // observation hook — see displayTick docs
         switch state {
         case .idle: return 0
         case let .running(ctx):
@@ -339,6 +347,7 @@ final class PomodoroTimerService {
             stopTickTimer()
             return
         }
+        displayTick &+= 1
         if remainingSeconds == 0 {
             naturalEnd()
         }

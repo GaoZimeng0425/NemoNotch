@@ -202,8 +202,8 @@ struct SettingsView: View {
             List(launcherService.filteredScannedApps) { app in
                 let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
                 HStack(spacing: 10) {
-                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                    if let icon = launcherService.icon(forBundleID: app.bundleIdentifier) {
+                        Image(nsImage: icon)
                             .resizable()
                             .frame(width: 28, height: 28)
                     }
@@ -355,12 +355,11 @@ struct SettingsView: View {
                 } else {
                     ForEach(appSettings.monitoredApps, id: \.self) { bundleID in
                         HStack {
-                            let icon = NSWorkspace.shared
-                                .icon(forFile: NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?
-                                    .path ?? "")
-                            Image(nsImage: icon)
-                                .resizable()
-                                .frame(width: 24, height: 24)
+                            if let icon = launcherService.icon(forBundleID: bundleID) {
+                                Image(nsImage: icon)
+                                    .resizable()
+                                    .frame(width: 24, height: 24)
+                            }
                             VStack(alignment: .leading) {
                                 Text(appName(for: bundleID))
                                 Text(bundleID)

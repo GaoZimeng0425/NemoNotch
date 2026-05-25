@@ -142,11 +142,17 @@ struct NotchView: View {
                 .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
                 .zIndex(1)
 
-            notchTabBar
-                .opacity(effectiveStatus == .opened ? 1 : 0)
-                .allowsHitTesting(effectiveStatus == .opened)
-                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
-                .zIndex(2)
+            NotchTabBar(
+                tabs: enabledTabs,
+                selected: coordinator.selectedTab,
+                trailingX: notchLeftEdge - 8,
+                centerY: hardwareNotchSize.height / 2,
+                onSelect: selectTab
+            )
+            .opacity(effectiveStatus == .opened ? 1 : 0)
+            .allowsHitTesting(effectiveStatus == .opened)
+            .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+            .zIndex(2)
 
             // HUD overlay - render only on the primary HUD screen so it
             // doesn't flash on every connected display simultaneously.
@@ -207,39 +213,6 @@ struct NotchView: View {
         default:
             coordinator.notchOpen(tab: item.tab)
         }
-    }
-
-    // MARK: - Tab icons in notch
-
-    private var notchTabBar: some View {
-        let tabs = enabledTabs
-        let count = tabs.count
-        let iconSize: CGFloat = count > 5 ? 16 : 18
-        let spacing: CGFloat = count > 5 ? 3 : 4
-        let fontSize: CGFloat = count > 5 ? 10 : 11
-        let tabWidth = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
-        return HStack(spacing: spacing) {
-            ForEach(tabs) { tab in
-                let selected = coordinator.selectedTab == tab
-                Button {
-                    selectTab(tab)
-                } label: {
-                    Image(systemName: tab.icon)
-                        .font(.system(size: fontSize, weight: selected ? .semibold : .regular, design: .rounded))
-                        .foregroundStyle(selected ? NotchTheme.textPrimary : NotchTheme.textTertiary)
-                        .frame(width: iconSize, height: iconSize)
-                        .background(
-                            RoundedRectangle(cornerRadius: iconSize / 3, style: .continuous)
-                                .fill(selected ? NotchTheme.surfaceEmphasis : .clear)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .position(
-            x: notchLeftEdge - tabWidth / 2 - 8,
-            y: hardwareNotchSize.height / 2
-        )
     }
 
     // MARK: - Content panel (drops down from notch)

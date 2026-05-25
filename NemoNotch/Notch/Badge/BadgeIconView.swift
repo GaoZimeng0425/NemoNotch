@@ -141,6 +141,7 @@ struct BadgeIconView: View {
         case .compactLeft, .row:
             if emoji.isEmpty {
                 Image("HermesIcon")
+                    .renderingMode(.original)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: style == .row ? 14 : 13, height: style == .row ? 14 : 13)

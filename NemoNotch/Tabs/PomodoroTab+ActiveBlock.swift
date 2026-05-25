@@ -3,7 +3,6 @@ import SwiftUI
 struct PomodoroActiveBlock: View {
     @Environment(PomodoroTimerService.self) var timerService
     @Environment(TaskStore.self) var taskStore
-    @Environment(AppSettings.self) var appSettings
 
     let onPauseResume: () -> Void
     let onCompleteEarly: () -> Void
@@ -17,66 +16,81 @@ struct PomodoroActiveBlock: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            mainRow
-            controlsRow
+        VStack(alignment: .leading, spacing: 6) {
+            compactRow
             if let kind = pendingConfirm {
                 confirmBanner(kind)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(NotchTheme.surfaceSubtle, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var mainRow: some View {
-        HStack(spacing: 14) {
+    private var compactRow: some View {
+        HStack(spacing: 10) {
             PomodoroPieView(
                 remainingFraction: remainingFraction,
                 phase: timerService.currentPhase,
-                style: .large,
-                centerText: mmss(timerService.remainingSeconds)
+                style: .compact
             )
-            .opacity(emojiPieOpacity)
+            .opacity(emojiOpacity)
 
-            VStack(alignment: .leading, spacing: 4) {
-                taskTitleRow
-                phaseRow
-                priorityAndDotsRow
-                remainingLabel
+            Text(taskTitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 8)
+
+            Text(mmss(timerService.remainingSeconds))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.snappy(duration: 0.28), value: timerService.remainingSeconds)
+
+            iconButton(
+                systemName: pauseResumeIcon,
+                tint: NotchTheme.textPrimary,
+                helpKey: pauseResumeLabel,
+                action: onPauseResume
+            )
+            iconButton(
+                systemName: "checkmark",
+                tint: Color(red: 0.34, green: 0.78, blue: 0.51),
+                helpKey: "pomodoro.action.completeEarly"
+            ) {
+                pendingConfirm = .completeEarly
+            }
+            iconButton(
+                systemName: "xmark",
+                tint: Color(red: 0.93, green: 0.36, blue: 0.36),
+                helpKey: "pomodoro.action.abandon"
+            ) {
+                pendingConfirm = .abandon
             }
         }
     }
 
-    private var controlsRow: some View {
-        HStack(spacing: 8) {
-            Button {
-                onPauseResume()
-            } label: {
-                Label(pauseResumeLabel, systemImage: pauseResumeIcon)
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button {
-                pendingConfirm = .completeEarly
-            } label: {
-                Label("pomodoro.action.completeEarly", systemImage: "checkmark.circle")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button {
-                pendingConfirm = .abandon
-            } label: {
-                Label("pomodoro.action.abandon", systemImage: "xmark.circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+    private func iconButton(
+        systemName: String,
+        tint: Color,
+        helpKey: LocalizedStringKey,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(NotchTheme.surface))
+                .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
+        .help(helpKey)
     }
 
     private var pauseResumeLabel: LocalizedStringKey {
@@ -105,13 +119,11 @@ struct PomodoroActiveBlock: View {
                 }
                 pendingConfirm = nil
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(NotchPillButtonStyle(prominent: true))
             Button("button.cancel") { pendingConfirm = nil }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(NotchPillButtonStyle())
         }
-        .padding(8)
+        .padding(.horizontal, 8).padding(.vertical, 6)
         .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
     }
 
@@ -135,75 +147,17 @@ struct PomodoroActiveBlock: View {
         return 0
     }
 
-    private var emojiPieOpacity: Double {
+    private var emojiOpacity: Double {
         if case .paused = timerService.state { return 0.55 }
         return 1.0
     }
 
-    private var taskTitleRow: some View {
-        let title: String = {
-            if case let .running(ctx) = timerService.state,
-               let id = ctx.taskID,
-               let task = taskStore.tasks.first(where: { $0.id == id }) {
-                return task.title
-            }
-            if case let .paused(ctx) = timerService.state,
-               let id = ctx.taskID,
-               let task = taskStore.tasks.first(where: { $0.id == id }) {
-                return task.title
-            }
-            return String(localized: "pomodoro.active.noTask")
-        }()
-        return Text(title)
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(NotchTheme.textPrimary)
-            .lineLimit(1)
-    }
-
-    private var phaseRow: some View {
-        let phaseLabel = phaseName(timerService.currentPhase)
-        let counterStr: String
-        let nextStr: String
-        if timerService.lastAutoFlow {
-            let n = timerService.workCounterSinceLongBreak + (timerService.currentPhase == .work ? 1 : 0)
-            let m = appSettings.pomodoroLongBreakInterval
-            counterStr = String(format: String(localized: "pomodoro.phase.counter"), n, m)
-            nextStr = nextPhaseLabel()
-        } else {
-            counterStr = String(localized: "pomodoro.phase.singleWork")
-            nextStr = ""
+    private var taskTitle: String {
+        if let id = currentTaskID,
+           let task = taskStore.tasks.first(where: { $0.id == id }) {
+            return task.title
         }
-        return HStack(spacing: 6) {
-            Text(phaseLabel).font(.system(size: 11)).foregroundStyle(NotchTheme.textSecondary)
-            Text("·").foregroundStyle(NotchTheme.textTertiary)
-            Text(counterStr).font(.system(size: 11)).foregroundStyle(NotchTheme.textSecondary)
-            if !nextStr.isEmpty {
-                Text("·").foregroundStyle(NotchTheme.textTertiary)
-                Text(String(format: String(localized: "pomodoro.phase.next"), nextStr))
-                    .font(.system(size: 11)).foregroundStyle(NotchTheme.textTertiary)
-            }
-        }
-    }
-
-    private var priorityAndDotsRow: some View {
-        Group {
-            if let taskID = currentTaskID,
-               let task = taskStore.tasks.first(where: { $0.id == taskID }) {
-                HStack(spacing: 6) {
-                    Text(priorityLabel(task.priority))
-                        .font(.system(size: 10))
-                        .foregroundStyle(NotchTheme.textTertiary)
-                    Text("·").foregroundStyle(NotchTheme.textTertiary)
-                    completedDots(task.completedPomodoros)
-                }
-            }
-        }
-    }
-
-    private var remainingLabel: some View {
-        Text(String(format: String(localized: "pomodoro.active.remaining"), mmss(timerService.remainingSeconds)))
-            .font(.system(size: 12, design: .monospaced))
-            .foregroundStyle(NotchTheme.textPrimary)
+        return String(localized: "pomodoro.active.noTask")
     }
 
     private var currentTaskID: UUID? {
@@ -216,48 +170,5 @@ struct PomodoroActiveBlock: View {
         let m = seconds / 60
         let s = seconds % 60
         return String(format: "%02d:%02d", m, s)
-    }
-
-    private func phaseName(_ p: PomodoroPhase) -> String {
-        switch p {
-        case .work: return String(localized: "pomodoro.phase.work")
-        case .shortBreak: return String(localized: "pomodoro.phase.shortBreak")
-        case .longBreak: return String(localized: "pomodoro.phase.longBreak")
-        case .idle: return ""
-        }
-    }
-
-    private func nextPhaseLabel() -> String {
-        let m = appSettings.pomodoroLongBreakInterval
-        switch timerService.currentPhase {
-        case .work:
-            let n = timerService.workCounterSinceLongBreak + 1
-            return (n % m == 0)
-                ? String(localized: "pomodoro.phase.longBreak")
-                : String(localized: "pomodoro.phase.shortBreak")
-        case .shortBreak, .longBreak: return String(localized: "pomodoro.phase.work")
-        case .idle: return ""
-        }
-    }
-
-    private func priorityLabel(_ p: TodoTask.Priority) -> String {
-        switch p {
-        case .low: return String(localized: "pomodoro.priority.low")
-        case .medium: return String(localized: "pomodoro.priority.medium")
-        case .high: return String(localized: "pomodoro.priority.high")
-        }
-    }
-
-    private func completedDots(_ n: Int) -> some View {
-        HStack(spacing: 2) {
-            ForEach(0 ..< 5, id: \.self) { i in
-                Circle()
-                    .fill(i < min(n, 5) ? NotchTheme.accent : NotchTheme.surfaceEmphasis)
-                    .frame(width: 4, height: 4)
-            }
-            if n > 5 {
-                Text("+").font(.system(size: 8)).foregroundStyle(NotchTheme.textTertiary)
-            }
-        }
     }
 }

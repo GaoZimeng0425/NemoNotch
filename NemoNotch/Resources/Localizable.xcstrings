@@ -1574,13 +1574,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "+ New Pomodoro"
+            "value" : "New Pomodoro"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "+ 新建番茄钟"
+            "value" : "新建番茄钟"
           }
         }
       }
@@ -2067,13 +2067,47 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "+ Add notes"
+            "value" : "Add notes"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "+ 添加备注"
+            "value" : "添加备注"
+          }
+        }
+      }
+    },
+    "pomodoro.quick.customDuration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom..."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义..."
+          }
+        }
+      }
+    },
+    "pomodoro.quick.duration.default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认"
           }
         }
       }
@@ -2299,6 +2333,23 @@
         }
       }
     },
+    "pomodoro.todo.active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进行中"
+          }
+        }
+      }
+    },
     "pomodoro.todo.countHeader" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2333,6 +2384,23 @@
         }
       }
     },
+    "pomodoro.todo.deleteConfirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete this TODO?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这个待办？"
+          }
+        }
+      }
+    },
     "pomodoro.todo.edit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2356,13 +2424,47 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No tasks. Use the hotkey or + New"
+            "value" : "No tasks yet"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "暂无任务，按快捷键或点击 + 新建"
+            "value" : "暂无任务"
+          }
+        }
+      }
+    },
+    "pomodoro.todo.markDone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark complete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标记完成"
+          }
+        }
+      }
+    },
+    "pomodoro.todo.markOpen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark open"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标记未完成"
           }
         }
       }
@@ -2397,6 +2499,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示已完成"
+          }
+        }
+      }
+    },
+    "pomodoro.todo.untitled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(Untitled)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（未命名）"
           }
         }
       }
