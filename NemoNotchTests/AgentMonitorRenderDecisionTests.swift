@@ -8,14 +8,16 @@ struct AgentMonitorRenderDecisionTests {
         openClawPending: Bool = false,
         openClawInstalled: Bool = false,
         openClawEnabled: Bool = true,
-        hermesInstalled: Bool = false
+        hermesInstalled: Bool = false,
+        hermesEnabled: Bool = true
     ) -> AgentMonitorRenderDecision.Mode {
         AgentMonitorRenderDecision.decide(
             hasOnlineMonitor: hasOnlineMonitor,
             openClawPendingApproval: openClawPending,
             openClawIsInstalled: openClawInstalled,
             openClawUserEnabled: openClawEnabled,
-            hermesIsInstalled: hermesInstalled
+            hermesIsInstalled: hermesInstalled,
+            hermesUserEnabled: hermesEnabled
         )
     }
 
@@ -59,5 +61,17 @@ struct AgentMonitorRenderDecisionTests {
         // Honor the user's disable.
         let mode = decide(openClawPending: true, openClawEnabled: false)
         #expect(mode == .setupCards(showHermesCard: true, openClaw: .hidden))
+    }
+
+    @Test("User disabled Hermes + nothing installed → setupCards without Hermes card")
+    func userDisabledHidesHermesCard() {
+        let mode = decide(hermesEnabled: false)
+        #expect(mode == .setupCards(showHermesCard: false, openClaw: .installHintCard))
+    }
+
+    @Test("User disabled both Hermes and OpenClaw → setupCards with neither card")
+    func userDisabledBothHidesEverything() {
+        let mode = decide(openClawEnabled: false, hermesEnabled: false)
+        #expect(mode == .setupCards(showHermesCard: false, openClaw: .hidden))
     }
 }

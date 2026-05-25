@@ -30,7 +30,8 @@ struct AgentMonitorTab: View {
             openClawPendingApproval: openClaw.pendingApproval != nil,
             openClawIsInstalled: openClaw.isInstalled,
             openClawUserEnabled: appSettings.openClawEnabled,
-            hermesIsInstalled: hermesService.isHookInstalled
+            hermesIsInstalled: hermesService.isHookInstalled,
+            hermesUserEnabled: appSettings.hermesEnabled
         )
     }
 

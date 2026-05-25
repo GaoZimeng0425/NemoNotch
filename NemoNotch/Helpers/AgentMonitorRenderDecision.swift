@@ -30,7 +30,8 @@ enum AgentMonitorRenderDecision {
         openClawPendingApproval: Bool,
         openClawIsInstalled: Bool,
         openClawUserEnabled: Bool,
-        hermesIsInstalled: Bool
+        hermesIsInstalled: Bool,
+        hermesUserEnabled: Bool
     ) -> Mode {
         if hasOnlineMonitor {
             return .agentSections
@@ -55,6 +56,6 @@ enum AgentMonitorRenderDecision {
             .installHintCard
         }
 
-        return .setupCards(showHermesCard: true, openClaw: openClawKind)
+        return .setupCards(showHermesCard: hermesUserEnabled, openClaw: openClawKind)
     }
 }
