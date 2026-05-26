@@ -25,7 +25,7 @@ struct SettingsView: View {
                 .tag(1)
 
             claudeView
-                .tabItem { Label("settings.tab.ai_agents", systemImage: "cpu") }
+                .tabItem { Label("settings.tab.ai_agents", systemImage: "sparkles") }
                 .tag(2)
 
             notificationListView
@@ -252,7 +252,7 @@ struct SettingsView: View {
             // Claude Code
             hookSection(
                 name: "Claude Code",
-                icon: "cpu",
+                icon: "sparkles",
                 isInstalled: aiService.claudeProvider.isHookInstalled,
                 onInstall: {
                     appSettings.claudeEnabled = true
@@ -269,7 +269,7 @@ struct SettingsView: View {
             // Gemini CLI
             hookSection(
                 name: "Gemini CLI",
-                icon: "sparkle",
+                icon: "sparkles",
                 isInstalled: aiService.geminiProvider.isHookInstalled,
                 onInstall: {
                     appSettings.geminiEnabled = true
@@ -286,7 +286,7 @@ struct SettingsView: View {
             // Hermes Agent
             hookSection(
                 name: "Hermes Agent",
-                icon: "bird",
+                icon: "brain",
                 isInstalled: hermesService.isHookInstalled,
                 onInstall: {
                     appSettings.hermesEnabled = true
@@ -357,7 +357,7 @@ struct SettingsView: View {
 
     private var openClawSection: some View {
         VStack(spacing: 8) {
-            Label("settings.openclaw.title", systemImage: "ladybug")
+            Label("settings.openclaw.title", systemImage: "brain")
                 .font(.title3)
                 .foregroundStyle(.primary)
 

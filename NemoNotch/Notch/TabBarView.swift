@@ -16,6 +16,10 @@ struct NotchTabBar: View {
     let centerY: CGFloat
     let onSelect: (Tab) -> Void
 
+    /// Add state to track bounces per tab to avoid animation when de-selecting.
+    /// We only increment this when the user clicks a tab.
+    @State private var bounceTriggers: [Tab: Int] = [:]
+
     var body: some View {
         let count = tabs.count
         let iconSize: CGFloat = count > 5 ? 16 : 18
@@ -51,11 +55,15 @@ struct NotchTabBar: View {
     ) -> some View {
         let isSelected = tab == selected
         return Button {
+            // Only increment the bounce trigger for the tab that was clicked.
+            // This ensures the SF Symbol animation only plays on activation.
+            bounceTriggers[tab, default: 0] += 1
             onSelect(tab)
         } label: {
             Image(systemName: tab.icon)
                 .font(.system(size: fontSize, weight: isSelected ? .semibold : .regular, design: .rounded))
-                .foregroundStyle(isSelected ? NotchTheme.textPrimary : NotchTheme.textTertiary)
+                .symbolEffect(.bounce.down, value: bounceTriggers[tab, default: 0])
+                .foregroundStyle(isSelected ? NotchTheme.accent : NotchTheme.textTertiary)
                 .frame(width: iconSize, height: iconSize)
                 .background(
                     RoundedRectangle(cornerRadius: iconSize / 3, style: .continuous)
@@ -65,6 +73,15 @@ struct NotchTabBar: View {
                 .padding(.vertical, hitVPadding)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchTabButtonStyle())
+    }
+}
+
+private struct NotchTabButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
