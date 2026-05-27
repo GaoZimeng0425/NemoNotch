@@ -7,6 +7,11 @@ final class QuickStartWindowController {
     private var clickOutsideMonitor: Any?
     private var previousApp: NSRunningApplication?
     private var editingTaskID: UUID?
+    /// When the panel was last shown. Clicks within `dismissGrace` of this are ignored:
+    /// activating the app from background can replay the opening click into the global
+    /// click-outside monitor (and re-fire the toggle), instantly self-dismissing the panel.
+    private var presentedAt: Date = .distantPast
+    private let dismissGrace: TimeInterval = 0.25
 
     private let timerService: PomodoroTimerService
     private let taskStore: TaskStore
@@ -28,6 +33,9 @@ final class QuickStartWindowController {
 
     func toggle() {
         if let window, window.isVisible {
+            // Ignore the duplicate invocation that can arrive when the trigger button is
+            // clicked from a background window (app activation replays the click).
+            if Date().timeIntervalSince(presentedAt) < dismissGrace { return }
             dismiss()
         } else {
             present(editingTask: nil)
@@ -51,12 +59,15 @@ final class QuickStartWindowController {
         editingTaskID = editingTask?.id
         let w = window ?? QuickStartWindow()
         window = w
-        w.contentViewController = makeHost(editingTask: editingTask)
+        let host = makeHost(editingTask: editingTask)
+        w.contentViewController = host
+        w.setContentSize(host.view.fittingSize)
         captureFrontmostApp()
         center(w)
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        installClickOutsideMonitor(for: w)
+        presentedAt = Date()
+        installClickOutsideMonitor()
         LogService.debug(
             "QuickStartWindow present (\(editingTask == nil ? "create" : "edit"))",
             category: "QuickStart"
@@ -64,7 +75,7 @@ final class QuickStartWindowController {
     }
 
     private func makeHost(editingTask: TodoTask?) -> NSHostingController<some View> {
-        NSHostingController(
+        let controller = NSHostingController(
             rootView: QuickStartFormView(
                 editingTask: editingTask,
                 onConfirm: { [weak self] result in self?.handleConfirm(result) },
@@ -76,6 +87,11 @@ final class QuickStartWindowController {
             .environment(appSettings)
             .environment(notificationMonitor)
         )
+        // Keep the hosting view transparent so the rounded-corner area outside the
+        // SwiftUI card stays clear — otherwise AppKit paints (and shadows) a black square.
+        controller.view.wantsLayer = true
+        controller.view.layer?.backgroundColor = NSColor.clear.cgColor
+        return controller
     }
 
     private func center(_ w: NSWindow) {
@@ -107,15 +123,18 @@ final class QuickStartWindowController {
         }
     }
 
-    private func installClickOutsideMonitor(for window: NSWindow) {
+    private func installClickOutsideMonitor() {
         uninstallClickOutsideMonitor()
-        clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            guard let self else { return }
+        clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
             let global = NSEvent.mouseLocation
-            if !window.frame.contains(global) {
-                Task { @MainActor in self.dismiss() }
+            Task { @MainActor in
+                guard let self, let window = self.window, window.isVisible else { return }
+                // Skip the click burst right after present (activation can replay it here).
+                if Date().timeIntervalSince(self.presentedAt) < self.dismissGrace { return }
+                if !window.frame.contains(global) {
+                    self.dismiss()
+                }
             }
-            _ = event
         }
     }
 

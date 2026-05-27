@@ -56,7 +56,7 @@ struct AgentMonitorTab: View {
 
     private var offlineState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "ladybug.fill")
+            Image(systemName: "brain")
                 .font(.system(size: 28))
                 .foregroundStyle(NotchTheme.textTertiary)
             Text("agents.all_offline")
@@ -497,7 +497,7 @@ struct AgentMessagePreview: View {
     private func symbolForRole(_ msg: ChatMessage) -> String {
         switch msg.role {
         case .user: "person.fill"
-        case .assistant: msg.toolName != nil ? "wrench.and.screwdriver.fill" : "cpu"
+        case .assistant: msg.toolName != nil ? "wrench.and.screwdriver.fill" : "sparkles"
         case .thought: "lightbulb.fill"
         case .tool, .toolResult: "doc.text.fill"
         case .system: "info.circle.fill"

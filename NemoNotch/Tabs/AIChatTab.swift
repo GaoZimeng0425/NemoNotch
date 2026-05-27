@@ -205,7 +205,7 @@ struct AIChatTab: View {
 
     private var idleState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "cpu")
+            Image(systemName: "sparkles")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(NotchTheme.textSecondary)
             Text("ai.no_active_sessions")
@@ -293,14 +293,14 @@ struct AIChatTab: View {
                     case .claude:
                         ClaudeCrabIcon(size: 22, color: .white)
                     case .gemini:
-                        Image(systemName: "sparkle")
+                        Image(systemName: "sparkles")
                             .font(.system(size: 19, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                     }
                 } else {
                     HStack(spacing: 0) {
                         ClaudeCrabIcon(size: 18, color: .white)
-                        Image(systemName: "sparkle")
+                        Image(systemName: "sparkles")
                             .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                     }
@@ -576,7 +576,7 @@ struct AIChatTab: View {
         case .claude:
             ClaudeCrabIcon(size: size, color: sourceTint(source))
         case .gemini:
-            Image(systemName: "sparkle")
+            Image(systemName: "sparkles")
                 .font(.system(size: size * 0.85, weight: .semibold))
                 .foregroundStyle(sourceTint(source))
         }

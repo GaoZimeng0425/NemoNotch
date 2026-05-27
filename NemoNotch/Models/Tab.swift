@@ -15,8 +15,8 @@ enum Tab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview: "rectangle.3.group"
-        case .claude: "cpu"
-        case .agents: "ladybug.fill"
+        case .claude: "sparkles"
+        case .agents: "brain"
         case .launcher: "square.grid.2x2"
         case .pomodoro: "timer"
         case .system: "gearshape.2"

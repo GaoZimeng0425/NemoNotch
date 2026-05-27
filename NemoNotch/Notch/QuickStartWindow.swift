@@ -9,10 +9,13 @@ final class QuickStartWindow: NSPanel {
             defer: false
         )
         isFloatingPanel = true
-        level = .floating
+        // Above the notch panel (.statusBar + 8) so the popup is never occluded by it.
+        level = .statusBar + 9
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // Shadow is drawn in SwiftUI (with transparent padding for blur room); a native
+        // window shadow would be cast from the rectangular frame and clip into a black square.
+        hasShadow = false
         isMovableByWindowBackground = true
         collectionBehavior = [.canJoinAllSpaces, .transient]
         hidesOnDeactivate = false
@@ -95,6 +98,8 @@ struct QuickStartFormView: View {
                 .stroke(NotchTheme.stroke, lineWidth: 0.6)
         )
         .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
+        // Transparent margin so the shadow blur has room and isn't clipped to a square by the window edge.
+        .padding(NotchConstants.openedShadowRadius + 6)
         .onAppear {
             hydrateIfNeeded()
             titleFocused = true
