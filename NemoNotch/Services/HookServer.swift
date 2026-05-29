@@ -242,6 +242,24 @@ final class HookServer {
         }
     }
 
+    /// Silently drop pending permission(s) for a session WITHOUT sending a
+    /// decision. Used when a tool completes (PostToolUse): the request is moot
+    /// because the tool already ran — approved here, approved directly in the
+    /// terminal, or timed out — so a late allow/deny would be wrong. Closing the
+    /// (usually already-dead) connection just releases the held socket.
+    func clearPendingPermissions(sessionId: String) {
+        let matching = pendingPermissions.keys.filter { $0.hasPrefix(sessionId + ":") }
+        for key in matching {
+            if let conn = pendingPermissions.removeValue(forKey: key) {
+                conn.cancel()
+                LogService.debug(
+                    "Cleared pending permission \(key) on tool completion",
+                    category: "HookServer"
+                )
+            }
+        }
+    }
+
     private func sendJSON(
         _ connection: NWConnection,
         status: String = "200 OK",
