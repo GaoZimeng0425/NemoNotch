@@ -69,6 +69,8 @@ final class SystemService: LifecycleAware {
     deinit { MainActor.assumeIsolated { timer?.invalidate() } }
 
     func update() {
+        // uitest 下保留 UITestSeeder 注入的假数据,禁止实时采样覆盖。
+        if UITestMode.isActive { return }
         updateCPU()
         updateMemory()
         updateBattery()

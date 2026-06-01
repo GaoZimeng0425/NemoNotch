@@ -39,7 +39,9 @@ enum UITestSeeder {
         s.position = 96
         s.isPlaying = true
         s.appName = "Music"
-        s.appBundleIdentifier = "com.apple.Music"
+        // 故意不设 KnownPlayer bundle id:否则 Overview 会因缺少 Automation 授权
+        // 渲染权限卡而非正在播放卡。留空走 MediaRemote 路径,直接显示 now-playing。
+        s.appBundleIdentifier = nil
         s.artworkData = makeArtwork(
             top: NSColor(red: 0.42, green: 0.20, blue: 0.62, alpha: 1),
             bottom: NSColor(red: 0.95, green: 0.35, blue: 0.45, alpha: 1),
@@ -164,6 +166,10 @@ enum UITestSeeder {
         system.memoryUsed = 11_200_000_000
         system.batteryLevel = 76
         system.isCharging = true
+        system.diskTotal = 1_000_000_000_000
+        system.diskFree = 412_000_000_000
+        system.uploadSpeed = 11100
+        system.downloadSpeed = 38900
     }
 
     // MARK: - AI Chat
@@ -232,15 +238,6 @@ enum UITestSeeder {
                     workspace: "/Users/dev/Projects/dashboard",
                     lastEventTime: Date().addingTimeInterval(-30)
                 ),
-                MonitoredAgent(
-                    id: "h2",
-                    name: "writer",
-                    emoji: "✍️",
-                    state: .speaking,
-                    lastMessage: "Drafting the migration guide section 2.",
-                    workspace: "/Users/dev/Projects/docs",
-                    lastEventTime: Date().addingTimeInterval(-90)
-                ),
             ]
         )
         let openClaw = UITestMockAgentMonitor(
@@ -300,7 +297,7 @@ enum UITestSeeder {
     /// 坐标为 screencapture 习惯(原点=主屏左上,y 向下),单位点。
     static func writeCaptureRect(for tab: Tab, on screen: NSScreen) {
         let width: CGFloat = (tab == .overview) ? NotchConstants.overviewOpenedWidth : NotchConstants.openedWidth
-        let height: CGFloat = NotchConstants.openedHeight + 8
+        let height: CGFloat = NotchConstants.openedHeight
         let x = screen.frame.midX - width / 2
         let y: CGFloat = 0 // 面板从刘海顶端下垂,内容顶 = 屏顶
         let line = "\(Int(x)) \(Int(y)) \(Int(width)) \(Int(height))\n"
