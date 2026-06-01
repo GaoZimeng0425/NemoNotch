@@ -32,7 +32,8 @@ test -d "$APP" || { echo "构建产物未找到: $APP"; exit 1; }
 
 for tab in "${TABS[@]}"; do
   echo "==> 截图 $tab"
-  rm -f "$RECT_FILE"
+  # 每次启动前清掉临时种子文件,否则 TaskStore 会在持久文件上反复追加,列表越积越多。
+  rm -f "$RECT_FILE" /tmp/nemonotch-uitest-tasks.json /tmp/nemonotch-uitest-history.json
   "$APP/Contents/MacOS/NemoNotch" --uitest --tab="$tab" &
   PID=$!
   wait_for 1.6   # 等开屏 + 内容渲染
@@ -40,6 +41,7 @@ for tab in "${TABS[@]}"; do
   RECT=$(tr ' ' ',' < "$RECT_FILE" | tr -d '\n')
   screencapture -x -R"$RECT" "$OUT_DIR/tab-$tab.png"
   kill "$PID" 2>/dev/null || true
+  wait "$PID" 2>/dev/null || true   # 确保实例完全退出再起下一个,避免端口/浮层残留
   wait_for 0.4
 done
 

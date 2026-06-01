@@ -1,13 +1,13 @@
 import AppKit
-import EventKit
 import Foundation
 
 /// UI 测试/截图模式下,把各 @Observable service 填成营销级活跃态。
 /// 仅在 `UITestMode.isActive` 时由 AppDelegate 调用。
 @MainActor
 enum UITestSeeder {
-    /// 临时 tasks 文件,避免污染 ~/.NemoNotch/tasks.json。
+    /// 临时 tasks / history 文件,避免污染 ~/.NemoNotch/ 下的真实数据。
     static let tasksURL = URL(fileURLWithPath: "/tmp/nemonotch-uitest-tasks.json")
+    static let historyURL = URL(fileURLWithPath: "/tmp/nemonotch-uitest-history.json")
 
     static func seed(
         media: MediaService,
@@ -264,10 +264,10 @@ enum UITestSeeder {
 
     private static func seedPomodoro(_ pomodoro: PomodoroTimerService, tasks: TaskStore) {
         let t1 = tasks.add(
-            title: "Ship uitest screenshots",
+            title: "Redesign onboarding flow",
             priority: .high,
             notes: "",
-            tags: ["nemonotch"],
+            tags: ["design"],
             dueDate: nil
         )
         tasks.update(t1) { $0.completedPomodoros = 3 }

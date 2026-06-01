@@ -163,7 +163,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         systemService = system
 
         let tasks = TaskStore(fileURL: UITestMode.isActive ? UITestSeeder.tasksURL : TaskStore.defaultURL)
-        let history = PomodoroHistoryStore()
+        let history = PomodoroHistoryStore(fileURL: UITestMode.isActive ? UITestSeeder.historyURL : PomodoroHistoryStore
+            .defaultURL)
         let notificationPermission = NotificationPermissionMonitor()
         let pomodoro = PomodoroTimerService(
             taskStore: tasks,
