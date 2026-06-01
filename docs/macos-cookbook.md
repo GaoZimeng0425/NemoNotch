@@ -23,6 +23,7 @@
 17. [Architecture patterns](#17-architecture-patterns)
 18. [Logging conventions](#18-logging-conventions)
 19. [Reference-projects index](#19-reference-projects-index)
+20. [UI-test screenshot harness (`--uitest`)](#20-ui-test-screenshot-harness---uitest)
 
 ---
 
@@ -2499,3 +2500,15 @@ Mirror of CLAUDE.md's "Reference Projects" table — kept here so the cookbook i
 | Status icons | **NotchNook** | Notch-side icon layout style |
 
 ---
+
+## 20. UI-test screenshot harness (`--uitest`)
+
+Because the notch panel is a hover/hotkey-summoned borderless `NSPanel` whose content depends on live external state (calendar, media, AI sessions, agents), there is no clean way to script "open tab X with good-looking data and screenshot it." The `--uitest` mode makes the app **self-driving and deterministic** so a shell script can capture every tab. Pattern (no XCUITest target, no `project.pbxproj` edits):
+
+- **Arg gate** — `UITestMode` (`NemoNotch/Helpers/UITestMode.swift`) reads `ProcessInfo.processInfo.arguments` for `--uitest` and `--tab=<rawValue>`. Pure `isActive(in:)`/`tab(in:)` are unit-tested; runtime `isActive`/`tab` read the real process args.
+- **Side-effect suppression** — `applicationDidFinishLaunching` gates every live subsystem behind `if !UITestMode.isActive`: `MediaService(disableLiveUpdates:)` skips the perl NowPlaying daemon + polling, and `HookServer.start()` / OpenClaw+Hermes `connect()` / `MediaAutomationPermissionMonitor.startProbing()` / weather network are not called. Critical: this avoids the second instance fighting the installed app for the HookServer TCP port. `SystemService.update()` early-returns under uitest so its 2 s sampler can't overwrite seeded process rows.
+- **Seeding** — `UITestSeeder` (`NemoNotch/Helpers/UITestSeeder.swift`) writes marketing-quality state directly into each `@Observable` service. `var` state is set directly; `private(set)` state gets a tiny `seedForUITest(...)` entry (e.g. `CalendarService`). `TaskStore(fileURL:)` is pointed at a temp file so seeding never touches `~/.NemoNotch/tasks.json`. The Agents tab is seeded by registering a mock `MultiAgentMonitor` (`UITestMockAgentMonitor`, `isInstalled`/`isOnline` = true) rather than faking OpenClaw/Hermes internals. Album art is drawn programmatically (`NSGradient` + glyph → PNG) to avoid bundling copyrighted assets.
+- **Stay-open** — `NotchCoordinator.init` skips `setupEventMonitoring()` when `UITestMode.isActive`, so the programmatically-opened panel does not auto-close on mouse-outside. The app opens via `notchOpen(tab:on:)` forced onto the built-in notch screen (`NSScreen.first { $0.isBuiltInDisplay && $0.hasNotch }`), independent of cursor position.
+- **Now-playing vs permission card gotcha** — seeding `playbackState.appBundleIdentifier` to a `KnownPlayer` (Music/Spotify) makes Overview render the Automation-permission card instead of the track. Leave the bundle id `nil` to force the MediaRemote/now-playing path.
+- **Capture geometry** — on open, `UITestSeeder.writeCaptureRect(for:on:)` writes the panel's `screencapture`-style rect (origin = main-display top-left, y down) to `/tmp/nemonotch-uitest.rect`: `x = screen.frame.midX - width/2`, `y = 0`, `width = overviewOpenedWidth(700)|openedWidth(560)`, `height = openedHeight(328)`. The script reads this file per tab (width differs by tab) and runs `screencapture -x -R<x,y,w,h>`.
+- **Orchestration** — `scripts/uitest-screenshots.sh` quits the running install (so two notch overlays don't ghost), `xcodebuild`-builds Debug, then per tab: launch `NemoNotch.app --uitest --tab=<tab>`, `osascript -e 'delay …'` (not shell `sleep`), read the rect file, `screencapture`, kill the instance — then reopens the user's install. Output → `docs/images/tab-*.png`.
