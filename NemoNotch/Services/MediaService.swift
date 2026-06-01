@@ -41,11 +41,15 @@ final class MediaService {
     private var reconcileGuardExpiresAt: Date?
     private static let guardMaxDuration: TimeInterval = 3.0
 
-    init() {
+    init(disableLiveUpdates: Bool = false) {
         remote.registerForNotifications()
         remote.setCanBeNowPlayingApplication(false)
         MediaBridge.permissionDeniedCallback = { [weak self] bundleID in
             self?.permissionDeniedHandler?(bundleID)
+        }
+        guard !disableLiveUpdates else {
+            LogService.info("MediaService init (uitest: live updates disabled)", category: "MediaService")
+            return
         }
         setupNotifications()
         startPolling()

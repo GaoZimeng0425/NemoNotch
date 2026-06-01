@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = LogService.shared
 
         let settings = AppSettings()
-        let media = MediaService()
+        let media = MediaService(disableLiveUpdates: UITestMode.isActive)
         let permissionMonitor = MediaAutomationPermissionMonitor(
             monitoredBundles: KnownPlayer.allCases.map(\.rawValue)
         )
@@ -119,19 +119,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.automationAuthorizedHandler = { [weak permissionMonitor] bundleID in
             permissionMonitor?.recordAuthorized(bundleID: bundleID)
         }
-        permissionMonitor.startProbing()
+        if !UITestMode.isActive { permissionMonitor.startProbing() }
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
 
-        aiMonitor.startServer()
+        if !UITestMode.isActive { aiMonitor.startServer() }
 
         let openClaw = OpenClawService()
-        openClaw.connect()
+        if !UITestMode.isActive { openClaw.connect() }
         openClawService = openClaw
 
         let hermes = HermesService()
-        hermes.connect()
+        if !UITestMode.isActive { hermes.connect() }
         aiMonitor.hermesService = hermes
         hermesService = hermes
 
@@ -151,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notificationService = notification
 
         let weather = WeatherService()
-        if !settings.weatherCity.isEmpty {
+        if !UITestMode.isActive, !settings.weatherCity.isEmpty {
             weather.updateCity(settings.weatherCity)
         }
         weatherService = weather
@@ -162,8 +162,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let system = SystemService()
         systemService = system
 
-        let tasks = TaskStore()
-        let history = PomodoroHistoryStore()
+        let tasks = TaskStore(fileURL: UITestMode.isActive ? UITestSeeder.tasksURL : TaskStore.defaultURL)
+        let history = PomodoroHistoryStore(fileURL: UITestMode.isActive ? UITestSeeder.historyURL : PomodoroHistoryStore
+            .defaultURL)
         let notificationPermission = NotificationPermissionMonitor()
         let pomodoro = PomodoroTimerService(
             taskStore: tasks,
@@ -223,6 +224,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator)
+
+        if UITestMode.isActive {
+            UITestSeeder.seed(
+                media: media,
+                calendar: calendar,
+                weather: weather,
+                system: system,
+                aiStore: aiMonitor.store,
+                registry: registry,
+                pomodoro: pomodoro,
+                tasks: tasks
+            )
+            let target = NSScreen.screens.first(where: { $0.isBuiltInDisplay && $0.hasNotch })
+                ?? NSScreen.main
+            let tab = UITestMode.tab
+            if let target {
+                UITestSeeder.writeCaptureRect(for: tab, on: target)
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            notchCoordinator.notchOpen(tab: tab, on: target)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

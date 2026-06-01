@@ -3,11 +3,21 @@
 macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块多功能信息中心。
 
 <p align="center">
-  <img src="docs/images/nemo-notch.png" alt="NemoNotch Screenshot" width="700">
+  <img src="docs/images/tab-overview.png" alt="概览 — 媒体、日历与天气" width="720">
 </p>
 
 <p align="center">
-  <img src="docs/images/nemo-notch-2.png" alt="NemoNotch Screenshot" width="700">
+  <img src="docs/images/tab-claude.png" alt="AI Chat" width="380">
+  <img src="docs/images/tab-agents.png" alt="智能体" width="380">
+</p>
+
+<p align="center">
+  <img src="docs/images/tab-pomodoro.png" alt="番茄钟" width="380">
+  <img src="docs/images/tab-system.png" alt="系统" width="380">
+</p>
+
+<p align="center">
+  <img src="docs/images/tab-launcher.png" alt="启动器" width="380">
 </p>
 
 <p align="center">
@@ -16,18 +26,16 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 ## 功能
 
-### 8 个功能标签页
+### 6 个功能标签页
 
 | 标签 | 功能 |
 |------|------|
-| **媒体控制** | 实时播放控制（播放/暂停/上下曲）、专辑封面、进度条，支持 Spotify 和 Apple Music |
-| **日历** | 15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接、权限引导 |
+| **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲）、专辑封面、进度条（支持 Spotify 和 Apple Music）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
 | **AI Chat** | 统一 Claude Code 和 Gemini CLI 监控 — 会话列表、对话详情、权限审批、Context 用量进度条、子代理追踪、模型显示 |
 | **智能体** | 多代理系统状态监控，支持 OpenClaw（WebSocket）和 Hermes-agent（HTTP API），实时代理工作状态追踪 |
 | **启动器** | 应用图标网格、搜索过滤、快速启动自定义应用列表 |
 | **番茄钟** | 经典 25/5/15 周期（每 4 个工作长休息），快捷键呼出居中浮窗一键启动，notch 折叠态显示 🍅 + 饼图剩余时间；TODO 列表持久化，每个任务累计番茄钟数；结束时播放声音 + 系统通知 |
-| **天气** | 当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
-| **系统** | Top 5 进程资源排行（CPU 和内存）、应用图标、系统概览底栏（CPU / 内存 / 电池） |
+| **系统** | Top 5 进程资源排行（CPU 和内存）、应用图标、系统概览底栏（CPU / 内存 / 电池 / 网络） |
 
 ### 核心特性
 
@@ -43,7 +51,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 ## 技术栈
 
-- **Swift 5** + **SwiftUI**，纯 macOS 原生应用
+- **Swift 6** + **SwiftUI**，纯 macOS 原生应用
 - **AppKit** — 自定义 NSWindow，点击穿透，多屏幕定位
 - **MediaPlayer / MediaRemote** — 媒体播放控制
 - **EventKit** — 日历事件读取
