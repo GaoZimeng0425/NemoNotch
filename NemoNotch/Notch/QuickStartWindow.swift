@@ -19,7 +19,12 @@ final class QuickStartWindow: NSPanel {
         isMovableByWindowBackground = true
         collectionBehavior = [.canJoinAllSpaces, .transient]
         hidesOnDeactivate = false
-        animationBehavior = .utilityWindow
+        // .utilityWindow makes AppKit run an async _NSWindowTransformAnimation on every
+        // order-in/out. Reusing this panel + swapping contentViewController + rapid toggle
+        // leaves that animation's dispose block referencing freed state, over-releasing on
+        // dealloc → recurring SIGSEGV in -[_NSWindowTransformAnimation dealloc]. The panel
+        // draws its own visuals/shadow in SwiftUI, so no system window animation is wanted.
+        animationBehavior = .none
     }
 
     override var canBecomeKey: Bool {

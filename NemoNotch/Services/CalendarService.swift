@@ -82,6 +82,16 @@ final class CalendarService {
         fetchEvents()
     }
 
+    /// UI 测试种子:直接写入授权态与多日事件,绕过 EventKit。
+    func seedForUITest(events: [Date: [CalendarEvent]]) {
+        authorizationStatus = .fullAccess
+        multiDayEvents = events
+        let todayKey = startOfDay(for: Date())
+        todayEvents = (events[todayKey] ?? []).sorted { $0.startDate < $1.startDate }
+        nextEvent = todayEvents.first { !$0.isPast }
+        selectedDate = Date()
+    }
+
     private func fetchEvents() {
         guard authorizationStatus == .fullAccess else { return }
 

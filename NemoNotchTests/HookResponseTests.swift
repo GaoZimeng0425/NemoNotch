@@ -16,30 +16,37 @@ struct HookResponseTests {
         #expect(try Self.encode(.ack) == #"{"status":"ok"}"#)
     }
 
-    @Test("Allow decision encodes without reason field")
+    // Claude Code (>= 2.x) parses the permission decision from
+    // hookSpecificOutput.decision.behavior. The legacy flat {"decision":"allow"}
+    // shape is silently ignored, leaving the CLI blocked at its terminal prompt.
+
+    @Test("Allow decision nests behavior under hookSpecificOutput")
     func allow() throws {
-        #expect(try Self.encode(.decision(.allow)) == #"{"decision":"allow"}"#)
+        #expect(try Self.encode(.decision(.allow)) ==
+            #"{"hookSpecificOutput":{"decision":{"behavior":"allow"},"hookEventName":"PermissionRequest"}}"#)
     }
 
-    @Test("Deny decision encodes with reason field")
+    @Test("Deny decision encodes reason as message")
     func denyTimeout() throws {
-        #expect(try Self.encode(.decision(.deny(reason: .timeout))) == #"{"decision":"deny","reason":"timeout"}"#)
+        #expect(try Self.encode(.decision(.deny(reason: .timeout))) ==
+            #"{"hookSpecificOutput":{"decision":{"behavior":"deny","message":"timeout"},"hookEventName":"PermissionRequest"}}"#)
     }
 
     @Test("Deny with sessionEnded reason")
     func denySessionEnded() throws {
-        #expect(try Self
-            .encode(.decision(.deny(reason: .sessionEnded))) == #"{"decision":"deny","reason":"session ended"}"#)
+        #expect(try Self.encode(.decision(.deny(reason: .sessionEnded))) ==
+            #"{"hookSpecificOutput":{"decision":{"behavior":"deny","message":"session ended"},"hookEventName":"PermissionRequest"}}"#)
     }
 
     @Test("Deny with noSessionId reason")
     func denyNoSessionId() throws {
-        #expect(try Self
-            .encode(.decision(.deny(reason: .noSessionId))) == #"{"decision":"deny","reason":"no session id"}"#)
+        #expect(try Self.encode(.decision(.deny(reason: .noSessionId))) ==
+            #"{"hookSpecificOutput":{"decision":{"behavior":"deny","message":"no session id"},"hookEventName":"PermissionRequest"}}"#)
     }
 
-    @Test("Deny without explicit reason omits reason field")
+    @Test("Deny without explicit reason omits message field")
     func denyNoReason() throws {
-        #expect(try Self.encode(.decision(.deny(reason: nil))) == #"{"decision":"deny"}"#)
+        #expect(try Self.encode(.decision(.deny(reason: nil))) ==
+            #"{"hookSpecificOutput":{"decision":{"behavior":"deny"},"hookEventName":"PermissionRequest"}}"#)
     }
 }

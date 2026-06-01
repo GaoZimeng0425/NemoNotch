@@ -149,9 +149,19 @@ final class ClaudeProvider: AIProvider {
             parseConversation(for: sessionId)
 
         case "PostToolUse":
+            // A tool finishing while we still show an approval prompt means it
+            // was approved in the terminal (or the request timed out). Drop the
+            // stale pending request and clear the button so it can't be clicked
+            // into a void.
+            if store.get(sessionId)?.phase.isWaitingForApproval == true {
+                hookServer?.clearPendingPermissions(sessionId: sessionId)
+            }
             store.mutateOrCreate(sessionId, source: .claude) { session in
                 session.currentTool = nil
                 session.isPreToolUse = false
+                if session.phase.isWaitingForApproval {
+                    session.phase = session.phase.transition(to: .processing)
+                }
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
                 if let toolName = event.toolName, ["Task", "Agent"].contains(toolName) {

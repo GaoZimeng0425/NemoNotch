@@ -104,6 +104,8 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
     }
 
     private func fetchWeather(coordinate: CLLocationCoordinate2D? = nil) {
+        // uitest 下保留 UITestSeeder 注入的假天气,禁止真实网络请求覆盖(并避免无谓的 wttr.in 调用)。
+        if UITestMode.isActive { return }
         let lang = Locale.current.language.languageCode?.identifier ?? "en"
         var urlStr: String
         if !customCity.isEmpty {

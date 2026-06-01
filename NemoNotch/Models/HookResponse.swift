@@ -1,8 +1,10 @@
 import Foundation
 
-/// Response sent from HookServer back to the hook-sender.sh shell script.
-/// Wire format is JSON over HTTP/1.1; shapes must stay byte-stable so the
-/// shell-side parser (jq-based) continues to work.
+/// Response sent from HookServer back to the hook-sender.sh shell script,
+/// which echoes it to stdout for the CLI to parse. Wire format is JSON over
+/// HTTP/1.1. Claude Code (>= 2.x) reads the permission decision from
+/// `hookSpecificOutput.decision.behavior`; the legacy flat `{"decision":"allow"}`
+/// shape is silently ignored, leaving the CLI blocked at its terminal prompt.
 enum HookResponse: Codable, Equatable {
     case ack
     case decision(Decision)
@@ -26,14 +28,23 @@ enum HookResponse: Codable, Equatable {
             var container = encoder.container(keyedBy: AckKeys.self)
             try container.encode("ok", forKey: .status)
         case let .decision(decision):
-            var container = encoder.container(keyedBy: DecisionKeys.self)
+            var root = encoder.container(keyedBy: RootKeys.self)
+            var output = root.nestedContainer(
+                keyedBy: HookSpecificOutputKeys.self,
+                forKey: .hookSpecificOutput
+            )
+            try output.encode("PermissionRequest", forKey: .hookEventName)
+            var decisionContainer = output.nestedContainer(
+                keyedBy: DecisionKeys.self,
+                forKey: .decision
+            )
             switch decision {
             case .allow:
-                try container.encode("allow", forKey: .decision)
+                try decisionContainer.encode("allow", forKey: .behavior)
             case let .deny(reason):
-                try container.encode("deny", forKey: .decision)
+                try decisionContainer.encode("deny", forKey: .behavior)
                 if let reason {
-                    try container.encode(reason.rawValue, forKey: .reason)
+                    try decisionContainer.encode(reason.rawValue, forKey: .message)
                 }
             }
         }
@@ -49,5 +60,7 @@ enum HookResponse: Codable, Equatable {
     }
 
     private enum AckKeys: String, CodingKey { case status }
-    private enum DecisionKeys: String, CodingKey { case decision, reason }
+    private enum RootKeys: String, CodingKey { case hookSpecificOutput }
+    private enum HookSpecificOutputKeys: String, CodingKey { case hookEventName, decision }
+    private enum DecisionKeys: String, CodingKey { case behavior, message }
 }

@@ -85,7 +85,11 @@ final class NotchCoordinator {
             object: nil
         )
 
-        setupEventMonitoring()
+        // uitest 下不装鼠标事件监听:程序化 notchOpen 后面板需常驻供截图,
+        // 否则鼠标在内容区外会触发 HotkeyDismissState.shouldClose 立刻收起。
+        if !UITestMode.isActive {
+            setupEventMonitoring()
+        }
     }
 
     deinit {

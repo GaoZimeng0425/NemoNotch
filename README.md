@@ -3,11 +3,21 @@
 An interactive floating panel for the MacBook notch area, turning the notch into a multi-purpose information hub.
 
 <p align="center">
-  <img src="docs/images/nemo-notch.png" alt="NemoNotch Screenshot" width="700">
+  <img src="docs/images/tab-overview.png" alt="Overview — media, calendar & weather" width="720">
 </p>
 
 <p align="center">
-  <img src="docs/images/nemo-notch-2.png" alt="NemoNotch Screenshot" width="700">
+  <img src="docs/images/tab-claude.png" alt="AI Chat" width="380">
+  <img src="docs/images/tab-agents.png" alt="Agents" width="380">
+</p>
+
+<p align="center">
+  <img src="docs/images/tab-pomodoro.png" alt="Pomodoro" width="380">
+  <img src="docs/images/tab-system.png" alt="System" width="380">
+</p>
+
+<p align="center">
+  <img src="docs/images/tab-launcher.png" alt="Launcher" width="380">
 </p>
 
 <p align="center">
@@ -16,18 +26,16 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 ## Features
 
-### 8 Functional Tabs
+### 6 Functional Tabs
 
 | Tab | Description |
 |-----|-------------|
-| **Media** | Real-time playback controls (play/pause/next/previous), album artwork, progress bar. Supports Spotify & Apple Music |
-| **Calendar** | 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs, permission guidance |
+| **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous), album artwork, progress bar (Spotify & Apple Music); **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
 | **AI Chat** | Unified Claude Code & Gemini CLI monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
 | **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
 | **Pomodoro** | Classic 25/5/15 cycle with persistent TODO list, per-task completed-pomodoro counts, hotkey-summoned centered QuickStart panel, end-of-phase sound + system notification, collapsed-notch 🍅 + remaining-time pie |
-| **Weather** | Current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
-| **System** | Top 5 process resource ranking (CPU & memory), app icons, system summary footer (CPU / RAM / battery) |
+| **System** | Top 5 process resource ranking (CPU & memory), app icons, system summary footer (CPU / RAM / battery / network) |
 
 ### Highlights
 
@@ -43,7 +51,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 ## Tech Stack
 
-- **Swift 5** + **SwiftUI**, native macOS app
+- **Swift 6** + **SwiftUI**, native macOS app
 - **AppKit** — Custom NSWindow, click-through, multi-screen positioning
 - **MediaPlayer / MediaRemote** — Media playback control
 - **EventKit** — Calendar event access
