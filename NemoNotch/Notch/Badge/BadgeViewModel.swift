@@ -102,6 +102,12 @@ final class BadgeViewModel {
         displayedBadgeItems.count >= 2
     }
 
+    /// Activity glow for the expanded notch: amber while a session awaits
+    /// approval, green while AI is working or an agent is active, otherwise off.
+    var glowState: NotchGlow {
+        BadgeItem.glow(for: activeBadgeItems)
+    }
+
     // MARK: - Lifecycle
 
     func initialize() {

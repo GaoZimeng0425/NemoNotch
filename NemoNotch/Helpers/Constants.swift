@@ -48,6 +48,19 @@ enum NotchConstants {
     static let openedShadowRadius: CGFloat = 14
     static let openedShadowOpacity: CGFloat = 0.34
 
+    // Activity glow (expanded notch, blurred inner edge ring — never overlaps content)
+    static let glowRingOpacity: CGFloat = 0.85
+    static let glowRingWidth: CGFloat = 7
+    static let glowRingBlur: CGFloat = 9
+    /// Vertical coverage: the glow occupies this fraction of the panel height
+    /// measured from the bottom, fading to nothing above it.
+    static let glowRingCoverage: CGFloat = 0.8
+    /// Ambient breathing: glow opacity oscillates between min and max over this
+    /// period (seconds), giving a gentle "mood light" rhythm.
+    static let glowPulseDuration: Double = 2.2
+    static let glowPulseMin: Double = 0.5
+    static let glowPulseMax: Double = 1.0
+
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///
     /// AF_UNIX socket files were previously used but proved unworkable on this
