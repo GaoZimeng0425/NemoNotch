@@ -221,6 +221,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notchCoordinator.restoreSuppressionCheck = { [weak self] in
             self?.shouldSuppressPreviousAppRestore ?? false
         }
+        notchCoordinator.onOpen = { [weak self] in
+            self?.calendarService?.resetSelectedDateToToday()
+        }
         coordinator = notchCoordinator
 
         setupHotkeys(coordinator: notchCoordinator)
