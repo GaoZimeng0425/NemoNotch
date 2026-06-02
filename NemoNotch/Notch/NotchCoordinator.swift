@@ -20,6 +20,10 @@ final class NotchCoordinator {
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
+    /// Fired every time the notch transitions from closed to opened, before the
+    /// expand animation. Used to refresh per-session UI state (e.g. snap the
+    /// calendar back to today).
+    var onOpen: (() -> Void)?
 
     /// Unified across all screens — derived once from the built-in display's
     /// physical notch, or a default fallback for headless / external-only setups.
@@ -182,6 +186,7 @@ final class NotchCoordinator {
         guard let target, let slot = slots[target.displayID] else { return }
 
         captureFrontmostApp()
+        onOpen?()
         if let tab {
             selectedTab = tab
         } else if let auto = autoSelectTab?() {

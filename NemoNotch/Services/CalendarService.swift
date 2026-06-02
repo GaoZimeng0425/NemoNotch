@@ -74,6 +74,14 @@ final class CalendarService {
         return !(multiDayEvents[key]?.isEmpty ?? true)
     }
 
+    /// Snaps the selected day back to today. Called when the notch reopens so
+    /// it never lingers on a date the user browsed to in a previous session.
+    func resetSelectedDateToToday() {
+        guard !Calendar.current.isDateInToday(selectedDate) else { return }
+        LogService.debug("Reset selectedDate \(selectedDate) -> today", category: "CalendarService")
+        selectedDate = Date()
+    }
+
     private func startOfDay(for date: Date) -> Date {
         Calendar.current.startOfDay(for: date)
     }
