@@ -301,17 +301,25 @@ struct NotchView: View {
 
     // MARK: - Notch background shape
 
+    /// Activity glow for the expanded body. Only the opened, active screen
+    /// glows; collapsed and non-active screens stay dark.
+    private var notchGlow: NotchGlow {
+        effectiveStatus == .closed ? .none : (badgeViewModel?.glowState ?? .none)
+    }
+
     private func notchShape(shown: Bool) -> some View {
         NotchBackgroundView(
             status: effectiveStatus,
             notchSize: notchSize,
             cornerRadius: notchCornerRadius,
-            spacing: NotchConstants.notchBackgroundSpacing
+            spacing: NotchConstants.notchBackgroundSpacing,
+            glow: notchGlow
         )
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shown
         )
+        .animation(.easeInOut(duration: NotchConstants.fadeNormalDuration), value: notchGlow)
     }
 
     private func selectTab(_ tab: Tab) {
