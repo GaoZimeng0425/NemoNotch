@@ -62,6 +62,11 @@ final class ClaudeProvider: AIProvider {
 
                 let result = ConversationParser.parseFullResult(filePath: filePath)
                 session.messages = result.messages
+                // Record how far we've already read. Without this the first hook
+                // event re-parses the whole JSONL from offset 0 on the MainActor
+                // (up to several MB) and duplicate-appends every message. See the
+                // freeze-investigation: the post-"Allow" stall walked this path.
+                session.lastParsedOffset = result.newOffset
                 session.inputTokens = result.inputTokens
                 session.outputTokens = result.outputTokens
                 session.cacheReadTokens = result.cacheReadTokens

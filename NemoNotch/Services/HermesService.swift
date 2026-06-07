@@ -25,6 +25,10 @@ final class HermesService: MultiAgentMonitor {
     /// sessionId → recently parsed messages (max 20)
     var sessionMessages: [String: [ChatMessage]] = [:]
     private var lastMessageCounts: [String: Int] = [:]
+    /// sessionId → on-disk modification date at the last scan that parsed it.
+    /// The 3s poll skips any file whose modDate is unchanged, so static sessions
+    /// (the vast majority) are never re-deserialized. See `needsReparse`.
+    private var lastModDates: [String: Date] = [:]
 
     /// FSEvent stream for instant file change notifications
     private var eventStream: FSEventStreamRef?
@@ -71,6 +75,7 @@ final class HermesService: MultiAgentMonitor {
         pollTimer = nil
         sessionMessages = [:]
         lastMessageCounts = [:]
+        lastModDates = [:]
         isOnline = false
         LogService.info("Disconnected from Hermes monitoring", category: "HermesService")
     }
@@ -196,6 +201,15 @@ final class HermesService: MultiAgentMonitor {
 
     // MARK: - Session File Parsing
 
+    /// Whether a session file needs (re-)parsing this scan: we've either never
+    /// seen it, or its on-disk modification date advanced since we last parsed
+    /// it. Skipping unchanged files is what stops the 3s poll from
+    /// re-deserializing every session file (the freeze-investigation found this
+    /// full-parse storm dominating CPU). Pure so it can be unit-tested.
+    nonisolated static func needsReparse(currentModDate: Date, lastSeenModDate: Date?) -> Bool {
+        lastSeenModDate != currentModDate
+    }
+
     /// Full scan — called on connect and by polling timer.
     private func refreshSessions() {
         Task.detached { [weak self] in
@@ -205,6 +219,9 @@ final class HermesService: MultiAgentMonitor {
             var updates: [(sessionId: String, messages: [ChatMessage], count: Int, isActive: Bool)] = []
             // Keep active agents alive using file mod date (not Date()) so tool calls don't cause eviction
             var keepAlive: [(sessionId: String, modDate: Date)] = []
+            // modDate for every file we parsed this scan, recorded so the next
+            // poll can skip it while unchanged.
+            var modDateUpdates: [(sessionId: String, modDate: Date)] = []
             var currentSessionIds: Set<String> = []
 
             for file in files {
@@ -215,6 +232,12 @@ final class HermesService: MultiAgentMonitor {
 
                 let isActive = now.timeIntervalSince(modDate) < activeThreshold
                 if isActive { keepAlive.append((file.sessionId, modDate)) }
+
+                // Skip the expensive full read+parse for files untouched since
+                // we last looked — this is the bulk of the saved work.
+                let lastMod = await self?.lastModDates[file.sessionId]
+                guard Self.needsReparse(currentModDate: modDate, lastSeenModDate: lastMod) else { continue }
+                modDateUpdates.append((file.sessionId, modDate))
 
                 let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
 
@@ -234,6 +257,10 @@ final class HermesService: MultiAgentMonitor {
                         agent.lastEventTime = ka.modDate
                         agents[ka.sessionId] = agent
                     }
+                }
+
+                for md in modDateUpdates {
+                    lastModDates[md.sessionId] = md.modDate
                 }
 
                 for update in updates {
@@ -258,6 +285,9 @@ final class HermesService: MultiAgentMonitor {
                     lastMessageCounts.removeValue(forKey: id)
                     sessionMessages.removeValue(forKey: id)
                 }
+                for id in lastModDates.keys where !currentSessionIds.contains(id) {
+                    lastModDates.removeValue(forKey: id)
+                }
             }
         }
     }
@@ -268,6 +298,7 @@ final class HermesService: MultiAgentMonitor {
             let now = Date()
             let activeThreshold: TimeInterval = 600
             var updates: [(sessionId: String, messages: [ChatMessage], count: Int, isActive: Bool)] = []
+            var modDateUpdates: [(sessionId: String, modDate: Date)] = []
 
             for file in files {
                 let lastCount = await self?.lastMessageCounts[file.sessionId] ?? 0
@@ -278,11 +309,14 @@ final class HermesService: MultiAgentMonitor {
                 let parsed = HermesConversationParser.parseFull(filePath: file.path)
                 let recent = Array(parsed.messages.suffix(20))
 
-                let isActive: Bool = if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
-                                        let modDate = attrs[.modificationDate] as? Date {
-                    now.timeIntervalSince(modDate) < activeThreshold
+                let isActive: Bool
+                if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+                   let modDate = attrs[.modificationDate] as? Date {
+                    isActive = now.timeIntervalSince(modDate) < activeThreshold
+                    // Record so the polling scan won't re-parse what we just did.
+                    modDateUpdates.append((file.sessionId, modDate))
                 } else {
-                    true
+                    isActive = true
                 }
 
                 updates.append((file.sessionId, recent, count, isActive))
@@ -290,6 +324,9 @@ final class HermesService: MultiAgentMonitor {
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
+                for md in modDateUpdates {
+                    lastModDates[md.sessionId] = md.modDate
+                }
                 for update in updates {
                     sessionMessages[update.sessionId] = update.messages
                     lastMessageCounts[update.sessionId] = update.count

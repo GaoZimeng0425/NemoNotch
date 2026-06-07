@@ -35,16 +35,20 @@ graph TB
 
     subgraph Services["Service Layer — all @Observable"]
         MS["MediaService<br/>MediaRemote + NowPlayingCLI + MediaBridge"]
-        AIM["AICLIMonitorService<br/>Unified AI entry"]
+        APM["MediaAutomationPermissionMonitor<br/>Per-bundle AppleEvents auth probe"]
+        AIM["AICLIMonitorService<br/>Unified AI entry + owns AISessionStore"]
+        AISS["AISessionStore<br/>Central AI session truth source (@Observable)"]
         CCS["ClaudeCodeService<br/>AIProvider impl<br/>HookServer + ConversationParser"]
         GP["GeminiProvider<br/>AIProvider impl<br/>GeminiConversationParser"]
-        OCS["OpenClawService<br/>WebSocket client"]
+        REG["AgentMonitorRegistry<br/>Unifies agent monitors"]
+        OCS["OpenClawService<br/>WebSocket client (MultiAgentMonitor)"]
         HES["HermesService<br/>HTTP API client (MultiAgentMonitor)"]
         CS["CalendarService<br/>EventKit"]
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
+        SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
         TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
         PHS["PomodoroHistoryStore<br/>Append-only history (~/.NemoNotch/pomodoro-history.json)"]
         PTS["PomodoroTimerService<br/>State machine + tick + end-alert pipeline"]
@@ -82,6 +86,12 @@ graph TB
     AD -->|"creates"| NC
     AIM --> CCS
     AIM --> GP
+    AIM -->|"owns"| AISS
+    CCS -.->|"mutate"| AISS
+    GP -.->|"mutate"| AISS
+    REG -->|"registers"| OCS
+    REG -->|"registers"| HES
+    MS -.->|"denied / authorized events"| APM
     NC --> NW --> NV
     NV --> Tabs
     NV --> CB
@@ -106,10 +116,12 @@ graph LR
         GC["Gemini CLI"]
     end
 
-    subgraph Monitor["AICLIMonitorService"]
+    subgraph Monitor["AICLIMonitorService — unified entry, owns the store"]
         HS["HookServer<br/>/tmp/nemonotch.sock"]
         CP["ConversationParser<br/>Claude JSONL"]
         GCP["GeminiConversationParser<br/>Gemini JSON"]
+        IW["InterruptWatcher<br/>detects 'interrupted by user' / /clear / /compact"]
+        AFW["AgentFileWatcher<br/>incremental subagent tool_use / tool_result"]
     end
 
     subgraph Providers["AIProvider Implementations"]
@@ -117,8 +129,12 @@ graph LR
         GPR["GeminiProvider"]
     end
 
-    subgraph Data["Data Models"]
-        AIS["AISessionState<br/>Unified session state"]
+    subgraph Store["AISessionStore — single source of truth (@MainActor @Observable)"]
+        ST["sessions / sortedSessions / activeSession<br/>upsert · mutate · mutateOrCreate"]
+    end
+
+    subgraph Data["Per-session state"]
+        AIS["AISessionState"]
         MSG["[ChatMessage]"]
         SA["SubagentState"]
     end
@@ -129,17 +145,27 @@ graph LR
         GJ["~/.gemini/tmp/*/chats/"]
     end
 
+    UI["AIChatTab / Badge UI"]
+
     CC -->|"hook events"| HS
     GC -->|"hook events"| HS
     HS --> CLS
     HS --> GPR
     CP -->|"incremental parse"| CJ
     GCP -->|"incremental parse"| GJ
-    CLS --> AIS
-    GPR --> AIS
+    IW -.->|"watches"| CJ
+    AFW -.->|"watches subagent files"| CJ
+    CLS -->|"mutate"| ST
+    GPR -->|"mutate"| ST
+    ST --> AIS
     AIS --> MSG
     AIS --> SA
+    ST -.->|"UI reads sortedSessions"| UI
 ```
+
+**AISessionStore — central session truth source:** All AI providers (Claude Code, Gemini, future DeepSeek/OpenAI) write into one `@MainActor @Observable` store (`NemoNotch/Services/AISessionStore.swift`) owned by `AICLIMonitorService`. Providers translate hook events + file-parse results into `upsert` / `mutate` / `mutateOrCreate` calls on the store; **UI reads `sortedSessions` directly and never touches a provider's internal state**. The store keeps a cached `sortedSessions` (descending by `lastEventTime`, rebuilt on every mutation) and exposes `activeSession` via a priority comparator (`waitingForApproval > processing/compacting > waitingForInput > idle > ended`, ties broken by recency). `sessions(for:)` filters by `AISource` for per-provider surfaces (e.g. a badge that only cares about Claude). Adding a provider means writing to this store — no UI or consumer changes.
+
+**Agent monitoring — registry pattern:** `OpenClawService` and `HermesService` both conform to `MultiAgentMonitor` and are collected by `AgentMonitorRegistry` (`NemoNotch/Services/AgentMonitorRegistry.swift`). The registry exposes unified reads — `installedMonitors`, `anyActiveAgent`, `hasAnyActiveAgent`, `activeAgents` (non-idle across all monitors, sorted by recency) — which `AgentMonitorTab` and the badge layer consume. Hermes additionally has its own `HermesConversationParser` + `HermesHookInstaller`, mirroring Claude's parser/installer split. Adding an agent monitor is one `registry.register(...)` call.
 
 ### Notch Event Flow
 
