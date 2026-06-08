@@ -3,6 +3,12 @@
 macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块多功能信息中心。
 
 <p align="center">
+  <img src="docs/images/Notch.png" alt="收起状态的刘海 — 一眼掌握 AI CLI 活动" width="720">
+</p>
+
+<p align="center"><em>实时展示 AI 会话与智能体状态。</em></p>
+
+<p align="center">
   <img src="docs/images/tab-overview.png" alt="概览 — 媒体、日历与天气" width="720">
 </p>
 

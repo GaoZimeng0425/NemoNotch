@@ -3,6 +3,12 @@
 An interactive floating panel for the MacBook notch area, turning the notch into a multi-purpose information hub.
 
 <p align="center">
+  <img src="docs/images/Notch.png" alt="Collapsed notch — at-a-glance AI CLI activity badges" width="720">
+</p>
+
+<p align="center"><em>Real-time AI session &amp; agent status.</em></p>
+
+<p align="center">
   <img src="docs/images/tab-overview.png" alt="Overview — media, calendar & weather" width="720">
 </p>
 
