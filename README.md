@@ -127,7 +127,7 @@ NemoNotch draws inspiration from the following open-source projects:
 ### Launcher & UI Components
 
 - [**sol**](https://github.com/ospfranco/sol) — App launcher architecture
-- [**Luminare**](https://github.com/Lakr233/Luminare) — SwiftUI component library & design language
+- [**Luminare**](https://github.com/MrKai77/Luminare) — SwiftUI component library & design language
 
 ### AI & Desktop Integration
 

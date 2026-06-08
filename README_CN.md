@@ -101,13 +101,13 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 ### 刘海窗口与交互
 
 - [**NotchDrop**](https://github.com/Lakr233/NotchDrop) — Notch 窗口定位、多屏幕支持、点击穿透
-- [**DynamicNotchKit**](https://github.com/Lakr233/DynamicNotchKit) — Spring 动画、自动收起、内容切换
-- [**Peninsula**](https://github.com/yufan8414/Peninsula) — 刘海区域多视图状态管理
+- [**DynamicNotchKit**](https://github.com/MrKai77/DynamicNotchKit) — Spring 动画、自动收起、内容切换
+- [**Peninsula**](https://github.com/celve/Peninsula) — 刘海区域多视图状态管理
 
 ### 媒体与播放控制
 
-- [**PlayStatus**](https://github.com/nicklama/PlayStatus) — MediaRemote 框架集成、媒体键拦截
-- [**Tuneful**](https://github.com/Dimillian/Tuneful) — 播放信息获取与 UI 展示
+- [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote 框架集成、媒体键拦截
+- [**Tuneful**](https://github.com/martinfekete10/Tuneful) — 播放信息获取与 UI 展示
 - [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — 命令行获取播放信息
 
 ### 窗口管理与快捷键
@@ -122,17 +122,17 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 ### 菜单栏与系统工具
 
 - [**eul**](https://github.com/gao-sun/eul) — 菜单栏架构设计、Combine 响应式模式
-- [**menubar_runcat**](https://github.com/Kyle-Ye/menubar_runcat) — 菜单栏状态动画
+- [**menubar_runcat**](https://github.com/Kyome22/menubar_runcat) — 菜单栏状态动画
 
 ### 启动器与 UI 组件
 
 - [**sol**](https://github.com/ospfranco/sol) — 应用启动器架构
-- [**Luminare**](https://github.com/Dimillian/Luminare) — SwiftUI 组件库与设计语言
+- [**Luminare**](https://github.com/MrKai77/Luminare) — SwiftUI 组件库与设计语言
 
 ### AI 与桌面集成
 
 - [**Vibe Notch**](https://github.com/farouqaldori/vibe-notch) — Claude Code 刘海通知、会话监控、权限审批交互
-- [**masko-code**](https://github.com/nicepkg/masko-code) — Claude Code 状态监控与桌面覆盖层概念
+- [**masko-code**](https://github.com/RousselPaul/masko-code) — Claude Code 状态监控与桌面覆盖层概念
 
 ### UI 与设计
 
