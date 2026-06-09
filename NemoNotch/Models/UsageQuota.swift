@@ -14,7 +14,7 @@ enum QuotaProvider: String, CaseIterable, Sendable {
     }
 }
 
-/// Status of the Claude OAuth credential / quota fetch.
+/// Status of a provider's OAuth credential / quota fetch.
 enum CredentialStatus: Equatable, Sendable {
     case valid
     case expired
