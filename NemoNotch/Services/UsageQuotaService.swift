@@ -24,6 +24,8 @@ final class UsageQuotaService: LifecycleAware {
         LogService.info("UsageQuotaService init", category: "UsageQuotaService")
     }
 
+    deinit { MainActor.assumeIsolated { timer?.invalidate() } }
+
     func setActive(_ active: Bool) {
         if active {
             LogService.debug("UsageQuotaService active", category: "UsageQuotaService")
@@ -104,9 +106,10 @@ final class UsageQuotaService: LifecycleAware {
         }
     }
 
-    /// Reads the generic-password blob keyed on service name only (the account
-    /// is the macOS username and may vary). Mirrors the Keychain read pattern
-    /// in `OpenClawService` (see docs/macos-cookbook.md §14).
+    /// Reads Claude Code CLI's own credential, which it stores as a Keychain
+    /// generic-password item keyed by service name `"Claude Code-credentials"`
+    /// (the account is the macOS username and varies), so we match on
+    /// `kSecAttrService` alone and take the single result.
     private func keychainBlob() -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
