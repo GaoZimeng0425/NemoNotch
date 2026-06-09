@@ -47,6 +47,7 @@ graph TB
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
+        UQS["UsageQuotaService<br/>Claude oauth/usage 5h/7d quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
         TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
@@ -166,6 +167,8 @@ graph LR
 **AISessionStore — central session truth source:** All AI providers (Claude Code, Gemini, future DeepSeek/OpenAI) write into one `@MainActor @Observable` store (`NemoNotch/Services/AISessionStore.swift`) owned by `AICLIMonitorService`. Providers translate hook events + file-parse results into `upsert` / `mutate` / `mutateOrCreate` calls on the store; **UI reads `sortedSessions` directly and never touches a provider's internal state**. The store keeps a cached `sortedSessions` (descending by `lastEventTime`, rebuilt on every mutation) and exposes `activeSession` via a priority comparator (`waitingForApproval > processing/compacting > waitingForInput > idle > ended`, ties broken by recency). `sessions(for:)` filters by `AISource` for per-provider surfaces (e.g. a badge that only cares about Claude). Adding a provider means writing to this store — no UI or consumer changes.
 
 **Agent monitoring — registry pattern:** `OpenClawService` and `HermesService` both conform to `MultiAgentMonitor` and are collected by `AgentMonitorRegistry` (`NemoNotch/Services/AgentMonitorRegistry.swift`). The registry exposes unified reads — `installedMonitors`, `anyActiveAgent`, `hasAnyActiveAgent`, `activeAgents` (non-idle across all monitors, sorted by recency) — which `AgentMonitorTab` and the badge layer consume. Hermes additionally has its own `HermesConversationParser` + `HermesHookInstaller`, mirroring Claude's parser/installer split. Adding an agent monitor is one `registry.register(...)` call.
+
+**Usage quota:** `UsageQuotaService` reads the Claude OAuth token (Keychain `Claude Code-credentials`, falling back to `~/.claude/.credentials.json`) and polls `GET /api/oauth/usage` to surface the 5-hour / 7-day quota as a card in `AIChatTab`. It is `LifecycleAware` (active only while the tab's session list is visible) and throttles refreshes to 60s with a 5-minute auto-refresh timer. The robust `resets_at` parse tolerates the API's microsecond fractional seconds.
 
 ### Notch Event Flow
 
