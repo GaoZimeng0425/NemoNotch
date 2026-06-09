@@ -47,7 +47,7 @@ graph TB
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
-        UQS["UsageQuotaService<br/>Claude oauth/usage 5h/7d quota"]
+        UQS["UsageQuotaService<br/>Claude + Codex usage quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
         TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
@@ -168,7 +168,7 @@ graph LR
 
 **Agent monitoring — registry pattern:** `OpenClawService` and `HermesService` both conform to `MultiAgentMonitor` and are collected by `AgentMonitorRegistry` (`NemoNotch/Services/AgentMonitorRegistry.swift`). The registry exposes unified reads — `installedMonitors`, `anyActiveAgent`, `hasAnyActiveAgent`, `activeAgents` (non-idle across all monitors, sorted by recency) — which `AgentMonitorTab` and the badge layer consume. Hermes additionally has its own `HermesConversationParser` + `HermesHookInstaller`, mirroring Claude's parser/installer split. Adding an agent monitor is one `registry.register(...)` call.
 
-**Usage quota:** `UsageQuotaService` reads the Claude OAuth token (Keychain `Claude Code-credentials`, falling back to `~/.claude/.credentials.json`) and polls `GET /api/oauth/usage` to surface the 5-hour / 7-day quota as a card in `AIChatTab`. It is `LifecycleAware` (active only while the tab's session list is visible) and throttles refreshes to 60s with a 5-minute auto-refresh timer. The robust `resets_at` parse tolerates the API's microsecond fractional seconds.
+**Usage quota:** `UsageQuotaService` exposes `quotas: [QuotaProvider: ProviderUsageQuota]` and fetches **Claude Code** (Keychain `Claude Code-credentials` / `~/.claude/.credentials.json` → `GET /api/oauth/usage`) and **Codex** (`~/.codex/auth.json` / Keychain `Codex Auth` → `GET chatgpt.com/backend-api/wham/usage` with `ChatGPT-Account-Id`) concurrently. The Codex section appears only when a Codex credential is detected (`hasCodexCredential`). Windows are normalized (session→weekly) and rendered as a card in `AIChatTab`. `LifecycleAware`, 60s refresh throttle, 5-minute timer, robust `resets_at` parse, and reset-backfill from the previous fetch (ideas borrowed from `CodexBar`). Gemini quota is a planned follow-up (needs OAuth token refresh + project resolution).
 
 ### Notch Event Flow
 

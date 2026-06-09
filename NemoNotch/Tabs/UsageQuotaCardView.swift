@@ -1,14 +1,26 @@
 import SwiftUI
 
-/// Compact card showing Claude Code 5h / 7d usage quotas. Binds the quota
-/// service to its own visibility via `.activates`.
+/// Compact card showing Claude Code and/or Codex usage quotas. Each present
+/// provider gets a labeled section. Binds the quota service to its visibility
+/// via `.activates`.
 struct UsageQuotaCardView: View {
     @Environment(UsageQuotaService.self) private var service
+    @Environment(AppSettings.self) private var appSettings
+
+    /// Providers to show: Claude when enabled, Codex when a credential exists.
+    private var visibleProviders: [QuotaProvider] {
+        var result: [QuotaProvider] = []
+        if appSettings.claudeEnabled { result.append(.claude) }
+        if service.hasCodexCredential { result.append(.codex) }
+        return result
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             header
-            content
+            ForEach(visibleProviders, id: \.self) { provider in
+                providerSection(provider)
+            }
         }
         .padding(10)
         .notchCard(radius: 10, fill: NotchTheme.surface)
@@ -31,7 +43,7 @@ struct UsageQuotaCardView: View {
                     .animation(
                         service.isRefreshing
                             ? .linear(duration: 0.8).repeatForever(autoreverses: false)
-                            : nil, // stop instantly — no reverse (counterclockwise) sweep back to 0°
+                            : nil, // stop instantly — no reverse sweep back to 0°
                         value: service.isRefreshing
                     )
             }
@@ -42,21 +54,28 @@ struct UsageQuotaCardView: View {
     }
 
     @ViewBuilder
-    private var content: some View {
-        if let quota = service.quota, quota.status == .valid, !quota.tiers.isEmpty {
-            ForEach(quota.tiers, id: \.window) { tier in
-                tierRow(tier)
+    private func providerSection(_ provider: QuotaProvider) -> some View {
+        let quota = service.quotas[provider]
+        VStack(alignment: .leading, spacing: 3) {
+            Text(verbatim: provider.displayName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(NotchTheme.textSecondary)
+
+            if let quota, quota.status == .valid, !quota.tiers.isEmpty {
+                ForEach(quota.tiers, id: \.window) { tier in
+                    tierRow(tier)
+                }
+            } else {
+                Text(statusKey(for: quota))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(NotchTheme.textTertiary)
             }
-        } else {
-            Text(statusKey)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(NotchTheme.textTertiary)
         }
     }
 
     private func tierRow(_ tier: QuotaTier) -> some View {
         HStack(spacing: 6) {
-            Text(label(for: tier.window))
+            label(for: tier.window)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(NotchTheme.textSecondary)
                 .frame(width: 64, alignment: .leading)
@@ -92,12 +111,13 @@ struct UsageQuotaCardView: View {
         }
     }
 
-    private func label(for window: QuotaWindow) -> LocalizedStringKey {
+    private func label(for window: QuotaWindow) -> Text {
         switch window {
-        case .fiveHour: "quota.window.5h"
-        case .sevenDay: "quota.window.7d"
-        case .sevenDayOpus: "quota.window.7d_opus"
-        case .sevenDaySonnet: "quota.window.7d_sonnet"
+        case .fiveHour: Text("quota.window.5h")
+        case .sevenDay: Text("quota.window.7d")
+        case .sevenDayOpus: Text("quota.window.7d_opus")
+        case .sevenDaySonnet: Text("quota.window.7d_sonnet")
+        case let .rolling(minutes): Text(verbatim: UsageQuotaFormatter.windowLabel(minutes: minutes))
         }
     }
 
@@ -107,10 +127,8 @@ struct UsageQuotaCardView: View {
         return .green
     }
 
-    private var statusKey: LocalizedStringKey {
-        guard let quota = service.quota else {
-            return "quota.status.reading"
-        }
+    private func statusKey(for quota: ProviderUsageQuota?) -> LocalizedStringKey {
+        guard let quota else { return "quota.status.reading" }
         switch quota.status {
         case .valid: return "quota.status.no_data"
         case .expired: return "quota.status.login_required"

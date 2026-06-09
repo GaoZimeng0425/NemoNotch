@@ -42,6 +42,7 @@ struct UsageQuotaTests {
         """
         let quota = try UsageQuotaParser.parseClaudeCodeQuota(data: Data(json.utf8))
         #expect(quota.status == .valid)
+        #expect(quota.provider == .claude)
         // null tiers dropped → 3 tiers, in declared order
         #expect(quota.tiers.map(\.window) == [.fiveHour, .sevenDay, .sevenDaySonnet])
         #expect(quota.tiers[0].utilization == 6.0)
@@ -101,5 +102,78 @@ struct UsageQuotaTests {
     @Test func countdownAlreadyReset() {
         let now = Date(timeIntervalSince1970: 100)
         #expect(UsageQuotaFormatter.countdown(until: now.addingTimeInterval(-10), now: now) == .reset)
+    }
+
+    // MARK: - Codex quota parsing
+
+    @Test func parseCodexQuotaFreeTier() throws {
+        let json = """
+        { "rate_limit": {
+            "primary_window": {"used_percent": 7, "limit_window_seconds": 2592000, "reset_at": 1782973688},
+            "secondary_window": null
+        } }
+        """
+        let quota = try UsageQuotaParser.parseCodexQuota(data: Data(json.utf8))
+        #expect(quota.provider == .codex)
+        #expect(quota.tiers.count == 1)
+        #expect(quota.tiers[0].window == .rolling(minutes: 43200))
+        #expect(quota.tiers[0].utilization == 7)
+        #expect(quota.tiers[0].resetsAt != nil)
+    }
+
+    @Test func parseCodexQuotaPaidTierOrdersSessionFirst() throws {
+        let json = """
+        { "rate_limit": {
+            "primary_window":   {"used_percent": 20, "limit_window_seconds": 604800, "reset_at": 1782973688},
+            "secondary_window": {"used_percent": 50, "limit_window_seconds": 18000,  "reset_at": 1782900000}
+        } }
+        """
+        let quota = try UsageQuotaParser.parseCodexQuota(data: Data(json.utf8))
+        #expect(quota.tiers.map(\.window) == [.rolling(minutes: 300), .rolling(minutes: 10080)])
+    }
+
+    @Test func windowLabelFormats() {
+        #expect(UsageQuotaFormatter.windowLabel(minutes: 300) == "5h")
+        #expect(UsageQuotaFormatter.windowLabel(minutes: 10080) == "7d")
+        #expect(UsageQuotaFormatter.windowLabel(minutes: 43200) == "30d")
+        #expect(UsageQuotaFormatter.windowLabel(minutes: 1440) == "1d")
+        #expect(UsageQuotaFormatter.windowLabel(minutes: 90) == "90m")
+    }
+
+    @Test func parseCodexCredentialsValid() throws {
+        let json = #"{"auth_mode":"chatgpt","tokens":{"access_token":"tok","account_id":"acct-1"}}"#
+        let c = try UsageCredentialParser.parseCodexCredentials(data: Data(json.utf8))
+        #expect(c.token == "tok")
+        #expect(c.accountID == "acct-1")
+        #expect(c.status == .valid)
+    }
+
+    @Test func parseCodexCredentialsMissingToken() throws {
+        let json = #"{"auth_mode":"chatgpt","tokens":{"account_id":"acct-1"}}"#
+        let c = try UsageCredentialParser.parseCodexCredentials(data: Data(json.utf8))
+        #expect(c.token == nil)
+        #expect(c.status == .parseError)
+    }
+
+    @Test func parseCodexCredentialsNotChatGPT() throws {
+        let json = #"{"auth_mode":"apikey","tokens":{"access_token":"tok"}}"#
+        let c = try UsageCredentialParser.parseCodexCredentials(data: Data(json.utf8))
+        #expect(c.status == .notFound)
+    }
+
+    @Test func backfillReusesCachedResetWhenMissing() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let cached = QuotaTier(window: .rolling(minutes: 300), utilization: 10, resetsAt: now.addingTimeInterval(3600))
+        let fresh = QuotaTier(window: .rolling(minutes: 300), utilization: 12, resetsAt: nil)
+        let filled = fresh.backfillingReset(from: cached, now: now)
+        #expect(filled.resetsAt == now.addingTimeInterval(3600))
+        #expect(filled.utilization == 12)
+    }
+
+    @Test func backfillIgnoresPastCachedReset() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let cached = QuotaTier(window: .rolling(minutes: 300), utilization: 10, resetsAt: now.addingTimeInterval(-10))
+        let fresh = QuotaTier(window: .rolling(minutes: 300), utilization: 12, resetsAt: nil)
+        #expect(fresh.backfillingReset(from: cached, now: now).resetsAt == nil)
     }
 }
