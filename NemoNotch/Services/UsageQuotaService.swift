@@ -7,7 +7,7 @@ import Security
 @MainActor
 @Observable
 final class UsageQuotaService: LifecycleAware {
-    private(set) var quota: ClaudeUsageQuota?
+    private(set) var quota: ProviderUsageQuota?
     private(set) var isRefreshing = false
 
     private let keychainService = "Claude Code-credentials"
@@ -53,15 +53,25 @@ final class UsageQuotaService: LifecycleAware {
         lastFetched = Date()
     }
 
-    private func fetch() async -> ClaudeUsageQuota {
+    private func fetch() async -> ProviderUsageQuota {
         let now = Date()
         let credential = readCredential(now: now)
         guard let token = credential.token else {
             LogService.warn("Quota: no credential (status \(credential.status))", category: "UsageQuotaService")
-            return ClaudeUsageQuota(status: credential.status, fetchedAt: now, errorMessage: credential.message)
+            return ProviderUsageQuota(
+                provider: .claude,
+                status: credential.status,
+                fetchedAt: now,
+                errorMessage: credential.message
+            )
         }
         if credential.status == .expired {
-            return ClaudeUsageQuota(status: .expired, fetchedAt: now, errorMessage: credential.message)
+            return ProviderUsageQuota(
+                provider: .claude,
+                status: .expired,
+                fetchedAt: now,
+                errorMessage: credential.message
+            )
         }
 
         var request = URLRequest(url: usageURL, timeoutInterval: 10)
@@ -75,18 +85,33 @@ final class UsageQuotaService: LifecycleAware {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if status == 401 {
                 LogService.warn("Quota: HTTP 401 unauthorized", category: "UsageQuotaService")
-                return ClaudeUsageQuota(status: .expired, fetchedAt: now, errorMessage: "Re-login required")
+                return ProviderUsageQuota(
+                    provider: .claude,
+                    status: .expired,
+                    fetchedAt: now,
+                    errorMessage: "Re-login required"
+                )
             }
             guard (200 ..< 300).contains(status) else {
                 LogService.error("Quota: HTTP \(status)", category: "UsageQuotaService")
-                return ClaudeUsageQuota(status: .valid, fetchedAt: now, errorMessage: "HTTP \(status)")
+                return ProviderUsageQuota(
+                    provider: .claude,
+                    status: .valid,
+                    fetchedAt: now,
+                    errorMessage: "HTTP \(status)"
+                )
             }
             let parsed = try UsageQuotaParser.parseClaudeCodeQuota(data: data, fetchedAt: now)
             LogService.info("Quota fetched: \(parsed.tiers.count) tiers", category: "UsageQuotaService")
             return parsed
         } catch {
             LogService.error("Quota fetch failed: \(error.localizedDescription)", category: "UsageQuotaService")
-            return ClaudeUsageQuota(status: .valid, fetchedAt: now, errorMessage: error.localizedDescription)
+            return ProviderUsageQuota(
+                provider: .claude,
+                status: .valid,
+                fetchedAt: now,
+                errorMessage: error.localizedDescription
+            )
         }
     }
 

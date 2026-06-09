@@ -42,6 +42,7 @@ struct UsageQuotaTests {
         """
         let quota = try UsageQuotaParser.parseClaudeCodeQuota(data: Data(json.utf8))
         #expect(quota.status == .valid)
+        #expect(quota.provider == .claude)
         // null tiers dropped → 3 tiers, in declared order
         #expect(quota.tiers.map(\.window) == [.fiveHour, .sevenDay, .sevenDaySonnet])
         #expect(quota.tiers[0].utilization == 6.0)

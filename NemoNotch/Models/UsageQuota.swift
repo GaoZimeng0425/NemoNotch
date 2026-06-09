@@ -1,5 +1,19 @@
 import Foundation
 
+/// A usage-quota source.
+enum QuotaProvider: String, CaseIterable, Sendable {
+    case claude
+    case codex
+
+    /// Brand name shown as the section header (verbatim, not localized).
+    var displayName: String {
+        switch self {
+        case .claude: "Claude Code"
+        case .codex: "Codex"
+        }
+    }
+}
+
 /// Status of the Claude OAuth credential / quota fetch.
 enum CredentialStatus: Equatable, Sendable {
     case valid
@@ -23,14 +37,22 @@ struct QuotaTier: Equatable, Sendable {
     let resetsAt: Date?
 }
 
-/// Parsed Claude Code usage quota (or an error state).
-struct ClaudeUsageQuota: Equatable, Sendable {
+/// Parsed usage quota for one provider (or an error state).
+struct ProviderUsageQuota: Equatable, Sendable {
+    let provider: QuotaProvider
     let status: CredentialStatus
     let tiers: [QuotaTier]
     let fetchedAt: Date
     let errorMessage: String?
 
-    init(status: CredentialStatus, tiers: [QuotaTier] = [], fetchedAt: Date = Date(), errorMessage: String? = nil) {
+    init(
+        provider: QuotaProvider,
+        status: CredentialStatus,
+        tiers: [QuotaTier] = [],
+        fetchedAt: Date = Date(),
+        errorMessage: String? = nil
+    ) {
+        self.provider = provider
         self.status = status
         self.tiers = tiers
         self.fetchedAt = fetchedAt
@@ -41,11 +63,13 @@ struct ClaudeUsageQuota: Equatable, Sendable {
 /// OAuth credential extracted from Keychain / credentials file.
 struct UsageCredential: Equatable, Sendable {
     let token: String?
+    let accountID: String?
     let status: CredentialStatus
     let message: String?
 
-    init(token: String?, status: CredentialStatus, message: String? = nil) {
+    init(token: String?, accountID: String? = nil, status: CredentialStatus, message: String? = nil) {
         self.token = token
+        self.accountID = accountID
         self.status = status
         self.message = message
     }
@@ -83,7 +107,7 @@ enum UsageCredentialParser {
 }
 
 enum UsageQuotaParser {
-    static func parseClaudeCodeQuota(data: Data, fetchedAt: Date = Date()) throws -> ClaudeUsageQuota {
+    static func parseClaudeCodeQuota(data: Data, fetchedAt: Date = Date()) throws -> ProviderUsageQuota {
         let response = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
         let tiers: [QuotaTier] = [
             response.fiveHour.map { tier(.fiveHour, $0) },
@@ -91,7 +115,7 @@ enum UsageQuotaParser {
             response.sevenDayOpus.map { tier(.sevenDayOpus, $0) },
             response.sevenDaySonnet.map { tier(.sevenDaySonnet, $0) },
         ].compactMap(\.self)
-        return ClaudeUsageQuota(status: .valid, tiers: tiers, fetchedAt: fetchedAt)
+        return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: fetchedAt)
     }
 
     /// Robust ISO8601 parse. The live API returns 6-digit fractional seconds
