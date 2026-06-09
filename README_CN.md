@@ -47,7 +47,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 - **Notch 浮动面板** — 窗口悬浮在刘海区域，自动检测屏幕 Notch 尺寸
 - **多 AI 提供商** — 统一界面支持 Claude Code 和 Gemini CLI，集成 Hook 事件监听、会话追踪和权限拦截
-- **Claude 用量配额** —— 在 AI 标签页以卡片展示 Claude Code 的 5 小时 / 7 天配额（使用率 % + 重置倒计时），数据来自 OAuth 用量接口
+- **AI 用量配额** —— 在 AI 标签页以卡片展示 Claude Code 与 Codex 的用量配额（使用率 % + 重置倒计时），数据来自各 CLI 的 OAuth 凭证。检测到 Codex CLI 已登录时自动显示 Codex 段。
 - **全局快捷键** — 切换面板开关：在设置 → 快捷键里自行配置（默认无）。切换标签页默认 `⌥⌘1-5`。所有快捷键均可自定义，基于 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **自动切换** — 智能检测活跃服务（AI 工作中、音乐播放中）自动切到对应标签
 - **活动光晕** — AI/Agent 忙碌时（运行中或等待审批），展开的刘海下半内边缘会泛起一层应用主题橘色的柔和模糊光晕，到中部渐隐消失（不遮挡正文）
