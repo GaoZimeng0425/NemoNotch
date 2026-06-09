@@ -60,6 +60,20 @@ struct UsageQuotaTests {
         #expect(d != nil)
     }
 
+    @Test func parseResetDateThreeDigitFraction() {
+        #expect(UsageQuotaParser.parseResetDate("2026-06-09T08:00:00.858+00:00") != nil)
+    }
+
+    @Test func parseResetDateNoFraction() {
+        #expect(UsageQuotaParser.parseResetDate("2026-06-09T08:00:00+00:00") != nil)
+    }
+
+    @Test func parseCredentialNonJSONThrows() {
+        #expect(throws: (any Error).self) {
+            try UsageCredentialParser.parseClaudeCredentials(data: Data("not json".utf8), now: Date())
+        }
+    }
+
     // MARK: - Countdown formatting
 
     @Test func countdownDaysAndHours() {

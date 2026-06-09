@@ -1,7 +1,7 @@
 import Foundation
 
 /// Status of the Claude OAuth credential / quota fetch.
-enum CredentialStatus: Equatable {
+enum CredentialStatus: Equatable, Sendable {
     case valid
     case expired
     case notFound
@@ -9,7 +9,7 @@ enum CredentialStatus: Equatable {
 }
 
 /// One Claude usage rolling-window.
-enum QuotaWindow: String, CaseIterable {
+enum QuotaWindow: String, Sendable, CaseIterable {
     case fiveHour
     case sevenDay
     case sevenDayOpus
@@ -17,14 +17,14 @@ enum QuotaWindow: String, CaseIterable {
 }
 
 /// A single quota tier: utilization (0...100) + when it resets.
-struct QuotaTier: Equatable {
+struct QuotaTier: Equatable, Sendable {
     let window: QuotaWindow
     let utilization: Double
     let resetsAt: Date?
 }
 
 /// Parsed Claude Code usage quota (or an error state).
-struct ClaudeUsageQuota: Equatable {
+struct ClaudeUsageQuota: Equatable, Sendable {
     let status: CredentialStatus
     let tiers: [QuotaTier]
     let fetchedAt: Date
@@ -39,7 +39,7 @@ struct ClaudeUsageQuota: Equatable {
 }
 
 /// OAuth credential extracted from Keychain / credentials file.
-struct UsageCredential: Equatable {
+struct UsageCredential: Equatable, Sendable {
     let token: String?
     let status: CredentialStatus
     let message: String?

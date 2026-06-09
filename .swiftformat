@@ -32,3 +32,4 @@
 --disable redundantReturn
 --disable trailingClosures
 --disable wrapMultilineStatementBraces
+--disable redundantSendable
