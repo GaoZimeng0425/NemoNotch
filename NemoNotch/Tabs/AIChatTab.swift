@@ -9,6 +9,7 @@ enum ProviderCardKind: Equatable {
 struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
     @Environment(AppSettings.self) var appSettings
+    @Environment(UsageQuotaService.self) private var quotaService
     @State private var selectedSessionId: String?
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
@@ -232,7 +233,7 @@ struct AIChatTab: View {
         VStack(spacing: 12) {
             aiConsoleHeader
 
-            if appSettings.claudeEnabled {
+            if appSettings.claudeEnabled || quotaService.hasCodexCredential {
                 UsageQuotaCardView()
             }
 
