@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var historyStore: PomodoroHistoryStore?
     private(set) var pomodoroTimerService: PomodoroTimerService?
     private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
+    private(set) var usageQuotaService: UsageQuotaService?
     private(set) var quickStartController: QuickStartWindowController?
 
     var shouldSuppressPreviousAppRestore: Bool {
@@ -156,6 +157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         weatherService = weather
 
+        let usageQuota = UsageQuotaService()
+        usageQuotaService = usageQuota
+
         let hud = HUDService()
         hudService = hud
 
@@ -193,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
+                    .environment(usageQuota)
                     .environment(openClaw)
                     .environment(registry)
                     .environment(hermes)

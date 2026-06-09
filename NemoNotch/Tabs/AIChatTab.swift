@@ -232,6 +232,10 @@ struct AIChatTab: View {
         VStack(spacing: 12) {
             aiConsoleHeader
 
+            if appSettings.claudeEnabled {
+                UsageQuotaCardView()
+            }
+
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach(allSessions) { session in

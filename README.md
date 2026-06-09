@@ -47,6 +47,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
 - **Multi-AI Provider** — Unified interface for Claude Code and Gemini CLI with hook event listening, session tracking, and permission interception
+- **Claude Usage Quota** — Shows your Claude Code 5-hour and 7-day quota (utilization % + reset countdown) as a card in the AI tab, read from the OAuth usage endpoint
 - **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
 - **Activity Glow** — When AI/agents are busy (working, or waiting for approval), the expanded notch shows a soft blurred glow in the app's theme orange along its lower inner edge, fading out by the middle (content stays clean)
