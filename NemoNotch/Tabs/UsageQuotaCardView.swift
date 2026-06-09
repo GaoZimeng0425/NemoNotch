@@ -98,6 +98,7 @@ struct UsageQuotaCardView: View {
         case .sevenDay: "quota.window.7d"
         case .sevenDayOpus: "quota.window.7d_opus"
         case .sevenDaySonnet: "quota.window.7d_sonnet"
+        case let .rolling(minutes): LocalizedStringKey(UsageQuotaFormatter.windowLabel(minutes: minutes))
         }
     }
 
