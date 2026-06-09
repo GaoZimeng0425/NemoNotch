@@ -31,7 +31,7 @@ struct UsageQuotaCardView: View {
                     .animation(
                         service.isRefreshing
                             ? .linear(duration: 0.8).repeatForever(autoreverses: false)
-                            : .default,
+                            : nil, // stop instantly — no reverse (counterclockwise) sweep back to 0°
                         value: service.isRefreshing
                     )
             }
