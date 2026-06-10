@@ -9,8 +9,8 @@ enum ProviderCardKind: Equatable {
 struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
     @Environment(AppSettings.self) var appSettings
-    @Environment(UsageQuotaService.self) private var quotaService
     @State private var selectedSessionId: String?
+    @State private var showContextDetail = false
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
 
@@ -233,10 +233,6 @@ struct AIChatTab: View {
         VStack(spacing: 12) {
             aiConsoleHeader
 
-            if appSettings.claudeEnabled || quotaService.hasCodexCredential {
-                UsageQuotaCardView()
-            }
-
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach(allSessions) { session in
@@ -267,7 +263,32 @@ struct AIChatTab: View {
 
             Spacer(minLength: 12)
 
-            VStack(alignment: .trailing, spacing: 7) {
+            HStack(alignment: .top, spacing: 8) {
+                contextSummaryCard
+                UsageQuotaCompactView()
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Summary cards (context · usage quota)
+
+    /// Compact card pair living in the header's top-right: session context on
+    /// the left, periodic-token usage quota on the right. Each is tappable for a
+    /// detail popover.
+    private var contextSummaryCard: some View {
+        Button { showContextDetail.toggle() } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(NotchTheme.textTertiary)
+                    Text("ai.context")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                    Spacer(minLength: 0)
+                }
                 if headerMeterSessions.isEmpty {
                     serverStatus
                 } else {
@@ -276,10 +297,47 @@ struct AIChatTab: View {
                     }
                 }
             }
-            .padding(.top, 2)
+            .padding(8)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 4)
+        .buttonStyle(.plain)
+        .notchCard(radius: 10, fill: NotchTheme.surfaceSubtle)
+        .popover(isPresented: $showContextDetail, arrowEdge: .bottom) {
+            contextDetailPopover
+                .frame(width: 280)
+        }
+    }
+
+    private var contextDetailPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ai.context")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(allSessions) { session in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                sourceIcon(session.source, size: 11)
+                                Text(session.displayTitle)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(NotchTheme.textPrimary)
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                                if let model = session.displayModel {
+                                    Text(model)
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(NotchTheme.textTertiary)
+                                }
+                            }
+                            contextBar(session: session)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 240)
+        }
+        .padding(10)
     }
 
     private var consoleIcon: some View {
@@ -315,11 +373,11 @@ struct AIChatTab: View {
     }
 
     private func compactContextMeter(_ session: AISessionState) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 5) {
             Text(meterLabel(for: session))
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 54, alignment: .trailing)
+                .frame(width: 40, alignment: .trailing)
                 .lineLimit(1)
 
             GeometryReader { geo in
@@ -331,12 +389,12 @@ struct AIChatTab: View {
                         .frame(width: max(geo.size.width * CGFloat(session.contextPercent), 4))
                 }
             }
-            .frame(width: 68, height: 7)
+            .frame(width: 40, height: 6)
 
             Text(String(format: "%.0f%%", session.contextPercent * 100))
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
                 .foregroundStyle(NotchTheme.accentText)
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: 30, alignment: .trailing)
         }
     }
 
