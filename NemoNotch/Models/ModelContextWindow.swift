@@ -14,6 +14,14 @@ enum ModelContextWindow {
     static let defaultValue = 200_000
 
     static func limit(for model: String) -> Int {
-        limits[model] ?? defaultValue
+        if let exact = limits[model] { return exact }
+        // Claude model ids are versioned/dated (e.g. "claude-opus-4-1-20250805",
+        // "claude-sonnet-4-5-20250929"); match Opus/Sonnet by family rather than
+        // enumerating every dated variant. Both support a 1M context window.
+        let lowered = model.lowercased()
+        if lowered.contains("opus") || lowered.contains("sonnet") {
+            return 1_048_576
+        }
+        return defaultValue
     }
 }

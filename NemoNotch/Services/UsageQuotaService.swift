@@ -1,0 +1,276 @@
+import Foundation
+import Security
+
+/// Fetches Claude Code and Codex subscription usage and exposes them keyed by
+/// provider. Active only while a consuming view is visible (`LifecycleAware`);
+/// refreshes throttled to once per 60s with a 5-minute auto-refresh timer.
+@MainActor
+@Observable
+final class UsageQuotaService: LifecycleAware {
+    private(set) var quotas: [QuotaProvider: ProviderUsageQuota] = [:]
+    private(set) var isRefreshing = false
+    /// Whether a Codex credential exists (drives the Codex section's visibility).
+    /// Computed at init so the UI gate is correct before the first fetch.
+    private(set) var hasCodexCredential = false
+
+    private let claudeKeychainService = "Claude Code-credentials"
+    private let claudeCredentialsURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".claude/.credentials.json")
+    private let claudeUsageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+
+    private let codexKeychainService = "Codex Auth"
+    private let codexAuthURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".codex/auth.json")
+    private let codexUsageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+
+    private let throttleInterval: TimeInterval = 60
+    private let refreshInterval: TimeInterval = 300
+
+    private var timer: Timer?
+    private var lastFetched: Date?
+
+    init() {
+        LogService.info("UsageQuotaService init", category: "UsageQuotaService")
+        hasCodexCredential = codexCredentialPresent()
+    }
+
+    deinit { MainActor.assumeIsolated { timer?.invalidate() } }
+
+    func setActive(_ active: Bool) {
+        if active {
+            LogService.debug("UsageQuotaService active", category: "UsageQuotaService")
+            Task { await refresh(force: false) }
+            guard timer == nil else { return }
+            timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in await self?.refresh(force: false) }
+            }
+        } else {
+            LogService.debug("UsageQuotaService inactive", category: "UsageQuotaService")
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    func refresh(force: Bool) async {
+        if !force, let last = lastFetched, Date().timeIntervalSince(last) < throttleInterval {
+            LogService.debug("Quota refresh throttled", category: "UsageQuotaService")
+            return
+        }
+        if isRefreshing { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        hasCodexCredential = codexCredentialPresent()
+        async let claudeTask = fetchClaude()
+        async let codexTask = fetchCodexIfPresent()
+        let (claudeResult, codexResult) = await (claudeTask, codexTask)
+
+        var next: [QuotaProvider: ProviderUsageQuota] = [:]
+        next[.claude] = backfilled(claudeResult, from: quotas[.claude])
+        if let codexResult { next[.codex] = backfilled(codexResult, from: quotas[.codex]) }
+        quotas = next
+        lastFetched = Date()
+    }
+
+    /// Re-applies a future reset time from the previous fetch to any fresh tier
+    /// that came back without one.
+    private func backfilled(
+        _ quota: ProviderUsageQuota,
+        from previous: ProviderUsageQuota?,
+        now: Date = Date()
+    ) -> ProviderUsageQuota {
+        guard !quota.tiers.isEmpty, let previous else { return quota }
+        let tiers = quota.tiers.map { tier in
+            tier.backfillingReset(from: previous.tiers.first { $0.window == tier.window }, now: now)
+        }
+        return ProviderUsageQuota(
+            provider: quota.provider,
+            status: quota.status,
+            tiers: tiers,
+            fetchedAt: quota.fetchedAt,
+            errorMessage: quota.errorMessage
+        )
+    }
+
+    // MARK: - Claude
+
+    private func fetchClaude() async -> ProviderUsageQuota {
+        let now = Date()
+        let credential = readClaudeCredential(now: now)
+        guard let token = credential.token else {
+            LogService.warn("Claude quota: no credential (status \(credential.status))", category: "UsageQuotaService")
+            return ProviderUsageQuota(
+                provider: .claude,
+                status: credential.status,
+                fetchedAt: now,
+                errorMessage: credential.message
+            )
+        }
+        if credential.status == .expired {
+            return ProviderUsageQuota(
+                provider: .claude,
+                status: .expired,
+                fetchedAt: now,
+                errorMessage: credential.message
+            )
+        }
+
+        var request = URLRequest(url: claudeUsageURL, timeoutInterval: 10)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 401 {
+                LogService.warn("Claude quota: HTTP 401", category: "UsageQuotaService")
+                return ProviderUsageQuota(
+                    provider: .claude,
+                    status: .expired,
+                    fetchedAt: now,
+                    errorMessage: "Re-login required"
+                )
+            }
+            guard (200 ..< 300).contains(status) else {
+                LogService.error("Claude quota: HTTP \(status)", category: "UsageQuotaService")
+                return ProviderUsageQuota(
+                    provider: .claude,
+                    status: .valid,
+                    fetchedAt: now,
+                    errorMessage: "HTTP \(status)"
+                )
+            }
+            let parsed = try UsageQuotaParser.parseClaudeCodeQuota(data: data, fetchedAt: now)
+            LogService.info("Claude quota fetched: \(parsed.tiers.count) tiers", category: "UsageQuotaService")
+            return parsed
+        } catch {
+            LogService.error("Claude quota fetch failed: \(error.localizedDescription)", category: "UsageQuotaService")
+            return ProviderUsageQuota(
+                provider: .claude,
+                status: .valid,
+                fetchedAt: now,
+                errorMessage: error.localizedDescription
+            )
+        }
+    }
+
+    private func readClaudeCredential(now: Date) -> UsageCredential {
+        if let data = keychainBlob(service: claudeKeychainService),
+           let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now) {
+            return credential
+        }
+        guard FileManager.default.fileExists(atPath: claudeCredentialsURL.path) else {
+            return UsageCredential(token: nil, status: .notFound)
+        }
+        do {
+            let data = try Data(contentsOf: claudeCredentialsURL)
+            return try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
+        } catch {
+            return UsageCredential(token: nil, status: .parseError, message: error.localizedDescription)
+        }
+    }
+
+    // MARK: - Codex
+
+    private func fetchCodexIfPresent() async -> ProviderUsageQuota? {
+        guard hasCodexCredential else { return nil }
+        return await fetchCodex()
+    }
+
+    private func fetchCodex() async -> ProviderUsageQuota {
+        let now = Date()
+        let credential = readCodexCredential()
+        guard let token = credential.token else {
+            LogService.warn("Codex quota: no credential (status \(credential.status))", category: "UsageQuotaService")
+            return ProviderUsageQuota(
+                provider: .codex,
+                status: credential.status,
+                fetchedAt: now,
+                errorMessage: credential.message
+            )
+        }
+
+        var request = URLRequest(url: codexUsageURL, timeoutInterval: 10)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("NemoNotch", forHTTPHeaderField: "User-Agent")
+        if let accountID = credential.accountID, !accountID.isEmpty {
+            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 401 {
+                LogService.warn("Codex quota: HTTP 401", category: "UsageQuotaService")
+                return ProviderUsageQuota(
+                    provider: .codex,
+                    status: .expired,
+                    fetchedAt: now,
+                    errorMessage: "Re-login required"
+                )
+            }
+            guard (200 ..< 300).contains(status) else {
+                LogService.error("Codex quota: HTTP \(status)", category: "UsageQuotaService")
+                return ProviderUsageQuota(
+                    provider: .codex,
+                    status: .valid,
+                    fetchedAt: now,
+                    errorMessage: "HTTP \(status)"
+                )
+            }
+            let parsed = try UsageQuotaParser.parseCodexQuota(data: data, fetchedAt: now)
+            LogService.info("Codex quota fetched: \(parsed.tiers.count) tiers", category: "UsageQuotaService")
+            return parsed
+        } catch {
+            LogService.error("Codex quota fetch failed: \(error.localizedDescription)", category: "UsageQuotaService")
+            return ProviderUsageQuota(
+                provider: .codex,
+                status: .valid,
+                fetchedAt: now,
+                errorMessage: error.localizedDescription
+            )
+        }
+    }
+
+    private func readCodexCredential() -> UsageCredential {
+        if let data = keychainBlob(service: codexKeychainService),
+           let credential = try? UsageCredentialParser.parseCodexCredentials(data: data) {
+            return credential
+        }
+        guard FileManager.default.fileExists(atPath: codexAuthURL.path) else {
+            return UsageCredential(token: nil, status: .notFound)
+        }
+        do {
+            let data = try Data(contentsOf: codexAuthURL)
+            return try UsageCredentialParser.parseCodexCredentials(data: data)
+        } catch {
+            return UsageCredential(token: nil, status: .parseError, message: error.localizedDescription)
+        }
+    }
+
+    private func codexCredentialPresent() -> Bool {
+        if FileManager.default.fileExists(atPath: codexAuthURL.path) { return true }
+        return keychainBlob(service: codexKeychainService) != nil
+    }
+
+    // MARK: - Keychain
+
+    /// Reads a CLI's credential blob, stored as a Keychain generic-password
+    /// item keyed by service name (the account is the macOS username and
+    /// varies), so we match on `kSecAttrService` alone and take one result.
+    private func keychainBlob(service: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+}
