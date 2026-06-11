@@ -2092,8 +2092,8 @@ private func keychainProbe(service: String) -> KeychainProbe {
 
 ```swift
 private func readKeychainCredential(provider:, service:, parse:) -> UsageCredential {
-    if keychainGranted(provider) {                       // persisted in UserDefaults
-        if let data = keychainBlob(service: service),    // data read — silent ONLY because we're now trusted
+    if keychainGranted(provider) {                       // grant keyed by cdhash (see below)
+        if let data = keychainBlob(service: service),    // data read — silent ONLY because we're trusted
            let cred = parse(data) { return cred }
         setKeychainGranted(false, provider)              // trust gone → fall back to button
     }
@@ -2102,6 +2102,37 @@ private func readKeychainCredential(provider:, service:, parse:) -> UsageCredent
         : UsageCredential(token: nil, status: .needsAuthorization)   // → renders Authorize button
 }
 ```
+
+**Key the grant by the code identity (cdhash), not a bare bool.** macOS binds
+"Always Allow" ACL trust to the app's code signature; under ad-hoc signing the
+signature changes every rebuild. A bare `granted = true` flag then survives the
+rebuild but the ACL trust does NOT — so the gated data read above fires for a
+*now-untrusted* binary and **prompts on entry** (the exact bug this section is
+about, just one layer deeper). Fix: store the cdhash at grant time and only treat
+the grant as valid when it still matches the running binary:
+
+```swift
+private func keychainGranted(_ p: QuotaProvider) -> Bool {
+    guard let id = Self.currentCodeIdentity() else { return false }   // nil → not granted (safe)
+    return UserDefaults.standard.string(forKey: grantedIdentityKey(p)) == id
+}
+private static func currentCodeIdentity() -> String? {               // hex cdhash via SecCode
+    var code: SecCode?
+    guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+    var stat: SecStaticCode?
+    guard SecCodeCopyStaticCode(code, [], &stat) == errSecSuccess, let stat else { return nil }
+    var infoCF: CFDictionary?
+    guard SecCodeCopySigningInformation(stat, [], &infoCF) == errSecSuccess,
+          let info = infoCF as? [String: Any],
+          let cdhash = info[kSecCodeInfoUnique as String] as? Data else { return nil }
+    return cdhash.map { String(format: "%02x", $0) }.joined()
+}
+```
+
+Now a stale grant (older build's cdhash) reads as NOT granted → the entry path
+shows the Authorize button and never does the prompting data read. Same build →
+cdhash matches → silent auto-load. Stable Developer ID signature → cdhash stable
+→ authorize once, forever.
 
 `.needsAuthorization` renders an **Authorize** button (+ a one-line reason, so the user understands *why*). Its action does the ONE *interactive* read (the same query **without** `applyNoUI`), off the main actor since `SecItemCopyMatching` blocks while the dialog is up; on success it persists the grant:
 
@@ -2127,7 +2158,7 @@ private func applyNoUI(to query: inout [String: Any]) {
 }
 ```
 
-**Gotcha:** "Always Allow" trust is bound to the app's **code signature**. Under ad-hoc signing (`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity, so the persisted grant flag survives but the ACL trust doesn't — the gated data read then prompts once after each rebuild. A stable Developer ID signature makes it truly one-time. This is macOS behavior, not a logic bug.
+**Gotcha:** "Always Allow" trust is bound to the app's **code signature**. Under ad-hoc signing (`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity. Keying the grant by cdhash (above) turns this into a harmless re-prompt-on-click after each rebuild rather than an *auto*-prompt on entry. A stable Developer ID signature makes it truly one-time. macOS behavior, not a logic bug.
 
 **Gotcha:** never put `kSecReturnData` on the automatic path "just to try" — in a GUI app it prompts even with every no-UI flag set. Attribute reads for detection, data reads only when explicitly user-initiated or already-granted.
 

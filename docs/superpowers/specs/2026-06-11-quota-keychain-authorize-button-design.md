@@ -106,21 +106,25 @@ Revised design (implemented):
 - Automatic path NEVER issues a `kSecReturnData` read for an unauthorized item.
 - Detection uses the attributes-only probe (present → `.needsAuthorization`,
   absent → `.notFound`).
-- The data read is gated behind a **persisted grant** (`keychainGranted`,
-  UserDefaults key `quota.keychainGranted.<provider>`): set by the user-tapped
-  `authorize(_:)`, after which later launches do a silent gated data read (silent
-  because "Always Allow" puts the app in the item's ACL).
+- The data read is gated behind a **persisted grant keyed by code identity**
+  (cdhash via `SecCodeCopySigningInformation`, UserDefaults key
+  `quota.keychainGrantedIdentity.<provider>`): set by the user-tapped
+  `authorize(_:)`. A later launch does the silent gated data read ONLY if the
+  cdhash still matches. A bare boolean flag was insufficient — under ad-hoc
+  signing the cdhash changes every rebuild, so a stale bool triggered an entry
+  data read against a now-untrusted ACL, which auto-prompted (the bug that was
+  observed). Keying by cdhash makes a stale grant read as not-granted → button,
+  no auto-prompt.
 - The Authorize button shows a one-line reason (`quota.authorize.reason`) so the
   user understands *why* access is requested.
 
 ## Known behavior
 
 "Always Allow" trust is bound to the code signature. Under ad-hoc signing
-(`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity, so the persisted
-grant survives but ACL trust does not — the gated read prompts once per rebuild.
-A stable Developer ID signature makes authorization truly one-time. macOS
-behavior, not a logic bug. (If the user picks "Allow Once", same effect on the
-next launch.)
+(`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity. Because the grant is
+keyed by cdhash, a rebuild reads as not-granted → the entry path shows the button
+(no auto-prompt); the user re-grants with one click. A stable Developer ID
+signature makes authorization truly one-time. macOS behavior, not a logic bug.
 
 ## Testing
 

@@ -374,15 +374,42 @@ final class UsageQuotaService: LifecycleAware {
         }
     }
 
-    /// Whether the user has authorized Keychain access for this provider before.
-    /// Drives the "automatic read vs show Authorize button" decision so the
-    /// entry path never prompts for a never-authorized provider.
+    /// Whether the user has authorized Keychain access for this provider *for the
+    /// currently-running code identity*. The grant is keyed by cdhash, not a bare
+    /// bool: macOS binds "Always Allow" ACL trust to the code signature, and
+    /// ad-hoc signing changes that every rebuild. Comparing cdhash means a stale
+    /// grant (from an older build) reads as NOT granted, so the entry path shows
+    /// the Authorize button instead of doing a data read that would prompt.
     private func keychainGranted(_ provider: QuotaProvider) -> Bool {
-        UserDefaults.standard.bool(forKey: "quota.keychainGranted.\(provider.rawValue)")
+        guard let current = Self.currentCodeIdentity() else { return false }
+        return UserDefaults.standard.string(forKey: grantedIdentityKey(provider)) == current
     }
 
     private func setKeychainGranted(_ granted: Bool, _ provider: QuotaProvider) {
-        UserDefaults.standard.set(granted, forKey: "quota.keychainGranted.\(provider.rawValue)")
+        if granted, let current = Self.currentCodeIdentity() {
+            UserDefaults.standard.set(current, forKey: grantedIdentityKey(provider))
+        } else {
+            UserDefaults.standard.removeObject(forKey: grantedIdentityKey(provider))
+        }
+    }
+
+    private func grantedIdentityKey(_ provider: QuotaProvider) -> String {
+        "quota.keychainGrantedIdentity.\(provider.rawValue)"
+    }
+
+    /// The running code's cdhash, hex-encoded — the identity the Keychain ACL
+    /// trusts. Returns nil if it can't be resolved, in which case `keychainGranted`
+    /// is false (safe: show the button, never auto-read).
+    private nonisolated static func currentCodeIdentity() -> String? {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        var infoCF: CFDictionary?
+        guard SecCodeCopySigningInformation(staticCode, [], &infoCF) == errSecSuccess,
+              let info = infoCF as? [String: Any],
+              let cdhash = info[kSecCodeInfoUnique as String] as? Data else { return nil }
+        return cdhash.map { String(format: "%02x", $0) }.joined()
     }
 
     private func keychainService(for provider: QuotaProvider) -> String {
