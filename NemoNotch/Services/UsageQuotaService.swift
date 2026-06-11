@@ -1,4 +1,6 @@
+import Darwin
 import Foundation
+import LocalAuthentication
 import Security
 
 /// Fetches Claude Code and Codex subscription usage and exposes them keyed by
@@ -157,19 +159,26 @@ final class UsageQuotaService: LifecycleAware {
     }
 
     private func readClaudeCredential(now: Date) -> UsageCredential {
+        // File first — most users have ~/.claude/.credentials.json, so the common
+        // path never touches the Keychain (and never triggers its cross-app prompt).
+        if FileManager.default.fileExists(atPath: claudeCredentialsURL.path) {
+            do {
+                let data = try Data(contentsOf: claudeCredentialsURL)
+                return try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
+            } catch {
+                LogService.warn(
+                    "Claude credential file unreadable, trying Keychain: \(error.localizedDescription)",
+                    category: "UsageQuotaService"
+                )
+            }
+        }
+        // Keychain fallback — non-interactive (see keychainBlob): returns nil rather
+        // than prompting when this app hasn't been granted access to the CLI's item.
         if let data = keychainBlob(service: claudeKeychainService),
            let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now) {
             return credential
         }
-        guard FileManager.default.fileExists(atPath: claudeCredentialsURL.path) else {
-            return UsageCredential(token: nil, status: .notFound)
-        }
-        do {
-            let data = try Data(contentsOf: claudeCredentialsURL)
-            return try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
-        } catch {
-            return UsageCredential(token: nil, status: .parseError, message: error.localizedDescription)
-        }
+        return UsageCredential(token: nil, status: .notFound)
     }
 
     // MARK: - Codex
@@ -237,19 +246,23 @@ final class UsageQuotaService: LifecycleAware {
     }
 
     private func readCodexCredential() -> UsageCredential {
+        // File first — see readClaudeCredential for the rationale (avoids the prompt).
+        if FileManager.default.fileExists(atPath: codexAuthURL.path) {
+            do {
+                let data = try Data(contentsOf: codexAuthURL)
+                return try UsageCredentialParser.parseCodexCredentials(data: data)
+            } catch {
+                LogService.warn(
+                    "Codex credential file unreadable, trying Keychain: \(error.localizedDescription)",
+                    category: "UsageQuotaService"
+                )
+            }
+        }
         if let data = keychainBlob(service: codexKeychainService),
            let credential = try? UsageCredentialParser.parseCodexCredentials(data: data) {
             return credential
         }
-        guard FileManager.default.fileExists(atPath: codexAuthURL.path) else {
-            return UsageCredential(token: nil, status: .notFound)
-        }
-        do {
-            let data = try Data(contentsOf: codexAuthURL)
-            return try UsageCredentialParser.parseCodexCredentials(data: data)
-        } catch {
-            return UsageCredential(token: nil, status: .parseError, message: error.localizedDescription)
-        }
+        return UsageCredential(token: nil, status: .notFound)
     }
 
     private func codexCredentialPresent() -> Bool {
@@ -262,15 +275,45 @@ final class UsageQuotaService: LifecycleAware {
     /// Reads a CLI's credential blob, stored as a Keychain generic-password
     /// item keyed by service name (the account is the macOS username and
     /// varies), so we match on `kSecAttrService` alone and take one result.
+    /// The query is forced non-interactive (`applyNoUI`): these items belong to
+    /// the Claude/Codex CLIs, so reading them from NemoNotch would otherwise pop
+    /// the macOS "wants to use confidential information" dialog. Instead the
+    /// lookup returns `errSecInteractionNotAllowed` (→ nil) and we fall back to
+    /// the on-disk credential file.
     private func keychainBlob(service: String) -> Data? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        applyNoUI(to: &query)
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
         return result as? Data
     }
+
+    /// Makes a Keychain query strictly non-interactive. `LAContext.interactionNotAllowed`
+    /// covers the data-protection keychain; `kSecUseAuthenticationUIFail` is still
+    /// needed for the legacy login keychain, where these CLI credentials actually
+    /// live. The deprecated constant is resolved at runtime via `dlsym` so we keep
+    /// its true value without a compile-time reference to the deprecated symbol.
+    /// (Pattern borrowed from CodexBar's `KeychainNoUIQuery`.)
+    private func applyNoUI(to query: inout [String: Any]) {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
+        query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString
+    }
+
+    /// Runtime-resolved value of `kSecUseAuthenticationUIFail`. Falls back to the
+    /// known literal ("u_AuthUIF") if the symbol can't be loaded.
+    private static let uiFailPolicy: String = {
+        let path = "/System/Library/Frameworks/Security.framework/Security"
+        guard let handle = dlopen(path, RTLD_NOW) else { return "u_AuthUIF" }
+        defer { dlclose(handle) }
+        guard let symbol = dlsym(handle, "kSecUseAuthenticationUIFail") else { return "u_AuthUIF" }
+        let pointer = symbol.assumingMemoryBound(to: CFString?.self)
+        return (pointer.pointee as String?) ?? "u_AuthUIF"
+    }()
 }

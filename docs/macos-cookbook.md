@@ -2050,6 +2050,47 @@ SecItemAdd(addQuery as CFDictionary, nil)
 
 **Gotcha:** `SecItemAdd` returns `errSecDuplicateItem` (`-25299`) if the key already exists. The current code ignores the return value because the preceding load guarantees absence — but if you split load/save across functions, switch to `SecItemUpdate` on duplicate, or call `SecItemDelete` first.
 
+### 14.3 Reading *another app's* Keychain item without the consent prompt
+
+`UsageQuotaService` reads CLI-owned credential items (`Claude Code-credentials`, `Codex Auth`) to fetch usage quotas. These items were created by the Claude Code / Codex CLIs, so their ACL is bound to *those* binaries. A plain `SecItemCopyMatching` from NemoNotch (a different, ad-hoc-signed binary) makes macOS pop the **"NemoNotch wants to use confidential information stored in … in your keychain"** Allow/Deny dialog — every tab-open, and repeatedly because ad-hoc signing changes the trusted code identity each build.
+
+Two-part fix:
+
+**1. Read the on-disk credential file first, Keychain only as fallback.** Both CLIs also write `~/.claude/.credentials.json` / `~/.codex/auth.json`. Reading the file is unprivileged, so the common path never touches the Keychain at all.
+
+**2. Force the Keychain query strictly non-interactive** so the fallback *fails silently* (`errSecInteractionNotAllowed` → `nil`) instead of prompting. `UsageQuotaService.swift`:
+
+```swift
+import Darwin           // dlopen / dlsym / RTLD_NOW
+import LocalAuthentication
+
+private func applyNoUI(to query: inout [String: Any]) {
+    let context = LAContext()
+    context.interactionNotAllowed = true
+    query[kSecUseAuthenticationContext as String] = context
+    // Legacy login keychain (where CLI creds live) can still prompt even with
+    // interactionNotAllowed — kSecUseAuthenticationUIFail is the belt-and-braces.
+    query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString
+}
+
+// kSecUseAuthenticationUIFail is deprecated; resolve its true value at runtime
+// via dlsym so we never reference the deprecated symbol at compile time.
+private static let uiFailPolicy: String = {
+    let path = "/System/Library/Frameworks/Security.framework/Security"
+    guard let handle = dlopen(path, RTLD_NOW) else { return "u_AuthUIF" }
+    defer { dlclose(handle) }
+    guard let symbol = dlsym(handle, "kSecUseAuthenticationUIFail") else { return "u_AuthUIF" }
+    let pointer = symbol.assumingMemoryBound(to: CFString?.self)
+    return (pointer.pointee as String?) ?? "u_AuthUIF"
+}()
+```
+
+**Gotcha:** `LAContext.interactionNotAllowed = true` alone covers the **data-protection** keychain, but the CLI credentials live in the **legacy login** keychain, which on some configs still prompts — hence the `kSecUseAuthenticationUIFail` belt-and-braces. (Pattern borrowed from CodexBar's `KeychainNoUIQuery`.)
+
+**Gotcha:** if you ever do a *preflight* probe to check access, request `kSecReturnAttributes` and **not** `kSecReturnData` — asking for the secret payload itself has been observed to surface the legacy prompt even with the no-UI flags set.
+
+**Gotcha:** the `u_AuthUIF` literal is the documented underlying value of `kSecUseAuthenticationUIFail`; it's the fallback only for the (unlikely) case the symbol can't be `dlsym`'d. Don't "simplify" by hardcoding it and dropping the runtime resolution — the resolved `CFString` is what the Security framework actually compares against.
+
 ---
 
 ## 15. Swift 6 concurrency conventions
