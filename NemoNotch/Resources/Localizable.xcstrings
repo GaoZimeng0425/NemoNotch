@@ -3867,6 +3867,22 @@
           }
         }
       }
+    },
+    "quota.authorize.reason": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NemoNotch needs Keychain access to read your usage limits."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取额度需要访问钥匙串中的登录凭证。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

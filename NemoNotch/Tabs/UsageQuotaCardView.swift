@@ -82,19 +82,26 @@ struct UsageQuotaCardView: View {
     }
 
     /// Shown when the credential lives only in the Keychain and this app hasn't
-    /// been granted access. Tapping triggers the (one-time) macOS consent dialog.
+    /// been granted access. Explains *why* access is needed, then triggers the
+    /// (one-time) macOS consent dialog on tap.
     private func authorizeButton(_ provider: QuotaProvider) -> some View {
-        Button {
-            Task { await service.authorize(provider) }
-        } label: {
-            Text("quota.authorize")
-                .font(.system(size: 10, weight: .medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(NotchTheme.accent))
-                .foregroundStyle(Color.black.opacity(0.85))
+        VStack(alignment: .leading, spacing: 4) {
+            Text("quota.authorize.reason")
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await service.authorize(provider) }
+            } label: {
+                Text("quota.authorize")
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(NotchTheme.accent))
+                    .foregroundStyle(Color.black.opacity(0.85))
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     private func tierRow(_ tier: QuotaTier) -> some View {

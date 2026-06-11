@@ -172,19 +172,9 @@ final class UsageQuotaService: LifecycleAware {
                 )
             }
         }
-        // No usable file — probe the Keychain non-interactively to distinguish
-        // "item exists but unauthorized" (→ Authorize button) from "nothing there".
-        switch keychainProbe(service: claudeKeychainService) {
-        case .authorized:
-            if let data = keychainBlob(service: claudeKeychainService),
-               let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now) {
-                return credential
-            }
-            return UsageCredential(token: nil, status: .notFound)
-        case .needsAuthorization:
-            return UsageCredential(token: nil, status: .needsAuthorization)
-        case .notFound, .failure:
-            return UsageCredential(token: nil, status: .notFound)
+        // No usable file — resolve from the Keychain without ever prompting here.
+        return readKeychainCredential(provider: .claude, service: claudeKeychainService) {
+            try? UsageCredentialParser.parseClaudeCredentials(data: $0, now: now)
         }
     }
 
@@ -265,15 +255,45 @@ final class UsageQuotaService: LifecycleAware {
                 )
             }
         }
-        // No usable file — see readClaudeCredential for the probe rationale.
-        switch keychainProbe(service: codexKeychainService) {
-        case .authorized:
-            if let data = keychainBlob(service: codexKeychainService),
-               let credential = try? UsageCredentialParser.parseCodexCredentials(data: data) {
+        // No usable file — resolve from the Keychain without ever prompting here.
+        return readKeychainCredential(provider: .codex, service: codexKeychainService) {
+            try? UsageCredentialParser.parseCodexCredentials(data: $0)
+        }
+    }
+
+    /// Keychain-only credential resolution that NEVER prompts on this (automatic)
+    /// path. The legacy login-keychain ACL guards the *secret data*: a GUI app
+    /// reading another app's `kSecReturnData` triggers the consent dialog, and
+    /// `applyNoUI` does NOT suppress it (it only gates LocalAuthentication UI).
+    /// So:
+    /// - If the user authorized before (`keychainGranted`), attempt the silent
+    ///   no-UI data read — instant for "Always Allow" (we're in the ACL). If that
+    ///   fails the grant is gone, so forget it and fall through to the button.
+    /// - Otherwise only probe *attributes* (never prompts): item present →
+    ///   `.needsAuthorization` (render the Authorize button, NO data read here);
+    ///   absent → `.notFound`.
+    private func readKeychainCredential(
+        provider: QuotaProvider,
+        service: String,
+        parse: (Data) -> UsageCredential?
+    ) -> UsageCredential {
+        if keychainGranted(provider) {
+            if let data = keychainBlob(service: service), let credential = parse(data) {
                 return credential
             }
-            return UsageCredential(token: nil, status: .notFound)
-        case .needsAuthorization:
+            LogService.warn(
+                "Keychain grant for \(provider.rawValue) no longer valid; reverting to Authorize",
+                category: "UsageQuotaService"
+            )
+            setKeychainGranted(false, provider)
+        }
+        let probe = keychainProbe(service: service)
+        LogService.info(
+            "Keychain probe \(provider.rawValue): \(probe) (granted=\(keychainGranted(provider)))",
+            category: "UsageQuotaService"
+        )
+        switch probe {
+        case .authorized, .needsAuthorization:
             return UsageCredential(token: nil, status: .needsAuthorization)
         case .notFound, .failure:
             return UsageCredential(token: nil, status: .notFound)
@@ -347,10 +367,22 @@ final class UsageQuotaService: LifecycleAware {
         let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
         if granted {
             LogService.info("Quota authorize granted: \(provider.rawValue)", category: "UsageQuotaService")
+            setKeychainGranted(true, provider)
             await refresh(force: true)
         } else {
             LogService.warn("Quota authorize denied or failed: \(provider.rawValue)", category: "UsageQuotaService")
         }
+    }
+
+    /// Whether the user has authorized Keychain access for this provider before.
+    /// Drives the "automatic read vs show Authorize button" decision so the
+    /// entry path never prompts for a never-authorized provider.
+    private func keychainGranted(_ provider: QuotaProvider) -> Bool {
+        UserDefaults.standard.bool(forKey: "quota.keychainGranted.\(provider.rawValue)")
+    }
+
+    private func setKeychainGranted(_ granted: Bool, _ provider: QuotaProvider) {
+        UserDefaults.standard.set(granted, forKey: "quota.keychainGranted.\(provider.rawValue)")
     }
 
     private func keychainService(for provider: QuotaProvider) -> String {

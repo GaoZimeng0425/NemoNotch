@@ -2052,46 +2052,22 @@ SecItemAdd(addQuery as CFDictionary, nil)
 
 ### 14.3 Reading *another app's* Keychain item without the consent prompt
 
-`UsageQuotaService` reads CLI-owned credential items (`Claude Code-credentials`, `Codex Auth`) to fetch usage quotas. These items were created by the Claude Code / Codex CLIs, so their ACL is bound to *those* binaries. A plain `SecItemCopyMatching` from NemoNotch (a different, ad-hoc-signed binary) makes macOS pop the **"NemoNotch wants to use confidential information stored in … in your keychain"** Allow/Deny dialog — every tab-open, and repeatedly because ad-hoc signing changes the trusted code identity each build.
+`UsageQuotaService` reads CLI-owned credential items (`Claude Code-credentials`, `Codex Auth`) to fetch usage quotas. These items were created by the Claude Code / Codex CLIs, so their ACL is bound to *those* binaries. A `SecItemCopyMatching` **data read** (`kSecReturnData`) from NemoNotch (a different, ad-hoc-signed binary) makes macOS pop the **"NemoNotch wants to use confidential information stored in … in your keychain"** Allow/Deny dialog.
 
-Two-part fix:
+**The thing that bit us:** the no-UI flags (`LAContext.interactionNotAllowed` + `kSecUseAuthenticationUIFail`) do **NOT** suppress this dialog for a GUI app. Empirically:
 
-**1. Read the on-disk credential file first, Keychain only as fallback.** Both CLIs also write `~/.claude/.credentials.json` / `~/.codex/auth.json`. Reading the file is unprivileged, so the common path never touches the Keychain at all.
+| caller | attributes read (`kSecReturnAttributes`) | data read (`kSecReturnData`, no-UI flags) |
+|---|---|---|
+| CLI tool | succeeds, no prompt | returns `errSecUserCanceled` (-128), no prompt |
+| **GUI `.app`** | succeeds, no prompt | **still PROMPTS** |
 
-**2. Force the Keychain query strictly non-interactive** so the fallback *fails silently* (`errSecInteractionNotAllowed` → `nil`) instead of prompting. `UsageQuotaService.swift`:
+The legacy-login-keychain ACL guards the **secret data**; the no-UI flags only gate *LocalAuthentication* UI (Touch ID / password), not the cross-app ACL consent dialog — and a windowed app gets the dialog regardless. So you **cannot** silently attempt a data read of another app's item from a GUI app. The design must avoid automatic data reads entirely.
 
-```swift
-import Darwin           // dlopen / dlsym / RTLD_NOW
-import LocalAuthentication
+**The pattern that actually works** (`UsageQuotaService.swift`):
 
-private func applyNoUI(to query: inout [String: Any]) {
-    let context = LAContext()
-    context.interactionNotAllowed = true
-    query[kSecUseAuthenticationContext as String] = context
-    // Legacy login keychain (where CLI creds live) can still prompt even with
-    // interactionNotAllowed — kSecUseAuthenticationUIFail is the belt-and-braces.
-    query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString
-}
+**1. File first.** Both CLIs *may* also write `~/.claude/.credentials.json` / `~/.codex/auth.json`. Reading the file is unprivileged. (Note: Claude does NOT always write this file — when it's Keychain-only, you hit the path below.)
 
-// kSecUseAuthenticationUIFail is deprecated; resolve its true value at runtime
-// via dlsym so we never reference the deprecated symbol at compile time.
-private static let uiFailPolicy: String = {
-    let path = "/System/Library/Frameworks/Security.framework/Security"
-    guard let handle = dlopen(path, RTLD_NOW) else { return "u_AuthUIF" }
-    defer { dlclose(handle) }
-    guard let symbol = dlsym(handle, "kSecUseAuthenticationUIFail") else { return "u_AuthUIF" }
-    let pointer = symbol.assumingMemoryBound(to: CFString?.self)
-    return (pointer.pointee as String?) ?? "u_AuthUIF"
-}()
-```
-
-**Gotcha:** `LAContext.interactionNotAllowed = true` alone covers the **data-protection** keychain, but the CLI credentials live in the **legacy login** keychain, which on some configs still prompts — hence the `kSecUseAuthenticationUIFail` belt-and-braces. (Pattern borrowed from CodexBar's `KeychainNoUIQuery`.)
-
-**Gotcha:** if you ever do a *preflight* probe to check access, request `kSecReturnAttributes` and **not** `kSecReturnData` — asking for the secret payload itself has been observed to surface the legacy prompt even with the no-UI flags set.
-
-**Gotcha:** the `u_AuthUIF` literal is the documented underlying value of `kSecUseAuthenticationUIFail`; it's the fallback only for the (unlikely) case the symbol can't be `dlsym`'d. Don't "simplify" by hardcoding it and dropping the runtime resolution — the resolved `CFString` is what the Security framework actually compares against.
-
-**Distinguishing "unauthorized" from "absent", and a button-gated grant.** A silent no-UI read returns `nil` for *both* "item exists but not authorized" and "no item at all" — so you can't tell whether to offer the user a way in. A non-interactive **preflight probe** disambiguates by reading the OSStatus, requesting `kSecReturnAttributes` (NOT `kSecReturnData`):
+**2. Detect with an attributes-only probe** (never prompts — confirmed above). It distinguishes exists-but-unauthorized from absent by OSStatus:
 
 ```swift
 private enum KeychainProbe { case authorized, needsAuthorization, notFound, failure }
@@ -2099,31 +2075,61 @@ private func keychainProbe(service: String) -> KeychainProbe {
     var query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: service,
-        kSecReturnAttributes as String: true,   // attributes only — never the secret
+        kSecReturnAttributes as String: true,   // attributes only — NEVER kSecReturnData here
         kSecMatchLimit as String: kSecMatchLimitOne,
     ]
-    applyNoUI(to: &query)
+    applyNoUI(to: &query)                        // belt-and-braces; harmless for attrs
     var result: AnyObject?
     switch SecItemCopyMatching(query as CFDictionary, &result) {
-    case errSecSuccess:               return .authorized        // already granted → read silently
-    case errSecInteractionNotAllowed: return .needsAuthorization // exists, locked → show button
-    case errSecItemNotFound:          return .notFound           // genuinely absent
-    default:                          return .failure
+    case errSecSuccess, errSecInteractionNotAllowed: return .authorized   // item present
+    case errSecItemNotFound:                          return .notFound
+    default:                                          return .failure
     }
 }
 ```
 
-`.needsAuthorization` drives a UI "Authorize" button (consistent with the app's `PermissionCard` pattern: never auto-prompt). The button's action does the ONE *interactive* read — the same query **without** `applyNoUI` — which surfaces the consent dialog. `SecItemCopyMatching` blocks while the dialog is up, so run it off the main actor:
+**3. Gate the data read behind a persisted grant + an explicit button.** On the automatic path, NEVER call the data read unless the user has authorized before:
+
+```swift
+private func readKeychainCredential(provider:, service:, parse:) -> UsageCredential {
+    if keychainGranted(provider) {                       // persisted in UserDefaults
+        if let data = keychainBlob(service: service),    // data read — silent ONLY because we're now trusted
+           let cred = parse(data) { return cred }
+        setKeychainGranted(false, provider)              // trust gone → fall back to button
+    }
+    return keychainProbe(service: service) == .notFound
+        ? UsageCredential(token: nil, status: .notFound)
+        : UsageCredential(token: nil, status: .needsAuthorization)   // → renders Authorize button
+}
+```
+
+`.needsAuthorization` renders an **Authorize** button (+ a one-line reason, so the user understands *why*). Its action does the ONE *interactive* read (the same query **without** `applyNoUI`), off the main actor since `SecItemCopyMatching` blocks while the dialog is up; on success it persists the grant:
 
 ```swift
 func authorize(_ provider: QuotaProvider) async {
     let service = keychainService(for: provider)
     let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
-    if granted { await refresh(force: true) }   // subsequent no-UI reads now succeed
+    if granted { setKeychainGranted(true, provider); await refresh(force: true) }
 }
 ```
 
-**Gotcha:** if "Allow Once" was chosen (not "Always Allow"), the next launch is back to `.needsAuthorization` — that's macOS ACL behavior, not a bug. No cooldown is needed because nothing ever prompts except the explicit button tap. (See `UsageQuotaService.swift`.)
+After "Always Allow" the app is in the item's ACL, so the gated data read in step 3 is genuinely silent on later launches.
+
+`applyNoUI` (kept for the probe and the post-grant read; `kSecUseAuthenticationUIFail` resolved via `dlsym` to avoid a compile-time reference to the deprecated symbol):
+
+```swift
+import Darwin           // dlopen / dlsym / RTLD_NOW
+import LocalAuthentication
+private func applyNoUI(to query: inout [String: Any]) {
+    let context = LAContext(); context.interactionNotAllowed = true
+    query[kSecUseAuthenticationContext as String] = context
+    query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString  // "u_AuthUIF"
+}
+```
+
+**Gotcha:** "Always Allow" trust is bound to the app's **code signature**. Under ad-hoc signing (`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity, so the persisted grant flag survives but the ACL trust doesn't — the gated data read then prompts once after each rebuild. A stable Developer ID signature makes it truly one-time. This is macOS behavior, not a logic bug.
+
+**Gotcha:** never put `kSecReturnData` on the automatic path "just to try" — in a GUI app it prompts even with every no-UI flag set. Attribute reads for detection, data reads only when explicitly user-initiated or already-granted.
 
 ---
 

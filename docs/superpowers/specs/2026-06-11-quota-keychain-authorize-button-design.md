@@ -93,11 +93,34 @@ hides and the button never shows). `.notFound`/`.failure` → absent.
 - `.failure` probe outcome is treated as `.notFound` to avoid a dead button that
   can't succeed.
 
+## Correction after testing (no-UI flags don't suppress the GUI prompt)
+
+The original design assumed a non-interactive (`applyNoUI`) data read would
+*fail silently* instead of prompting. **Testing disproved this for a GUI app:**
+the no-UI flags gate only LocalAuthentication UI, not the cross-app ACL consent
+dialog. A CLI tool's no-UI data read returns `errSecUserCanceled` with no prompt;
+a windowed `.app` still gets the dialog. Attribute reads (`kSecReturnAttributes`)
+never prompt for either.
+
+Revised design (implemented):
+- Automatic path NEVER issues a `kSecReturnData` read for an unauthorized item.
+- Detection uses the attributes-only probe (present → `.needsAuthorization`,
+  absent → `.notFound`).
+- The data read is gated behind a **persisted grant** (`keychainGranted`,
+  UserDefaults key `quota.keychainGranted.<provider>`): set by the user-tapped
+  `authorize(_:)`, after which later launches do a silent gated data read (silent
+  because "Always Allow" puts the app in the item's ACL).
+- The Authorize button shows a one-line reason (`quota.authorize.reason`) so the
+  user understands *why* access is requested.
+
 ## Known behavior
 
-If the user picks "Allow Once" (not "Always Allow") in the system dialog, the
-next entry returns to `.needsAuthorization`. This is macOS keychain ACL behavior
-and is expected.
+"Always Allow" trust is bound to the code signature. Under ad-hoc signing
+(`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity, so the persisted
+grant survives but ACL trust does not — the gated read prompts once per rebuild.
+A stable Developer ID signature makes authorization truly one-time. macOS
+behavior, not a logic bug. (If the user picks "Allow Once", same effect on the
+next launch.)
 
 ## Testing
 
