@@ -1,4 +1,6 @@
+import Darwin
 import Foundation
+import LocalAuthentication
 import Security
 
 /// Fetches Claude Code and Codex subscription usage and exposes them keyed by
@@ -157,18 +159,22 @@ final class UsageQuotaService: LifecycleAware {
     }
 
     private func readClaudeCredential(now: Date) -> UsageCredential {
-        if let data = keychainBlob(service: claudeKeychainService),
-           let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now) {
-            return credential
+        // File first — most users have ~/.claude/.credentials.json, so the common
+        // path never touches the Keychain (and never triggers its cross-app prompt).
+        if FileManager.default.fileExists(atPath: claudeCredentialsURL.path) {
+            do {
+                let data = try Data(contentsOf: claudeCredentialsURL)
+                return try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
+            } catch {
+                LogService.warn(
+                    "Claude credential file unreadable, trying Keychain: \(error.localizedDescription)",
+                    category: "UsageQuotaService"
+                )
+            }
         }
-        guard FileManager.default.fileExists(atPath: claudeCredentialsURL.path) else {
-            return UsageCredential(token: nil, status: .notFound)
-        }
-        do {
-            let data = try Data(contentsOf: claudeCredentialsURL)
-            return try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
-        } catch {
-            return UsageCredential(token: nil, status: .parseError, message: error.localizedDescription)
+        // No usable file — resolve from the Keychain without ever prompting here.
+        return readKeychainCredential(provider: .claude, service: claudeKeychainService) {
+            try? UsageCredentialParser.parseClaudeCredentials(data: $0, now: now)
         }
     }
 
@@ -237,24 +243,71 @@ final class UsageQuotaService: LifecycleAware {
     }
 
     private func readCodexCredential() -> UsageCredential {
-        if let data = keychainBlob(service: codexKeychainService),
-           let credential = try? UsageCredentialParser.parseCodexCredentials(data: data) {
-            return credential
+        // File first — see readClaudeCredential for the rationale (avoids the prompt).
+        if FileManager.default.fileExists(atPath: codexAuthURL.path) {
+            do {
+                let data = try Data(contentsOf: codexAuthURL)
+                return try UsageCredentialParser.parseCodexCredentials(data: data)
+            } catch {
+                LogService.warn(
+                    "Codex credential file unreadable, trying Keychain: \(error.localizedDescription)",
+                    category: "UsageQuotaService"
+                )
+            }
         }
-        guard FileManager.default.fileExists(atPath: codexAuthURL.path) else {
+        // No usable file — resolve from the Keychain without ever prompting here.
+        return readKeychainCredential(provider: .codex, service: codexKeychainService) {
+            try? UsageCredentialParser.parseCodexCredentials(data: $0)
+        }
+    }
+
+    /// Keychain-only credential resolution that NEVER prompts on this (automatic)
+    /// path. The legacy login-keychain ACL guards the *secret data*: a GUI app
+    /// reading another app's `kSecReturnData` triggers the consent dialog, and
+    /// `applyNoUI` does NOT suppress it (it only gates LocalAuthentication UI).
+    /// So:
+    /// - If the user authorized before (`keychainGranted`), attempt the silent
+    ///   no-UI data read — instant for "Always Allow" (we're in the ACL). If that
+    ///   fails the grant is gone, so forget it and fall through to the button.
+    /// - Otherwise only probe *attributes* (never prompts): item present →
+    ///   `.needsAuthorization` (render the Authorize button, NO data read here);
+    ///   absent → `.notFound`.
+    private func readKeychainCredential(
+        provider: QuotaProvider,
+        service: String,
+        parse: (Data) -> UsageCredential?
+    ) -> UsageCredential {
+        if keychainGranted(provider) {
+            if let data = keychainBlob(service: service), let credential = parse(data) {
+                return credential
+            }
+            LogService.warn(
+                "Keychain grant for \(provider.rawValue) no longer valid; reverting to Authorize",
+                category: "UsageQuotaService"
+            )
+            setKeychainGranted(false, provider)
+        }
+        let probe = keychainProbe(service: service)
+        LogService.info(
+            "Keychain probe \(provider.rawValue): \(probe) (granted=\(keychainGranted(provider)))",
+            category: "UsageQuotaService"
+        )
+        switch probe {
+        case .authorized, .needsAuthorization:
+            return UsageCredential(token: nil, status: .needsAuthorization)
+        case .notFound, .failure:
             return UsageCredential(token: nil, status: .notFound)
-        }
-        do {
-            let data = try Data(contentsOf: codexAuthURL)
-            return try UsageCredentialParser.parseCodexCredentials(data: data)
-        } catch {
-            return UsageCredential(token: nil, status: .parseError, message: error.localizedDescription)
         }
     }
 
     private func codexCredentialPresent() -> Bool {
         if FileManager.default.fileExists(atPath: codexAuthURL.path) { return true }
-        return keychainBlob(service: codexKeychainService) != nil
+        // An unauthorized-but-present item still counts as present, so the Codex
+        // section shows (and offers the Authorize button) instead of hiding.
+        switch keychainProbe(service: codexKeychainService) {
+        case .authorized, .needsAuthorization: return true
+        case .notFound, .failure: return false
+        }
     }
 
     // MARK: - Keychain
@@ -262,7 +315,113 @@ final class UsageQuotaService: LifecycleAware {
     /// Reads a CLI's credential blob, stored as a Keychain generic-password
     /// item keyed by service name (the account is the macOS username and
     /// varies), so we match on `kSecAttrService` alone and take one result.
+    /// The query is forced non-interactive (`applyNoUI`): these items belong to
+    /// the Claude/Codex CLIs, so reading them from NemoNotch would otherwise pop
+    /// the macOS "wants to use confidential information" dialog. Instead the
+    /// lookup returns `errSecInteractionNotAllowed` (→ nil) and we fall back to
+    /// the on-disk credential file.
     private func keychainBlob(service: String) -> Data? {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        applyNoUI(to: &query)
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    private enum KeychainProbe { case authorized, needsAuthorization, notFound, failure }
+
+    /// Non-interactive existence/authorization probe. Requests attributes only
+    /// (never `kSecReturnData` — asking for the secret can itself surface the
+    /// legacy prompt) so we can tell "exists but unauthorized" from "absent"
+    /// without ever prompting.
+    private func keychainProbe(service: String) -> KeychainProbe {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        applyNoUI(to: &query)
+        var result: AnyObject?
+        switch SecItemCopyMatching(query as CFDictionary, &result) {
+        case errSecSuccess: return .authorized
+        case errSecInteractionNotAllowed: return .needsAuthorization
+        case errSecItemNotFound: return .notFound
+        default: return .failure
+        }
+    }
+
+    /// User-initiated grant: performs ONE *interactive* Keychain read, surfacing
+    /// the macOS consent dialog. On success the quota is refreshed (subsequent
+    /// non-interactive reads then succeed silently); on denial nothing changes.
+    func authorize(_ provider: QuotaProvider) async {
+        let service = keychainService(for: provider)
+        LogService.info("Quota authorize requested: \(provider.rawValue)", category: "UsageQuotaService")
+        // SecItemCopyMatching blocks while the dialog is up — run it off the main
+        // actor so the UI doesn't freeze.
+        let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
+        if granted {
+            LogService.info("Quota authorize granted: \(provider.rawValue)", category: "UsageQuotaService")
+            setKeychainGranted(true, provider)
+            await refresh(force: true)
+        } else {
+            LogService.warn("Quota authorize denied or failed: \(provider.rawValue)", category: "UsageQuotaService")
+        }
+    }
+
+    /// Whether the user has authorized Keychain access for this provider *for the
+    /// currently-running code identity*. The grant is keyed by cdhash, not a bare
+    /// bool: macOS binds "Always Allow" ACL trust to the code signature, and
+    /// ad-hoc signing changes that every rebuild. Comparing cdhash means a stale
+    /// grant (from an older build) reads as NOT granted, so the entry path shows
+    /// the Authorize button instead of doing a data read that would prompt.
+    private func keychainGranted(_ provider: QuotaProvider) -> Bool {
+        guard let current = Self.currentCodeIdentity() else { return false }
+        return UserDefaults.standard.string(forKey: grantedIdentityKey(provider)) == current
+    }
+
+    private func setKeychainGranted(_ granted: Bool, _ provider: QuotaProvider) {
+        if granted, let current = Self.currentCodeIdentity() {
+            UserDefaults.standard.set(current, forKey: grantedIdentityKey(provider))
+        } else {
+            UserDefaults.standard.removeObject(forKey: grantedIdentityKey(provider))
+        }
+    }
+
+    private func grantedIdentityKey(_ provider: QuotaProvider) -> String {
+        "quota.keychainGrantedIdentity.\(provider.rawValue)"
+    }
+
+    /// The running code's cdhash, hex-encoded — the identity the Keychain ACL
+    /// trusts. Returns nil if it can't be resolved, in which case `keychainGranted`
+    /// is false (safe: show the button, never auto-read).
+    private nonisolated static func currentCodeIdentity() -> String? {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        var infoCF: CFDictionary?
+        guard SecCodeCopySigningInformation(staticCode, [], &infoCF) == errSecSuccess,
+              let info = infoCF as? [String: Any],
+              let cdhash = info[kSecCodeInfoUnique as String] as? Data else { return nil }
+        return cdhash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func keychainService(for provider: QuotaProvider) -> String {
+        switch provider {
+        case .claude: claudeKeychainService
+        case .codex: codexKeychainService
+        }
+    }
+
+    /// Interactive read — deliberately omits `applyNoUI`, so macOS shows the
+    /// consent dialog when access hasn't been granted. Used only from `authorize`.
+    private nonisolated static func interactiveKeychainRead(service: String) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -273,4 +432,28 @@ final class UsageQuotaService: LifecycleAware {
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
         return result as? Data
     }
+
+    /// Makes a Keychain query strictly non-interactive. `LAContext.interactionNotAllowed`
+    /// covers the data-protection keychain; `kSecUseAuthenticationUIFail` is still
+    /// needed for the legacy login keychain, where these CLI credentials actually
+    /// live. The deprecated constant is resolved at runtime via `dlsym` so we keep
+    /// its true value without a compile-time reference to the deprecated symbol.
+    /// (Pattern borrowed from CodexBar's `KeychainNoUIQuery`.)
+    private func applyNoUI(to query: inout [String: Any]) {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
+        query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString
+    }
+
+    /// Runtime-resolved value of `kSecUseAuthenticationUIFail`. Falls back to the
+    /// known literal ("u_AuthUIF") if the symbol can't be loaded.
+    private static let uiFailPolicy: String = {
+        let path = "/System/Library/Frameworks/Security.framework/Security"
+        guard let handle = dlopen(path, RTLD_NOW) else { return "u_AuthUIF" }
+        defer { dlclose(handle) }
+        guard let symbol = dlsym(handle, "kSecUseAuthenticationUIFail") else { return "u_AuthUIF" }
+        let pointer = symbol.assumingMemoryBound(to: CFString?.self)
+        return (pointer.pointee as String?) ?? "u_AuthUIF"
+    }()
 }
