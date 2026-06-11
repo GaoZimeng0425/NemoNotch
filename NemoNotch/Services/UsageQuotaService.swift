@@ -172,13 +172,20 @@ final class UsageQuotaService: LifecycleAware {
                 )
             }
         }
-        // Keychain fallback — non-interactive (see keychainBlob): returns nil rather
-        // than prompting when this app hasn't been granted access to the CLI's item.
-        if let data = keychainBlob(service: claudeKeychainService),
-           let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now) {
-            return credential
+        // No usable file — probe the Keychain non-interactively to distinguish
+        // "item exists but unauthorized" (→ Authorize button) from "nothing there".
+        switch keychainProbe(service: claudeKeychainService) {
+        case .authorized:
+            if let data = keychainBlob(service: claudeKeychainService),
+               let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now) {
+                return credential
+            }
+            return UsageCredential(token: nil, status: .notFound)
+        case .needsAuthorization:
+            return UsageCredential(token: nil, status: .needsAuthorization)
+        case .notFound, .failure:
+            return UsageCredential(token: nil, status: .notFound)
         }
-        return UsageCredential(token: nil, status: .notFound)
     }
 
     // MARK: - Codex
@@ -258,16 +265,29 @@ final class UsageQuotaService: LifecycleAware {
                 )
             }
         }
-        if let data = keychainBlob(service: codexKeychainService),
-           let credential = try? UsageCredentialParser.parseCodexCredentials(data: data) {
-            return credential
+        // No usable file — see readClaudeCredential for the probe rationale.
+        switch keychainProbe(service: codexKeychainService) {
+        case .authorized:
+            if let data = keychainBlob(service: codexKeychainService),
+               let credential = try? UsageCredentialParser.parseCodexCredentials(data: data) {
+                return credential
+            }
+            return UsageCredential(token: nil, status: .notFound)
+        case .needsAuthorization:
+            return UsageCredential(token: nil, status: .needsAuthorization)
+        case .notFound, .failure:
+            return UsageCredential(token: nil, status: .notFound)
         }
-        return UsageCredential(token: nil, status: .notFound)
     }
 
     private func codexCredentialPresent() -> Bool {
         if FileManager.default.fileExists(atPath: codexAuthURL.path) { return true }
-        return keychainBlob(service: codexKeychainService) != nil
+        // An unauthorized-but-present item still counts as present, so the Codex
+        // section shows (and offers the Authorize button) instead of hiding.
+        switch keychainProbe(service: codexKeychainService) {
+        case .authorized, .needsAuthorization: return true
+        case .notFound, .failure: return false
+        }
     }
 
     // MARK: - Keychain
@@ -288,6 +308,67 @@ final class UsageQuotaService: LifecycleAware {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         applyNoUI(to: &query)
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    private enum KeychainProbe { case authorized, needsAuthorization, notFound, failure }
+
+    /// Non-interactive existence/authorization probe. Requests attributes only
+    /// (never `kSecReturnData` — asking for the secret can itself surface the
+    /// legacy prompt) so we can tell "exists but unauthorized" from "absent"
+    /// without ever prompting.
+    private func keychainProbe(service: String) -> KeychainProbe {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        applyNoUI(to: &query)
+        var result: AnyObject?
+        switch SecItemCopyMatching(query as CFDictionary, &result) {
+        case errSecSuccess: return .authorized
+        case errSecInteractionNotAllowed: return .needsAuthorization
+        case errSecItemNotFound: return .notFound
+        default: return .failure
+        }
+    }
+
+    /// User-initiated grant: performs ONE *interactive* Keychain read, surfacing
+    /// the macOS consent dialog. On success the quota is refreshed (subsequent
+    /// non-interactive reads then succeed silently); on denial nothing changes.
+    func authorize(_ provider: QuotaProvider) async {
+        let service = keychainService(for: provider)
+        LogService.info("Quota authorize requested: \(provider.rawValue)", category: "UsageQuotaService")
+        // SecItemCopyMatching blocks while the dialog is up — run it off the main
+        // actor so the UI doesn't freeze.
+        let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
+        if granted {
+            LogService.info("Quota authorize granted: \(provider.rawValue)", category: "UsageQuotaService")
+            await refresh(force: true)
+        } else {
+            LogService.warn("Quota authorize denied or failed: \(provider.rawValue)", category: "UsageQuotaService")
+        }
+    }
+
+    private func keychainService(for provider: QuotaProvider) -> String {
+        switch provider {
+        case .claude: claudeKeychainService
+        case .codex: codexKeychainService
+        }
+    }
+
+    /// Interactive read — deliberately omits `applyNoUI`, so macOS shows the
+    /// consent dialog when access hasn't been granted. Used only from `authorize`.
+    private nonisolated static func interactiveKeychainRead(service: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
         return result as? Data

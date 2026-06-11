@@ -32,14 +32,9 @@ struct UsageQuotaCardView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(NotchTheme.textPrimary)
             Spacer()
-            Button {
-                Task { await service.refresh(force: true) }
-            } label: {
-                refreshIcon
-            }
-            .buttonStyle(.plain)
-            .disabled(service.isRefreshing)
-            .help("quota.refresh")
+                .buttonStyle(.plain)
+                .disabled(service.isRefreshing)
+                .help("quota.refresh")
         }
     }
 
@@ -76,12 +71,30 @@ struct UsageQuotaCardView: View {
                 ForEach(quota.tiers, id: \.window) { tier in
                     tierRow(tier)
                 }
+            } else if quota?.status == .needsAuthorization {
+                authorizeButton(provider)
             } else {
                 Text(statusKey(for: quota))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(NotchTheme.textTertiary)
             }
         }
+    }
+
+    /// Shown when the credential lives only in the Keychain and this app hasn't
+    /// been granted access. Tapping triggers the (one-time) macOS consent dialog.
+    private func authorizeButton(_ provider: QuotaProvider) -> some View {
+        Button {
+            Task { await service.authorize(provider) }
+        } label: {
+            Text("quota.authorize")
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(NotchTheme.accent))
+                .foregroundStyle(Color.black.opacity(0.85))
+        }
+        .buttonStyle(.plain)
     }
 
     private func tierRow(_ tier: QuotaTier) -> some View {
@@ -145,6 +158,7 @@ struct UsageQuotaCardView: View {
         case .expired: return "quota.status.login_required"
         case .notFound: return "quota.status.not_logged_in"
         case .parseError: return "quota.status.error"
+        case .needsAuthorization: return "quota.status.needs_authorization"
         }
     }
 }
@@ -201,8 +215,13 @@ struct UsageQuotaCompactView: View {
                     Spacer(minLength: 0)
                 }
                 VStack(alignment: .trailing, spacing: 5) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                        meterRow(provider: row.provider, window: row.window)
+                    ForEach(displayRows, id: \.self) { row in
+                        switch row {
+                        case let .meter(provider, window):
+                            meterRow(provider: provider, window: window)
+                        case let .authorize(provider):
+                            compactAuthorizeButton(provider)
+                        }
                     }
                 }
             }
@@ -237,6 +256,42 @@ struct UsageQuotaCompactView: View {
         } else {
             glyph
         }
+    }
+
+    /// One row per logical meter, except a provider awaiting authorization
+    /// collapses to a single authorize chip (instead of two "--" meters).
+    private enum CompactRow: Hashable {
+        case meter(provider: QuotaProvider, window: LogicalWindow)
+        case authorize(provider: QuotaProvider)
+    }
+
+    private var displayRows: [CompactRow] {
+        var seenAuth: Set<QuotaProvider> = []
+        var out: [CompactRow] = []
+        for row in rows {
+            if service.quotas[row.provider]?.status == .needsAuthorization {
+                if seenAuth.insert(row.provider).inserted {
+                    out.append(.authorize(provider: row.provider))
+                }
+            } else {
+                out.append(.meter(provider: row.provider, window: row.window))
+            }
+        }
+        return out
+    }
+
+    private func compactAuthorizeButton(_ provider: QuotaProvider) -> some View {
+        Button {
+            Task { await service.authorize(provider) }
+        } label: {
+            Text("quota.authorize")
+                .font(.system(size: 9, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(NotchTheme.accent))
+                .foregroundStyle(Color.black.opacity(0.85))
+        }
+        .buttonStyle(.plain)
     }
 
     private func meterRow(provider: QuotaProvider, window: LogicalWindow) -> some View {

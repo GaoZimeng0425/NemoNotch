@@ -101,8 +101,21 @@ and is expected.
 
 ## Testing
 
-Swift Testing unit tests for the pure branch logic:
-- probe outcome → `CredentialStatus` mapping
-- `fetch*` returns `.needsAuthorization` without a network call
+The new logic (probe, `authorize`, the probe→status branches) lives entirely
+inside private `@MainActor` methods that call `SecItem*` / the network — exactly
+the Keychain/integration-bound code the project's testing convention says to
+skip (it needs real macOS authorization state and is flaky). The OSStatus→probe
+and probe→`CredentialStatus` mappings are trivial 1:1 switches; exposing them
+purely to assert a rename carries no defect-catching value and would add
+DI scaffolding the design doesn't otherwise need.
 
-`SecItem*` calls themselves are not unit-tested (need real macOS auth state).
+Coverage relied on instead:
+- The existing `UsageQuotaTests` suite (parsers/formatters) still passes with the
+  new `CredentialStatus` case — confirms no regression.
+- Build verifies the exhaustive `switch` over `CredentialStatus` was updated in
+  the UI (`statusKey`).
+- Manual verification of the actual prompt behavior (run the app, open AI tab,
+  confirm no dialog; click 授权, confirm the dialog appears once).
+
+If injectable coverage is wanted later, extract a credential-source protocol
+(file reader + keychain probe) and inject fakes — deferred as out of scope.

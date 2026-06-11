@@ -2091,6 +2091,40 @@ private static let uiFailPolicy: String = {
 
 **Gotcha:** the `u_AuthUIF` literal is the documented underlying value of `kSecUseAuthenticationUIFail`; it's the fallback only for the (unlikely) case the symbol can't be `dlsym`'d. Don't "simplify" by hardcoding it and dropping the runtime resolution — the resolved `CFString` is what the Security framework actually compares against.
 
+**Distinguishing "unauthorized" from "absent", and a button-gated grant.** A silent no-UI read returns `nil` for *both* "item exists but not authorized" and "no item at all" — so you can't tell whether to offer the user a way in. A non-interactive **preflight probe** disambiguates by reading the OSStatus, requesting `kSecReturnAttributes` (NOT `kSecReturnData`):
+
+```swift
+private enum KeychainProbe { case authorized, needsAuthorization, notFound, failure }
+private func keychainProbe(service: String) -> KeychainProbe {
+    var query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecReturnAttributes as String: true,   // attributes only — never the secret
+        kSecMatchLimit as String: kSecMatchLimitOne,
+    ]
+    applyNoUI(to: &query)
+    var result: AnyObject?
+    switch SecItemCopyMatching(query as CFDictionary, &result) {
+    case errSecSuccess:               return .authorized        // already granted → read silently
+    case errSecInteractionNotAllowed: return .needsAuthorization // exists, locked → show button
+    case errSecItemNotFound:          return .notFound           // genuinely absent
+    default:                          return .failure
+    }
+}
+```
+
+`.needsAuthorization` drives a UI "Authorize" button (consistent with the app's `PermissionCard` pattern: never auto-prompt). The button's action does the ONE *interactive* read — the same query **without** `applyNoUI` — which surfaces the consent dialog. `SecItemCopyMatching` blocks while the dialog is up, so run it off the main actor:
+
+```swift
+func authorize(_ provider: QuotaProvider) async {
+    let service = keychainService(for: provider)
+    let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
+    if granted { await refresh(force: true) }   // subsequent no-UI reads now succeed
+}
+```
+
+**Gotcha:** if "Allow Once" was chosen (not "Always Allow"), the next launch is back to `.needsAuthorization` — that's macOS ACL behavior, not a bug. No cooldown is needed because nothing ever prompts except the explicit button tap. (See `UsageQuotaService.swift`.)
+
 ---
 
 ## 15. Swift 6 concurrency conventions
