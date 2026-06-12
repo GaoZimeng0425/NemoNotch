@@ -73,9 +73,9 @@ enum NotchConstants {
     /// Blur applied to the halo — smaller = tighter, more defined glow.
     static let completionGlowBlur: CGFloat = 18
     /// Crisp solid outer line hugging the very edge, so the rim reads as solid.
-    static let completionGlowEdgeWidth: CGFloat = 2.5
+    static let completionGlowEdgeWidth: CGFloat = 6
     /// Peak opacity of the edge glow at the top of the flash.
-    static let completionGlowOpacity: Double = 0.6
+    static let completionGlowOpacity: Double = 0.9
 
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///
