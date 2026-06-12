@@ -179,7 +179,11 @@ struct UsageQuotaCompactView: View {
     @Environment(AppSettings.self) private var appSettings
     @State private var showDetail = false
 
-    private enum LogicalWindow { case fiveHour, sevenDay }
+    /// A compact meter slot: the provider's primary (shortest) tier or its
+    /// secondary (next) tier. Provider-agnostic so Codex — whose windows are
+    /// arbitrary rolling lengths, often without a literal 5h — surfaces whatever
+    /// windows it actually reports instead of an empty "5h" meter.
+    private enum Slot { case primary, secondary }
 
     /// Providers to surface: Claude when enabled, Codex when a credential exists.
     private var visibleProviders: [QuotaProvider] {
@@ -189,18 +193,16 @@ struct UsageQuotaCompactView: View {
         return result
     }
 
-    /// At most two rows. One provider → its 5h + 7d. Two/three → each provider's
-    /// 5h (capped at two). More than three → just Claude + Codex 5h.
-    private var rows: [(provider: QuotaProvider, window: LogicalWindow)] {
+    /// At most two rows. One provider → its primary + secondary tier. Two
+    /// providers → each provider's primary tier. (Only Claude/Codex exist, so
+    /// the list never exceeds two.)
+    private var rows: [(provider: QuotaProvider, slot: Slot)] {
         let providers = visibleProviders
         if providers.count <= 1 {
             guard let only = providers.first else { return [] }
-            return [(only, .fiveHour), (only, .sevenDay)]
+            return [(only, .primary), (only, .secondary)]
         }
-        if providers.count > 3 {
-            return [(.claude, .fiveHour), (.codex, .fiveHour)]
-        }
-        return providers.prefix(2).map { ($0, .fiveHour) }
+        return providers.prefix(2).map { ($0, .primary) }
     }
 
     var body: some View {
@@ -224,8 +226,8 @@ struct UsageQuotaCompactView: View {
                 VStack(alignment: .trailing, spacing: 5) {
                     ForEach(displayRows, id: \.self) { row in
                         switch row {
-                        case let .meter(provider, window):
-                            meterRow(provider: provider, window: window)
+                        case let .meter(provider, slot):
+                            meterRow(provider: provider, slot: slot)
                         case let .authorize(provider):
                             compactAuthorizeButton(provider)
                         }
@@ -268,7 +270,7 @@ struct UsageQuotaCompactView: View {
     /// One row per logical meter, except a provider awaiting authorization
     /// collapses to a single authorize chip (instead of two "--" meters).
     private enum CompactRow: Hashable {
-        case meter(provider: QuotaProvider, window: LogicalWindow)
+        case meter(provider: QuotaProvider, slot: Slot)
         case authorize(provider: QuotaProvider)
     }
 
@@ -276,12 +278,17 @@ struct UsageQuotaCompactView: View {
         var seenAuth: Set<QuotaProvider> = []
         var out: [CompactRow] = []
         for row in rows {
-            if service.quotas[row.provider]?.status == .needsAuthorization {
+            let status = service.quotas[row.provider]?.status
+            if status == .needsAuthorization {
                 if seenAuth.insert(row.provider).inserted {
                     out.append(.authorize(provider: row.provider))
                 }
+            } else if status == .valid, tier(row.provider, row.slot) == nil {
+                // Loaded but no window in this slot (e.g. Codex free tier reports a
+                // single window) — skip rather than render an empty "--" meter.
+                continue
             } else {
-                out.append(.meter(provider: row.provider, window: row.window))
+                out.append(.meter(provider: row.provider, slot: row.slot))
             }
         }
         return out
@@ -301,14 +308,14 @@ struct UsageQuotaCompactView: View {
         .buttonStyle(.plain)
     }
 
-    private func meterRow(provider: QuotaProvider, window: LogicalWindow) -> some View {
-        let tier = tier(provider, window)
+    private func meterRow(provider: QuotaProvider, slot: Slot) -> some View {
+        let tier = tier(provider, slot)
         let pct = tier?.utilization ?? 0
         return HStack(spacing: 5) {
-            Text(label(provider: provider, window: window))
+            Text(label(provider: provider, tier: tier))
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: 40, alignment: .trailing)
                 .lineLimit(1)
 
             GeometryReader { geo in
@@ -328,27 +335,33 @@ struct UsageQuotaCompactView: View {
         }
     }
 
-    /// Resolves a provider's tier for a logical window, bridging Claude's named
-    /// windows and Codex's rolling-minute windows (5h ≈ 300m, 7d ≈ 10080m).
-    private func tier(_ provider: QuotaProvider, _ window: LogicalWindow) -> QuotaTier? {
+    /// The provider's tier for a slot, taken from its ordered tiers. Claude's are
+    /// ordered [5h, 7d, …]; Codex's are normalized session→weekly→other. So
+    /// `.primary` is the shortest window and `.secondary` the next — and a
+    /// provider that omits one simply has no tier for that slot.
+    private func tier(_ provider: QuotaProvider, _ slot: Slot) -> QuotaTier? {
         let tiers = service.quotas[provider]?.tiers ?? []
-        switch window {
-        case .fiveHour:
-            return tiers.first { $0.window == .fiveHour || isRolling($0.window, minutes: 300) }
-        case .sevenDay:
-            return tiers.first { $0.window == .sevenDay || isRolling($0.window, minutes: 10080) }
+        switch slot {
+        case .primary: return tiers.first
+        case .secondary: return tiers.count > 1 ? tiers[1] : nil
         }
     }
 
-    private func isRolling(_ window: QuotaWindow, minutes: Int) -> Bool {
-        if case let .rolling(value) = window { return value == minutes }
-        return false
-    }
-
-    private func label(provider: QuotaProvider, window: LogicalWindow) -> String {
-        let win = window == .fiveHour ? "5h" : "7d"
+    /// Window label from the resolved tier (Claude named windows → "5h"/"7d";
+    /// Codex rolling → "5h"/"7d"/"30d"/…), prefixed with the provider initial
+    /// when more than one provider is shown.
+    private func label(provider: QuotaProvider, tier: QuotaTier?) -> String {
+        let win = tier.map { windowShortLabel($0.window) } ?? "--"
         guard visibleProviders.count != 1 else { return win }
         return "\(provider == .claude ? "C" : "Cx") \(win)"
+    }
+
+    private func windowShortLabel(_ window: QuotaWindow) -> String {
+        switch window {
+        case .fiveHour: return "5h"
+        case .sevenDay, .sevenDayOpus, .sevenDaySonnet: return "7d"
+        case let .rolling(minutes): return UsageQuotaFormatter.windowLabel(minutes: minutes)
+        }
     }
 
     private func color(for utilization: Double) -> Color {
