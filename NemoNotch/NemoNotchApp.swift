@@ -99,8 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
     private(set) var usageQuotaService: UsageQuotaService?
     private(set) var quickStartController: QuickStartWindowController?
-    var completionFlashService: CompletionFlashService?
-    var completionFlashWindowController: CompletionFlashWindowController?
+    private(set) var completionFlashService: CompletionFlashService?
+    private(set) var completionFlashWindowController: CompletionFlashWindowController?
 
     var shouldSuppressPreviousAppRestore: Bool {
         Date() < suppressRestoreUntil
