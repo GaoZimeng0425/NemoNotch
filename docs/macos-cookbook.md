@@ -597,6 +597,62 @@ A borderless, click-outside-dismissable, all-Spaces `NSPanel` that lives at the 
 
 Example: `NemoNotch/Notch/QuickStartWindow.swift`, controller at `QuickStartWindowController.swift`.
 
+### 5.10 — Full-screen transparent click-through overlay window, per display
+
+What/why: A one-shot full-screen glow needs its own `NSWindow` covering the entire display because the notch window is sized to a small notch-centered rect — it cannot paint outside that area. Each connected screen gets its own overlay window so the effect fires simultaneously on every display.
+
+**Window construction** — `NemoNotch/Notch/CompletionFlashWindow.swift:6-25  CompletionFlashWindow.init(rect:)`
+
+```swift
+final class CompletionFlashWindow: NSWindow {
+    init(rect: NSRect) {
+        super.init(contentRect: rect, styleMask: [.borderless], backing: .buffered, defer: false)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        level = .statusBar + 8
+        ignoresMouseEvents = true          // purely visual — never captures clicks
+        isMovable = false
+        collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
+    }
+
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+```
+
+Key differences from `NotchWindow` [§5.1]: `ignoresMouseEvents = true` (no `PassThroughView` needed; the window never intercepts events at all), `canBecomeKey/Main` both return `false` (it must never steal focus), and it is sized to the **full `NSScreen.frame`** rather than a fixed notch-centered rect.
+
+**Per-screen controller** — `NemoNotch/Notch/CompletionFlashWindow.swift:31-85  CompletionFlashWindowController`
+
+One `CompletionFlashWindow` per `NSScreen`, managed in a `[UInt32: CompletionFlashWindow]` dictionary keyed by `screen.displayID`. On `NSApplication.didChangeScreenParametersNotification` the controller diffs the current screen set against its dictionary: windows for removed displays are closed and evicted; new displays get a fresh `makeWindow(for:)`.
+
+```swift
+private func rebuild() {
+    let currentIDs = Set(NSScreen.screens.map(\.displayID))
+    for (id, window) in windows where !currentIDs.contains(id) {
+        window.orderOut(nil); window.close()
+        windows.removeValue(forKey: id)
+    }
+    for screen in NSScreen.screens {
+        let id = screen.displayID
+        if let existing = windows[id] {
+            existing.setFrame(screen.frame, display: true)
+        } else {
+            windows[id] = makeWindow(for: screen)
+        }
+    }
+}
+```
+
+The `NSHostingView` inside each window hosts `CompletionFlashView` — a four-edge `.blendMode(.screen)` accent gradient blurred via `.blur(radius:)`, with `allowsHitTesting(false)`.
+
+**Gotcha:** `ignoresMouseEvents = true` on `NSWindow` is distinct from returning `nil` from `hitTest` in a subview. It is a window-level toggle that makes AppKit route all mouse events through the window as if it were absent — no subview override needed, and no risk of a SwiftUI view accidentally re-enabling hit-testing.
+
+**Gotcha:** These windows must be created and managed on `@MainActor`. `NSWindow` APIs are not thread-safe; `rebuild()` is called from a `NotificationCenter` callback that arrives on the main queue, but wrap the call in `MainActor.assumeIsolated { }` when the listener's block context is not formally `@MainActor` (see `CompletionFlashWindowController.init` for the pattern).
+
+**Gotcha:** The window level must match `NotchWindow`'s `.statusBar + 8` so the glow appears above the menubar and other app chrome, including fullscreen apps (which `.fullScreenAuxiliary` covers).
+
 ---
 
 ## 6. Event capture & hotkeys

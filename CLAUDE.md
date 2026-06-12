@@ -55,6 +55,7 @@ graph TB
         PTS["PomodoroTimerService<br/>State machine + tick + end-alert pipeline"]
         NPM["NotificationPermissionMonitor<br/>UNUserNotificationCenter probe"]
         HK["Hotkeys.swift<br/>KeyboardShortcuts registration (AppDelegate.setupHotkeys)"]
+        CFS["CompletionFlashService<br/>Observes AISessionStore + AgentMonitorRegistry<br/>throttle/merge → drives flash + toast"]
     end
 
     subgraph NotchUI["Notch UI Layer"]
@@ -211,6 +212,20 @@ ai approval > notification > pomodoro running > agents active > ai working > med
 ### Activity Glow (when notch is expanded)
 
 The expanded notch body renders a soft blurred glow ring hugging its inner edge whenever there is AI/agent activity — the center (content) stays clean. It is purely visual (`.allowsHitTesting` unaffected; never alters layout). Decision is the pure function `BadgeItem.glow(for: activeBadgeItems) -> NotchGlow`: `.attention` if any session awaits approval, else `.running` if AI is working or an agent is active, else `.none`. Both active states render in the app's theme accent (`NotchTheme.accent`, orange) — the enum stays split so the two can be re-differentiated later without touching the decision logic. `BadgeViewModel.glowState` exposes it; `NotchView` passes it to `NotchBackgroundView`, which strokes the notch's rounded shape, blurs it, and lets the existing notch `.mask` clip the outward spread so only an inner-edge ring remains; a further vertical `LinearGradient` `.mask` fades it so only the **lower-half** edge glows (vanishing by the middle). `.screen` blended, only when `status != .closed`. Tunables: `NotchConstants.glowRingOpacity` / `glowRingWidth` / `glowRingBlur` / `glowRingCoverage`.
+
+### Completion Flash (when AI/agent finishes)
+
+When an AI session transitions working→idle or an agent transitions active→idle, NemoNotch plays a one-shot **full-screen accent-orange edge glow** on every connected display, plus a **HUD-style toast capsule** near the notch listing the finished project/agent name(s).
+
+**`CompletionFlashService`** (`NemoNotch/Services/CompletionFlashService.swift`) is the decoupled `@MainActor @Observable` driver. It observes `AISessionStore.sortedSessions` and `AgentMonitorRegistry.installedMonitors` via `withObservationTracking`, feeding the current snapshot into the pure `CompletionDetector` on each change to identify working→idle / active→idle edges. On a detected completion it either fires the flash (exposes `flashActive`, animates through `completionFlashFadeIn` → `completionFlashHold` → `completionFlashFadeOut`) or, if a flash is already within the `completionFlashThrottle` cooldown (~2 s), merges the new names into the visible toast via `CompletionFlashNames.merge` (deduplication + count chip) without replaying the glow. The service exposes `toastNames` and `toastVisible` for the toast view.
+
+**Per-screen overlay windows** are managed by `CompletionFlashWindowController` (`NemoNotch/Notch/CompletionFlashWindow.swift`). It creates one borderless transparent `CompletionFlashWindow` per `NSScreen`, covering the full screen frame, and rebuilds on `NSApplication.didChangeScreenParametersNotification`. Each window hosts a `CompletionFlashView` — a four-edge `.blendMode(.screen)` accent gradient, blurred, with `allowsHitTesting(false)`. See [§5.8] in the cookbook for the full window recipe.
+
+**Toast** (`NemoNotch/Notch/CompletionToastView.swift`) is mounted in `NotchView` next to the existing volume/brightness HUD overlay, anchored on `isHUDScreen` (the built-in display) to avoid duplicate toasts on multi-screen setups.
+
+**Setting:** `AppSettings.completionFlashEnabled` (default `true`) gates the service — no flash or toast fires when disabled. Toggle lives in Settings → General.
+
+**Tunables** in `NotchConstants`: `completionFlashThrottle`, `completionFlashFadeIn`, `completionFlashHold`, `completionFlashFadeOut`, `completionGlowWidth`, `completionGlowBlur`, `completionGlowOpacity`.
 
 ## Debug Pitfalls
 
