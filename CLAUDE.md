@@ -219,11 +219,11 @@ When an AI session transitions working→idle or an agent transitions active→i
 
 **`CompletionFlashService`** (`NemoNotch/Services/CompletionFlashService.swift`) is the decoupled `@MainActor @Observable` driver. It observes `AISessionStore.sortedSessions` and `AgentMonitorRegistry.installedMonitors` via `withObservationTracking`, feeding the current snapshot into the pure `CompletionDetector` on each change to identify working→idle / active→idle edges. On a detected completion it either fires the flash (exposes `flashActive`, animates through `completionFlashFadeIn` → `completionFlashHold` → `completionFlashFadeOut`) or, if a flash is already within the `completionFlashThrottle` cooldown (~2 s), merges the new names into the visible toast via `CompletionFlashNames.merge` (deduplication + count chip) without replaying the glow. The service exposes `toastNames` and `toastVisible` for the toast view.
 
-**Per-screen overlay windows** are managed by `CompletionFlashWindowController` (`NemoNotch/Notch/CompletionFlashWindow.swift`). It creates one borderless transparent `CompletionFlashWindow` per `NSScreen`, covering the full screen frame, and rebuilds on `NSApplication.didChangeScreenParametersNotification`. Each window hosts a `CompletionFlashView` — a four-edge `.blendMode(.screen)` accent gradient, blurred, with `allowsHitTesting(false)`. See [§5.8] in the cookbook for the full window recipe.
+**Per-screen overlay windows** are managed by `CompletionFlashWindowController` (`NemoNotch/Notch/CompletionFlashWindow.swift`). It creates one borderless transparent `CompletionFlashWindow` per `NSScreen`, covering the full screen frame, and rebuilds on `NSApplication.didChangeScreenParametersNotification`. Each window hosts a `CompletionFlashView` — a four-edge `.blendMode(.screen)` accent gradient, blurred, with `allowsHitTesting(false)`. See [§5.10] in the cookbook for the full window recipe.
 
 **Toast** (`NemoNotch/Notch/CompletionToastView.swift`) is mounted in `NotchView` next to the existing volume/brightness HUD overlay, anchored on `isHUDScreen` (the built-in display) to avoid duplicate toasts on multi-screen setups.
 
-**Setting:** `AppSettings.completionFlashEnabled` (default `true`) gates the service — no flash or toast fires when disabled. Toggle lives in Settings → General.
+**Setting:** `AppSettings.completionFlashEnabled` (default `true`) gates the service — no flash or toast fires when disabled. Toggle lives in the Settings → Tabs page (the `tabManagementView` form).
 
 **Tunables** in `NotchConstants`: `completionFlashThrottle`, `completionFlashFadeIn`, `completionFlashHold`, `completionFlashFadeOut`, `completionGlowWidth`, `completionGlowBlur`, `completionGlowOpacity`.
 
