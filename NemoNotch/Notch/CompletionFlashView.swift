@@ -3,8 +3,8 @@ import SwiftUI
 /// Full-screen accent glow wrapping all four screen edges. A crisp solid line
 /// hugs the very rim while a tighter blurred halo fades inward — same family
 /// as the notch's `NotchGlowRing`, but a full-screen rectangle frame.
-/// Opacity is driven by `service.flashActive` (animated by the service via
-/// `withAnimation`). Purely visual — never intercepts events.
+/// Opacity is driven by `service.flashLevel` (0...1, animated by the service
+/// through the double-pulse curve). Purely visual — never intercepts events.
 struct CompletionFlashView: View {
     let service: CompletionFlashService
 
@@ -22,7 +22,7 @@ struct CompletionFlashView: View {
             Rectangle()
                 .strokeBorder(NotchTheme.accent, lineWidth: NotchConstants.completionGlowEdgeWidth)
         }
-        .opacity(service.flashActive ? NotchConstants.completionGlowOpacity : 0)
+        .opacity(NotchConstants.completionGlowOpacity * service.flashLevel)
         .allowsHitTesting(false)
         .ignoresSafeArea()
     }

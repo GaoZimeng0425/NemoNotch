@@ -61,17 +61,19 @@ enum NotchConstants {
     static let glowPulseMin: Double = 0.5
     static let glowPulseMax: Double = 1.0
 
-    // Completion flash (full-screen edge glow on AI/agent completion)
+    /// Completion flash (full-screen edge glow on AI/agent completion)
     /// Cooldown window: the first completion flashes; further completions
     /// within this window merge into the visible toast without re-flashing.
     static let completionFlashThrottle: TimeInterval = 2.0
-    static let completionFlashFadeIn: Double = 0.18
-    static let completionFlashHold: Double = 0.15
-    static let completionFlashFadeOut: Double = 0.55
-    /// How many fade-in/out pulses one flash plays.
-    static let completionFlashPulses: Int = 2
-    /// Quiet gap between consecutive pulses.
-    static let completionFlashGap: Double = 0.12
+    /// One flash is a single continuous double-pulse on the glow level:
+    /// 0 → 1 → dipLevel → 1 → 0. Each rise (`0→1` and `dipLevel→1`) uses
+    /// `completionFlashRise`; the mid trough (`1→dipLevel`) uses
+    /// `completionFlashDip`; the final `1→0` uses `completionFlashFall`.
+    static let completionFlashRise: Double = 0.12
+    static let completionFlashDip: Double = 0.12
+    static let completionFlashFall: Double = 0.2
+    /// Trough between the two peaks — the glow dips to this fraction, never to 0.
+    static let completionFlashDipLevel: Double = 0.5
     /// How long the completion toast stays before dismissing (own value — the
     /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
     static let completionToastDuration: Double = 5.0

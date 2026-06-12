@@ -8,8 +8,9 @@ import SwiftUI
 @MainActor
 @Observable
 final class CompletionFlashService {
-    /// Drives the edge-glow window opacity. Set inside `withAnimation`.
-    private(set) var flashActive = false
+    /// Drives the edge-glow level, 0...1 (scaled by `completionGlowOpacity` in
+    /// the view). Animated through the double-pulse curve inside `withAnimation`.
+    private(set) var flashLevel: Double = 0
     /// Project/agent names shown in the current toast.
     private(set) var toastNames: [String] = []
     /// Whether the toast is currently shown.
@@ -117,24 +118,24 @@ final class CompletionFlashService {
         flashResetTask?.cancel()
         flashResetTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for pulse in 0 ..< NotchConstants.completionFlashPulses {
-                if Task.isCancelled { return }
-                withAnimation(.easeOut(duration: NotchConstants.completionFlashFadeIn)) {
-                    self.flashActive = true
-                }
-                try? await Task.sleep(
-                    for: .seconds(NotchConstants.completionFlashFadeIn + NotchConstants.completionFlashHold)
-                )
-                if Task.isCancelled { return }
-                withAnimation(.easeIn(duration: NotchConstants.completionFlashFadeOut)) {
-                    self.flashActive = false
-                }
-                // Quiet gap before the next pulse (none after the last).
-                if pulse < NotchConstants.completionFlashPulses - 1 {
-                    try? await Task.sleep(
-                        for: .seconds(NotchConstants.completionFlashFadeOut + NotchConstants.completionFlashGap)
-                    )
-                }
+            // Continuous double-pulse: 0 → 1 → dipLevel → 1 → 0.
+            withAnimation(.easeOut(duration: NotchConstants.completionFlashRise)) {
+                self.flashLevel = 1
+            }
+            try? await Task.sleep(for: .seconds(NotchConstants.completionFlashRise))
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: NotchConstants.completionFlashDip)) {
+                self.flashLevel = NotchConstants.completionFlashDipLevel
+            }
+            try? await Task.sleep(for: .seconds(NotchConstants.completionFlashDip))
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: NotchConstants.completionFlashRise)) {
+                self.flashLevel = 1
+            }
+            try? await Task.sleep(for: .seconds(NotchConstants.completionFlashRise))
+            if Task.isCancelled { return }
+            withAnimation(.easeIn(duration: NotchConstants.completionFlashFall)) {
+                self.flashLevel = 0
             }
         }
     }
