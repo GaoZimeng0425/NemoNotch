@@ -119,7 +119,8 @@ final class CompletionFlashService {
         flashResetTask = Task { @MainActor [weak self] in
             guard let self else { return }
             // Continuous double-pulse: 0 → 1 → dipLevel → 1 → 0.
-            withAnimation(.easeOut(duration: NotchConstants.completionFlashRise)) {
+            // easeInOut throughout keeps every transition soft at both ends.
+            withAnimation(.easeInOut(duration: NotchConstants.completionFlashRise)) {
                 self.flashLevel = 1
             }
             try? await Task.sleep(for: .seconds(NotchConstants.completionFlashRise))
@@ -134,7 +135,7 @@ final class CompletionFlashService {
             }
             try? await Task.sleep(for: .seconds(NotchConstants.completionFlashRise))
             if Task.isCancelled { return }
-            withAnimation(.easeIn(duration: NotchConstants.completionFlashFall)) {
+            withAnimation(.easeInOut(duration: NotchConstants.completionFlashFall)) {
                 self.flashLevel = 0
             }
         }

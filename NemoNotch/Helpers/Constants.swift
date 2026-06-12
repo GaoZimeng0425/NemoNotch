@@ -69,9 +69,9 @@ enum NotchConstants {
     /// 0 → 1 → dipLevel → 1 → 0. Each rise (`0→1` and `dipLevel→1`) uses
     /// `completionFlashRise`; the mid trough (`1→dipLevel`) uses
     /// `completionFlashDip`; the final `1→0` uses `completionFlashFall`.
-    static let completionFlashRise: Double = 0.12
-    static let completionFlashDip: Double = 0.12
-    static let completionFlashFall: Double = 0.2
+    static let completionFlashRise: Double = 0.28
+    static let completionFlashDip: Double = 0.28
+    static let completionFlashFall: Double = 0.4
     /// Trough between the two peaks — the glow dips to this fraction, never to 0.
     static let completionFlashDipLevel: Double = 0.5
     /// How long the completion toast stays before dismissing (own value — the
