@@ -3041,6 +3041,40 @@
         }
       }
     },
+    "settings.completion_flash.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flash screen edges when AI/agent finishes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI/Agent 执行结束时全屏边缘闪烁"
+          }
+        }
+      }
+    },
+    "settings.completion_flash.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completion Flash"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成闪烁"
+          }
+        }
+      }
+    },
     "settings.default_tab" : {
       "localizations" : {
         "en" : {
