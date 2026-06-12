@@ -61,6 +61,19 @@ enum NotchConstants {
     static let glowPulseMin: Double = 0.5
     static let glowPulseMax: Double = 1.0
 
+    // Completion flash (full-screen edge glow on AI/agent completion)
+    /// Cooldown window: the first completion flashes; further completions
+    /// within this window merge into the visible toast without re-flashing.
+    static let completionFlashThrottle: TimeInterval = 2.0
+    static let completionFlashFadeIn: Double = 0.18
+    static let completionFlashHold: Double = 0.15
+    static let completionFlashFadeOut: Double = 0.55
+    /// Thickness (points) of the accent band fading inward from each screen edge.
+    static let completionGlowWidth: CGFloat = 120
+    static let completionGlowBlur: CGFloat = 60
+    /// Peak opacity of the edge glow at the top of the flash.
+    static let completionGlowOpacity: Double = 0.55
+
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///
     /// AF_UNIX socket files were previously used but proved unworkable on this
