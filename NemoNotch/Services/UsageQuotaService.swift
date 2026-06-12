@@ -328,6 +328,17 @@ final class UsageQuotaService: LifecycleAware {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         applyNoUI(to: &query)
+        // Belt-and-suspenders for the legacy login keychain: the per-query no-UI
+        // flags above do NOT suppress its ACL confirmation dialog on a data read,
+        // so an untrusted `kSecReturnData` read would pop the consent dialog even
+        // on this automatic path. Disabling process-wide interaction makes such a
+        // read fail with errSecInteractionNotAllowed instead — the caller then
+        // forgets the (stale) grant and falls back to the Authorize button rather
+        // than surprising the user with a prompt. A genuinely trusted read needs
+        // no interaction, so it still succeeds silently.
+        let toggle = Self.setUserInteractionAllowed
+        _ = toggle?(false)
+        defer { _ = toggle?(true) }
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
         return result as? Data
@@ -445,6 +456,22 @@ final class UsageQuotaService: LifecycleAware {
         query[kSecUseAuthenticationContext as String] = context
         query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString
     }
+
+    /// Runtime-resolved `SecKeychainSetUserInteractionAllowed(_:)` — the legacy
+    /// keychain's process-wide interaction toggle. Unlike the per-query no-UI
+    /// flags (which only gate the data-protection keychain / LAContext), this is
+    /// what actually turns the login keychain's ACL data-read dialog into an
+    /// `errSecInteractionNotAllowed` failure. Resolved via `dlsym` so there's no
+    /// compile-time reference to the deprecated symbol; nil (no-op) if unresolved.
+    /// `Boolean` (C `unsigned char`) bridges to `DarwinBoolean`.
+    private static let setUserInteractionAllowed: (@convention(c) (DarwinBoolean) -> OSStatus)? = {
+        let path = "/System/Library/Frameworks/Security.framework/Security"
+        // Intentionally keep the handle open for the process lifetime — the
+        // returned function pointer must stay valid.
+        guard let handle = dlopen(path, RTLD_NOW),
+              let symbol = dlsym(handle, "SecKeychainSetUserInteractionAllowed") else { return nil }
+        return unsafeBitCast(symbol, to: (@convention(c) (DarwinBoolean) -> OSStatus).self)
+    }()
 
     /// Runtime-resolved value of `kSecUseAuthenticationUIFail`. Falls back to the
     /// known literal ("u_AuthUIF") if the symbol can't be loaded.

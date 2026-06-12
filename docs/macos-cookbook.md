@@ -2093,9 +2093,9 @@ private func keychainProbe(service: String) -> KeychainProbe {
 ```swift
 private func readKeychainCredential(provider:, service:, parse:) -> UsageCredential {
     if keychainGranted(provider) {                       // grant keyed by cdhash (see below)
-        if let data = keychainBlob(service: service),    // data read — silent ONLY because we're trusted
+        if let data = keychainBlob(service: service),    // data read forced non-interactive (see step 4)
            let cred = parse(data) { return cred }
-        setKeychainGranted(false, provider)              // trust gone → fall back to button
+        setKeychainGranted(false, provider)              // not actually trusted → fall back to button
     }
     return keychainProbe(service: service) == .notFound
         ? UsageCredential(token: nil, status: .notFound)
@@ -2145,6 +2145,36 @@ func authorize(_ provider: QuotaProvider) async {
 ```
 
 After "Always Allow" the app is in the item's ACL, so the gated data read in step 3 is genuinely silent on later launches.
+
+**4. Force the gated data read non-interactive so the cdhash gate can't be defeated.** The cdhash gate (step 3) only proves the binary is the same one the user authorized — it does **not** prove the login-keychain ACL durably trusts it. Two real cases where `keychainGranted == true` but the ACL still wants to prompt:
+
+- the user clicked **"Allow"** (one-shot) instead of **"Always Allow"** — `interactiveKeychainRead` succeeded and we persisted the grant, but no durable ACL trust was added; or
+- the item's ACL (created by the CLI) simply doesn't grant another app silent access.
+
+In both, the next *automatic* refresh hits `keychainBlob` and — because the per-query no-UI flags don't suppress the legacy data-read dialog — **macOS prompts even though the user never clicked Authorize.** (Symptom: a Keychain consent dialog appears on the 5-min refresh timer, with no log line, because the success-path data read isn't logged.)
+
+Fix: wrap the gated data read in the legacy keychain's process-wide interaction toggle, `SecKeychainSetUserInteractionAllowed(false)`. This is the *only* knob that turns the login-keychain ACL dialog into an `errSecInteractionNotAllowed` failure (the `kSecUseAuthenticationUI*` flags only gate the data-protection keychain / LAContext). A genuinely trusted read needs no interaction, so it still succeeds silently; an untrusted one fails → `keychainBlob` returns nil → step 3 forgets the grant and shows the button. The symbol is deprecated, so resolve it via `dlsym` (no compile-time reference) and bridge C `Boolean` as `DarwinBoolean`:
+
+```swift
+private static let setUserInteractionAllowed: (@convention(c) (DarwinBoolean) -> OSStatus)? = {
+    let path = "/System/Library/Frameworks/Security.framework/Security"
+    guard let handle = dlopen(path, RTLD_NOW),       // keep handle open: fn pointer must stay valid
+          let sym = dlsym(handle, "SecKeychainSetUserInteractionAllowed") else { return nil }
+    return unsafeBitCast(sym, to: (@convention(c) (DarwinBoolean) -> OSStatus).self)
+}()
+
+private func keychainBlob(service: String) -> Data? {
+    var query: [String: Any] = [ /* …kSecReturnData… */ ]
+    applyNoUI(to: &query)
+    let toggle = Self.setUserInteractionAllowed
+    _ = toggle?(false); defer { _ = toggle?(true) }   // process-global; restore for interactive authorize
+    var result: AnyObject?
+    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+    return result as? Data
+}
+```
+
+It's process-global, so set it `false` only around the synchronous automatic read and restore `true` in `defer` — the user-initiated `authorize()` read (run detached, off the main actor) relies on interaction being allowed.
 
 `applyNoUI` (kept for the probe and the post-grant read; `kSecUseAuthenticationUIFail` resolved via `dlsym` to avoid a compile-time reference to the deprecated symbol):
 
