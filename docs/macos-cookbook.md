@@ -2050,6 +2050,148 @@ SecItemAdd(addQuery as CFDictionary, nil)
 
 **Gotcha:** `SecItemAdd` returns `errSecDuplicateItem` (`-25299`) if the key already exists. The current code ignores the return value because the preceding load guarantees absence — but if you split load/save across functions, switch to `SecItemUpdate` on duplicate, or call `SecItemDelete` first.
 
+### 14.3 Reading *another app's* Keychain item without the consent prompt
+
+`UsageQuotaService` reads CLI-owned credential items (`Claude Code-credentials`, `Codex Auth`) to fetch usage quotas. These items were created by the Claude Code / Codex CLIs, so their ACL is bound to *those* binaries. A `SecItemCopyMatching` **data read** (`kSecReturnData`) from NemoNotch (a different, ad-hoc-signed binary) makes macOS pop the **"NemoNotch wants to use confidential information stored in … in your keychain"** Allow/Deny dialog.
+
+**The thing that bit us:** the no-UI flags (`LAContext.interactionNotAllowed` + `kSecUseAuthenticationUIFail`) do **NOT** suppress this dialog for a GUI app. Empirically:
+
+| caller | attributes read (`kSecReturnAttributes`) | data read (`kSecReturnData`, no-UI flags) |
+|---|---|---|
+| CLI tool | succeeds, no prompt | returns `errSecUserCanceled` (-128), no prompt |
+| **GUI `.app`** | succeeds, no prompt | **still PROMPTS** |
+
+The legacy-login-keychain ACL guards the **secret data**; the no-UI flags only gate *LocalAuthentication* UI (Touch ID / password), not the cross-app ACL consent dialog — and a windowed app gets the dialog regardless. So you **cannot** silently attempt a data read of another app's item from a GUI app. The design must avoid automatic data reads entirely.
+
+**The pattern that actually works** (`UsageQuotaService.swift`):
+
+**1. File first.** Both CLIs *may* also write `~/.claude/.credentials.json` / `~/.codex/auth.json`. Reading the file is unprivileged. (Note: Claude does NOT always write this file — when it's Keychain-only, you hit the path below.)
+
+**2. Detect with an attributes-only probe** (never prompts — confirmed above). It distinguishes exists-but-unauthorized from absent by OSStatus:
+
+```swift
+private enum KeychainProbe { case authorized, needsAuthorization, notFound, failure }
+private func keychainProbe(service: String) -> KeychainProbe {
+    var query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecReturnAttributes as String: true,   // attributes only — NEVER kSecReturnData here
+        kSecMatchLimit as String: kSecMatchLimitOne,
+    ]
+    applyNoUI(to: &query)                        // belt-and-braces; harmless for attrs
+    var result: AnyObject?
+    switch SecItemCopyMatching(query as CFDictionary, &result) {
+    case errSecSuccess, errSecInteractionNotAllowed: return .authorized   // item present
+    case errSecItemNotFound:                          return .notFound
+    default:                                          return .failure
+    }
+}
+```
+
+**3. Gate the data read behind a persisted grant + an explicit button.** On the automatic path, NEVER call the data read unless the user has authorized before:
+
+```swift
+private func readKeychainCredential(provider:, service:, parse:) -> UsageCredential {
+    if keychainGranted(provider) {                       // grant keyed by cdhash (see below)
+        if let data = keychainBlob(service: service),    // data read forced non-interactive (see step 4)
+           let cred = parse(data) { return cred }
+        setKeychainGranted(false, provider)              // not actually trusted → fall back to button
+    }
+    return keychainProbe(service: service) == .notFound
+        ? UsageCredential(token: nil, status: .notFound)
+        : UsageCredential(token: nil, status: .needsAuthorization)   // → renders Authorize button
+}
+```
+
+**Key the grant by the code identity (cdhash), not a bare bool.** macOS binds
+"Always Allow" ACL trust to the app's code signature; under ad-hoc signing the
+signature changes every rebuild. A bare `granted = true` flag then survives the
+rebuild but the ACL trust does NOT — so the gated data read above fires for a
+*now-untrusted* binary and **prompts on entry** (the exact bug this section is
+about, just one layer deeper). Fix: store the cdhash at grant time and only treat
+the grant as valid when it still matches the running binary:
+
+```swift
+private func keychainGranted(_ p: QuotaProvider) -> Bool {
+    guard let id = Self.currentCodeIdentity() else { return false }   // nil → not granted (safe)
+    return UserDefaults.standard.string(forKey: grantedIdentityKey(p)) == id
+}
+private static func currentCodeIdentity() -> String? {               // hex cdhash via SecCode
+    var code: SecCode?
+    guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+    var stat: SecStaticCode?
+    guard SecCodeCopyStaticCode(code, [], &stat) == errSecSuccess, let stat else { return nil }
+    var infoCF: CFDictionary?
+    guard SecCodeCopySigningInformation(stat, [], &infoCF) == errSecSuccess,
+          let info = infoCF as? [String: Any],
+          let cdhash = info[kSecCodeInfoUnique as String] as? Data else { return nil }
+    return cdhash.map { String(format: "%02x", $0) }.joined()
+}
+```
+
+Now a stale grant (older build's cdhash) reads as NOT granted → the entry path
+shows the Authorize button and never does the prompting data read. Same build →
+cdhash matches → silent auto-load. Stable Developer ID signature → cdhash stable
+→ authorize once, forever.
+
+`.needsAuthorization` renders an **Authorize** button (+ a one-line reason, so the user understands *why*). Its action does the ONE *interactive* read (the same query **without** `applyNoUI`), off the main actor since `SecItemCopyMatching` blocks while the dialog is up; on success it persists the grant:
+
+```swift
+func authorize(_ provider: QuotaProvider) async {
+    let service = keychainService(for: provider)
+    let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
+    if granted { setKeychainGranted(true, provider); await refresh(force: true) }
+}
+```
+
+After "Always Allow" the app is in the item's ACL, so the gated data read in step 3 is genuinely silent on later launches.
+
+**4. Force the gated data read non-interactive so the cdhash gate can't be defeated.** The cdhash gate (step 3) only proves the binary is the same one the user authorized — it does **not** prove the login-keychain ACL durably trusts it. Two real cases where `keychainGranted == true` but the ACL still wants to prompt:
+
+- the user clicked **"Allow"** (one-shot) instead of **"Always Allow"** — `interactiveKeychainRead` succeeded and we persisted the grant, but no durable ACL trust was added; or
+- the item's ACL (created by the CLI) simply doesn't grant another app silent access.
+
+In both, the next *automatic* refresh hits `keychainBlob` and — because the per-query no-UI flags don't suppress the legacy data-read dialog — **macOS prompts even though the user never clicked Authorize.** (Symptom: a Keychain consent dialog appears on the 5-min refresh timer, with no log line, because the success-path data read isn't logged.)
+
+Fix: wrap the gated data read in the legacy keychain's process-wide interaction toggle, `SecKeychainSetUserInteractionAllowed(false)`. This is the *only* knob that turns the login-keychain ACL dialog into an `errSecInteractionNotAllowed` failure (the `kSecUseAuthenticationUI*` flags only gate the data-protection keychain / LAContext). A genuinely trusted read needs no interaction, so it still succeeds silently; an untrusted one fails → `keychainBlob` returns nil → step 3 forgets the grant and shows the button. The symbol is deprecated, so resolve it via `dlsym` (no compile-time reference) and bridge C `Boolean` as `DarwinBoolean`:
+
+```swift
+private static let setUserInteractionAllowed: (@convention(c) (DarwinBoolean) -> OSStatus)? = {
+    let path = "/System/Library/Frameworks/Security.framework/Security"
+    guard let handle = dlopen(path, RTLD_NOW),       // keep handle open: fn pointer must stay valid
+          let sym = dlsym(handle, "SecKeychainSetUserInteractionAllowed") else { return nil }
+    return unsafeBitCast(sym, to: (@convention(c) (DarwinBoolean) -> OSStatus).self)
+}()
+
+private func keychainBlob(service: String) -> Data? {
+    var query: [String: Any] = [ /* …kSecReturnData… */ ]
+    applyNoUI(to: &query)
+    let toggle = Self.setUserInteractionAllowed
+    _ = toggle?(false); defer { _ = toggle?(true) }   // process-global; restore for interactive authorize
+    var result: AnyObject?
+    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+    return result as? Data
+}
+```
+
+It's process-global, so set it `false` only around the synchronous automatic read and restore `true` in `defer` — the user-initiated `authorize()` read (run detached, off the main actor) relies on interaction being allowed.
+
+`applyNoUI` (kept for the probe and the post-grant read; `kSecUseAuthenticationUIFail` resolved via `dlsym` to avoid a compile-time reference to the deprecated symbol):
+
+```swift
+import Darwin           // dlopen / dlsym / RTLD_NOW
+import LocalAuthentication
+private func applyNoUI(to query: inout [String: Any]) {
+    let context = LAContext(); context.interactionNotAllowed = true
+    query[kSecUseAuthenticationContext as String] = context
+    query[kSecUseAuthenticationUI as String] = Self.uiFailPolicy as CFString  // "u_AuthUIF"
+}
+```
+
+**Gotcha:** "Always Allow" trust is bound to the app's **code signature**. Under ad-hoc signing (`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity. Keying the grant by cdhash (above) turns this into a harmless re-prompt-on-click after each rebuild rather than an *auto*-prompt on entry. A stable Developer ID signature makes it truly one-time. macOS behavior, not a logic bug.
+
+**Gotcha:** never put `kSecReturnData` on the automatic path "just to try" — in a GUI app it prompts even with every no-UI flag set. Attribute reads for detection, data reads only when explicitly user-initiated or already-granted.
+
 ---
 
 ## 15. Swift 6 concurrency conventions

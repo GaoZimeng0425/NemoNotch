@@ -20,6 +20,9 @@ enum CredentialStatus: Equatable, Sendable {
     case expired
     case notFound
     case parseError
+    /// Keychain item exists but this app isn't authorized to read it yet.
+    /// Surfaces a "Authorize" button rather than auto-prompting.
+    case needsAuthorization
 }
 
 /// A usage rolling-window. Claude uses named windows (localized labels);

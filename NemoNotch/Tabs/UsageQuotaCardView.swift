@@ -32,14 +32,9 @@ struct UsageQuotaCardView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(NotchTheme.textPrimary)
             Spacer()
-            Button {
-                Task { await service.refresh(force: true) }
-            } label: {
-                refreshIcon
-            }
-            .buttonStyle(.plain)
-            .disabled(service.isRefreshing)
-            .help("quota.refresh")
+                .buttonStyle(.plain)
+                .disabled(service.isRefreshing)
+                .help("quota.refresh")
         }
     }
 
@@ -76,11 +71,36 @@ struct UsageQuotaCardView: View {
                 ForEach(quota.tiers, id: \.window) { tier in
                     tierRow(tier)
                 }
+            } else if quota?.status == .needsAuthorization {
+                authorizeButton(provider)
             } else {
                 Text(statusKey(for: quota))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(NotchTheme.textTertiary)
             }
+        }
+    }
+
+    /// Shown when the credential lives only in the Keychain and this app hasn't
+    /// been granted access. Explains *why* access is needed, then triggers the
+    /// (one-time) macOS consent dialog on tap.
+    private func authorizeButton(_ provider: QuotaProvider) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("quota.authorize.reason")
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await service.authorize(provider) }
+            } label: {
+                Text("quota.authorize")
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(NotchTheme.accent))
+                    .foregroundStyle(Color.black.opacity(0.85))
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -145,6 +165,7 @@ struct UsageQuotaCardView: View {
         case .expired: return "quota.status.login_required"
         case .notFound: return "quota.status.not_logged_in"
         case .parseError: return "quota.status.error"
+        case .needsAuthorization: return "quota.status.needs_authorization"
         }
     }
 }
@@ -158,7 +179,11 @@ struct UsageQuotaCompactView: View {
     @Environment(AppSettings.self) private var appSettings
     @State private var showDetail = false
 
-    private enum LogicalWindow { case fiveHour, sevenDay }
+    /// A compact meter slot: the provider's primary (shortest) tier or its
+    /// secondary (next) tier. Provider-agnostic so Codex — whose windows are
+    /// arbitrary rolling lengths, often without a literal 5h — surfaces whatever
+    /// windows it actually reports instead of an empty "5h" meter.
+    private enum Slot { case primary, secondary }
 
     /// Providers to surface: Claude when enabled, Codex when a credential exists.
     private var visibleProviders: [QuotaProvider] {
@@ -168,18 +193,16 @@ struct UsageQuotaCompactView: View {
         return result
     }
 
-    /// At most two rows. One provider → its 5h + 7d. Two/three → each provider's
-    /// 5h (capped at two). More than three → just Claude + Codex 5h.
-    private var rows: [(provider: QuotaProvider, window: LogicalWindow)] {
+    /// At most two rows. One provider → its primary + secondary tier. Two
+    /// providers → each provider's primary tier. (Only Claude/Codex exist, so
+    /// the list never exceeds two.)
+    private var rows: [(provider: QuotaProvider, slot: Slot)] {
         let providers = visibleProviders
         if providers.count <= 1 {
             guard let only = providers.first else { return [] }
-            return [(only, .fiveHour), (only, .sevenDay)]
+            return [(only, .primary), (only, .secondary)]
         }
-        if providers.count > 3 {
-            return [(.claude, .fiveHour), (.codex, .fiveHour)]
-        }
-        return providers.prefix(2).map { ($0, .fiveHour) }
+        return providers.prefix(2).map { ($0, .primary) }
     }
 
     var body: some View {
@@ -201,8 +224,13 @@ struct UsageQuotaCompactView: View {
                     Spacer(minLength: 0)
                 }
                 VStack(alignment: .trailing, spacing: 5) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                        meterRow(provider: row.provider, window: row.window)
+                    ForEach(displayRows, id: \.self) { row in
+                        switch row {
+                        case let .meter(provider, slot):
+                            meterRow(provider: provider, slot: slot)
+                        case let .authorize(provider):
+                            compactAuthorizeButton(provider)
+                        }
                     }
                 }
             }
@@ -239,14 +267,55 @@ struct UsageQuotaCompactView: View {
         }
     }
 
-    private func meterRow(provider: QuotaProvider, window: LogicalWindow) -> some View {
-        let tier = tier(provider, window)
+    /// One row per logical meter, except a provider awaiting authorization
+    /// collapses to a single authorize chip (instead of two "--" meters).
+    private enum CompactRow: Hashable {
+        case meter(provider: QuotaProvider, slot: Slot)
+        case authorize(provider: QuotaProvider)
+    }
+
+    private var displayRows: [CompactRow] {
+        var seenAuth: Set<QuotaProvider> = []
+        var out: [CompactRow] = []
+        for row in rows {
+            let status = service.quotas[row.provider]?.status
+            if status == .needsAuthorization {
+                if seenAuth.insert(row.provider).inserted {
+                    out.append(.authorize(provider: row.provider))
+                }
+            } else if status == .valid, tier(row.provider, row.slot) == nil {
+                // Loaded but no window in this slot (e.g. Codex free tier reports a
+                // single window) — skip rather than render an empty "--" meter.
+                continue
+            } else {
+                out.append(.meter(provider: row.provider, slot: row.slot))
+            }
+        }
+        return out
+    }
+
+    private func compactAuthorizeButton(_ provider: QuotaProvider) -> some View {
+        Button {
+            Task { await service.authorize(provider) }
+        } label: {
+            Text("quota.authorize")
+                .font(.system(size: 9, weight: .semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(NotchTheme.accent))
+                .foregroundStyle(Color.black.opacity(0.85))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func meterRow(provider: QuotaProvider, slot: Slot) -> some View {
+        let tier = tier(provider, slot)
         let pct = tier?.utilization ?? 0
         return HStack(spacing: 5) {
-            Text(label(provider: provider, window: window))
+            Text(label(provider: provider, tier: tier))
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(NotchTheme.textSecondary)
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: 40, alignment: .trailing)
                 .lineLimit(1)
 
             GeometryReader { geo in
@@ -266,27 +335,33 @@ struct UsageQuotaCompactView: View {
         }
     }
 
-    /// Resolves a provider's tier for a logical window, bridging Claude's named
-    /// windows and Codex's rolling-minute windows (5h ≈ 300m, 7d ≈ 10080m).
-    private func tier(_ provider: QuotaProvider, _ window: LogicalWindow) -> QuotaTier? {
+    /// The provider's tier for a slot, taken from its ordered tiers. Claude's are
+    /// ordered [5h, 7d, …]; Codex's are normalized session→weekly→other. So
+    /// `.primary` is the shortest window and `.secondary` the next — and a
+    /// provider that omits one simply has no tier for that slot.
+    private func tier(_ provider: QuotaProvider, _ slot: Slot) -> QuotaTier? {
         let tiers = service.quotas[provider]?.tiers ?? []
-        switch window {
-        case .fiveHour:
-            return tiers.first { $0.window == .fiveHour || isRolling($0.window, minutes: 300) }
-        case .sevenDay:
-            return tiers.first { $0.window == .sevenDay || isRolling($0.window, minutes: 10080) }
+        switch slot {
+        case .primary: return tiers.first
+        case .secondary: return tiers.count > 1 ? tiers[1] : nil
         }
     }
 
-    private func isRolling(_ window: QuotaWindow, minutes: Int) -> Bool {
-        if case let .rolling(value) = window { return value == minutes }
-        return false
-    }
-
-    private func label(provider: QuotaProvider, window: LogicalWindow) -> String {
-        let win = window == .fiveHour ? "5h" : "7d"
+    /// Window label from the resolved tier (Claude named windows → "5h"/"7d";
+    /// Codex rolling → "5h"/"7d"/"30d"/…), prefixed with the provider initial
+    /// when more than one provider is shown.
+    private func label(provider: QuotaProvider, tier: QuotaTier?) -> String {
+        let win = tier.map { windowShortLabel($0.window) } ?? "--"
         guard visibleProviders.count != 1 else { return win }
         return "\(provider == .claude ? "C" : "Cx") \(win)"
+    }
+
+    private func windowShortLabel(_ window: QuotaWindow) -> String {
+        switch window {
+        case .fiveHour: return "5h"
+        case .sevenDay, .sevenDayOpus, .sevenDaySonnet: return "7d"
+        case let .rolling(minutes): return UsageQuotaFormatter.windowLabel(minutes: minutes)
+        }
     }
 
     private func color(for utilization: Double) -> Color {
