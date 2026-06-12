@@ -68,6 +68,13 @@ enum NotchConstants {
     static let completionFlashFadeIn: Double = 0.18
     static let completionFlashHold: Double = 0.15
     static let completionFlashFadeOut: Double = 0.55
+    /// How many fade-in/out pulses one flash plays.
+    static let completionFlashPulses: Int = 2
+    /// Quiet gap between consecutive pulses.
+    static let completionFlashGap: Double = 0.12
+    /// How long the completion toast stays before dismissing (own value — the
+    /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
+    static let completionToastDuration: Double = 5.0
     /// Thickness (points) of the soft accent halo wrapping the screen edge.
     static let completionGlowWidth: CGFloat = 64
     /// Blur applied to the halo — smaller = tighter, more defined glow.

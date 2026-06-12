@@ -115,16 +115,26 @@ final class CompletionFlashService {
     private func triggerFlash() {
         LogService.debug("Flash triggered", category: "CompletionFlash")
         flashResetTask?.cancel()
-        withAnimation(.easeOut(duration: NotchConstants.completionFlashFadeIn)) {
-            flashActive = true
-        }
         flashResetTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(
-                for: .seconds(NotchConstants.completionFlashFadeIn + NotchConstants.completionFlashHold)
-            )
-            guard let self, !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: NotchConstants.completionFlashFadeOut)) {
-                self.flashActive = false
+            guard let self else { return }
+            for pulse in 0 ..< NotchConstants.completionFlashPulses {
+                if Task.isCancelled { return }
+                withAnimation(.easeOut(duration: NotchConstants.completionFlashFadeIn)) {
+                    self.flashActive = true
+                }
+                try? await Task.sleep(
+                    for: .seconds(NotchConstants.completionFlashFadeIn + NotchConstants.completionFlashHold)
+                )
+                if Task.isCancelled { return }
+                withAnimation(.easeIn(duration: NotchConstants.completionFlashFadeOut)) {
+                    self.flashActive = false
+                }
+                // Quiet gap before the next pulse (none after the last).
+                if pulse < NotchConstants.completionFlashPulses - 1 {
+                    try? await Task.sleep(
+                        for: .seconds(NotchConstants.completionFlashFadeOut + NotchConstants.completionFlashGap)
+                    )
+                }
             }
         }
     }
@@ -137,7 +147,7 @@ final class CompletionFlashService {
     private func restartToastDismiss() {
         toastDismissTask?.cancel()
         toastDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(NotchConstants.hudDismissDelay))
+            try? await Task.sleep(for: .seconds(NotchConstants.completionToastDuration))
             guard let self, !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: NotchConstants.hudDismissDuration)) {
                 self.toastVisible = false
