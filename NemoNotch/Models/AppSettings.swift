@@ -88,6 +88,7 @@ final class AppSettings {
     static let claudeEnabledKey = "claudeEnabled"
     static let geminiEnabledKey = "geminiEnabled"
     static let hermesEnabledKey = "hermesEnabled"
+    static let completionFlashEnabledKey = "completionFlashEnabled"
 
     var claudeEnabled: Bool {
         didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
@@ -99,6 +100,12 @@ final class AppSettings {
 
     var hermesEnabled: Bool {
         didSet { UserDefaults.standard.set(hermesEnabled, forKey: Self.hermesEnabledKey) }
+    }
+
+    // MARK: - Completion flash
+
+    var completionFlashEnabled: Bool {
+        didSet { UserDefaults.standard.set(completionFlashEnabled, forKey: Self.completionFlashEnabledKey) }
     }
 
     var currentLocale: Locale {
@@ -161,6 +168,8 @@ final class AppSettings {
             .object(forKey: Self.geminiEnabledKey) as? Bool ?? true
         hermesEnabled = UserDefaults.standard
             .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
+        completionFlashEnabled = UserDefaults.standard
+            .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
     }
 
     private static let defaultApps: [AppItem] = [
