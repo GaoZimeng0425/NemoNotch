@@ -68,11 +68,14 @@ enum NotchConstants {
     static let completionFlashFadeIn: Double = 0.18
     static let completionFlashHold: Double = 0.15
     static let completionFlashFadeOut: Double = 0.55
-    /// Thickness (points) of the accent band fading inward from each screen edge.
-    static let completionGlowWidth: CGFloat = 120
-    static let completionGlowBlur: CGFloat = 60
+    /// Thickness (points) of the soft accent halo wrapping the screen edge.
+    static let completionGlowWidth: CGFloat = 64
+    /// Blur applied to the halo — smaller = tighter, more defined glow.
+    static let completionGlowBlur: CGFloat = 18
+    /// Crisp solid outer line hugging the very edge, so the rim reads as solid.
+    static let completionGlowEdgeWidth: CGFloat = 2.5
     /// Peak opacity of the edge glow at the top of the flash.
-    static let completionGlowOpacity: Double = 0.55
+    static let completionGlowOpacity: Double = 0.6
 
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///

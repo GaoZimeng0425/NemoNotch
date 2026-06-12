@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Full-screen accent glow hugging all four screen edges, fading inward.
+/// Full-screen accent glow wrapping all four screen edges. A crisp solid line
+/// hugs the very rim while a tighter blurred halo fades inward — same family
+/// as the notch's `NotchGlowRing`, but a full-screen rectangle frame.
 /// Opacity is driven by `service.flashActive` (animated by the service via
 /// `withAnimation`). Purely visual — never intercepts events.
 struct CompletionFlashView: View {
@@ -8,41 +10,18 @@ struct CompletionFlashView: View {
 
     var body: some View {
         ZStack {
-            edgeBand(.top)
-            edgeBand(.bottom)
-            edgeBand(.leading)
-            edgeBand(.trailing)
+            // Soft halo — the glow spread, kept tight so the rim stays defined.
+            Rectangle()
+                .strokeBorder(NotchTheme.accent, lineWidth: NotchConstants.completionGlowWidth)
+                .blur(radius: NotchConstants.completionGlowBlur)
+
+            // Crisp solid line hugging the very edge so the outermost rim reads solid.
+            Rectangle()
+                .strokeBorder(NotchTheme.accent, lineWidth: NotchConstants.completionGlowEdgeWidth)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .blur(radius: NotchConstants.completionGlowBlur)
         .blendMode(.screen)
         .opacity(service.flashActive ? NotchConstants.completionGlowOpacity : 0)
         .allowsHitTesting(false)
         .ignoresSafeArea()
-    }
-
-    /// One edge's accent→clear gradient, pinned to that edge.
-    @ViewBuilder
-    private func edgeBand(_ edge: Edge) -> some View {
-        let accent = NotchTheme.accent
-        let band = NotchConstants.completionGlowWidth
-        switch edge {
-        case .top:
-            LinearGradient(colors: [accent, .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: band)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        case .bottom:
-            LinearGradient(colors: [accent, .clear], startPoint: .bottom, endPoint: .top)
-                .frame(height: band)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        case .leading:
-            LinearGradient(colors: [accent, .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(width: band)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        case .trailing:
-            LinearGradient(colors: [accent, .clear], startPoint: .trailing, endPoint: .leading)
-                .frame(width: band)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-        }
     }
 }

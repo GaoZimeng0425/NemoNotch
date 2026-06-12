@@ -645,7 +645,7 @@ private func rebuild() {
 }
 ```
 
-The `NSHostingView` inside each window hosts `CompletionFlashView` — a four-edge `.blendMode(.screen)` accent gradient blurred via `.blur(radius:)`, with `allowsHitTesting(false)`.
+The `NSHostingView` inside each window hosts `CompletionFlashView` — a `.blendMode(.screen)` accent frame: a `Rectangle().strokeBorder` rim wrapping all four sides (a crisp solid outer line plus a wider `.blur(radius:)`-softened halo fading inward), with `allowsHitTesting(false)`.
 
 **Gotcha:** `ignoresMouseEvents = true` on `NSWindow` is distinct from returning `nil` from `hitTest` in a subview. It is a window-level toggle that makes AppKit route all mouse events through the window as if it were absent — no subview override needed, and no risk of a SwiftUI view accidentally re-enabling hit-testing.
 
