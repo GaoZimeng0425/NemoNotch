@@ -105,6 +105,13 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Section("settings.completion_flash.header") {
+                Toggle("settings.completion_flash.enabled", isOn: Binding(
+                    get: { appSettings.completionFlashEnabled },
+                    set: { appSettings.completionFlashEnabled = $0 }
+                ))
+            }
         }
         .formStyle(.grouped)
         .padding()
