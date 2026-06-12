@@ -75,10 +75,12 @@ enum NotchConstants {
     /// How long the completion toast stays before dismissing (own value — the
     /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
     static let completionToastDuration: Double = 5.0
-    /// Thickness (points) of the soft accent halo wrapping the screen edge.
-    static let completionGlowWidth: CGFloat = 64
-    /// Blur applied to the halo — smaller = tighter, more defined glow.
-    static let completionGlowBlur: CGFloat = 18
+    /// Thickness (points) of the accent halo band wrapping the screen edge.
+    /// Kept narrower than the blur so the halo reads as an edge-anchored glow
+    /// that fades smoothly inward rather than a flat-topped band.
+    static let completionGlowWidth: CGFloat = 46
+    /// Blur applied to the halo — larger = softer, prettier inward fade.
+    static let completionGlowBlur: CGFloat = 36
     /// Crisp solid outer line hugging the very edge, so the rim reads as solid.
     static let completionGlowEdgeWidth: CGFloat = 6
     /// Peak opacity of the edge glow at the top of the flash.
