@@ -35,6 +35,15 @@ final class CompletionFlashService {
         observe()
     }
 
+    deinit {
+        MainActor.assumeIsolated {
+            cooldownTask?.cancel()
+            flashResetTask?.cancel()
+            toastDismissTask?.cancel()
+            LogService.info("CompletionFlashService deinit", category: "CompletionFlash")
+        }
+    }
+
     // MARK: - Snapshot
 
     private func currentCandidates() -> [CompletionCandidate] {
@@ -43,6 +52,7 @@ final class CompletionFlashService {
             result.append(CompletionCandidate(
                 key: "ai:\(session.id)",
                 name: session.projectFolder ?? session.displayTitle,
+                // Active == .working only; a session merely .waiting is not "working".
                 isActive: session.status == .working
             ))
         }
@@ -70,8 +80,8 @@ final class CompletionFlashService {
         } onChange: {
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                observe() // re-arm before evaluating so no change is missed
                 evaluate()
-                observe() // re-arm for the next change
             }
         }
     }
@@ -103,6 +113,7 @@ final class CompletionFlashService {
     }
 
     private func triggerFlash() {
+        LogService.debug("Flash triggered", category: "CompletionFlash")
         flashResetTask?.cancel()
         withAnimation(.easeOut(duration: NotchConstants.completionFlashFadeIn)) {
             flashActive = true
