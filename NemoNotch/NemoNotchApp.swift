@@ -99,6 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
     private(set) var usageQuotaService: UsageQuotaService?
     private(set) var quickStartController: QuickStartWindowController?
+    private(set) var completionFlashService: CompletionFlashService?
+    private(set) var completionFlashWindowController: CompletionFlashWindowController?
 
     var shouldSuppressPreviousAppRestore: Bool {
         Date() < suppressRestoreUntil
@@ -163,6 +165,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hud = HUDService()
         hudService = hud
 
+        let completionFlash = CompletionFlashService(
+            store: aiMonitor.store,
+            registry: registry,
+            settings: settings
+        )
+        completionFlashService = completionFlash
+
         let system = SystemService()
         systemService = system
 
@@ -205,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(notification)
                     .environment(weather)
                     .environment(hud)
+                    .environment(completionFlash)
                     .environment(system)
                     .environment(tasks)
                     .environment(history)
@@ -230,6 +240,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.calendarService?.resetSelectedDateToToday()
         }
         coordinator = notchCoordinator
+
+        if !UITestMode.isActive {
+            completionFlashWindowController = CompletionFlashWindowController(service: completionFlash)
+        }
 
         setupHotkeys(coordinator: notchCoordinator)
 

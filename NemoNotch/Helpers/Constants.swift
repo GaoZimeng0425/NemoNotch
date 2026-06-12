@@ -61,6 +61,33 @@ enum NotchConstants {
     static let glowPulseMin: Double = 0.5
     static let glowPulseMax: Double = 1.0
 
+    /// Completion flash (full-screen edge glow on AI/agent completion)
+    /// Cooldown window: the first completion flashes; further completions
+    /// within this window merge into the visible toast without re-flashing.
+    static let completionFlashThrottle: TimeInterval = 2.0
+    /// One flash is a single continuous double-pulse on the glow level:
+    /// 0 → 1 → dipLevel → 1 → 0. Each rise (`0→1` and `dipLevel→1`) uses
+    /// `completionFlashRise`; the mid trough (`1→dipLevel`) uses
+    /// `completionFlashDip`; the final `1→0` uses `completionFlashFall`.
+    static let completionFlashRise: Double = 0.28
+    static let completionFlashDip: Double = 0.28
+    static let completionFlashFall: Double = 0.4
+    /// Trough between the two peaks — the glow dips to this fraction, never to 0.
+    static let completionFlashDipLevel: Double = 0.5
+    /// How long the completion toast stays before dismissing (own value — the
+    /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
+    static let completionToastDuration: Double = 5.0
+    /// Thickness (points) of the accent halo band wrapping the screen edge.
+    /// Kept narrower than the blur so the halo reads as an edge-anchored glow
+    /// that fades smoothly inward rather than a flat-topped band.
+    static let completionGlowWidth: CGFloat = 46
+    /// Blur applied to the halo — larger = softer, prettier inward fade.
+    static let completionGlowBlur: CGFloat = 36
+    /// Crisp solid outer line hugging the very edge, so the rim reads as solid.
+    static let completionGlowEdgeWidth: CGFloat = 6
+    /// Peak opacity of the edge glow at the top of the flash.
+    static let completionGlowOpacity: Double = 0.9
+
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///
     /// AF_UNIX socket files were previously used but proved unworkable on this
