@@ -50,13 +50,16 @@ final class CompletionFlashWindowController {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
         }
+        LogService.info("CompletionFlashWindowController deinit", category: "CompletionFlash")
     }
 
     private func rebuild() {
         let currentIDs = Set(NSScreen.screens.map(\.displayID))
         for (id, window) in windows where !currentIDs.contains(id) {
             window.orderOut(nil)
+            window.close()
             windows.removeValue(forKey: id)
+            LogService.debug("CompletionFlash window removed for display \(id)", category: "CompletionFlash")
         }
         for screen in NSScreen.screens {
             let id = screen.displayID
@@ -64,6 +67,7 @@ final class CompletionFlashWindowController {
                 existing.setFrame(screen.frame, display: true)
             } else {
                 windows[id] = makeWindow(for: screen)
+                LogService.debug("CompletionFlash window added for display \(id)", category: "CompletionFlash")
             }
         }
     }
