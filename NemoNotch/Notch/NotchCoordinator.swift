@@ -215,12 +215,31 @@ final class NotchCoordinator {
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
             status = .closed
         }
-        if let openedScreen, let slot = slots[openedScreen.displayID] {
-            slot.passThrough.isBlocking = false
-            if slot.window.isKeyWindow { slot.window.resignKey() }
-        }
         activeScreen = nil
         restorePreviousApp()
+        // Keep the panel intercepting clicks until the close animation has
+        // faded the content out. The tab bar and content stay visible during
+        // the fade, so dropping `isBlocking` now would let a click in that
+        // region leak straight through to the app behind the notch.
+        if let openedScreen, let slot = slots[openedScreen.displayID] {
+            scheduleBlockingTeardown(slot: slot, displayID: openedScreen.displayID)
+        }
+    }
+
+    /// Defer dropping `isBlocking` (and resigning key) until the close fade
+    /// finishes. Bails if the notch reopened on the same screen meanwhile.
+    private func scheduleBlockingTeardown(slot: NotchWindowSlot, displayID: UInt32) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(NotchConstants.openSpringDuration))
+            guard let self else { return }
+            guard !(status == .opened && activeScreen?.displayID == displayID) else { return }
+            slot.passThrough.isBlocking = false
+            if slot.window.isKeyWindow { slot.window.resignKey() }
+            LogService.debug(
+                "NotchCoordinator: blocking released after close fade (display \(displayID))",
+                category: "NotchCoordinator"
+            )
+        }
     }
 
     private func captureFrontmostApp() {
