@@ -101,6 +101,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var quickStartController: QuickStartWindowController?
     private(set) var completionFlashService: CompletionFlashService?
     private(set) var completionFlashWindowController: CompletionFlashWindowController?
+    /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
+    /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
+    private var uiTestFlashBackdrop: NSWindow?
 
     var shouldSuppressPreviousAppRestore: Bool {
         Date() < suppressRestoreUntil
@@ -241,7 +244,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         coordinator = notchCoordinator
 
-        if !UITestMode.isActive {
+        // 正常运行时常驻;UI 测试下仅在 --flash 截图模式才需要全屏 glow 窗口。
+        if !UITestMode.isActive || UITestMode.flash {
             completionFlashWindowController = CompletionFlashWindowController(service: completionFlash)
         }
 
@@ -264,9 +268,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let target {
                 UITestSeeder.writeCaptureRect(for: tab, on: target)
             }
+            // --flash:在面板/glow 之下铺一层暗色背景窗,让全屏 glow 在截图里清晰可见。
+            if UITestMode.flash, let target {
+                uiTestFlashBackdrop = makeUITestFlashBackdrop(on: target)
+            }
+
             NSApp.activate(ignoringOtherApps: true)
             notchCoordinator.notchOpen(tab: tab, on: target)
+
+            // --flash:面板打开后,钉住完成态 glow + toast 供脚本全屏截图。
+            if UITestMode.flash {
+                completionFlash.holdForUITest(names: ["NemoNotch"])
+            }
         }
+    }
+
+    /// 截图专用:覆盖整屏的暗色渐变背景窗,层级压在 glow / 面板之下。
+    private func makeUITestFlashBackdrop(on screen: NSScreen) -> NSWindow {
+        let window = NSWindow(
+            contentRect: screen.frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = true
+        window.hasShadow = false
+        window.level = .statusBar + 7 // 低于 glow / 面板(statusBar + 8)
+        window.ignoresMouseEvents = true
+        window.collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
+        let backdrop = LinearGradient(
+            colors: [
+                Color(red: 0.07, green: 0.07, blue: 0.10),
+                Color(red: 0.02, green: 0.02, blue: 0.04),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        let host = NSHostingView(rootView: backdrop.ignoresSafeArea())
+        host.frame = NSRect(origin: .zero, size: screen.frame.size)
+        window.contentView = host
+        window.setFrame(screen.frame, display: true)
+        window.orderFrontRegardless()
+        return window
     }
 
     func applicationWillTerminate(_ notification: Notification) {
