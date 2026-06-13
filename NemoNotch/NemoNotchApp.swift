@@ -252,16 +252,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupHotkeys(coordinator: notchCoordinator)
 
         if UITestMode.isActive {
-            UITestSeeder.seed(
-                media: media,
-                calendar: calendar,
-                weather: weather,
-                system: system,
-                aiStore: aiMonitor.store,
-                registry: registry,
-                pomodoro: pomodoro,
-                tasks: tasks
-            )
+            if UITestMode.flash {
+                // 只填一个工作中的 Claude 会话,收起的刘海只显示 Claude Code 一行徽标。
+                UITestSeeder.seedFlash(aiStore: aiMonitor.store)
+            } else {
+                UITestSeeder.seed(
+                    media: media,
+                    calendar: calendar,
+                    weather: weather,
+                    system: system,
+                    aiStore: aiMonitor.store,
+                    registry: registry,
+                    pomodoro: pomodoro,
+                    tasks: tasks
+                )
+            }
             let target = NSScreen.screens.first(where: { $0.isBuiltInDisplay && $0.hasNotch })
                 ?? NSScreen.main
             let tab = UITestMode.tab
@@ -274,11 +279,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             NSApp.activate(ignoringOtherApps: true)
-            notchCoordinator.notchOpen(tab: tab, on: target)
 
-            // --flash:面板打开后,钉住完成态 glow + toast 供脚本全屏截图。
             if UITestMode.flash {
+                // 保持刘海收起,只钉住完成态 glow + toast —— 贴合真实开发场景:
+                // 正在写代码、刘海收着,AI 跑完时屏幕一闪 + 刘海旁弹出完成 Toast。
                 completionFlash.holdForUITest(names: ["NemoNotch"])
+            } else {
+                notchCoordinator.notchOpen(tab: tab, on: target)
             }
         }
     }
