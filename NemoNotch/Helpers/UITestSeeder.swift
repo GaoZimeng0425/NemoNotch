@@ -28,6 +28,13 @@ enum UITestSeeder {
         seedPomodoro(pomodoro, tasks: tasks)
     }
 
+    /// 完成闪光截图(`--flash`)专用:只填一个正在工作的 Claude 会话,
+    /// 不碰媒体 / 日历 / Agent / 番茄 —— 收起的刘海于是只显示「Claude Code」一行徽标,
+    /// 不被番茄、Agent 等更高优先级徽标盖掉。
+    static func seedFlash(aiStore: AISessionStore) {
+        seedAI(aiStore)
+    }
+
     // MARK: - Overview: media + calendar + weather
 
     private static func seedMedia(_ media: MediaService) {
