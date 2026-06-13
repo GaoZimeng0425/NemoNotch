@@ -52,6 +52,10 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
 - **Activity Glow** — When AI/agents are busy (working, or waiting for approval), the expanded notch shows a soft blurred glow in the app's theme orange along its lower inner edge, fading out by the middle (content stays clean)
 - **Completion Flash** — When an AI session or agent finishes a turn (working→idle), NemoNotch plays a one-shot full-screen accent-orange edge glow on all screens, plus a HUD-style toast capsule near the notch showing the finished project/agent name(s). Rapid completions are throttled and merged into the visible toast rather than replaying the flash. Toggleable in Settings.
+
+  <p align="center">
+    <img src="docs/images/completion-flash.png" alt="Completion Flash — full-screen accent-orange edge glow with a completion toast near the notch" width="720">
+  </p>
 - **Menu Bar Entry** — Fixed pixel-art notch icon (state is visible on the notch panel above the menubar); menu shows Now Playing controls (previous / play-pause / next) when media is active
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings

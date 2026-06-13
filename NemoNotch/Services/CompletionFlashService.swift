@@ -98,6 +98,17 @@ final class CompletionFlashService {
         handle(names: completed)
     }
 
+    // MARK: - UI test
+
+    /// Screenshot helper: pin the glow at full level and show a toast with the
+    /// given names, with no auto-reset/cooldown. Only used under `--uitest --flash`.
+    func holdForUITest(names: [String]) {
+        flashLevel = 1
+        toastNames = names
+        toastVisible = true
+        LogService.debug("Flash held for UI test: \(names)", category: "CompletionFlash")
+    }
+
     // MARK: - Throttle / merge
 
     private func handle(names: [String]) {

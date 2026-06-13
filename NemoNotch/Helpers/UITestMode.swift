@@ -13,6 +13,11 @@ enum UITestMode {
         return Tab(rawValue: String(raw)) ?? .overview
     }
 
+    /// `--flash` 打开:展示一次「完成」全屏 glow + toast 并保持不衰减,供截图。
+    static func flash(in args: [String]) -> Bool {
+        args.contains("--flash")
+    }
+
     /// 截图矩形落盘路径,供脚本读取后 screencapture。
     static let rectFilePath = "/tmp/nemonotch-uitest.rect"
 
@@ -23,5 +28,9 @@ enum UITestMode {
 
     static var tab: Tab {
         tab(in: ProcessInfo.processInfo.arguments)
+    }
+
+    static var flash: Bool {
+        flash(in: ProcessInfo.processInfo.arguments)
     }
 }
