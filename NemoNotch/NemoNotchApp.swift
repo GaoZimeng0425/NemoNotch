@@ -284,6 +284,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // 保持刘海收起,只钉住完成态 glow + toast —— 贴合真实开发场景:
                 // 正在写代码、刘海收着,AI 跑完时屏幕一闪 + 刘海旁弹出完成 Toast。
                 completionFlash.holdForUITest(names: ["NemoNotch"])
+                // 安全网:--flash 会铺满屏的暗色背景窗;万一截图脚本被强杀来不及
+                // 清理,也让 app 自己 12s 后退出,绝不把全屏窗永久挂在屏幕上。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+                    LogService.info("--flash self-terminate (safety timeout)", category: "AppDelegate")
+                    NSApp.terminate(nil)
+                }
             } else {
                 notchCoordinator.notchOpen(tab: tab, on: target)
             }
