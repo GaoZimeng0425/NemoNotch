@@ -4,12 +4,14 @@ import Foundation
 enum QuotaProvider: String, CaseIterable, Sendable {
     case claude
     case codex
+    case gemini
 
     /// Brand name shown as the section header (verbatim, not localized).
     var displayName: String {
         switch self {
         case .claude: "Claude Code"
         case .codex: "Codex"
+        case .gemini: "Gemini"
         }
     }
 }
@@ -33,6 +35,8 @@ enum QuotaWindow: Hashable, Sendable {
     case sevenDayOpus
     case sevenDaySonnet
     case rolling(minutes: Int)
+    /// Gemini per-model daily quota; carries a short display label (e.g. "2.5 Pro").
+    case gemini(label: String)
 }
 
 /// A single quota tier: utilization (0...100) + when it resets.
@@ -90,6 +94,37 @@ struct UsageCredential: Equatable, Sendable {
     }
 }
 
+/// Gemini CLI auth mode from `~/.gemini/settings.json` (`security.auth.selectedType`).
+enum GeminiAuthType: String, Sendable {
+    case oauthPersonal = "oauth-personal"
+    case apiKey = "api-key"
+    case vertexAI = "vertex-ai"
+    case unknown
+}
+
+/// OAuth credential read from `~/.gemini/oauth_creds.json`.
+struct GeminiOAuthCredential: Equatable, Sendable {
+    let accessToken: String?
+    let refreshToken: String?
+    let expiryDate: Date?
+    let status: CredentialStatus
+    let message: String?
+
+    init(
+        accessToken: String?,
+        refreshToken: String?,
+        expiryDate: Date?,
+        status: CredentialStatus,
+        message: String? = nil
+    ) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiryDate = expiryDate
+        self.status = status
+        self.message = message
+    }
+}
+
 enum UsageCredentialParser {
     /// Parses `~/.claude/.credentials.json` or the Keychain blob.
     /// Shape: `{ "claudeAiOauth": { "accessToken": "...", "expiresAt": <ms epoch> } }`.
@@ -127,6 +162,35 @@ enum UsageCredentialParser {
         return UsageCredential(token: token, accountID: auth.tokens?.accountID, status: .valid)
     }
 
+    /// Parses `~/.gemini/oauth_creds.json`:
+    /// `{ "access_token": "...", "refresh_token": "...", "expiry_date": <ms epoch> }`.
+    /// Status is `.valid` when any usable token exists, `.notFound` when none do,
+    /// `.parseError` when the payload isn't a JSON object. The service decides
+    /// whether to refresh based on `expiryDate`.
+    static func parseGeminiCredentials(data: Data, now: Date = Date()) throws -> GeminiOAuthCredential {
+        let object = try JSONSerialization.jsonObject(with: data)
+        guard let root = object as? [String: Any] else {
+            return GeminiOAuthCredential(
+                accessToken: nil, refreshToken: nil, expiryDate: nil,
+                status: .parseError, message: "Gemini credentials JSON is not an object"
+            )
+        }
+        let access = (root["access_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let refresh = (root["refresh_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        var expiry: Date?
+        if let ms = root["expiry_date"] as? Double { expiry = Date(timeIntervalSince1970: ms / 1000) }
+        else if let ms = root["expiry_date"] as? Int { expiry = Date(timeIntervalSince1970: Double(ms) / 1000) }
+        guard access != nil || refresh != nil else {
+            return GeminiOAuthCredential(
+                accessToken: nil, refreshToken: nil, expiryDate: nil,
+                status: .notFound, message: "No Gemini tokens present"
+            )
+        }
+        return GeminiOAuthCredential(
+            accessToken: access, refreshToken: refresh, expiryDate: expiry, status: .valid
+        )
+    }
+
     private static func isExpired(_ value: Any, now: Date) -> Bool {
         let raw: Double
         if let d = value as? Double { raw = d }
@@ -148,6 +212,58 @@ enum UsageQuotaParser {
             response.sevenDaySonnet.map { tier(.sevenDaySonnet, $0) },
         ].compactMap(\.self)
         return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: fetchedAt)
+    }
+
+    /// Parses Gemini's `retrieveUserQuota` response. Collapses each model's
+    /// buckets to the lowest `remainingFraction` (most-constrained token type)
+    /// and maps to `utilization = (1 - fraction) * 100`, descending.
+    static func parseGeminiQuota(data: Data, fetchedAt: Date = Date()) throws -> ProviderUsageQuota {
+        let response = try JSONDecoder().decode(GeminiQuotaResponse.self, from: data)
+        let buckets = response.buckets ?? []
+
+        var byModel: [String: (fraction: Double, reset: String?)] = [:]
+        for bucket in buckets {
+            guard let model = bucket.modelId, let fraction = bucket.remainingFraction else { continue }
+            if let existing = byModel[model] {
+                if fraction < existing.fraction { byModel[model] = (fraction, bucket.resetTime) }
+            } else {
+                byModel[model] = (fraction, bucket.resetTime)
+            }
+        }
+
+        // utilization descending = remaining fraction ascending; tie-break by model id.
+        let tiers = byModel
+            .sorted { lhs, rhs in
+                lhs.value.fraction != rhs.value.fraction
+                    ? lhs.value.fraction < rhs.value.fraction
+                    : lhs.key < rhs.key
+            }
+            .map { model, info -> QuotaTier in
+                let utilization = min(max((1 - info.fraction) * 100, 0), 100)
+                return QuotaTier(
+                    window: .gemini(label: geminiModelShortName(model)),
+                    utilization: utilization,
+                    resetsAt: info.reset.flatMap(parseResetDate)
+                )
+            }
+
+        return ProviderUsageQuota(provider: .gemini, status: .valid, tiers: tiers, fetchedAt: fetchedAt)
+    }
+
+    /// `gemini-2.5-pro` → "2.5 Pro", `gemini-2.5-flash-lite` → "2.5 Flash Lite",
+    /// unknown families fall back to the id minus the `gemini-` prefix.
+    static func geminiModelShortName(_ modelId: String) -> String {
+        let lower = modelId.lowercased()
+        let version = modelId.split(separator: "-")
+            .first { $0.contains(".") && $0.allSatisfy { $0.isNumber || $0 == "." } }
+            .map(String.init)
+        let family: String
+        if lower.contains("flash-lite") { family = "Flash Lite" }
+        else if lower.contains("flash") { family = "Flash" }
+        else if lower.contains("pro") { family = "Pro" }
+        else { return modelId.replacingOccurrences(of: "gemini-", with: "") }
+        if let version { return "\(version) \(family)" }
+        return family
     }
 
     static func parseCodexQuota(data: Data, fetchedAt: Date = Date()) throws -> ProviderUsageQuota {
@@ -336,4 +452,15 @@ private struct CodexAuthTokens: Decodable {
     enum CodingKeys: String, CodingKey { case accessToken = "access_token"
         case accountID = "account_id"
     }
+}
+
+private struct GeminiQuotaResponse: Decodable {
+    let buckets: [GeminiQuotaBucket]?
+}
+
+private struct GeminiQuotaBucket: Decodable {
+    let modelId: String?
+    let tokenType: String?
+    let remainingFraction: Double?
+    let resetTime: String?
 }

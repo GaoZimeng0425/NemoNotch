@@ -176,4 +176,109 @@ struct UsageQuotaTests {
         let fresh = QuotaTier(window: .rolling(minutes: 300), utilization: 12, resetsAt: nil)
         #expect(fresh.backfillingReset(from: cached, now: now).resetsAt == nil)
     }
+
+    // MARK: - Gemini credential parsing
+
+    @Test func parseGeminiCredentialValid() throws {
+        let json = #"{"access_token":"acc-1","refresh_token":"ref-1","expiry_date":1779783180264,"id_token":"x"}"#
+        let cred = try UsageCredentialParser.parseGeminiCredentials(data: Data(json.utf8))
+        #expect(cred.accessToken == "acc-1")
+        #expect(cred.refreshToken == "ref-1")
+        #expect(cred.expiryDate == Date(timeIntervalSince1970: 1_779_783_180.264))
+        #expect(cred.status == .valid)
+    }
+
+    @Test func parseGeminiCredentialNoTokens() throws {
+        let json = #"{"scope":"openid"}"#
+        let cred = try UsageCredentialParser.parseGeminiCredentials(data: Data(json.utf8))
+        #expect(cred.accessToken == nil)
+        #expect(cred.refreshToken == nil)
+        #expect(cred.status == .notFound)
+    }
+
+    @Test func parseGeminiCredentialMalformedThrows() {
+        #expect(throws: (any Error).self) {
+            try UsageCredentialParser.parseGeminiCredentials(data: Data("not json".utf8))
+        }
+    }
+
+    @Test func parseGeminiCredentialNonObject() throws {
+        // Valid JSON, but an array rather than an object → .parseError (no throw).
+        let cred = try UsageCredentialParser.parseGeminiCredentials(data: Data("[1,2,3]".utf8))
+        #expect(cred.status == .parseError)
+    }
+
+    @Test func geminiAuthTypeRawValues() {
+        #expect(GeminiAuthType(rawValue: "oauth-personal") == .oauthPersonal)
+        #expect(GeminiAuthType(rawValue: "api-key") == .apiKey)
+        #expect(GeminiAuthType(rawValue: "vertex-ai") == .vertexAI)
+        #expect(GeminiAuthType(rawValue: "nonsense") == nil)
+    }
+
+    // MARK: - Gemini quota parsing
+
+    @Test func parseGeminiQuotaCollapsesPerModel() throws {
+        // Two token-type buckets for pro (keep the lower fraction = more used);
+        // one for flash. Order by utilization descending.
+        let json = """
+        {"buckets":[
+          {"modelId":"gemini-2.5-pro","tokenType":"REQUESTS","remainingFraction":0.4,"resetTime":"2026-06-16T00:00:00Z"},
+          {"modelId":"gemini-2.5-pro","tokenType":"TOKENS","remainingFraction":0.1,"resetTime":"2026-06-16T00:00:00Z"},
+          {"modelId":"gemini-2.5-flash","tokenType":"REQUESTS","remainingFraction":0.8,"resetTime":"2026-06-16T00:00:00Z"}
+        ]}
+        """
+        let quota = try UsageQuotaParser.parseGeminiQuota(data: Data(json.utf8))
+        #expect(quota.provider == .gemini)
+        #expect(quota.status == .valid)
+        #expect(quota.tiers.count == 2) // pro collapsed to one row
+        // pro: 1 - 0.1 = 90% used (lowest fraction kept); flash: 1 - 0.8 = 20%
+        #expect(quota.tiers[0].window == .gemini(label: "2.5 Pro"))
+        #expect(abs(quota.tiers[0].utilization - 90.0) < 0.001)
+        #expect(quota.tiers[1].window == .gemini(label: "2.5 Flash"))
+        #expect(abs(quota.tiers[1].utilization - 20.0) < 0.001)
+        #expect(quota.tiers[0].resetsAt != nil)
+    }
+
+    @Test func parseGeminiQuotaEmptyBuckets() throws {
+        let quota = try UsageQuotaParser.parseGeminiQuota(data: Data(#"{"buckets":[]}"#.utf8))
+        #expect(quota.status == .valid)
+        #expect(quota.tiers.isEmpty)
+    }
+
+    @Test func parseGeminiQuotaNilBucketsKey() throws {
+        // Response with no "buckets" key at all (some free tiers) → degrade to no tiers.
+        let quota = try UsageQuotaParser.parseGeminiQuota(data: Data("{}".utf8))
+        #expect(quota.status == .valid)
+        #expect(quota.tiers.isEmpty)
+    }
+
+    @Test func parseGeminiQuotaSkipsBucketsMissingFraction() throws {
+        // 100%-quota bucket omits remainingFraction → skipped, not crashed.
+        let json = #"{"buckets":[{"modelId":"gemini-2.5-pro","tokenType":"REQUESTS","resetTime":"2026-06-16T00:00:00Z"}]}"#
+        let quota = try UsageQuotaParser.parseGeminiQuota(data: Data(json.utf8))
+        #expect(quota.tiers.isEmpty)
+    }
+
+    @Test func geminiModelShortNames() {
+        #expect(UsageQuotaParser.geminiModelShortName("gemini-2.5-pro") == "2.5 Pro")
+        #expect(UsageQuotaParser.geminiModelShortName("gemini-2.5-flash") == "2.5 Flash")
+        #expect(UsageQuotaParser.geminiModelShortName("gemini-2.5-flash-lite") == "2.5 Flash Lite")
+        #expect(UsageQuotaParser.geminiModelShortName("gemini-exp-1206") == "exp-1206")
+    }
+
+    // MARK: - Gemini OAuth client extraction
+
+    @Test func geminiOAuthClientParse() {
+        let js = """
+        const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
+        const OAUTH_CLIENT_SECRET = 'xxxx-redacted-client-secret-xxxx';
+        """
+        let creds = GeminiOAuthClientLocator.parse(from: js)
+        #expect(creds?.clientId == "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com")
+        #expect(creds?.clientSecret == "xxxx-redacted-client-secret-xxxx")
+    }
+
+    @Test func geminiOAuthClientParseMissing() {
+        #expect(GeminiOAuthClientLocator.parse(from: "const FOO = 'bar';") == nil)
+    }
 }

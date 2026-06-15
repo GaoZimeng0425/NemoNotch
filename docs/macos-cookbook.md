@@ -2250,6 +2250,34 @@ private func applyNoUI(to query: inout [String: Any]) {
 
 ---
 
+### 14.4 Gemini quota — no Keychain, runtime client-secret extraction
+
+Unlike Claude/Codex, Gemini stores its OAuth credential in a plain file
+`~/.gemini/oauth_creds.json` (mode 0600, readable by the user's own GUI app), so
+there is **no Keychain ACL dance** — Gemini never uses the `needsAuthorization`
+path. The catch is the rest of the flow (`UsageQuotaService` + `GeminiOAuthClientLocator`):
+
+1. The stored `access_token` is short-lived and usually expired, so it must be
+   refreshed via `POST oauth2.googleapis.com/token` (`grant_type=refresh_token`).
+   That needs gemini-cli's OAuth client_id/secret, which are **not hardcoded** —
+   `GeminiOAuthClientLocator` extracts them at runtime from the installed CLI's
+   bundled JS: locate the `gemini` binary (candidate paths, else a bounded
+   login-shell `which`), resolve the symlink, then read `dist/src/code_assist/oauth2.js`
+   or BFS-scan `bundle/*.js` for `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`. This
+   survives a Google key rotation. `resolve()` does file I/O + a possible
+   subprocess, so it is called via `Task.detached` (off the `@MainActor`).
+2. The quota endpoint needs a Cloud Code project, so `:loadCodeAssist` resolves
+   `cloudaicompanionProject` (with a `cloudresourcemanager` fallback, then an
+   empty body) before `:retrieveUserQuota`.
+3. The refreshed token is written back to `oauth_creds.json` (atomic), matching
+   gemini-cli's own behavior. Form-body values are percent-encoded (RFC3986
+   unreserved set) since refresh tokens contain `/`.
+
+No new private API and no new `@unchecked Sendable` boundary. Reference port:
+CodexBar's `GeminiStatusProbe`.
+
+---
+
 ## 15. Swift 6 concurrency conventions
 
 How NemoNotch satisfies Swift 6's strict-concurrency checker without sacrificing performance. Five patterns recur: `@MainActor @Observable` services, `@unchecked Sendable` bridge structs for crossing isolation, `nonisolated(unsafe)` for queue-owned mutable state, `Task { @MainActor }` re-dispatch from background callbacks, and `nonisolated(unsafe) static let shared` for thread-safe singletons.
