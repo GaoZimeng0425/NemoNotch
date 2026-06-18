@@ -975,24 +975,15 @@ Loading the function pointers (`MRMediaRemoteSendCommand`, `MRMediaRemoteSetElap
   }
   ```
 
-  **Gotcha (the big one): DON'T call `sendCommand(.skipForward)` or `.skipBackward` on Spotify or Music.** The system returns "never supported" via `MPRemoteCommandCenter`, with no error and no recovery — the command is silently dropped. Music sometimes accepts it; Spotify never does. Always route those two players through `MediaBridge.setPlayerPosition` (AppleScript). See [§7.3] and [§9].
+  **Gotcha (the big one): DON'T express seek as a *relative* skip on Spotify.** `sendCommand(.skipForward/.skipBackward)` returns "never supported" via `MPRemoteCommandCenter` on Spotify (silently dropped; Music sometimes accepts). The fix is **not** AppleScript — it's to seek with an **absolute** position: `MRMediaRemoteSetElapsedTime` (`set_time`), which Spotify *does* honor (verified, §7.5). NemoNotch now does all seek through the perl bridge's `set_time` (§7.6); this in-process `skip` and the whole `MediaRemote.swift` control surface were removed.
 
-- **`setElapsedTime` for seek** — `NemoNotch/Services/MediaRemote.swift:169-174`. Absolute-position seek via the `MRMediaRemoteSetElapsedTime` symbol.
-
-  ```swift
-  @discardableResult
-  func setElapsedTime(_ seconds: Double) -> Bool {
-      guard let fn = setElapsedTimeFn else { return false }
-      fn(seconds)
-      return true
-  }
-  ```
-
-  **Gotcha:** The boolean return value only indicates whether **the symbol was loaded**, not whether the call did anything. For Music/Spotify it silently no-ops; for Podcasts, Safari, and Chrome it works. Always pair with a MediaBridge fallback when the bundleID is a `KnownPlayer`. See [§7.5 decision tree].
+- **`setElapsedTime` for seek (in-process) — REMOVED.** NemoNotch used to call `MRMediaRemoteSetElapsedTime` in-process from `MediaRemote.swift`. Since macOS 15.4 that in-process call is gated (silently no-ops for a non-Apple-signed app), so it was deleted. Absolute seek now goes through the perl bridge's `set_time` for **all** players including Spotify (§7.5 / §7.6) — the function is the same (`MRMediaRemoteSetElapsedTime`), only the caller (Apple-signed `perl`) differs.
 
 - **15.4+ `MRNowPlayingController` fallback** — covered in [§4 Pattern C] (`getNowPlayingInfoSwift15_4Plus()`). Cross-link only — no duplication here.
 
-### 7.3 — MediaBridge (ScriptingBridge)
+### 7.3 — MediaBridge (ScriptingBridge) — ⚠️ REMOVED (historical)
+
+> **This subsystem was deleted.** `MediaBridge.swift`, `MediaAutomationPermissionMonitor.swift`, and `Services/ScriptingBridge/{Spotify,Music}Application.swift` no longer exist, so the `file:line` anchors below are dangling. Once seek was proven to work on Spotify through the perl bridge (§7.5), **all** media control unified on `MediaRemoteCommander` (§7.6) — no ScriptingBridge, no AppleScript, no Automation permission. The prose is kept as a reusable macOS ScriptingBridge reference; it is **not** wired into NemoNotch anymore.
 
 The authoritative source for Music/Spotify play state and the only path that can reliably seek Spotify. Wraps generated `MusicApplication`/`SpotifyApplication` protocols behind a type-erased `PlayerHandle`.
 
@@ -1081,9 +1072,11 @@ The authoritative source for Music/Spotify play state and the only path that can
 
   **Gotcha:** There is no API to *ask* macOS whether automation permission is granted. The probe pattern is: reset the delegate's error code, issue a **benign read** (`playerPosition`), then check whether the delegate captured `-1743`. The dialog itself is triggered by the same benign call — `requestPermissionIfNeeded` just records that we've fired the prompt once via `UserDefaults` so we don't re-prompt every launch.
 
-### 7.4 — Reconcile pattern (optimistic UI + authoritative SB)
+### 7.4 — Reconcile pattern (optimistic UI + CLI guard)
 
-User taps play/pause → UI flips **instantly** to the new state (`isPlaying = !current`) and records a guard (`reconcileExpectedIsPlaying = newValue`). 0.5s later, `reconcilePlayState()` queries `MediaBridge.isPlaying(bundleID:)` (synchronous ScriptingBridge call — that's truth). Meanwhile, every `applyInfo()` from CLI polling checks the guard against `cliInfo.isPlaying`: if they disagree, **keep the expected value** (CLI is stale); when they agree, **clear the guard** (CLI caught up, safe to trust again).
+User taps play/pause → UI flips **instantly** to the new state (`isPlaying = !current`) and records a guard (`reconcileExpectedIsPlaying = newValue`). ~0.5s later `reconcilePlayState()` just re-fires `updateNowPlaying()` (a fresh CLI fetch; the player's own distributed notifications also trigger refreshes). Every `applyInfo()` from CLI polling checks the guard against the CLI's reported playback rate: while they disagree, **keep the expected value** (CLI is stale); when they agree — or after a 3s hard expiry — **clear the guard** (CLI is now trusted). The guard alone prevents flicker; no authoritative side-query is needed.
+
+> **History:** this used to query `MediaBridge.isPlaying(bundleID:)` (synchronous ScriptingBridge) as the 0.5s "truth" source. That was removed with `MediaBridge` (§7.3) — the CLI playback rate + guard + 3s expiry self-heal without it, so reads need no Automation permission.
 
 - **Properties** — `NemoNotch/Services/MediaService.swift:26-31  reconcileExpectedIsPlaying`.
 
@@ -1429,9 +1422,11 @@ private func updateDisk() {
 
 ---
 
-## 9. ScriptingBridge & AppleScript
+## 9. ScriptingBridge & AppleScript — ⚠️ REMOVED (historical)
 
-NemoNotch uses **ScriptingBridge with generated Swift protocols** instead of `osascript` strings. This section covers how those protocol files were produced, the AE keyword codes embedded in them, and the decision rule for when AppleScript wins over MediaRemote. SBApplication wiring and AE-error detection are in [§7.3] — not repeated here.
+> **NemoNotch no longer uses ScriptingBridge or AppleScript.** The generated `Services/ScriptingBridge/*.swift` protocols and `MediaBridge` were deleted when media control unified on the perl bridge (§7.5 / §7.6); media control now needs no Automation permission. This section is retained as a standalone, reusable recipe for *how to* drive a scriptable app via generated SB protocols — the `file:line` anchors no longer resolve in this repo.
+
+NemoNotch *used to use* **ScriptingBridge with generated Swift protocols** instead of `osascript` strings. This section covers how those protocol files were produced, the AE keyword codes embedded in them, and the decision rule for when AppleScript wins over MediaRemote. SBApplication wiring and AE-error detection are in [§7.3] — not repeated here.
 
 ### 9.1 How the generated headers were produced
 
@@ -1653,7 +1648,9 @@ func openSystemSettings() {
 - **Gotcha:** macOS 14+ uses `.fullAccess` / `.writeOnly` / `.denied` enum cases; older code using `.authorized` is **deprecated** and produces a runtime warning. Use the newer API and gate with `if #available(macOS 14, *)` if you must support older OS.
 - **Gotcha:** `EKEventStoreChanged` fires on **any change anywhere** — including iCloud-pushed edits while the user is in Calendar.app. Debounce before re-querying, otherwise you'll hammer EventKit during sync storms.
 
-### 11.2 Apple Events / Automation
+### 11.2 Apple Events / Automation — ⚠️ no longer used by NemoNotch
+
+> NemoNotch no longer sends Apple Events: media control moved to the perl bridge (§7.6) and `MediaBridge` / the Automation `PermissionCard` / the `NSAppleEventsUsageDescription` key were removed. Kept as a reference for the (genuinely treacherous) Automation-permission flow should it ever be needed again.
 
 Required Info.plist key: `INFOPLIST_KEY_NSAppleEventsUsageDescription` (must be declared in `project.pbxproj` — see [§3]).
 
