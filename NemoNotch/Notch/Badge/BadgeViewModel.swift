@@ -116,23 +116,29 @@ final class BadgeViewModel {
         wasWaitingForApproval = aiService.activeSession?.phase.isWaitingForApproval == true
     }
 
-    func updateDisplayedBadges(newTypes: [BadgeItem]) {
+    /// Apply a new badge set, animating `displayedBadgeItems` and
+    /// `shownHasActiveBadge` together so the compact-badge layout stays in sync.
+    ///
+    /// Non-empty updates coalesce on a 16ms tick (unchanged). An update that
+    /// drops to *empty* is delayed by `badgeEmptyGrace`: if a non-empty set
+    /// arrives within that window the pending collapse is cancelled, so a
+    /// momentary idle dip (e.g. an agent briefly returning to .idle between
+    /// tool calls) no longer flips `shownHasActiveBadge` false→true and replays
+    /// the right-edge badge's slide/spread animation.
+    func applyBadgeUpdate(newTypes: [BadgeItem]) {
         badgeTypeUpdateTask?.cancel()
+        let isEmpty = newTypes.isEmpty
+        let delay: Duration = isEmpty ? NotchConstants.badgeEmptyGrace : .milliseconds(16)
         badgeTypeUpdateTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(16))
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             withAnimation(.spring(
                 duration: NotchConstants.badgeSpringDuration,
                 bounce: NotchConstants.badgeSpringBounce
             )) {
                 displayedBadgeItems = newTypes
+                shownHasActiveBadge = !isEmpty
             }
-        }
-    }
-
-    func updateHasActiveBadge(_ newValue: Bool) {
-        withAnimation(.spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce)) {
-            shownHasActiveBadge = newValue
         }
     }
 

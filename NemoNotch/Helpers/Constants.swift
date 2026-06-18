@@ -14,6 +14,10 @@ enum NotchConstants {
     // Badge
     static let badgePadding: CGFloat = 36
     static let badgeSpread: CGFloat = 14
+    /// Grace delay before collapsing the compact badges when activity drops to
+    /// empty. Absorbs momentary idle dips (e.g. an agent briefly returning to
+    /// .idle between tool calls) so the right-edge badge doesn't slide in/out.
+    static let badgeEmptyGrace: Duration = .milliseconds(600)
 
     // Badge row
     static let badgeRowHeight: CGFloat = 24
