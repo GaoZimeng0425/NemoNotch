@@ -82,7 +82,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
     private(set) var mediaService: MediaService?
-    private(set) var automationPermissionMonitor: MediaAutomationPermissionMonitor?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private(set) var openClawService: OpenClawService?
@@ -116,16 +115,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = AppSettings()
         let media = MediaService(disableLiveUpdates: UITestMode.isActive)
-        let permissionMonitor = MediaAutomationPermissionMonitor(
-            monitoredBundles: KnownPlayer.allCases.map(\.rawValue)
-        )
-        media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
-            permissionMonitor?.recordDenied(bundleID: bundleID)
-        }
-        media.automationAuthorizedHandler = { [weak permissionMonitor] bundleID in
-            permissionMonitor?.recordAuthorized(bundleID: bundleID)
-        }
-        if !UITestMode.isActive { permissionMonitor.startProbing() }
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
@@ -148,7 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appSettings = settings
         mediaService = media
-        automationPermissionMonitor = permissionMonitor
         calendarService = calendar
         aiMonitorService = aiMonitor
         launcherService = launcher
@@ -206,7 +194,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(coordinator)
                     .environment(settings)
                     .environment(media)
-                    .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
                     .environment(usageQuota)
@@ -284,6 +271,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // 保持刘海收起,只钉住完成态 glow + toast —— 贴合真实开发场景:
                 // 正在写代码、刘海收着,AI 跑完时屏幕一闪 + 刘海旁弹出完成 Toast。
                 completionFlash.holdForUITest(names: ["NemoNotch"])
+                // 安全网:--flash 会铺满屏的暗色背景窗;万一截图脚本被强杀来不及
+                // 清理,也让 app 自己 12s 后退出,绝不把全屏窗永久挂在屏幕上。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+                    LogService.info("--flash self-terminate (safety timeout)", category: "AppDelegate")
+                    NSApp.terminate(nil)
+                }
             } else {
                 notchCoordinator.notchOpen(tab: tab, on: target)
             }

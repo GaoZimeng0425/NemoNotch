@@ -260,13 +260,17 @@ struct AIChatTab: View {
                     .foregroundStyle(NotchTheme.textSecondary)
                     .lineLimit(1)
             }
-
-            Spacer(minLength: 12)
+            // Title absorbs the slack and truncates first; the fixed-width summary
+            // cards keep their intrinsic size instead of being compressed (their
+            // meter bars can't shrink) and clipped by the notch mask.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(alignment: .top, spacing: 8) {
                 contextSummaryCard
                 UsageQuotaCompactView()
             }
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 4)

@@ -25,6 +25,20 @@ final class UsageQuotaService: LifecycleAware {
         .appendingPathComponent(".codex/auth.json")
     private let codexUsageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
 
+    private let geminiCredentialsURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".gemini/oauth_creds.json")
+    private let geminiSettingsURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".gemini/settings.json")
+    private let geminiTokenRefreshURL = URL(string: "https://oauth2.googleapis.com/token")!
+    private let geminiLoadCodeAssistURL = URL(string: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")!
+    private let geminiQuotaURL = URL(string: "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota")!
+    private let geminiProjectsURL = URL(string: "https://cloudresourcemanager.googleapis.com/v1/projects")!
+
+    /// Whether a usable Gemini OAuth credential exists (drives section visibility).
+    private(set) var hasGeminiCredential = false
+    /// Cloud Code project id, resolved once per process run.
+    private var geminiProjectID: String?
+
     private let throttleInterval: TimeInterval = 60
     private let refreshInterval: TimeInterval = 300
 
@@ -34,6 +48,7 @@ final class UsageQuotaService: LifecycleAware {
     init() {
         LogService.info("UsageQuotaService init", category: "UsageQuotaService")
         hasCodexCredential = codexCredentialPresent()
+        hasGeminiCredential = geminiCredentialPresent()
     }
 
     deinit { MainActor.assumeIsolated { timer?.invalidate() } }
@@ -63,13 +78,16 @@ final class UsageQuotaService: LifecycleAware {
         defer { isRefreshing = false }
 
         hasCodexCredential = codexCredentialPresent()
+        hasGeminiCredential = geminiCredentialPresent()
         async let claudeTask = fetchClaude()
         async let codexTask = fetchCodexIfPresent()
-        let (claudeResult, codexResult) = await (claudeTask, codexTask)
+        async let geminiTask = fetchGeminiIfPresent()
+        let (claudeResult, codexResult, geminiResult) = await (claudeTask, codexTask, geminiTask)
 
         var next: [QuotaProvider: ProviderUsageQuota] = [:]
         next[.claude] = backfilled(claudeResult, from: quotas[.claude])
         if let codexResult { next[.codex] = backfilled(codexResult, from: quotas[.codex]) }
+        if let geminiResult { next[.gemini] = backfilled(geminiResult, from: quotas[.gemini]) }
         quotas = next
         lastFetched = Date()
     }
@@ -310,6 +328,234 @@ final class UsageQuotaService: LifecycleAware {
         }
     }
 
+    // MARK: - Gemini
+
+    private func geminiCredentialPresent() -> Bool {
+        guard FileManager.default.fileExists(atPath: geminiCredentialsURL.path) else { return false }
+        switch geminiAuthType() {
+        case .apiKey, .vertexAI: return false
+        case .oauthPersonal, .unknown: return true
+        }
+    }
+
+    private func geminiAuthType() -> GeminiAuthType {
+        guard let data = try? Data(contentsOf: geminiSettingsURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let security = json["security"] as? [String: Any],
+              let auth = security["auth"] as? [String: Any],
+              let selected = auth["selectedType"] as? String else { return .unknown }
+        return GeminiAuthType(rawValue: selected) ?? .unknown
+    }
+
+    private func fetchGeminiIfPresent() async -> ProviderUsageQuota? {
+        guard hasGeminiCredential else { return nil }
+        return await fetchGemini()
+    }
+
+    private func fetchGemini() async -> ProviderUsageQuota {
+        let now = Date()
+        let credential: GeminiOAuthCredential
+        do {
+            let data = try Data(contentsOf: geminiCredentialsURL)
+            credential = try UsageCredentialParser.parseGeminiCredentials(data: data, now: now)
+        } catch {
+            LogService.error(
+                "Gemini quota: credential unreadable: \(error.localizedDescription)",
+                category: "UsageQuotaService"
+            )
+            return ProviderUsageQuota(
+                provider: .gemini,
+                status: .notFound,
+                fetchedAt: now,
+                errorMessage: error.localizedDescription
+            )
+        }
+        guard credential.status != .parseError else {
+            return ProviderUsageQuota(
+                provider: .gemini,
+                status: .parseError,
+                fetchedAt: now,
+                errorMessage: credential.message
+            )
+        }
+
+        guard let accessToken = await resolveGeminiAccessToken(credential) else {
+            return ProviderUsageQuota(
+                provider: .gemini,
+                status: .expired,
+                fetchedAt: now,
+                errorMessage: "Re-login required"
+            )
+        }
+
+        if geminiProjectID == nil {
+            geminiProjectID = await resolveGeminiProject(accessToken: accessToken)
+        }
+
+        var request = URLRequest(url: geminiQuotaURL, timeoutInterval: 10)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let project = geminiProjectID {
+            request.httpBody = Data(#"{"project":"\#(project)"}"#.utf8)
+        } else {
+            request.httpBody = Data("{}".utf8)
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 401 {
+                LogService.warn("Gemini quota: HTTP 401", category: "UsageQuotaService")
+                return ProviderUsageQuota(
+                    provider: .gemini,
+                    status: .expired,
+                    fetchedAt: now,
+                    errorMessage: "Re-login required"
+                )
+            }
+            guard (200 ..< 300).contains(status) else {
+                LogService.error("Gemini quota: HTTP \(status)", category: "UsageQuotaService")
+                return ProviderUsageQuota(
+                    provider: .gemini,
+                    status: .valid,
+                    fetchedAt: now,
+                    errorMessage: "HTTP \(status)"
+                )
+            }
+            let parsed = try UsageQuotaParser.parseGeminiQuota(data: data, fetchedAt: now)
+            LogService.info("Gemini quota fetched: \(parsed.tiers.count) tiers", category: "UsageQuotaService")
+            return parsed
+        } catch {
+            LogService.error("Gemini quota fetch failed: \(error.localizedDescription)", category: "UsageQuotaService")
+            return ProviderUsageQuota(
+                provider: .gemini,
+                status: .valid,
+                fetchedAt: now,
+                errorMessage: error.localizedDescription
+            )
+        }
+    }
+
+    /// Returns a usable access token, refreshing (and writing back) when the
+    /// stored one is missing or expired.
+    private func resolveGeminiAccessToken(_ credential: GeminiOAuthCredential) async -> String? {
+        let expired = credential.expiryDate.map { $0 < Date() } ?? true
+        if let token = credential.accessToken, !expired { return token }
+        guard let refresh = credential.refreshToken, !refresh.isEmpty else {
+            LogService.warn("Gemini quota: token expired, no refresh token", category: "UsageQuotaService")
+            return nil
+        }
+        return await refreshGeminiToken(refreshToken: refresh)
+    }
+
+    private func refreshGeminiToken(refreshToken: String) async -> String? {
+        guard let client = await Task.detached { GeminiOAuthClientLocator.resolve() }.value else {
+            LogService.error("Gemini quota: OAuth client credentials not found", category: "UsageQuotaService")
+            return nil
+        }
+        var request = URLRequest(url: geminiTokenRefreshURL, timeoutInterval: 10)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        let body = [
+            "client_id=\(Self.formEncode(client.clientId))",
+            "client_secret=\(Self.formEncode(client.clientSecret))",
+            "refresh_token=\(Self.formEncode(refreshToken))",
+            "grant_type=refresh_token",
+        ].joined(separator: "&")
+        request.httpBody = Data(body.utf8)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200,
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let token = json["access_token"] as? String else {
+                LogService.error("Gemini token refresh failed: HTTP \(status)", category: "UsageQuotaService")
+                return nil
+            }
+            writeBackGeminiToken(refreshResponse: json)
+            LogService.info("Gemini token refreshed", category: "UsageQuotaService")
+            return token
+        } catch {
+            LogService.error("Gemini token refresh error: \(error.localizedDescription)", category: "UsageQuotaService")
+            return nil
+        }
+    }
+
+    /// Persists the refreshed token back to `~/.gemini/oauth_creds.json` (atomic),
+    /// matching gemini-cli's own behavior so the CLI and NemoNotch stay in sync.
+    private func writeBackGeminiToken(refreshResponse: [String: Any]) {
+        guard let existing = try? Data(contentsOf: geminiCredentialsURL),
+              var json = try? JSONSerialization.jsonObject(with: existing) as? [String: Any] else { return }
+        if let access = refreshResponse["access_token"] { json["access_token"] = access }
+        if let expiresIn = refreshResponse["expires_in"] as? Double {
+            json["expiry_date"] = (Date().timeIntervalSince1970 + expiresIn) * 1000
+        }
+        if let idToken = refreshResponse["id_token"] { json["id_token"] = idToken }
+        do {
+            let updated = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+            try updated.write(to: geminiCredentialsURL, options: .atomic)
+        } catch {
+            LogService.warn(
+                "Gemini token write-back failed: \(error.localizedDescription)",
+                category: "UsageQuotaService"
+            )
+        }
+    }
+
+    /// Percent-encodes a value for an `application/x-www-form-urlencoded` body
+    /// using the RFC3986 unreserved set (encodes `/`, `+`, `=`, `&`, etc.).
+    private static func formEncode(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    /// loadCodeAssist → project; falls back to cloudresourcemanager; nil = send `{}`.
+    private func resolveGeminiProject(accessToken: String) async -> String? {
+        var request = URLRequest(url: geminiLoadCodeAssistURL, timeoutInterval: 10)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data(#"{"metadata":{"ideType":"GEMINI_CLI","pluginType":"GEMINI"}}"#.utf8)
+        if let (data, response) = try? await URLSession.shared.data(for: request),
+           (response as? HTTPURLResponse)?.statusCode == 200,
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let project = extractProjectID(from: json) {
+            LogService.info("Gemini project resolved via loadCodeAssist", category: "UsageQuotaService")
+            return project
+        }
+
+        var probe = URLRequest(url: geminiProjectsURL, timeoutInterval: 10)
+        probe.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        if let (data, response) = try? await URLSession.shared.data(for: probe),
+           (response as? HTTPURLResponse)?.statusCode == 200,
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let projects = json["projects"] as? [[String: Any]] {
+            for project in projects {
+                guard let id = project["projectId"] as? String else { continue }
+                if id.hasPrefix("gen-lang-client") { return id }
+                if let labels = project["labels"] as? [String: String],
+                   labels["generative-language"] != nil { return id }
+            }
+        }
+
+        LogService.warn("Gemini project unresolved; sending empty quota body", category: "UsageQuotaService")
+        return nil
+    }
+
+    private func extractProjectID(from json: [String: Any]) -> String? {
+        if let s = json["cloudaicompanionProject"] as? String {
+            let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let obj = json["cloudaicompanionProject"] as? [String: Any] {
+            return (obj["id"] as? String) ?? (obj["projectId"] as? String)
+        }
+        return nil
+    }
+
     // MARK: - Keychain
 
     /// Reads a CLI's credential blob, stored as a Keychain generic-password
@@ -371,6 +617,13 @@ final class UsageQuotaService: LifecycleAware {
     /// the macOS consent dialog. On success the quota is refreshed (subsequent
     /// non-interactive reads then succeed silently); on denial nothing changes.
     func authorize(_ provider: QuotaProvider) async {
+        guard provider != .gemini else {
+            LogService.warn(
+                "Quota authorize ignored: Gemini uses file-based OAuth, not Keychain",
+                category: "UsageQuotaService"
+            )
+            return
+        }
         let service = keychainService(for: provider)
         LogService.info("Quota authorize requested: \(provider.rawValue)", category: "UsageQuotaService")
         // SecItemCopyMatching blocks while the dialog is up — run it off the main
@@ -427,6 +680,7 @@ final class UsageQuotaService: LifecycleAware {
         switch provider {
         case .claude: claudeKeychainService
         case .codex: codexKeychainService
+        case .gemini: "" // Gemini uses file-based OAuth, not Keychain
         }
     }
 

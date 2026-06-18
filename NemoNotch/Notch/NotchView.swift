@@ -181,8 +181,7 @@ struct NotchView: View {
         }
         .onAppear { initializeBadgeViewModel() }
         .onChange(of: badgeViewModel?.activeBadgeItems ?? []) { _, newTypes in
-            badgeViewModel?.updateHasActiveBadge(!newTypes.isEmpty)
-            badgeViewModel?.updateDisplayedBadges(newTypes: newTypes)
+            badgeViewModel?.applyBadgeUpdate(newTypes: newTypes)
         }
         .onChange(of: aiService.activeSession?.phase.isWaitingForApproval == true) { _, _ in
             badgeViewModel?.checkApprovalSound(isOpen: effectiveStatus == .opened)

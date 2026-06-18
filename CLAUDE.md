@@ -6,8 +6,8 @@ NemoNotch is a macOS notch utility that provides an interactive floating panel i
 
 ### Tech Stack
 
-- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack, KeyboardShortcuts
-- Key frameworks: AppKit (NSWindow), MediaPlayer, ScriptingBridge, EventKit, IOKit
+- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack, KeyboardShortcuts, mediaremote-adapter (perl-bridge media control)
+- Key frameworks: AppKit (NSWindow), MediaPlayer, EventKit, IOKit
 
 ### Project Structure
 
@@ -34,8 +34,7 @@ graph TB
     end
 
     subgraph Services["Service Layer — all @Observable"]
-        MS["MediaService<br/>MediaRemote + NowPlayingCLI + MediaBridge"]
-        APM["MediaAutomationPermissionMonitor<br/>Per-bundle AppleEvents auth probe"]
+        MS["MediaService<br/>MediaRemote (notifications) + NowPlayingCLI (read) + MediaRemoteCommander (control)"]
         AIM["AICLIMonitorService<br/>Unified AI entry + owns AISessionStore"]
         AISS["AISessionStore<br/>Central AI session truth source (@Observable)"]
         CCS["ClaudeCodeService<br/>AIProvider impl<br/>HookServer + ConversationParser"]
@@ -47,7 +46,7 @@ graph TB
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
         WS["WeatherService<br/>wttr.in"]
-        UQS["UsageQuotaService<br/>Claude + Codex usage quota"]
+        UQS["UsageQuotaService<br/>Claude + Codex + Gemini usage quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
         TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
@@ -93,7 +92,6 @@ graph TB
     GP -.->|"mutate"| AISS
     REG -->|"registers"| OCS
     REG -->|"registers"| HES
-    MS -.->|"denied / authorized events"| APM
     NC --> NW --> NV
     NV --> Tabs
     NV --> CB
@@ -169,7 +167,7 @@ graph LR
 
 **Agent monitoring — registry pattern:** `OpenClawService` and `HermesService` both conform to `MultiAgentMonitor` and are collected by `AgentMonitorRegistry` (`NemoNotch/Services/AgentMonitorRegistry.swift`). The registry exposes unified reads — `installedMonitors`, `anyActiveAgent`, `hasAnyActiveAgent`, `activeAgents` (non-idle across all monitors, sorted by recency) — which `AgentMonitorTab` and the badge layer consume. Hermes additionally has its own `HermesConversationParser` + `HermesHookInstaller`, mirroring Claude's parser/installer split. Adding an agent monitor is one `registry.register(...)` call.
 
-**Usage quota:** `UsageQuotaService` exposes `quotas: [QuotaProvider: ProviderUsageQuota]` and fetches **Claude Code** (Keychain `Claude Code-credentials` / `~/.claude/.credentials.json` → `GET /api/oauth/usage`) and **Codex** (`~/.codex/auth.json` / Keychain `Codex Auth` → `GET chatgpt.com/backend-api/wham/usage` with `ChatGPT-Account-Id`) concurrently. The Codex section appears only when a Codex credential is detected (`hasCodexCredential`). Windows are normalized (session→weekly) and rendered as a card in `AIChatTab`. **Credential reads are file-first** (`~/.claude/.credentials.json` / `~/.codex/auth.json`). When a credential lives only in the Keychain, the AI tab must never auto-prompt: the no-UI flags do **not** suppress the cross-app ACL dialog for a GUI app's `kSecReturnData` read (only attribute reads are silent). So the automatic path uses an **attributes-only probe** (`kSecReturnAttributes`) to detect presence without prompting → `CredentialStatus.needsAuthorization` renders an **Authorize** button (+ a one-line reason) in both the full card and the compact meters, matching the `PermissionCard` "never auto-prompt" pattern. `authorize(_:)` does the one interactive `kSecReturnData` read (off the main actor) that surfaces the dialog and **persists the grant keyed by the running code's cdhash** (`quota.keychainGrantedIdentity.<provider>` in UserDefaults, via `SecCodeCopySigningInformation`); a later launch does a silent gated data read **only if the cdhash still matches**. Because ad-hoc signing changes the cdhash each rebuild, a stale grant reads as not-granted → the entry path shows the button (no auto-prompt) instead of a prompting data read; a stable signature makes it truly one-time. The gated data read itself is wrapped in `SecKeychainSetUserInteractionAllowed(false)` (legacy-keychain process-wide toggle, `dlsym`-resolved, `Boolean`→`DarwinBoolean`) so that even when the cdhash gate passes but the ACL doesn't durably trust the app (user clicked "Allow" once, not "Always Allow", or a restrictive item ACL), the read **fails with `errSecInteractionNotAllowed` instead of popping the consent dialog** → grant is forgotten → button shown. Without this, the 5-min auto-refresh timer surfaces the Keychain prompt with no user click. See macOS cookbook §14.3 step 4. `LifecycleAware`, 60s refresh throttle, 5-minute timer, robust `resets_at` parse, and reset-backfill from the previous fetch (ideas borrowed from `CodexBar`). Gemini quota is a planned follow-up (needs OAuth token refresh + project resolution).
+**Usage quota:** `UsageQuotaService` exposes `quotas: [QuotaProvider: ProviderUsageQuota]` and fetches **Claude Code** (Keychain `Claude Code-credentials` / `~/.claude/.credentials.json` → `GET /api/oauth/usage`) and **Codex** (`~/.codex/auth.json` / Keychain `Codex Auth` → `GET chatgpt.com/backend-api/wham/usage` with `ChatGPT-Account-Id`) concurrently. The Codex section appears only when a Codex credential is detected (`hasCodexCredential`). Windows are normalized (session→weekly) and rendered as a card in `AIChatTab`. **Credential reads are file-first** (`~/.claude/.credentials.json` / `~/.codex/auth.json`). When a credential lives only in the Keychain, the AI tab must never auto-prompt: the no-UI flags do **not** suppress the cross-app ACL dialog for a GUI app's `kSecReturnData` read (only attribute reads are silent). So the automatic path uses an **attributes-only probe** (`kSecReturnAttributes`) to detect presence without prompting → `CredentialStatus.needsAuthorization` renders an **Authorize** button (+ a one-line reason) in both the full card and the compact meters, matching the `PermissionCard` "never auto-prompt" pattern. `authorize(_:)` does the one interactive `kSecReturnData` read (off the main actor) that surfaces the dialog and **persists the grant keyed by the running code's cdhash** (`quota.keychainGrantedIdentity.<provider>` in UserDefaults, via `SecCodeCopySigningInformation`); a later launch does a silent gated data read **only if the cdhash still matches**. Because ad-hoc signing changes the cdhash each rebuild, a stale grant reads as not-granted → the entry path shows the button (no auto-prompt) instead of a prompting data read; a stable signature makes it truly one-time. The gated data read itself is wrapped in `SecKeychainSetUserInteractionAllowed(false)` (legacy-keychain process-wide toggle, `dlsym`-resolved, `Boolean`→`DarwinBoolean`) so that even when the cdhash gate passes but the ACL doesn't durably trust the app (user clicked "Allow" once, not "Always Allow", or a restrictive item ACL), the read **fails with `errSecInteractionNotAllowed` instead of popping the consent dialog** → grant is forgotten → button shown. Without this, the 5-min auto-refresh timer surfaces the Keychain prompt with no user click. See macOS cookbook §14.3 step 4. `LifecycleAware`, 60s refresh throttle, 5-minute timer, robust `resets_at` parse, and reset-backfill from the previous fetch (ideas borrowed from `CodexBar`). **Gemini** quota (free-tier personal Google account, gated by `geminiEnabled` + `hasGeminiCredential`) uses a three-call Cloud Code flow: refresh the OAuth token (`POST oauth2.googleapis.com/token`; the client_id/secret are extracted at runtime from the installed gemini-cli's bundled JS by `GeminiOAuthClientLocator` — locate binary → resolve symlink → read `oauth2.js` / scan `bundle/*.js` — never hardcoded, so a Google key rotation can't break us; `GeminiOAuthClientLocator.resolve()` runs off the main actor since it may spawn a subprocess) → resolve the project (`:loadCodeAssist`, with a `cloudresourcemanager` fallback) → `:retrieveUserQuota`. The refreshed token is written back to `~/.gemini/oauth_creds.json` (atomic) to stay in sync with the CLI. Credentials live in that plain file — **no Keychain**, so Gemini never uses the `needsAuthorization`/Authorize path; `settings.json`'s `security.auth.selectedType` gates out api-key/vertex-ai auth. Per-model buckets collapse to the lowest remaining fraction and render as `QuotaWindow.gemini(label:)` rows (`utilization = (1 - remainingFraction) * 100`, ordered most-constrained first).
 
 ### Notch Event Flow
 
@@ -199,7 +197,7 @@ sequenceDiagram
 
 **Hotkey-aware dismiss:** When the notch is opened via global hotkey, it does NOT close on mouse-move-outside until either (a) the mouse enters the content area at least once, (b) 3 seconds elapse with no mouse entry (`NotchConstants.hotkeyAutoCloseDelay`), or (c) the user presses ESC / hotkey / clicks outside. Mouse-hover open path is unchanged. State machine lives in `HotkeyDismissState`.
 
-**Permission UI pattern:** Calendar, Location, Automation, and Notification permissions are NOT auto-requested on launch. Instead the relevant Tab/Settings section renders a `PermissionCard` with a "Grant" button. AX uses the same card but only links to System Settings (no programmatic request API). Card lives at `NemoNotch/Helpers/PermissionCard.swift`. Notification permission ships in the Pomodoro settings page (`PomodoroSettingsView`), backed by `NotificationPermissionMonitor`.
+**Permission UI pattern:** Calendar, Location, and Notification permissions are NOT auto-requested on launch. Instead the relevant Tab/Settings section renders a `PermissionCard` with a "Grant" button. AX uses the same card but only links to System Settings (no programmatic request API). Card lives at `NemoNotch/Helpers/PermissionCard.swift`. Notification permission ships in the Pomodoro settings page (`PomodoroSettingsView`), backed by `NotificationPermissionMonitor`.
 
 **Pomodoro hotkeys:** `openPomodoro` opens the Pomodoro tab; `openQuickStart` toggles the centered draggable `QuickStartWindow` (`NemoNotch/Notch/QuickStartWindow.swift` / `QuickStartWindowController.swift`). Neither has a default binding — users must set them in Settings → Pomodoro.
 
@@ -208,6 +206,8 @@ sequenceDiagram
 ```
 ai approval > notification > pomodoro running > agents active > ai working > media playing > calendar upcoming
 ```
+
+**Empty-collapse debounce:** The compact badges' visibility is driven by `BadgeViewModel.applyBadgeUpdate(newTypes:)` (called from `NotchView`'s `onChange(of: activeBadgeItems)`). It animates `displayedBadgeItems` **and** `shownHasActiveBadge` together in one task — they must stay in sync, because either `shownHasActiveBadge` toggling (drives the right badge's `spread` position) or `displayedBadgeItems` emptying (makes `primaryItem` nil → fires the asymmetric insertion/removal `.offset(x:)` transition) produces a horizontal slide on the right-edge badge. Non-empty updates coalesce on a 16ms tick; an update that drops to **empty** is delayed by `NotchConstants.badgeEmptyGrace` (600ms) and cancelled if a non-empty set arrives within the window. This absorbs momentary idle dips — e.g. an agent (OpenClaw) briefly returning to `.idle` between tool calls drops out of `AgentMonitorRegistry.activeAgents` (which filters `.idle`), which would otherwise empty `activeBadgeItems` for a tick and replay the slide. Genuine completion (empty for >600ms) still collapses normally.
 
 ### Activity Glow (when notch is expanded)
 
@@ -241,24 +241,26 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 
 ### Media Info Retrieval
 
-**⚠️ Important**: Now Playing info (title, artist, album, artwork, duration, progress) is **retrieved via `NowPlayingCLI`**; playback state (isPlaying) uses a **reconcile mechanism** combining optimistic UI + ScriptingBridge authority.
+**⚠️ Important**: Now Playing info (title, artist, album, artwork, duration, progress) is **retrieved via `NowPlayingCLI`**; playback state (isPlaying) uses an **optimistic-update + guard** mechanism driven entirely by the CLI (no ScriptingBridge). **There is no `MediaBridge` / ScriptingBridge / Automation permission anymore** — reads come from `NowPlayingCLI`, control from `MediaRemoteCommander`.
 
 - `NowPlayingCLI` launches a perl daemon (`mediaremote-mini.pl` + dylib extracted from `MediaRemoteMini.bin.gz`), polling via stdin/stdout JSON protocol
 - `MediaService.updateNowPlaying()` → `nowPlayingCLI.fetchNowPlayingInfo()` → `applyInfo()`
-- `MediaRemote.swift` is used for **sending control commands** (play/pause/next/prev/skip for unknown players) and **registering system notifications** to trigger refresh
-- `MediaBridge` (ScriptingBridge) provides **authoritative play state** for known players (Music, Spotify) via `MediaBridge.isPlaying(bundleID:)` — synchronous, zero cache
+- **All playback control** (play/pause/next/previous/seek, **every player including Music & Spotify**) goes through `MediaRemoteCommander`, a thin wrapper around the `mediaremote-adapter` Swift package's `MediaController`. Since macOS 15.4 Apple gated the private `MediaRemote.framework` control functions (`MRMediaRemoteSendCommand` / `MRMediaRemoteSetElapsedTime`) to Apple-signed processes, so calling them **in-process** (the old `MediaRemote.swift` path) silently no-ops. The adapter spawns the Apple-signed `/usr/bin/perl`, which `dlopen`s the framework and issues the command — same perl-bridge bypass `NowPlayingCLI` already uses for reads. **Control no longer needs Automation/AppleScript.** Empirically verified on Spotify: `set_time` (absolute seek), `toggle_play_pause`, `next_track`, `previous_track` all work — the old "Spotify needs AppleScript for seek" note applied only to the **relative** `SkipBackward/Forward` commands, which Spotify rejects; **absolute `MRMediaRemoteSetElapsedTime` is honored**. See macOS cookbook §7.6.
+- `MediaRemote.swift` now only **registers system notifications** to trigger refresh / `setCanBeNowPlayingApplication`; its old `sendCommand` / `skip` / `setElapsedTime` (and the `Command` enum) were removed — in-process control is gated since 15.4
+- `MediaBridge`, `MediaAutomationPermissionMonitor`, and the `ScriptingBridge/` Spotify/Music interfaces were **deleted** — control no longer needs AppleScript/Automation, and the authoritative `isPlaying` read they provided is no longer needed (the CLI playback-rate + guard self-heal, see below). The Automation `PermissionCard` and the `NSAppleEventsUsageDescription` Info.plist key are gone too.
 - When debugging "info lost" issues, prioritize investigating NowPlayingCLI daemon state / dylib extraction (`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`) / perl script, rather than modifying MediaRemote.swift
 
 **Play/Pause state reconcile flow**:
 
-1. User taps play/pause → `togglePlayPause()` sets optimistic `isPlaying` + `reconcileExpectedIsPlaying` guard
-2. After 0.5s, `reconcilePlayState()` queries ScriptingBridge for real state
-3. `applyInfo()` respects the guard: if CLI returns stale data, guard preserves the authoritative value; once CLI catches up (matches guard), guard self-clears
+1. User taps play/pause → `togglePlayPause()` sets optimistic `isPlaying` + `reconcileExpectedIsPlaying` guard, then sends the command via `MediaRemoteCommander`
+2. After ~0.5s, `reconcilePlayState()` just triggers a fresh `updateNowPlaying()` (CLI fetch) — and the player's own `com.spotify.client.PlaybackStateChanged` / `com.apple.Music.playerInfo` distributed notifications also trigger refreshes for fast convergence
+3. `applyInfo()` respects the guard: while a stale CLI poll disagrees, the guard preserves the optimistic value; once the CLI's reported playback rate agrees (or the 3s hard expiry passes), the guard self-clears and the CLI value wins — so the button never lags, flickers, or sticks
 
 **Media seek (skip forward/back 15s)**:
 
-- Music / Spotify: must use AppleScript `set player position` (`MediaBridge.setPlayerPosition`), because Spotify doesn't respond to MediaRemote's `SkipBackward/Forward` commands (system returns "never supported"). Requires user authorization in "System Settings → Privacy → Automation"
-- Other players (browsers, Podcasts, etc.): use MediaRemote's `skip(interval:)` command
+- **All players** (Music, Spotify, browsers, Podcasts, …): `MediaService.seek(toAbsolute:)` computes the absolute target and calls `MediaRemoteCommander.setTime(seconds:)` → `set_time` over the perl bridge (`MRMediaRemoteSetElapsedTime`). This is honored even by Spotify (verified). No AppleScript / Automation needed.
+- `MediaService.supportsSeeking` is now simply `playbackState.duration > 0` (any finite timeline is seekable), not a per-player capability gate.
+- The old in-process `MediaRemote.skip(interval:)` / `setElapsedTime` and the AppleScript `MediaBridge.setPlayerPosition` paths were removed (along with all of `MediaBridge`) — the former is gated since 15.4, the latter is no longer needed now that absolute seek works through the bridge for Spotify too.
 
 ## Development Conventions
 
@@ -359,6 +361,8 @@ Multi-provider scenarios (AI Provider, Conversation Parser, Multi-Agent Monitor,
 ## macOS Cookbook
 
 A consolidated reference of every macOS-specific technique used in this codebase lives at `docs/macos-cookbook.md`. Organized by subsystem, anchored to `file:line` in real source. Use it before re-deriving how to do `dlopen`, MediaRemote, Carbon hotkeys, AX, IPC, etc.
+
+For **reusable, cross-project macOS playbooks** (distilled from NemoNotch + Peekaboo + Ironsmith + Raycast, organized by macOS development block — `window/` `media/` `permissions/` `keychain/` `ipc/` `architecture/` etc., plus `ai-codegen/` `native-feel/` `design-system/` domain modules), see the knowledge base at `docs/macos/index.md`. The cookbook above is NemoNotch's precise `file:line` map; the playbooks are the generalized patterns + Pitfalls + checklists that cite it.
 
 **Top-level sections:** 1) How to use · 2) Critical pitfalls · 3) Build & release · 4) Private API loading · 5) Notch & window · 6) Event capture & hotkeys · 7) Media · 8) System sensing · 9) ScriptingBridge & AppleScript · 10) Accessibility & Dock badges · 11) Permissions · 12) IPC & subprocess · 13) Hook installers · 14) Keychain · 15) Swift 6 concurrency · 16) SwiftUI patterns · 17) Architecture · 18) Logging · 19) Reference projects index · 20) UI-test screenshot harness (`--uitest`).
 

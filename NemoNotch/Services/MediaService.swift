@@ -11,16 +11,6 @@ final class MediaService {
     var playbackState = PlaybackState()
     var appIcon: NSImage?
 
-    /// Forwarder fired when `MediaBridge` denies access for a bundle.
-    /// AppDelegate wires this to `MediaAutomationPermissionMonitor.recordDenied`
-    /// so the monitor's per-bundle state machine and probe loop stay in sync.
-    var permissionDeniedHandler: ((String) -> Void)?
-
-    /// Forwarder fired when `requestAutomationAccess` confirms authorization.
-    /// AppDelegate wires this to `MediaAutomationPermissionMonitor.recordAuthorized`
-    /// so the PermissionCard hides as soon as the user grants access.
-    var automationAuthorizedHandler: ((String) -> Void)?
-
     private var pollTimer: Timer?
     private var progressTimer: Timer?
     private var reconcileTask: Task<Void, Never>?
@@ -28,15 +18,13 @@ final class MediaService {
     private var needsFollowupUpdate = false
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
+    private let commander = MediaRemoteCommander()
 
     // ── Reconcile guard ──────────────────────────────────────────────
-    // After an optimistic toggle we set `reconcileExpectedIsPlaying` to
-    // the value we expect.  `applyInfo` must preserve it until
-    // `reconcilePlayState` clears the flag and queries the authoritative
-    // source (ScriptingBridge for known players, CLI otherwise).
-    // The guard has a hard expiry: after `guardMaxDuration` we trust CLI
-    // again, so the UI can never get stuck if SB is stale or the user
-    // changes state externally.
+    // After an optimistic toggle we set `reconcileExpectedIsPlaying` to the
+    // value we expect. `applyInfo` preserves it until the CLI poll catches up
+    // (its reported playback rate matches) or the hard expiry passes, whichever
+    // comes first — so the UI never lags, flickers on a stale poll, or sticks.
     private var reconcileExpectedIsPlaying: Bool?
     private var reconcileGuardExpiresAt: Date?
     private static let guardMaxDuration: TimeInterval = 3.0
@@ -44,9 +32,6 @@ final class MediaService {
     init(disableLiveUpdates: Bool = false) {
         remote.registerForNotifications()
         remote.setCanBeNowPlayingApplication(false)
-        MediaBridge.permissionDeniedCallback = { [weak self] bundleID in
-            self?.permissionDeniedHandler?(bundleID)
-        }
         guard !disableLiveUpdates else {
             LogService.info("MediaService init (uitest: live updates disabled)", category: "MediaService")
             return
@@ -54,30 +39,6 @@ final class MediaService {
         setupNotifications()
         startPolling()
         updateNowPlaying()
-    }
-
-    func openAutomationSettings() {
-        MediaBridge.openAutomationSettings()
-    }
-
-    /// Probe the bundle's Automation permission. The probe IS the request —
-    /// sending an AppleEvent (which `hasAutomationAccess` does internally) is
-    /// what triggers the system permission dialog when the state is
-    /// `.notDetermined`. If already `.denied`, the system won't re-show the
-    /// dialog; the user must open Settings.
-    func requestAutomationAccess(for player: KnownPlayer) {
-        LogService.info(
-            "Automation permission requested for \(player.rawValue)",
-            category: "Permission"
-        )
-        // hasAutomationAccess is synchronous — it makes an AppleEvent that
-        // blocks during the system dialog and returns true/false based on the
-        // outcome. Forward the success case so the monitor flips to
-        // .authorized; the denied case is already routed via
-        // MediaBridge.permissionDeniedCallback → permissionDeniedHandler.
-        if MediaBridge.hasAutomationAccess(bundleID: player.rawValue) {
-            automationAuthorizedHandler?(player.rawValue)
-        }
     }
 
     // ── Player controls ──────────────────────────────────────────────
@@ -93,33 +54,19 @@ final class MediaService {
         reconcileExpectedIsPlaying = target
         reconcileGuardExpiresAt = Date().addingTimeInterval(Self.guardMaxDuration)
         updateProgressTimer(isPlaying: target)
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.togglePlayPause(bundleID: bundleID)
-        } else {
-            remote.sendCommand(.togglePlayPause)
-        }
+        commander.togglePlayPause()
         scheduleReconcile(after: 0.5)
     }
 
     func nextTrack() {
-        let bundleID = playbackState.appBundleIdentifier
         applyTrackChangePlaceholder()
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.nextTrack(bundleID: bundleID)
-        } else {
-            remote.sendCommand(.nextTrack)
-        }
+        commander.nextTrack()
         scheduleReconcile(after: 0.6)
     }
 
     func previousTrack() {
-        let bundleID = playbackState.appBundleIdentifier
         applyTrackChangePlaceholder()
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.previousTrack(bundleID: bundleID)
-        } else {
-            remote.sendCommand(.previousTrack)
-        }
+        commander.previousTrack()
         scheduleReconcile(after: 0.6)
     }
 
@@ -141,38 +88,23 @@ final class MediaService {
         }
     }
 
-    /// Queries the authoritative play state and keeps the guard set to the
-    /// SB value. The guard self-clears in `applyInfo` once CLI catches up.
+    /// Triggers a fresh CLI fetch shortly after an optimistic action. The guard
+    /// in `applyInfo` does the actual correction: it holds the optimistic value
+    /// until the CLI's reported playback rate agrees (or the hard expiry hits),
+    /// so a single stale poll can't flicker the button back.
     private func reconcilePlayState() {
-        let bundleID = playbackState.appBundleIdentifier
-        LogService.debug("[Media] reconcile: player=\(bundleID ?? "nil")", category: "media")
-
-        // For known players (Spotify / Music) query ScriptingBridge
-        // directly — synchronous, zero cache, authoritative.
-        if let playing = MediaBridge.isPlaying(bundleID: bundleID) {
-            LogService.debug(
-                "[Media] reconcile: ScriptingBridge isPlaying=\(playing), was=\(playbackState.isPlaying)",
-                category: "media"
-            )
-            playbackState.isPlaying = playing
-            updateProgressTimer(isPlaying: playing)
-            // Keep guard set to SB value — applyInfo auto-clears it once
-            // CLI catches up, or when the hard expiry passes (whichever
-            // comes first). Refresh the expiry on each reconcile.
-            reconcileExpectedIsPlaying = playing
-            reconcileGuardExpiresAt = Date().addingTimeInterval(Self.guardMaxDuration)
-        } else {
-            LogService.debug("[Media] reconcile: unknown player, falling back to CLI", category: "media")
-            reconcileExpectedIsPlaying = nil
-            reconcileGuardExpiresAt = nil
-            updateNowPlaying()
-        }
+        LogService.debug("[Media] reconcile: refresh from CLI (guard self-heals in applyInfo)", category: "media")
+        updateNowPlaying()
     }
 
     // ── Seek ─────────────────────────────────────────────────────────
 
+    /// Seeking works for any player with a finite timeline — control now goes
+    /// through `MediaRemoteCommander.setTime` (the perl bridge), which drives
+    /// `MRMediaRemoteSetElapsedTime` and is honored by Music, Spotify, browsers,
+    /// Podcasts, etc. Live streams report `duration == 0`, where seek is moot.
     var supportsSeeking: Bool {
-        MediaBridge.supportsSeeking(bundleID: playbackState.appBundleIdentifier)
+        playbackState.duration > 0
     }
 
     func skipForward(_ interval: Double = 15) {
@@ -192,21 +124,12 @@ final class MediaService {
     private func seek(by interval: Double) {
         guard playbackState.duration > 0 else { return }
         let target = max(0, min(playbackState.position + interval, playbackState.duration))
-        seek(toAbsolute: target, fallbackInterval: interval)
+        seek(toAbsolute: target)
     }
 
-    private func seek(toAbsolute target: Double, fallbackInterval: Double? = nil) {
-        let bundleID = playbackState.appBundleIdentifier
+    private func seek(toAbsolute target: Double) {
         playbackState.position = target
-
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.setPlayerPosition(bundleID: bundleID, position: target)
-        } else if remote.setElapsedTime(target) {
-            // ok
-        } else if let interval = fallbackInterval {
-            remote.skip(interval: interval)
-        }
-
+        commander.setTime(seconds: target)
         scheduleReconcile(after: 0.5)
     }
 
@@ -401,6 +324,5 @@ final class MediaService {
         } else {
             appIcon = nil
         }
-        MediaBridge.requestPermissionIfNeeded(bundleID: bundleID)
     }
 }

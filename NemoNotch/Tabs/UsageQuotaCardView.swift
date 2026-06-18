@@ -7,11 +7,13 @@ struct UsageQuotaCardView: View {
     @Environment(UsageQuotaService.self) private var service
     @Environment(AppSettings.self) private var appSettings
 
-    /// Providers to show: Claude when enabled, Codex when a credential exists.
+    /// Providers to show: Claude when enabled, Codex when a credential exists, Gemini when enabled and a credential
+    /// exists.
     private var visibleProviders: [QuotaProvider] {
         var result: [QuotaProvider] = []
         if appSettings.claudeEnabled { result.append(.claude) }
         if service.hasCodexCredential { result.append(.codex) }
+        if appSettings.geminiEnabled, service.hasGeminiCredential { result.append(.gemini) }
         return result
     }
 
@@ -149,6 +151,7 @@ struct UsageQuotaCardView: View {
         case .sevenDayOpus: Text("quota.window.7d_opus")
         case .sevenDaySonnet: Text("quota.window.7d_sonnet")
         case let .rolling(minutes): Text(verbatim: UsageQuotaFormatter.windowLabel(minutes: minutes))
+        case let .gemini(label): Text(verbatim: label)
         }
     }
 
@@ -185,17 +188,19 @@ struct UsageQuotaCompactView: View {
     /// windows it actually reports instead of an empty "5h" meter.
     private enum Slot { case primary, secondary }
 
-    /// Providers to surface: Claude when enabled, Codex when a credential exists.
+    /// Providers to surface: Claude when enabled, Codex when a credential exists, Gemini when enabled and a credential
+    /// exists.
     private var visibleProviders: [QuotaProvider] {
         var result: [QuotaProvider] = []
         if appSettings.claudeEnabled { result.append(.claude) }
         if service.hasCodexCredential { result.append(.codex) }
+        if appSettings.geminiEnabled, service.hasGeminiCredential { result.append(.gemini) }
         return result
     }
 
-    /// At most two rows. One provider → its primary + secondary tier. Two
-    /// providers → each provider's primary tier. (Only Claude/Codex exist, so
-    /// the list never exceeds two.)
+    /// At most two meters. One provider → its primary + secondary tier. Two or
+    /// more providers (Claude/Codex/Gemini) → the first two providers' primary
+    /// tier. The full breakdown for every provider is in the click-to-open card.
     private var rows: [(provider: QuotaProvider, slot: Slot)] {
         let providers = visibleProviders
         if providers.count <= 1 {
@@ -317,6 +322,7 @@ struct UsageQuotaCompactView: View {
                 .foregroundStyle(NotchTheme.textSecondary)
                 .frame(width: 40, alignment: .trailing)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -353,7 +359,12 @@ struct UsageQuotaCompactView: View {
     private func label(provider: QuotaProvider, tier: QuotaTier?) -> String {
         let win = tier.map { windowShortLabel($0.window) } ?? "--"
         guard visibleProviders.count != 1 else { return win }
-        return "\(provider == .claude ? "C" : "Cx") \(win)"
+        let prefix = switch provider {
+        case .claude: "C"
+        case .codex: "Cx"
+        case .gemini: "G"
+        }
+        return "\(prefix) \(win)"
     }
 
     private func windowShortLabel(_ window: QuotaWindow) -> String {
@@ -361,6 +372,7 @@ struct UsageQuotaCompactView: View {
         case .fiveHour: return "5h"
         case .sevenDay, .sevenDayOpus, .sevenDaySonnet: return "7d"
         case let .rolling(minutes): return UsageQuotaFormatter.windowLabel(minutes: minutes)
+        case let .gemini(label): return label
         }
     }
 

@@ -975,24 +975,15 @@ Loading the function pointers (`MRMediaRemoteSendCommand`, `MRMediaRemoteSetElap
   }
   ```
 
-  **Gotcha (the big one): DON'T call `sendCommand(.skipForward)` or `.skipBackward` on Spotify or Music.** The system returns "never supported" via `MPRemoteCommandCenter`, with no error and no recovery — the command is silently dropped. Music sometimes accepts it; Spotify never does. Always route those two players through `MediaBridge.setPlayerPosition` (AppleScript). See [§7.3] and [§9].
+  **Gotcha (the big one): DON'T express seek as a *relative* skip on Spotify.** `sendCommand(.skipForward/.skipBackward)` returns "never supported" via `MPRemoteCommandCenter` on Spotify (silently dropped; Music sometimes accepts). The fix is **not** AppleScript — it's to seek with an **absolute** position: `MRMediaRemoteSetElapsedTime` (`set_time`), which Spotify *does* honor (verified, §7.5). NemoNotch now does all seek through the perl bridge's `set_time` (§7.6); this in-process `skip` and the whole `MediaRemote.swift` control surface were removed.
 
-- **`setElapsedTime` for seek** — `NemoNotch/Services/MediaRemote.swift:169-174`. Absolute-position seek via the `MRMediaRemoteSetElapsedTime` symbol.
-
-  ```swift
-  @discardableResult
-  func setElapsedTime(_ seconds: Double) -> Bool {
-      guard let fn = setElapsedTimeFn else { return false }
-      fn(seconds)
-      return true
-  }
-  ```
-
-  **Gotcha:** The boolean return value only indicates whether **the symbol was loaded**, not whether the call did anything. For Music/Spotify it silently no-ops; for Podcasts, Safari, and Chrome it works. Always pair with a MediaBridge fallback when the bundleID is a `KnownPlayer`. See [§7.5 decision tree].
+- **`setElapsedTime` for seek (in-process) — REMOVED.** NemoNotch used to call `MRMediaRemoteSetElapsedTime` in-process from `MediaRemote.swift`. Since macOS 15.4 that in-process call is gated (silently no-ops for a non-Apple-signed app), so it was deleted. Absolute seek now goes through the perl bridge's `set_time` for **all** players including Spotify (§7.5 / §7.6) — the function is the same (`MRMediaRemoteSetElapsedTime`), only the caller (Apple-signed `perl`) differs.
 
 - **15.4+ `MRNowPlayingController` fallback** — covered in [§4 Pattern C] (`getNowPlayingInfoSwift15_4Plus()`). Cross-link only — no duplication here.
 
-### 7.3 — MediaBridge (ScriptingBridge)
+### 7.3 — MediaBridge (ScriptingBridge) — ⚠️ REMOVED (historical)
+
+> **This subsystem was deleted.** `MediaBridge.swift`, `MediaAutomationPermissionMonitor.swift`, and `Services/ScriptingBridge/{Spotify,Music}Application.swift` no longer exist, so the `file:line` anchors below are dangling. Once seek was proven to work on Spotify through the perl bridge (§7.5), **all** media control unified on `MediaRemoteCommander` (§7.6) — no ScriptingBridge, no AppleScript, no Automation permission. The prose is kept as a reusable macOS ScriptingBridge reference; it is **not** wired into NemoNotch anymore.
 
 The authoritative source for Music/Spotify play state and the only path that can reliably seek Spotify. Wraps generated `MusicApplication`/`SpotifyApplication` protocols behind a type-erased `PlayerHandle`.
 
@@ -1081,9 +1072,11 @@ The authoritative source for Music/Spotify play state and the only path that can
 
   **Gotcha:** There is no API to *ask* macOS whether automation permission is granted. The probe pattern is: reset the delegate's error code, issue a **benign read** (`playerPosition`), then check whether the delegate captured `-1743`. The dialog itself is triggered by the same benign call — `requestPermissionIfNeeded` just records that we've fired the prompt once via `UserDefaults` so we don't re-prompt every launch.
 
-### 7.4 — Reconcile pattern (optimistic UI + authoritative SB)
+### 7.4 — Reconcile pattern (optimistic UI + CLI guard)
 
-User taps play/pause → UI flips **instantly** to the new state (`isPlaying = !current`) and records a guard (`reconcileExpectedIsPlaying = newValue`). 0.5s later, `reconcilePlayState()` queries `MediaBridge.isPlaying(bundleID:)` (synchronous ScriptingBridge call — that's truth). Meanwhile, every `applyInfo()` from CLI polling checks the guard against `cliInfo.isPlaying`: if they disagree, **keep the expected value** (CLI is stale); when they agree, **clear the guard** (CLI caught up, safe to trust again).
+User taps play/pause → UI flips **instantly** to the new state (`isPlaying = !current`) and records a guard (`reconcileExpectedIsPlaying = newValue`). ~0.5s later `reconcilePlayState()` just re-fires `updateNowPlaying()` (a fresh CLI fetch; the player's own distributed notifications also trigger refreshes). Every `applyInfo()` from CLI polling checks the guard against the CLI's reported playback rate: while they disagree, **keep the expected value** (CLI is stale); when they agree — or after a 3s hard expiry — **clear the guard** (CLI is now trusted). The guard alone prevents flicker; no authoritative side-query is needed.
+
+> **History:** this used to query `MediaBridge.isPlaying(bundleID:)` (synchronous ScriptingBridge) as the 0.5s "truth" source. That was removed with `MediaBridge` (§7.3) — the CLI playback rate + guard + 3s expiry self-heal without it, so reads need no Automation permission.
 
 - **Properties** — `NemoNotch/Services/MediaService.swift:26-31  reconcileExpectedIsPlaying`.
 
@@ -1154,22 +1147,44 @@ User taps play/pause → UI flips **instantly** to the new state (`isPlaying = !
 
   **Gotcha:** `MediaBridge.isPlaying(bundleID:)` returns **`nil`** for unknown bundleIDs and offline apps — that's why `reconcilePlayState` has a fallback branch that nils the guard and re-fires `updateNowPlaying()`. Don't conflate "false" with "nil" here: false means "the app reports paused", nil means "I cannot ask the app".
 
-### 7.5 — Media seek decision tree
+### 7.5 — Media seek (unified on the perl bridge)
 
-| Player | MediaRemote `skip` | `setElapsedTime` | AppleScript `set player position` | Use |
-|---|---|---|---|---|
-| Music | accepts | accepts | accepts | AppleScript (most reliable) |
-| Spotify | rejects | silent fail | accepts | **AppleScript only** |
-| Podcasts | accepts | accepts | no AS verb | MediaRemote |
-| Safari/Chrome video | accepts | partial | no AS verb | MediaRemote |
-| Unknown | try MR first | — | — | MediaRemote with fallback log |
+Seek for **every player**, Spotify included, now goes through one path: `NemoNotch/Services/MediaService.swift  seek(toAbsolute:)` computes the absolute target and calls `MediaRemoteCommander.setTime(seconds:)` → `set_time` over the perl bridge (`MRMediaRemoteSetElapsedTime`, see §7.6). No per-player branching, no AppleScript, no Automation permission.
 
-The dispatch lives in `NemoNotch/Services/MediaService.swift:160-173  seek(toAbsolute:fallbackInterval:)`: known players (`KnownPlayer.init(bundleID:)` matches) go to `MediaBridge.setPlayerPosition` (AppleScript path); otherwise `remote.setElapsedTime`; if both fail, `remote.skip(interval:)` as the relative fallback.
+**The "Spotify needs AppleScript for seek" myth — corrected by测试.** The historical rule below distinguished a **relative skip** (`MRMediaRemoteSendCommand` with `SkipForward/Backward`, which Spotify *does* reject — "never supported") from an **absolute set** (`MRMediaRemoteSetElapsedTime`). Empirical test through the adapter: `set_time 30` then `set_time 120` moved Spotify's reported `elapsedTime` to exactly 30s then 120s — **absolute seek is honored**. So the only reason we ever used AppleScript for Spotify seek (the rejected *relative* skip) no longer applies once seek is expressed as an absolute set.
+
+| Player | relative `skip` (`SendCommand`) | absolute `setElapsedTime` |
+|---|---|---|
+| Music | accepts | accepts |
+| Spotify | **rejects** ("never supported") | **accepts** (verified) |
+| Podcasts / browser video | accepts | accepts |
+
+`MediaService.supportsSeeking` is now just `playbackState.duration > 0` (any finite timeline), not a per-player capability gate.
 
 **Reference projects:**
 - *nowplaying-cli* — origin of the dylib-extraction + perl-daemon pattern (`NowPlayingCLI` is a direct adaptation).
 - *PlayStatus* — MediaRemote private API loading (covered in [§4 Pattern B]) and the media-key interception story.
 - *Tuneful* — ScriptingBridge approach for Music/Spotify control, including the `SBApplicationDelegate` error-capture pattern.
+
+### 7.6 — Media control via the mediaremote-adapter perl bridge (macOS 15.4+)
+
+**The gate:** Since macOS 15.4, Apple restricted the private `MediaRemote.framework` functions (`MRMediaRemoteGetNowPlayingInfo`, `MRMediaRemoteSendCommand`, `MRMediaRemoteSetElapsedTime`, …) to Apple-signed / entitled processes. A third-party app that `dlopen`s MediaRemote and calls them **in-process** is rejected silently — `MediaRemote.swift`'s `sendCommand` / `setElapsedTime` became no-ops. Symptom: only Music/Spotify (which we *used* to drive via AppleScript) stayed controllable; every other player went dead. Once seek was proven to work on Spotify through the bridge (§7.5), **all** control was unified here and the AppleScript control path was deleted.
+
+**The bypass:** Don't call the private API from our own process. Spawn the system's `/usr/bin/perl` (which IS Apple-signed and carries the entitlements), have *Perl* `dlopen` the framework and invoke the function, stream JSON back over stdout. The signature check sees Perl as the caller, so it passes. This is the same trick `NowPlayingCLI` already uses for *reads* (§7.1); §7.6 extends it to *control*.
+
+**Wiring** (`NemoNotch/Services/MediaRemoteCommander.swift`): a thin `@MainActor` wrapper owns a `MediaController` from the `mediaremote-adapter` Swift package (`https://github.com/ejbills/mediaremote-adapter.git`, pinned to revision `cf30c4f1af29b5829d859f088f8dbdf12611a046`). `MediaService` calls `commander.togglePlayPause()` / `nextTrack()` / `previousTrack()` / `setTime(seconds:)` for **all** players (no per-player branching). Commands need **no** background listener: `MediaController.sendCommand` writes to a live listener's stdin if present, else spawns a one-shot `perl run.pl <dylib> <command>` — we use only the one-shot path.
+
+**Build-config pitfall — the product MUST be embedded as a dynamic framework.** The package declares `type: .dynamic` for a reason: its perl script (`run.pl`) does `dl_load_file(libraryPath)` where `libraryPath = Bundle(for: MediaController.self).executablePath`, then `dl_find_symbol` for `_bootstrap` / `_loop` / `_play` / `_set_time_from_env` / …. Those C symbols live in the package's `CIMediaRemote` target and are referenced **only** from perl, never from Swift — so if Xcode links the product statically into the main app binary, the linker dead-strips the whole object and `dl_find_symbol` fails at runtime. The fix (mirroring DockDoor) is an **Embed Frameworks** copy-files phase (`dstSubfolderSpec = 10`, `CodeSignOnCopy`) so `MediaRemoteAdapter.framework` ships in `Contents/Frameworks/` with its symbols exported. Verify after building:
+```bash
+DYLIB="$APP/Contents/Frameworks/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter"
+nm -gU "$DYLIB" | grep -E "_loop$|_play$|_set_time_from_env$"   # must print symbols
+# end-to-end smoke (reads, then controls a non-Spotify/Music player):
+/usr/bin/perl "$APP/Contents/Resources/MediaRemoteAdapter_MediaRemoteAdapter.bundle/Contents/Resources/run.pl" "$DYLIB" get
+/usr/bin/perl ".../run.pl" "$DYLIB" toggle_play_pause
+```
+Adding the SPM dependency by hand touches five `project.pbxproj` spots (PBXBuildFile link entry, Frameworks phase `files`, the target's `packageProductDependencies`, the project's `packageReferences`, the `XCRemoteSwiftPackageReference` + `XCSwiftPackageProductDependency` sections) **plus** the Embed Frameworks PBXBuildFile + PBXCopyFilesBuildPhase + the phase reference in the target's `buildPhases`, and a pin in `Package.resolved`.
+
+**Reference project:** *DockDoor* (`DockDoor/Utilities/Media/MediaRemoteService.swift`) — same package, same embed phase; also documents optimistic-update + seek-debounce refinements worth copying.
 
 ---
 
@@ -1407,9 +1422,11 @@ private func updateDisk() {
 
 ---
 
-## 9. ScriptingBridge & AppleScript
+## 9. ScriptingBridge & AppleScript — ⚠️ REMOVED (historical)
 
-NemoNotch uses **ScriptingBridge with generated Swift protocols** instead of `osascript` strings. This section covers how those protocol files were produced, the AE keyword codes embedded in them, and the decision rule for when AppleScript wins over MediaRemote. SBApplication wiring and AE-error detection are in [§7.3] — not repeated here.
+> **NemoNotch no longer uses ScriptingBridge or AppleScript.** The generated `Services/ScriptingBridge/*.swift` protocols and `MediaBridge` were deleted when media control unified on the perl bridge (§7.5 / §7.6); media control now needs no Automation permission. This section is retained as a standalone, reusable recipe for *how to* drive a scriptable app via generated SB protocols — the `file:line` anchors no longer resolve in this repo.
+
+NemoNotch *used to use* **ScriptingBridge with generated Swift protocols** instead of `osascript` strings. This section covers how those protocol files were produced, the AE keyword codes embedded in them, and the decision rule for when AppleScript wins over MediaRemote. SBApplication wiring and AE-error detection are in [§7.3] — not repeated here.
 
 ### 9.1 How the generated headers were produced
 
@@ -1631,7 +1648,9 @@ func openSystemSettings() {
 - **Gotcha:** macOS 14+ uses `.fullAccess` / `.writeOnly` / `.denied` enum cases; older code using `.authorized` is **deprecated** and produces a runtime warning. Use the newer API and gate with `if #available(macOS 14, *)` if you must support older OS.
 - **Gotcha:** `EKEventStoreChanged` fires on **any change anywhere** — including iCloud-pushed edits while the user is in Calendar.app. Debounce before re-querying, otherwise you'll hammer EventKit during sync storms.
 
-### 11.2 Apple Events / Automation
+### 11.2 Apple Events / Automation — ⚠️ no longer used by NemoNotch
+
+> NemoNotch no longer sends Apple Events: media control moved to the perl bridge (§7.6) and `MediaBridge` / the Automation `PermissionCard` / the `NSAppleEventsUsageDescription` key were removed. Kept as a reference for the (genuinely treacherous) Automation-permission flow should it ever be needed again.
 
 Required Info.plist key: `INFOPLIST_KEY_NSAppleEventsUsageDescription` (must be declared in `project.pbxproj` — see [§3]).
 
@@ -2247,6 +2266,34 @@ private func applyNoUI(to query: inout [String: Any]) {
 **Gotcha:** "Always Allow" trust is bound to the app's **code signature**. Under ad-hoc signing (`CODE_SIGN_IDENTITY="-"`) every rebuild is a new identity. Keying the grant by cdhash (above) turns this into a harmless re-prompt-on-click after each rebuild rather than an *auto*-prompt on entry. A stable Developer ID signature makes it truly one-time. macOS behavior, not a logic bug.
 
 **Gotcha:** never put `kSecReturnData` on the automatic path "just to try" — in a GUI app it prompts even with every no-UI flag set. Attribute reads for detection, data reads only when explicitly user-initiated or already-granted.
+
+---
+
+### 14.4 Gemini quota — no Keychain, runtime client-secret extraction
+
+Unlike Claude/Codex, Gemini stores its OAuth credential in a plain file
+`~/.gemini/oauth_creds.json` (mode 0600, readable by the user's own GUI app), so
+there is **no Keychain ACL dance** — Gemini never uses the `needsAuthorization`
+path. The catch is the rest of the flow (`UsageQuotaService` + `GeminiOAuthClientLocator`):
+
+1. The stored `access_token` is short-lived and usually expired, so it must be
+   refreshed via `POST oauth2.googleapis.com/token` (`grant_type=refresh_token`).
+   That needs gemini-cli's OAuth client_id/secret, which are **not hardcoded** —
+   `GeminiOAuthClientLocator` extracts them at runtime from the installed CLI's
+   bundled JS: locate the `gemini` binary (candidate paths, else a bounded
+   login-shell `which`), resolve the symlink, then read `dist/src/code_assist/oauth2.js`
+   or BFS-scan `bundle/*.js` for `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`. This
+   survives a Google key rotation. `resolve()` does file I/O + a possible
+   subprocess, so it is called via `Task.detached` (off the `@MainActor`).
+2. The quota endpoint needs a Cloud Code project, so `:loadCodeAssist` resolves
+   `cloudaicompanionProject` (with a `cloudresourcemanager` fallback, then an
+   empty body) before `:retrieveUserQuota`.
+3. The refreshed token is written back to `oauth_creds.json` (atomic), matching
+   gemini-cli's own behavior. Form-body values are percent-encoded (RFC3986
+   unreserved set) since refresh tokens contain `/`.
+
+No new private API and no new `@unchecked Sendable` boundary. Reference port:
+CodexBar's `GeminiStatusProbe`.
 
 ---
 

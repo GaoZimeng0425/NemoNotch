@@ -36,7 +36,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 | Tab | Description |
 |-----|-------------|
-| **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous), album artwork, progress bar (Spotify & Apple Music); **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
+| **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous/seek), album artwork, progress bar — works with any player that reports Now Playing (Apple Music, Spotify, browsers, Podcasts, NetEase Music, …) via a Perl bridge to the system media controls; **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
 | **AI Chat** | Unified Claude Code & Gemini CLI monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
 | **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
@@ -47,7 +47,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
 - **Multi-AI Provider** — Unified interface for Claude Code and Gemini CLI with hook event listening, session tracking, and permission interception
-- **AI usage quota** — shows your Claude Code and Codex usage quotas (utilization % + reset countdown) as a card in the AI tab, read from each CLI's OAuth credential. The Codex section appears automatically when the Codex CLI is signed in.
+- **AI usage quota** — shows your Claude Code, Codex, and Gemini usage quotas (utilization % + reset countdown) as a card in the AI tab, read from each CLI's OAuth credential. The Codex and Gemini sections appear automatically when those CLIs are signed in.
 - **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
 - **Activity Glow** — When AI/agents are busy (working, or waiting for approval), the expanded notch shows a soft blurred glow in the app's theme orange along its lower inner edge, fading out by the middle (content stays clean)
@@ -59,7 +59,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Menu Bar Entry** — Fixed pixel-art notch icon (state is visible on the notch panel above the menubar); menu shows Now Playing controls (previous / play-pause / next) when media is active
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
-- **Explicit permission requests.** NemoNotch does not auto-request permissions on launch. Each feature surfaces a "Grant Access" button (Calendar in the Overview tab, Location in the Weather card, Automation in the Media card when controlling Music/Spotify) — click to invoke the system dialog.
+- **Explicit permission requests.** NemoNotch does not auto-request permissions on launch. Each feature surfaces a "Grant Access" button (Calendar in the Overview tab, Location in the Weather card) — click to invoke the system dialog. Media control needs no permission at all — it goes through the Perl bridge.
 - **ESC closes the notch.** Press ESC any time the notch is opened.
 
 ## Tech Stack
@@ -115,6 +115,7 @@ NemoNotch draws inspiration from the following open-source projects:
 - [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote framework integration, media key interception
 - [**Tuneful**](https://github.com/martinfekete10/Tuneful) — Now playing info & UI
 - [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — CLI tool for now playing info
+- [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — Perl bridge for media control on macOS 15.4+ (bypasses the private-API signature gate)
 
 ### Window Management & Shortcuts
 

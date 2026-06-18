@@ -35,6 +35,9 @@ rm -f "$RECT_FILE" /tmp/nemonotch-uitest-tasks.json /tmp/nemonotch-uitest-histor
 # 用 claude tab 当背景:面板里展示 AI 会话,叠加完成 toast,四周全屏 glow。
 "$APP/Contents/MacOS/NemoNotch" --uitest --tab=claude --flash &
 PID=$!
+# 安全网:无论脚本是正常结束、被 Ctrl-C 还是被 TERM,都先杀掉这个会铺满屏的
+# uitest 实例(SIGKILL 杀不到的话,app 内部还有 12s 自杀定时器兜底)。
+trap 'kill "$PID" 2>/dev/null || true' EXIT INT TERM
 wait_for 2   # 等开屏 + 内容渲染 + glow 钉住
 
 # app 自身在 glow / 面板之下铺了整屏暗色背景窗(--flash 专用),无需隐藏用户其它 app。

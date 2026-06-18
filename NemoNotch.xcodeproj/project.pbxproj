@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000022F9363C40037E18E /* CocoaLumberjackSwift */; };
 		AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000042F9363C40037E18E /* KeyboardShortcuts */; };
+		AA0000082F9363C40037E18E /* MediaRemoteAdapter in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000072F9363C40037E18E /* MediaRemoteAdapter */; };
+		AA0000092F9363C40037E18E /* MediaRemoteAdapter in Embed Frameworks */ = {isa = PBXBuildFile; productRef = AA0000072F9363C40037E18E /* MediaRemoteAdapter */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +41,20 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		AA00000A2F9363C40037E18E /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				AA0000092F9363C40037E18E /* MediaRemoteAdapter in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		4547895B2FC058C500A8B535 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -53,6 +69,7 @@
 			files = (
 				45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */,
 				AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */,
+				AA0000082F9363C40037E18E /* MediaRemoteAdapter in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -111,6 +128,7 @@
 				45DDDF7C2F9363C40037E18E /* Sources */,
 				45DDDF7D2F9363C40037E18E /* Frameworks */,
 				45DDDF7E2F9363C40037E18E /* Resources */,
+				AA00000A2F9363C40037E18E /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -123,6 +141,7 @@
 			packageProductDependencies = (
 				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
 				AA0000042F9363C40037E18E /* KeyboardShortcuts */,
+				AA0000072F9363C40037E18E /* MediaRemoteAdapter */,
 			);
 			productName = NemoNotch;
 			productReference = 45DDDF802F9363C40037E18E /* NemoNotch.app */;
@@ -160,6 +179,7 @@
 			packageReferences = (
 				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
 				AA0000032F9363C40037E18E /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				AA0000062F9363C40037E18E /* XCRemoteSwiftPackageReference "mediaremote-adapter" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45DDDF812F9363C40037E18E /* Products */;
@@ -429,7 +449,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "NemoNotch 需要控制音乐播放器以实现快进、快退等播放控制功能。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -484,7 +503,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "NemoNotch 需要控制音乐播放器以实现快进、快退等播放控制功能。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -562,6 +580,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		AA0000062F9363C40037E18E /* XCRemoteSwiftPackageReference "mediaremote-adapter" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ejbills/mediaremote-adapter.git";
+			requirement = {
+				kind = revision;
+				revision = cf30c4f1af29b5829d859f088f8dbdf12611a046;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -574,6 +600,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000032F9363C40037E18E /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
+		};
+		AA0000072F9363C40037E18E /* MediaRemoteAdapter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000062F9363C40037E18E /* XCRemoteSwiftPackageReference "mediaremote-adapter" */;
+			productName = MediaRemoteAdapter;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

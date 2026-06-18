@@ -36,7 +36,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 | 标签 | 功能 |
 |------|------|
-| **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲）、专辑封面、进度条（支持 Spotify 和 Apple Music）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
+| **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲/拖动进度）、专辑封面、进度条 —— 通过 Perl 桥接系统媒体控制，支持任何上报 Now Playing 的播放器（Apple Music、Spotify、浏览器、Podcasts、网易云音乐……）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
 | **AI Chat** | 统一 Claude Code 和 Gemini CLI 监控 — 会话列表、对话详情、权限审批、Context 用量进度条、子代理追踪、模型显示 |
 | **智能体** | 多代理系统状态监控，支持 OpenClaw（WebSocket）和 Hermes-agent（HTTP API），实时代理工作状态追踪 |
 | **启动器** | 应用图标网格、搜索过滤、快速启动自定义应用列表 |
@@ -47,7 +47,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 - **Notch 浮动面板** — 窗口悬浮在刘海区域，自动检测屏幕 Notch 尺寸
 - **多 AI 提供商** — 统一界面支持 Claude Code 和 Gemini CLI，集成 Hook 事件监听、会话追踪和权限拦截
-- **AI 用量配额** —— 在 AI 标签页以卡片展示 Claude Code 与 Codex 的用量配额（使用率 % + 重置倒计时），数据来自各 CLI 的 OAuth 凭证。检测到 Codex CLI 已登录时自动显示 Codex 段。
+- **AI 用量配额** —— 在 AI 标签页以卡片展示 Claude Code、Codex 与 Gemini 的用量配额（使用率 % + 重置倒计时），数据来自各 CLI 的 OAuth 凭证。检测到 Codex / Gemini CLI 已登录时自动显示对应段。
 - **全局快捷键** — 切换面板开关：在设置 → 快捷键里自行配置（默认无）。切换标签页默认 `⌥⌘1-5`。所有快捷键均可自定义，基于 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **自动切换** — 智能检测活跃服务（AI 工作中、音乐播放中）自动切到对应标签
 - **活动光晕** — AI/Agent 忙碌时（运行中或等待审批），展开的刘海下半内边缘会泛起一层应用主题橘色的柔和模糊光晕，到中部渐隐消失（不遮挡正文）
@@ -59,7 +59,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 - **菜单栏入口** — 固定刘海图标（状态从刘海面板查看）；媒体播放时菜单显示正在播放控制区（上一曲 / 播放暂停 / 下一曲）
 - **HUD 叠加层** — 音量、亮度、电池电量的分段条指示器
 - **国际化** — 支持中文和英文，可在设置中切换
-- **显式权限请求。** NemoNotch 启动时不会自动申请系统权限。每个需要权限的功能会在对应 Tab 中显示「授权」按钮(Overview 的日历、Weather 卡片的定位、Media 卡片控制 Music/Spotify 时的自动化)— 点击触发系统弹窗。
+- **显式权限请求。** NemoNotch 启动时不会自动申请系统权限。每个需要权限的功能会在对应 Tab 中显示「授权」按钮(Overview 的日历、Weather 卡片的定位)— 点击触发系统弹窗。媒体控制完全不需要权限——走 Perl 桥实现。
 - **ESC 关闭 Notch。** notch 打开时按 ESC 即可关闭。
 
 ## 技术栈
@@ -115,6 +115,7 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 - [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote 框架集成、媒体键拦截
 - [**Tuneful**](https://github.com/martinfekete10/Tuneful) — 播放信息获取与 UI 展示
 - [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — 命令行获取播放信息
+- [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — macOS 15.4+ 媒体控制的 Perl 桥（绕过私有 API 签名限制）
 
 ### 窗口管理与快捷键
 

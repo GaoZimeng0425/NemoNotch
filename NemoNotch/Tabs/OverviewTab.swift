@@ -204,39 +204,17 @@ private struct CalendarMeetingIcon: View {
 
 private struct OverviewMediaSection: View {
     @Environment(MediaService.self) var mediaService
-    @Environment(MediaAutomationPermissionMonitor.self) var automationMonitor
 
     private var state: PlaybackState {
         mediaService.playbackState
     }
 
-    private var automationCardPlayer: KnownPlayer? {
-        guard let bundleID = mediaService.playbackState.appBundleIdentifier,
-              let player = KnownPlayer(bundleID: bundleID) else { return nil }
-        return automationMonitor.state(for: bundleID) == .authorized ? nil : player
-    }
-
     var body: some View {
         VStack(spacing: 6) {
-            if let player = automationCardPlayer {
-                PermissionCard(
-                    icon: "lock.shield",
-                    titleKey: "permission.automation.title",
-                    detailKey: "permission.automation.detail",
-                    status: automationMonitor.state(for: player.rawValue) == .denied
-                        ? .denied
-                        : .notDetermined,
-                    primary: .programmatic {
-                        mediaService.requestAutomationAccess(for: player)
-                    },
-                    openSettings: { mediaService.openAutomationSettings() }
-                )
-            } else {
-                artwork
-                trackInfo
-                progressBar
-                controls
-            }
+            artwork
+            trackInfo
+            progressBar
+            controls
         }
         .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
