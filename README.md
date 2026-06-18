@@ -36,7 +36,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 
 | Tab | Description |
 |-----|-------------|
-| **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous), album artwork, progress bar (Spotify & Apple Music); **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
+| **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous/seek), album artwork, progress bar — works with any player that reports Now Playing (Apple Music, Spotify, browsers, Podcasts, NetEase Music, …) via a Perl bridge to the system media controls; **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
 | **AI Chat** | Unified Claude Code & Gemini CLI monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
 | **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
@@ -115,6 +115,7 @@ NemoNotch draws inspiration from the following open-source projects:
 - [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote framework integration, media key interception
 - [**Tuneful**](https://github.com/martinfekete10/Tuneful) — Now playing info & UI
 - [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — CLI tool for now playing info
+- [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — Perl bridge for media control on macOS 15.4+ (bypasses the private-API signature gate)
 
 ### Window Management & Shortcuts
 

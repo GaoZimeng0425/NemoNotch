@@ -1,51 +1,90 @@
 ---
-summary: 'Index and navigation guide for the Peekaboo macOS playbook set covering 12 reusable implementation patterns.'
+summary: 'macOS 原生应用开发知识库总入口:按系统区块组织的可复用 playbook + 领域模块 + NemoNotch 专属速查。'
 read_when:
-  - 'starting a new macOS app and choosing which playbooks to follow'
-  - 'looking for the right playbook to address a specific macOS capability'
+  - '开始一个新的 macOS 应用,想按"我要做哪个系统能力"定位知识'
+  - '查某个 macOS 子系统(窗口/权限/媒体/IPC…)的可复用模式与陷阱'
+  - '回顾跨项目冲突当初是怎么裁决的'
 ---
 
-# Peekaboo → macOS App Playbook 套件
+# macOS 开发知识库
 
 ## 这是什么
 
-从 Peekaboo 提炼出可在未来 macOS 应用开发中复用的实施方案,聚焦 GUI 桌面应用 + 辅助功能/自动化/截屏能力。每篇 playbook 对应一个独立主题,包含来自真实工程的模式、陷阱与落地 checklist,可独立阅读,也可组合使用。
+从多个真实 macOS 项目(Peekaboo / NemoNotch / Ironsmith / Raycast)提炼、**按 macOS 开发区块**组织的可复用知识库。每个区块是跨项目去重融合后的统一结论;领域模块保留不属系统区块的专门主题;`macos-cookbook.md` 保留 NemoNotch 专属的 `file:line` 精确锚点。
 
 ## 怎么用
 
-- **新建 macOS 项目时**:从 01 开始,按编号顺序对照执行,建立模块结构、并发模型、日志与错误处理等基础,再逐步引入系统集成能力。
-- **已有项目要补某能力**:直接跳到对应编号,每篇都自带"落地 checklist"与"Pitfalls",可独立对照检查。
-- **查找相关主题**:每篇末尾的"延伸阅读 → 其它 playbook"列出强相关篇目,形成双向网络。
+- **新建项目**:从「基础设施」区块起步,按需引入「系统集成」与「视觉交互」。
+- **补某能力**:直接进对应区块文件夹,每篇自带 Pitfalls 与落地 checklist。
+- **查精确锚点**:区块篇引用 `macos-cookbook.md` 取 NemoNotch 源码 `file:line`。
 
-## 目录
+## 区块树
 
 ### 基础设施
-
-- [01 · 模块划分与依赖方向](./01-module-layout.md) — 单向层次模块 + SPM 编译隔离,把增量构建从 43 秒压到 5 秒以内
-- [02 · Swift 6 严格并发实践](./02-swift6-concurrency.md) — 在编译期而非运行期消除数据竞争,含 SILGen 崩溃规避方法
-- [03 · 日志与可观测性](./03-logging-observability.md) — OSLog 统一后端 + CLI stderr 双轨输出,不阻塞主线程
-- [04 · 错误处理](./04-error-handling.md) — 三层架构:域错误 → 跨域包装 → 跨进程序列化,用户消息与诊断 payload 分离
+- [project-layout/](./project-layout/) — 模块/SPM 分层、依赖方向、增量构建隔离
+- [concurrency/](./concurrency/) — Swift 6 严格并发、@MainActor、Sendable 边界
+- [logging/](./logging/) — CocoaLumberjack/LogService(主)+ OSLog 底层与适用边界
+- [error-handling/](./error-handling/) — 三层错误:域错误→跨域包装→跨进程序列化
 
 ### 系统集成
-
-- [05 · 权限三态状态机](./05-permissions-state-machine.md) — Screen Recording/Accessibility/AppleEvents 三类 TCC 权限的生效时机差异与轮询建模
-- [06 · AXorcist 元素查找 + Focus](./06-ax-automation-axorcist.md) — 类型安全的 AX 树遍历,操作前必须重新 query 以防 stale 引用
-- [07 · CGEvent 拟真输入](./07-cgevent-input-synthesis.md) — 对数正态击键间隔 + 风/重力鼠标轨迹,可注入随机源保持测试确定性
-- [08 · 屏幕捕获 + 窗口 + Spaces](./08-screen-capture-windows-spaces.md) — ScreenCaptureKit 优先,旧版 OS 回退 CGWindowList,Spaces 管理走 CGS 私有 API
+- [private-api/](./private-api/) — dlopen/dlsym 私有框架加载
+- [events-hotkeys/](./events-hotkeys/) — 全局事件监听、CGEvent 拟真输入、热键
+- [media/](./media/) — MediaRemote、NowPlayingCLI daemon、ScriptingBridge reconcile
+- [system-sensing/](./system-sensing/) — CPU/内存/磁盘采样、亮度、电量
+- [accessibility/](./accessibility/) — AX 树遍历 + Focus、Dock 角标
+- [screen-capture/](./screen-capture/) — ScreenCaptureKit、窗口枚举、Spaces
+- [permissions/](./permissions/) — TCC 状态机、PermissionCard never-auto-prompt、Info.plist 陷阱
+- [ipc/](./ipc/) — Unix socket、subprocess、HookServer + hook installer
+- [keychain/](./keychain/) — Keychain 基础、cdhash-gated 静默读
 
 ### 视觉与交互
-
-- [09 · SwiftUI + AppKit + Liquid Glass](./09-swiftui-appkit-liquid-glass.md) — `@main App` + `@NSApplicationDelegateAdaptor` 混合架构,Liquid Glass 效果统一适配器封装
-- [10 · Visualizer 屏上 overlay](./10-visualizer-overlay.md) — 无边框 `NSWindow` 实现"看得见、点不到、不抢焦点"的屏上 overlay
+- [window/](./window/) — NSWindow/NSPanel、notch 面板、多屏 overlay、completion flash/glow
+- [swiftui/](./swiftui/) — SwiftUI 模式、AppKit 桥接、Liquid Glass、状态驱动紧凑 UI
 
 ### 工程实践
+- [architecture/](./architecture/) — @Observable 服务层、DI、单一真相源 store、protocol-first
+- [testing/](./testing/) — 权限敏感测试 gating、Swift Testing
+- [build-release/](./build-release/) — 签名/公证/DMG、应用数据路径、增量构建、UI-test harness
 
-- [11 · SwiftPM + Xcode + Poltergeist](./11-swiftpm-xcode-poltergeist.md) — 混合工程统一进 `.xcworkspace`,Poltergeist 后台监听文件变化触发增量构建
-- [12 · 测试策略 + 权限敏感测试 gating](./12-testing-permission-gated.md) — 编译期标志 + 运行期环境变量四级分层,CI 只跑安全集、本地按需解锁
+## 领域模块(非系统区块)
 
-## 设计 Spec
+- [ai-codegen/](./ai-codegen/) — AI 代码生成管线(Ironsmith):prompt 工程、输出清洗、编译诊断解析、修复循环
+- [native-feel/](./native-feel/) — WebView 跨平台 native-feel skill(Raycast);**技术栈不同于原生 macOS**,适用于跨平台 WebView app
+- [design-system/](./design-system/) — NemoNotch Warm Noir 视觉系统(单 OS 原生 SwiftUI 的品牌视觉)
+- [macos-cookbook.md](../macos-cookbook.md) — NemoNotch 专属 `file:line` 速查地图
 
-[2026-05-20 设计文档](../../specs/2026-05-20-peekaboo-macos-playbook-design.md)
+## 冲突裁决记录
+
+跨项目融合时遇到的冲突与最终裁决(可追溯)。
+
+| 区块 | 冲突 | 裁决 | 日期 |
+|---|---|---|---|
+| logging | swift-log(P01)/ OSLog(P03)/ CocoaLumberjack(N)/ 自研(I) | CocoaLumberjack 为主、OSLog 作底层;修 P01 swift-log 离群描述 | 2026-06-18 |
+| permissions | "三态"标题 vs 五态代码 vs 七态图(P05) | **七态完整模型**;注明 Swift 枚举折成 5 个 case | 2026-06-18 |
+| testing | 裸 `-D`(P11)不生效;env 门控 key 不一致致 input 测试永不启用 | 统一 `-Xswiftc -D`;env 用通用泛化名 `RUN_AUTOMATION_TESTS` | 2026-06-18 |
+| keychain | accessibility 常量 `ThisDeviceOnly`(I)vs 示例未设(N) | 推荐 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` | 2026-06-18 |
+| screen-capture | `SCScreenshotManager` 12.3+ vs 14+(P08 自相矛盾) | 取 14+(正确) | 2026-06-18 |
+| events-hotkeys | 对数正态下限钳制 0.2× vs 0.25×(P07) | 取实测代码值 0.2× | 2026-06-18 |
+| window | overlay level `.screenSaver`(P10)vs `.floating`(P09) | 并列两种 + 标注适用场景,不强裁 | 2026-06-18 |
+| swiftui | accent 系统色(R)vs 固定橙(D);spring;web toast vs HUD toast | 并列 + 标注适用场景,不强裁 | 2026-06-18 |
+| architecture | DI 闭包client(I)vs protocol-first(N);SwiftData(I)vs UserDefaults/JSON(N) | 并列两种选型 + 按场景选,不强裁 | 2026-06-18 |
+
+## 源项目缩写
+
+各篇 frontmatter 的 `sources` 与正文锚点用以下缩写标注融合来源:
+
+- **P** = Peekaboo(原 `macos/` playbook 套件;`P03` = 其日志篇)
+- **N** = NemoNotch(`macos-cookbook.md`;`N §7` = cookbook 第 7 节)
+- **I** = Ironsmith(`I-20` = 其原则文档第 20 章;管线部分见 [ai-codegen/](./ai-codegen/))
+- **R** = Raycast([native-feel/](./native-feel/))
+- **D** = NemoNotch 设计系统([design-system/](./design-system/))
+
+## 源码锚定版本
+
+- **NemoNotch(N / D)**:锚定 commit `fe4e9e5`;精确 `file:line` 见各篇 + [`macos-cookbook.md`](../macos-cookbook.md)。
+- **Peekaboo(P)**:来自原 `macos/` playbook 套件,各篇当初在**不同 commit** 上各自校验,故各区块 frontmatter 的 `last_verified.peekaboo` SHA 不统一——这是历史事实,非笔误;以各篇自记的 SHA 为准。
+- **Ironsmith(I)**:来自 principles 文档(无 commit SHA),锚点尽量指向 Ironsmith 实际源文件名。
+- **Raycast(R)**:见 [`native-feel/`](./native-feel/) 各篇自记来源。
 
 ---
-*Last verified against Peekaboo @ `881ef3cf`*
+*区块树由 Peekaboo / NemoNotch / Ironsmith / Raycast 提炼融合。各篇 frontmatter 记 `sources` 与 `last_verified`。*

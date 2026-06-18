@@ -6,7 +6,7 @@ NemoNotch is a macOS notch utility that provides an interactive floating panel i
 
 ### Tech Stack
 
-- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack, KeyboardShortcuts
+- Swift 6 + SwiftUI, macOS only, depends on CocoaLumberjack, KeyboardShortcuts, mediaremote-adapter (perl-bridge media control)
 - Key frameworks: AppKit (NSWindow), MediaPlayer, ScriptingBridge, EventKit, IOKit
 
 ### Project Structure
@@ -34,7 +34,7 @@ graph TB
     end
 
     subgraph Services["Service Layer — all @Observable"]
-        MS["MediaService<br/>MediaRemote + NowPlayingCLI + MediaBridge"]
+        MS["MediaService<br/>MediaRemote + NowPlayingCLI + MediaBridge + MediaRemoteCommander"]
         APM["MediaAutomationPermissionMonitor<br/>Per-bundle AppleEvents auth probe"]
         AIM["AICLIMonitorService<br/>Unified AI entry + owns AISessionStore"]
         AISS["AISessionStore<br/>Central AI session truth source (@Observable)"]
@@ -247,8 +247,9 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 
 - `NowPlayingCLI` launches a perl daemon (`mediaremote-mini.pl` + dylib extracted from `MediaRemoteMini.bin.gz`), polling via stdin/stdout JSON protocol
 - `MediaService.updateNowPlaying()` → `nowPlayingCLI.fetchNowPlayingInfo()` → `applyInfo()`
-- `MediaRemote.swift` is used for **sending control commands** (play/pause/next/prev/skip for unknown players) and **registering system notifications** to trigger refresh
-- `MediaBridge` (ScriptingBridge) provides **authoritative play state** for known players (Music, Spotify) via `MediaBridge.isPlaying(bundleID:)` — synchronous, zero cache
+- **All playback control** (play/pause/next/previous/seek, **every player including Music & Spotify**) goes through `MediaRemoteCommander`, a thin wrapper around the `mediaremote-adapter` Swift package's `MediaController`. Since macOS 15.4 Apple gated the private `MediaRemote.framework` control functions (`MRMediaRemoteSendCommand` / `MRMediaRemoteSetElapsedTime`) to Apple-signed processes, so calling them **in-process** (the old `MediaRemote.swift` path) silently no-ops. The adapter spawns the Apple-signed `/usr/bin/perl`, which `dlopen`s the framework and issues the command — same perl-bridge bypass `NowPlayingCLI` already uses for reads. **Control no longer needs Automation/AppleScript.** Empirically verified on Spotify: `set_time` (absolute seek), `toggle_play_pause`, `next_track`, `previous_track` all work — the old "Spotify needs AppleScript for seek" note applied only to the **relative** `SkipBackward/Forward` commands, which Spotify rejects; **absolute `MRMediaRemoteSetElapsedTime` is honored**. See macOS cookbook §7.6.
+- `MediaRemote.swift` now only **registers system notifications** to trigger refresh / `setCanBeNowPlayingApplication`; its old `sendCommand` / `skip` / `setElapsedTime` (and the `Command` enum) were removed — in-process control is gated since 15.4
+- `MediaBridge` (ScriptingBridge) is now used **only as the authoritative `isPlaying` read** for known players (Music, Spotify) in the reconcile step (`MediaBridge.isPlaying(bundleID:)` — synchronous, zero cache) **plus the Automation-permission probe** (`hasAutomationAccess` / `requestPermissionIfNeeded`). All its control methods were removed. (Automation permission is therefore no longer required for *control* — only to improve reconcile play-state accuracy.)
 - When debugging "info lost" issues, prioritize investigating NowPlayingCLI daemon state / dylib extraction (`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`) / perl script, rather than modifying MediaRemote.swift
 
 **Play/Pause state reconcile flow**:
@@ -259,8 +260,9 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 
 **Media seek (skip forward/back 15s)**:
 
-- Music / Spotify: must use AppleScript `set player position` (`MediaBridge.setPlayerPosition`), because Spotify doesn't respond to MediaRemote's `SkipBackward/Forward` commands (system returns "never supported"). Requires user authorization in "System Settings → Privacy → Automation"
-- Other players (browsers, Podcasts, etc.): use MediaRemote's `skip(interval:)` command
+- **All players** (Music, Spotify, browsers, Podcasts, …): `MediaService.seek(toAbsolute:)` computes the absolute target and calls `MediaRemoteCommander.setTime(seconds:)` → `set_time` over the perl bridge (`MRMediaRemoteSetElapsedTime`). This is honored even by Spotify (verified). No AppleScript / Automation needed.
+- `MediaService.supportsSeeking` is now simply `playbackState.duration > 0` (any finite timeline is seekable), not a per-player capability gate.
+- The old in-process `MediaRemote.skip(interval:)` / `setElapsedTime` and the AppleScript `MediaBridge.setPlayerPosition` paths were removed — the former is gated since 15.4, the latter is no longer needed now that absolute seek works through the bridge for Spotify too.
 
 ## Development Conventions
 
@@ -361,6 +363,8 @@ Multi-provider scenarios (AI Provider, Conversation Parser, Multi-Agent Monitor,
 ## macOS Cookbook
 
 A consolidated reference of every macOS-specific technique used in this codebase lives at `docs/macos-cookbook.md`. Organized by subsystem, anchored to `file:line` in real source. Use it before re-deriving how to do `dlopen`, MediaRemote, Carbon hotkeys, AX, IPC, etc.
+
+For **reusable, cross-project macOS playbooks** (distilled from NemoNotch + Peekaboo + Ironsmith + Raycast, organized by macOS development block — `window/` `media/` `permissions/` `keychain/` `ipc/` `architecture/` etc., plus `ai-codegen/` `native-feel/` `design-system/` domain modules), see the knowledge base at `docs/macos/index.md`. The cookbook above is NemoNotch's precise `file:line` map; the playbooks are the generalized patterns + Pitfalls + checklists that cite it.
 
 **Top-level sections:** 1) How to use · 2) Critical pitfalls · 3) Build & release · 4) Private API loading · 5) Notch & window · 6) Event capture & hotkeys · 7) Media · 8) System sensing · 9) ScriptingBridge & AppleScript · 10) Accessibility & Dock badges · 11) Permissions · 12) IPC & subprocess · 13) Hook installers · 14) Keychain · 15) Swift 6 concurrency · 16) SwiftUI patterns · 17) Architecture · 18) Logging · 19) Reference projects index · 20) UI-test screenshot harness (`--uitest`).
 

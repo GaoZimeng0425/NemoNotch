@@ -36,7 +36,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 
 | 标签 | 功能 |
 |------|------|
-| **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲）、专辑封面、进度条（支持 Spotify 和 Apple Music）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
+| **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲/拖动进度）、专辑封面、进度条 —— 通过 Perl 桥接系统媒体控制，支持任何上报 Now Playing 的播放器（Apple Music、Spotify、浏览器、Podcasts、网易云音乐……）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
 | **AI Chat** | 统一 Claude Code 和 Gemini CLI 监控 — 会话列表、对话详情、权限审批、Context 用量进度条、子代理追踪、模型显示 |
 | **智能体** | 多代理系统状态监控，支持 OpenClaw（WebSocket）和 Hermes-agent（HTTP API），实时代理工作状态追踪 |
 | **启动器** | 应用图标网格、搜索过滤、快速启动自定义应用列表 |
@@ -115,6 +115,7 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 - [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote 框架集成、媒体键拦截
 - [**Tuneful**](https://github.com/martinfekete10/Tuneful) — 播放信息获取与 UI 展示
 - [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — 命令行获取播放信息
+- [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — macOS 15.4+ 媒体控制的 Perl 桥（绕过私有 API 签名限制）
 
 ### 窗口管理与快捷键
 

@@ -1154,22 +1154,44 @@ User taps play/pause → UI flips **instantly** to the new state (`isPlaying = !
 
   **Gotcha:** `MediaBridge.isPlaying(bundleID:)` returns **`nil`** for unknown bundleIDs and offline apps — that's why `reconcilePlayState` has a fallback branch that nils the guard and re-fires `updateNowPlaying()`. Don't conflate "false" with "nil" here: false means "the app reports paused", nil means "I cannot ask the app".
 
-### 7.5 — Media seek decision tree
+### 7.5 — Media seek (unified on the perl bridge)
 
-| Player | MediaRemote `skip` | `setElapsedTime` | AppleScript `set player position` | Use |
-|---|---|---|---|---|
-| Music | accepts | accepts | accepts | AppleScript (most reliable) |
-| Spotify | rejects | silent fail | accepts | **AppleScript only** |
-| Podcasts | accepts | accepts | no AS verb | MediaRemote |
-| Safari/Chrome video | accepts | partial | no AS verb | MediaRemote |
-| Unknown | try MR first | — | — | MediaRemote with fallback log |
+Seek for **every player**, Spotify included, now goes through one path: `NemoNotch/Services/MediaService.swift  seek(toAbsolute:)` computes the absolute target and calls `MediaRemoteCommander.setTime(seconds:)` → `set_time` over the perl bridge (`MRMediaRemoteSetElapsedTime`, see §7.6). No per-player branching, no AppleScript, no Automation permission.
 
-The dispatch lives in `NemoNotch/Services/MediaService.swift:160-173  seek(toAbsolute:fallbackInterval:)`: known players (`KnownPlayer.init(bundleID:)` matches) go to `MediaBridge.setPlayerPosition` (AppleScript path); otherwise `remote.setElapsedTime`; if both fail, `remote.skip(interval:)` as the relative fallback.
+**The "Spotify needs AppleScript for seek" myth — corrected by测试.** The historical rule below distinguished a **relative skip** (`MRMediaRemoteSendCommand` with `SkipForward/Backward`, which Spotify *does* reject — "never supported") from an **absolute set** (`MRMediaRemoteSetElapsedTime`). Empirical test through the adapter: `set_time 30` then `set_time 120` moved Spotify's reported `elapsedTime` to exactly 30s then 120s — **absolute seek is honored**. So the only reason we ever used AppleScript for Spotify seek (the rejected *relative* skip) no longer applies once seek is expressed as an absolute set.
+
+| Player | relative `skip` (`SendCommand`) | absolute `setElapsedTime` |
+|---|---|---|
+| Music | accepts | accepts |
+| Spotify | **rejects** ("never supported") | **accepts** (verified) |
+| Podcasts / browser video | accepts | accepts |
+
+`MediaService.supportsSeeking` is now just `playbackState.duration > 0` (any finite timeline), not a per-player capability gate.
 
 **Reference projects:**
 - *nowplaying-cli* — origin of the dylib-extraction + perl-daemon pattern (`NowPlayingCLI` is a direct adaptation).
 - *PlayStatus* — MediaRemote private API loading (covered in [§4 Pattern B]) and the media-key interception story.
 - *Tuneful* — ScriptingBridge approach for Music/Spotify control, including the `SBApplicationDelegate` error-capture pattern.
+
+### 7.6 — Media control via the mediaremote-adapter perl bridge (macOS 15.4+)
+
+**The gate:** Since macOS 15.4, Apple restricted the private `MediaRemote.framework` functions (`MRMediaRemoteGetNowPlayingInfo`, `MRMediaRemoteSendCommand`, `MRMediaRemoteSetElapsedTime`, …) to Apple-signed / entitled processes. A third-party app that `dlopen`s MediaRemote and calls them **in-process** is rejected silently — `MediaRemote.swift`'s `sendCommand` / `setElapsedTime` became no-ops. Symptom: only Music/Spotify (which we *used* to drive via AppleScript) stayed controllable; every other player went dead. Once seek was proven to work on Spotify through the bridge (§7.5), **all** control was unified here and the AppleScript control path was deleted.
+
+**The bypass:** Don't call the private API from our own process. Spawn the system's `/usr/bin/perl` (which IS Apple-signed and carries the entitlements), have *Perl* `dlopen` the framework and invoke the function, stream JSON back over stdout. The signature check sees Perl as the caller, so it passes. This is the same trick `NowPlayingCLI` already uses for *reads* (§7.1); §7.6 extends it to *control*.
+
+**Wiring** (`NemoNotch/Services/MediaRemoteCommander.swift`): a thin `@MainActor` wrapper owns a `MediaController` from the `mediaremote-adapter` Swift package (`https://github.com/ejbills/mediaremote-adapter.git`, pinned to revision `cf30c4f1af29b5829d859f088f8dbdf12611a046`). `MediaService` calls `commander.togglePlayPause()` / `nextTrack()` / `previousTrack()` / `setTime(seconds:)` for **all** players (no per-player branching). Commands need **no** background listener: `MediaController.sendCommand` writes to a live listener's stdin if present, else spawns a one-shot `perl run.pl <dylib> <command>` — we use only the one-shot path.
+
+**Build-config pitfall — the product MUST be embedded as a dynamic framework.** The package declares `type: .dynamic` for a reason: its perl script (`run.pl`) does `dl_load_file(libraryPath)` where `libraryPath = Bundle(for: MediaController.self).executablePath`, then `dl_find_symbol` for `_bootstrap` / `_loop` / `_play` / `_set_time_from_env` / …. Those C symbols live in the package's `CIMediaRemote` target and are referenced **only** from perl, never from Swift — so if Xcode links the product statically into the main app binary, the linker dead-strips the whole object and `dl_find_symbol` fails at runtime. The fix (mirroring DockDoor) is an **Embed Frameworks** copy-files phase (`dstSubfolderSpec = 10`, `CodeSignOnCopy`) so `MediaRemoteAdapter.framework` ships in `Contents/Frameworks/` with its symbols exported. Verify after building:
+```bash
+DYLIB="$APP/Contents/Frameworks/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter"
+nm -gU "$DYLIB" | grep -E "_loop$|_play$|_set_time_from_env$"   # must print symbols
+# end-to-end smoke (reads, then controls a non-Spotify/Music player):
+/usr/bin/perl "$APP/Contents/Resources/MediaRemoteAdapter_MediaRemoteAdapter.bundle/Contents/Resources/run.pl" "$DYLIB" get
+/usr/bin/perl ".../run.pl" "$DYLIB" toggle_play_pause
+```
+Adding the SPM dependency by hand touches five `project.pbxproj` spots (PBXBuildFile link entry, Frameworks phase `files`, the target's `packageProductDependencies`, the project's `packageReferences`, the `XCRemoteSwiftPackageReference` + `XCSwiftPackageProductDependency` sections) **plus** the Embed Frameworks PBXBuildFile + PBXCopyFilesBuildPhase + the phase reference in the target's `buildPhases`, and a pin in `Package.resolved`.
+
+**Reference project:** *DockDoor* (`DockDoor/Utilities/Media/MediaRemoteService.swift`) — same package, same embed phase; also documents optimistic-update + seek-debounce refinements worth copying.
 
 ---
 
