@@ -28,6 +28,7 @@ final class MediaService {
     private var needsFollowupUpdate = false
     private let remote = MediaRemote.shared
     private let nowPlayingCLI = NowPlayingCLI()
+    private let commander = MediaRemoteCommander()
 
     // ── Reconcile guard ──────────────────────────────────────────────
     // After an optimistic toggle we set `reconcileExpectedIsPlaying` to
@@ -93,33 +94,19 @@ final class MediaService {
         reconcileExpectedIsPlaying = target
         reconcileGuardExpiresAt = Date().addingTimeInterval(Self.guardMaxDuration)
         updateProgressTimer(isPlaying: target)
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.togglePlayPause(bundleID: bundleID)
-        } else {
-            remote.sendCommand(.togglePlayPause)
-        }
+        commander.togglePlayPause()
         scheduleReconcile(after: 0.5)
     }
 
     func nextTrack() {
-        let bundleID = playbackState.appBundleIdentifier
         applyTrackChangePlaceholder()
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.nextTrack(bundleID: bundleID)
-        } else {
-            remote.sendCommand(.nextTrack)
-        }
+        commander.nextTrack()
         scheduleReconcile(after: 0.6)
     }
 
     func previousTrack() {
-        let bundleID = playbackState.appBundleIdentifier
         applyTrackChangePlaceholder()
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.previousTrack(bundleID: bundleID)
-        } else {
-            remote.sendCommand(.previousTrack)
-        }
+        commander.previousTrack()
         scheduleReconcile(after: 0.6)
     }
 
@@ -171,8 +158,12 @@ final class MediaService {
 
     // ── Seek ─────────────────────────────────────────────────────────
 
+    /// Seeking works for any player with a finite timeline — control now goes
+    /// through `MediaRemoteCommander.setTime` (the perl bridge), which drives
+    /// `MRMediaRemoteSetElapsedTime` and is honored by Music, Spotify, browsers,
+    /// Podcasts, etc. Live streams report `duration == 0`, where seek is moot.
     var supportsSeeking: Bool {
-        MediaBridge.supportsSeeking(bundleID: playbackState.appBundleIdentifier)
+        playbackState.duration > 0
     }
 
     func skipForward(_ interval: Double = 15) {
@@ -192,21 +183,12 @@ final class MediaService {
     private func seek(by interval: Double) {
         guard playbackState.duration > 0 else { return }
         let target = max(0, min(playbackState.position + interval, playbackState.duration))
-        seek(toAbsolute: target, fallbackInterval: interval)
+        seek(toAbsolute: target)
     }
 
-    private func seek(toAbsolute target: Double, fallbackInterval: Double? = nil) {
-        let bundleID = playbackState.appBundleIdentifier
+    private func seek(toAbsolute target: Double) {
         playbackState.position = target
-
-        if MediaBridge.supportsSeeking(bundleID: bundleID) {
-            MediaBridge.setPlayerPosition(bundleID: bundleID, position: target)
-        } else if remote.setElapsedTime(target) {
-            // ok
-        } else if let interval = fallbackInterval {
-            remote.skip(interval: interval)
-        }
-
+        commander.setTime(seconds: target)
         scheduleReconcile(after: 0.5)
     }
 

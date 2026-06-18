@@ -83,34 +83,6 @@ private enum PlayerHandle {
             return s == .playing || s == .fastForwarding || s == .rewinding
         }
     }
-
-    func togglePlayPause() {
-        switch self {
-        case let .spotify(a): a.playpause?()
-        case let .music(a): a.playpause?()
-        }
-    }
-
-    func nextTrack() {
-        switch self {
-        case let .spotify(a): a.nextTrack?()
-        case let .music(a): a.nextTrack?()
-        }
-    }
-
-    func previousTrack() {
-        switch self {
-        case let .spotify(a): a.previousTrack?()
-        case let .music(a): a.previousTrack?()
-        }
-    }
-
-    func setPosition(_ value: Double) {
-        switch self {
-        case let .spotify(a): a.setPlayerPosition?(value)
-        case let .music(a): a.setPlayerPosition?(value)
-        }
-    }
 }
 
 @MainActor
@@ -129,10 +101,6 @@ enum MediaBridge {
     /// MediaService observes this via `permissionDeniedCallback`.
     static var permissionDeniedCallback: ((String) -> Void)?
     private static var lastDeniedBundleID: String?
-
-    static func supportsSeeking(bundleID: String?) -> Bool {
-        KnownPlayer(bundleID: bundleID) != nil
-    }
 
     /// Returns true if the target app is currently running. SBApplication
     /// would otherwise *launch* it on first command, which is rarely desired.
@@ -169,30 +137,14 @@ enum MediaBridge {
 
     /// Query the player's actual play state via ScriptingBridge.
     /// Returns nil for unknown players or if the app isn't running.
+    ///
+    /// This is now the only repeated ScriptingBridge call (control moved to the
+    /// `mediaremote-adapter` perl bridge), so it records `lastDeniedBundleID` for
+    /// the async permission-denied callback in case this AppleEvent is refused.
     static func isPlaying(bundleID: String?) -> Bool? {
         guard let bundleID, isRunning(bundleID: bundleID) else { return nil }
+        lastDeniedBundleID = bundleID
         return handle(for: bundleID)?.isPlaying
-    }
-
-    static func togglePlayPause(bundleID: String?) {
-        lastDeniedBundleID = bundleID
-        handle(for: bundleID)?.togglePlayPause()
-    }
-
-    static func nextTrack(bundleID: String?) {
-        lastDeniedBundleID = bundleID
-        handle(for: bundleID)?.nextTrack()
-    }
-
-    static func previousTrack(bundleID: String?) {
-        lastDeniedBundleID = bundleID
-        handle(for: bundleID)?.previousTrack()
-    }
-
-    static func setPlayerPosition(bundleID: String?, position: Double) {
-        lastDeniedBundleID = bundleID
-        handle(for: bundleID)?.setPosition(position)
-        LogService.debug("MediaBridge: seek \(bundleID ?? "?") -> \(position)s", category: "media")
     }
 
     /// Called by the SBApplication delegate (any thread) when AppleEvents fail
