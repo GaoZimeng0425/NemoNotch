@@ -46,8 +46,7 @@ enum UITestSeeder {
         s.position = 96
         s.isPlaying = true
         s.appName = "Music"
-        // 故意不设 KnownPlayer bundle id:否则 Overview 会因缺少 Automation 授权
-        // 渲染权限卡而非正在播放卡。留空走 MediaRemote 路径,直接显示 now-playing。
+        // 留空 bundle id:UI 测试无需真实播放器图标,直接渲染 now-playing 卡。
         s.appBundleIdentifier = nil
         s.artworkData = makeArtwork(
             top: NSColor(red: 0.42, green: 0.20, blue: 0.62, alpha: 1),

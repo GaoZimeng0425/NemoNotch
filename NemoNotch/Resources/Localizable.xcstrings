@@ -1506,38 +1506,6 @@
         }
       }
     },
-    "permission.automation.detail" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Used for real playback state and 15-second seek. Click to grant."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用于真实播放状态读取和 15 秒快进快退。点击授权。"
-          }
-        }
-      }
-    },
-    "permission.automation.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automation Permission Required"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要自动化权限"
-          }
-        }
-      }
-    },
     "permission.calendar.detail" : {
       "localizations" : {
         "en" : {

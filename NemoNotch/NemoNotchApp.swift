@@ -82,7 +82,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var coordinator: NotchCoordinator?
     private(set) var appSettings: AppSettings?
     private(set) var mediaService: MediaService?
-    private(set) var automationPermissionMonitor: MediaAutomationPermissionMonitor?
     private var calendarService: CalendarService?
     private(set) var aiMonitorService: AICLIMonitorService?
     private(set) var openClawService: OpenClawService?
@@ -116,16 +115,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = AppSettings()
         let media = MediaService(disableLiveUpdates: UITestMode.isActive)
-        let permissionMonitor = MediaAutomationPermissionMonitor(
-            monitoredBundles: KnownPlayer.allCases.map(\.rawValue)
-        )
-        media.permissionDeniedHandler = { [weak permissionMonitor] bundleID in
-            permissionMonitor?.recordDenied(bundleID: bundleID)
-        }
-        media.automationAuthorizedHandler = { [weak permissionMonitor] bundleID in
-            permissionMonitor?.recordAuthorized(bundleID: bundleID)
-        }
-        if !UITestMode.isActive { permissionMonitor.startProbing() }
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
@@ -148,7 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appSettings = settings
         mediaService = media
-        automationPermissionMonitor = permissionMonitor
         calendarService = calendar
         aiMonitorService = aiMonitor
         launcherService = launcher
@@ -206,7 +194,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(coordinator)
                     .environment(settings)
                     .environment(media)
-                    .environment(permissionMonitor)
                     .environment(calendar)
                     .environment(aiMonitor)
                     .environment(usageQuota)

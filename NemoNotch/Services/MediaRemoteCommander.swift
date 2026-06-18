@@ -11,9 +11,10 @@ import MediaRemoteAdapter
 /// spawns the Apple-signed `/usr/bin/perl`, which `dlopen`s the framework and
 /// issues the command on our behalf — the signature check sees Perl, so it
 /// passes. This is the same bypass NemoNotch already uses for *reads* via
-/// `NowPlayingCLI`; here it covers *control* for any player that reports Now
-/// Playing info (browsers, Podcasts, etc.). Spotify / Music keep using
-/// ScriptingBridge (`MediaBridge`) — they need AppleScript for seek anyway.
+/// `NowPlayingCLI`; here it covers *control* for **every** player that reports
+/// Now Playing info — including Music and Spotify. (Spotify only ever rejected
+/// the *relative* skip commands; absolute `set_time` / `MRMediaRemoteSetElapsedTime`
+/// is honored, verified empirically — so no AppleScript / Automation is needed.)
 ///
 /// Commands work without `startListening()`: `MediaController` writes to a live
 /// listener's stdin if present, otherwise spawns a one-shot `perl run.pl`. We
