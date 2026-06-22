@@ -18,6 +18,10 @@ final class UsageQuotaService: LifecycleAware {
     private let claudeKeychainService = "Claude Code-credentials"
     private let claudeCredentialsURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".claude/.credentials.json")
+    /// Local read cache of the last good Claude token (accessToken + expiresAt only).
+    /// Lets refreshes skip the Keychain entirely; see `readClaudeCredential`.
+    private let claudeCacheURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".NemoNotch/claude-cred.json")
     private let claudeUsageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
 
     private let codexKeychainService = "Codex Auth"
@@ -146,6 +150,10 @@ final class UsageQuotaService: LifecycleAware {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if status == 401 {
                 LogService.warn("Claude quota: HTTP 401", category: "UsageQuotaService")
+                // The cached token was accepted by our clock check but rejected by
+                // the server — drop the cache so the next refresh re-resolves a fresh
+                // token from the CLI file / Keychain.
+                invalidateClaudeCache()
                 return ProviderUsageQuota(
                     provider: .claude,
                     status: .expired,
@@ -177,12 +185,25 @@ final class UsageQuotaService: LifecycleAware {
     }
 
     private func readClaudeCredential(now: Date) -> UsageCredential {
-        // File first — most users have ~/.claude/.credentials.json, so the common
-        // path never touches the Keychain (and never triggers its cross-app prompt).
+        // Local cache first — a copy of the last good token under ~/.NemoNotch/.
+        // It survives sleep without touching the Keychain, so the common refresh
+        // path no longer re-validates the ad-hoc signature against the Keychain ACL
+        // (which lapses across sleep and forced a re-authorize). The Keychain is
+        // consulted only when this cache is absent or its token has expired.
+        if let data = try? Data(contentsOf: claudeCacheURL),
+           let cached = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now),
+           cached.status == .valid {
+            return cached
+        }
+        // Claude CLI's own file next — most users have ~/.claude/.credentials.json,
+        // so this path never touches the Keychain (and never triggers its cross-app
+        // prompt). Refresh the local cache from it on success.
         if FileManager.default.fileExists(atPath: claudeCredentialsURL.path) {
             do {
                 let data = try Data(contentsOf: claudeCredentialsURL)
-                return try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
+                let credential = try UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
+                if credential.status == .valid { writeClaudeCache(from: data) }
+                return credential
             } catch {
                 LogService.warn(
                     "Claude credential file unreadable, trying Keychain: \(error.localizedDescription)",
@@ -190,10 +211,53 @@ final class UsageQuotaService: LifecycleAware {
                 )
             }
         }
-        // No usable file — resolve from the Keychain without ever prompting here.
-        return readKeychainCredential(provider: .claude, service: claudeKeychainService) {
-            try? UsageCredentialParser.parseClaudeCredentials(data: $0, now: now)
+        // No usable cache or file — resolve from the Keychain without ever prompting
+        // here, and cache the blob (token + expiry only) on success so subsequent
+        // refreshes can skip the Keychain entirely.
+        return readKeychainCredential(provider: .claude, service: claudeKeychainService) { data in
+            let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
+            if credential?.status == .valid { self.writeClaudeCache(from: data) }
+            return credential
         }
+    }
+
+    /// Writes a minimal copy of the Claude credential — accessToken + expiresAt
+    /// only, deliberately NOT the refreshToken — to ~/.NemoNotch/claude-cred.json
+    /// with 0600 permissions. This read cache lets refreshes avoid the Keychain
+    /// (see `readClaudeCredential`); it is a plaintext copy of a secret, so it
+    /// stores the least it can and is locked to the owner.
+    private func writeClaudeCache(from raw: Data) {
+        guard
+            let root = try? JSONSerialization.jsonObject(with: raw) as? [String: Any],
+            let entry = (root["claudeAiOauth"] ?? root["claude.ai_oauth"]) as? [String: Any],
+            let token = entry["accessToken"] as? String, !token.isEmpty
+        else { return }
+        var minimal: [String: Any] = ["accessToken": token]
+        if let expiresAt = entry["expiresAt"] { minimal["expiresAt"] = expiresAt }
+        guard let data = try? JSONSerialization.data(withJSONObject: ["claudeAiOauth": minimal]) else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: claudeCacheURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: claudeCacheURL, options: .atomic)
+            // Atomic write renames a temp file in, so re-assert owner-only perms.
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: claudeCacheURL.path)
+            LogService.debug("Claude credential cache written", category: "UsageQuotaService")
+        } catch {
+            LogService.warn(
+                "Claude credential cache write failed: \(error.localizedDescription)",
+                category: "UsageQuotaService"
+            )
+        }
+    }
+
+    /// Drops the local Claude cache so the next refresh re-resolves the token from
+    /// the Keychain / CLI file. Called when the server rejects the cached token (401).
+    private func invalidateClaudeCache() {
+        guard FileManager.default.fileExists(atPath: claudeCacheURL.path) else { return }
+        try? FileManager.default.removeItem(at: claudeCacheURL)
+        LogService.info("Claude credential cache invalidated (401)", category: "UsageQuotaService")
     }
 
     // MARK: - Codex
@@ -296,14 +360,26 @@ final class UsageQuotaService: LifecycleAware {
         parse: (Data) -> UsageCredential?
     ) -> UsageCredential {
         if keychainGranted(provider) {
-            if let data = keychainBlob(service: service), let credential = parse(data) {
+            let (data, status) = keychainBlob(service: service)
+            if let data, let credential = parse(data) {
                 return credential
             }
-            LogService.warn(
-                "Keychain grant for \(provider.rawValue) no longer valid; reverting to Authorize",
-                category: "UsageQuotaService"
-            )
-            setKeychainGranted(false, provider)
+            // Only forget the grant when the item is genuinely gone. A transient
+            // failure — e.g. errSecInteractionNotAllowed after the ad-hoc signature's
+            // ACL trust lapses across sleep — keeps the grant so a later refresh can
+            // retry the silent read instead of forcing a manual re-authorize.
+            if status == errSecItemNotFound {
+                LogService.warn(
+                    "Keychain item for \(provider.rawValue) gone; forgetting grant",
+                    category: "UsageQuotaService"
+                )
+                setKeychainGranted(false, provider)
+            } else {
+                LogService.warn(
+                    "Keychain read for \(provider.rawValue) failed transiently (OSStatus \(status)); keeping grant",
+                    category: "UsageQuotaService"
+                )
+            }
         }
         let probe = keychainProbe(service: service)
         LogService.info(
@@ -566,7 +642,7 @@ final class UsageQuotaService: LifecycleAware {
     /// the macOS "wants to use confidential information" dialog. Instead the
     /// lookup returns `errSecInteractionNotAllowed` (→ nil) and we fall back to
     /// the on-disk credential file.
-    private func keychainBlob(service: String) -> Data? {
+    private func keychainBlob(service: String) -> (data: Data?, status: OSStatus) {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -586,8 +662,9 @@ final class UsageQuotaService: LifecycleAware {
         _ = toggle?(false)
         defer { _ = toggle?(true) }
         var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
-        return result as? Data
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess else { return (nil, status) }
+        return (result as? Data, status)
     }
 
     private enum KeychainProbe { case authorized, needsAuthorization, notFound, failure }
