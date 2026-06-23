@@ -341,7 +341,7 @@ Workflow:
 
 ### Coding Conventions
 
-- Design docs go in `docs/plans/`, implemented plans are auto-archived, commit plan docs alongside code
+- Planning docs follow the **Superpowers** convention: design specs go in `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (via the brainstorming skill), implementation plans go in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` (via the writing-plans skill). Once a plan ships, move it to `docs/superpowers/plans/archive/`; the spec stays in `specs/`. Commit plan docs alongside code.
 - After adding or modifying features, must update `README.md`, `README_CN.md`, and `CLAUDE.md` to reflect changes in feature descriptions, tech stack, architecture, etc.
 - All Services use `@Observable` macro, UI updates via SwiftUI reactivity
 - AI providers implement the `AIProvider` protocol, managed via `AICLIMonitorService`
