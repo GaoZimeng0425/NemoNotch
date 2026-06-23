@@ -360,7 +360,9 @@ Multi-provider scenarios (AI Provider, Conversation Parser, Multi-Agent Monitor,
 
 ## macOS Cookbook
 
-A consolidated reference of every macOS-specific technique used in this codebase lives at `docs/macos-cookbook.md`. Organized by subsystem, anchored to `file:line` in real source. Use it before re-deriving how to do `dlopen`, MediaRemote, Carbon hotkeys, AX, IPC, etc.
+> **The macOS knowledge base lives in its own repo:** `git@github.com:GaoZimeng0425/macos-playbook.git`. `docs/macos` here is a **local symlink** to a sibling checkout (`../macos-playbook`) and is **gitignored** — it won't appear in a fresh clone of NemoNotch. To get it, clone the playbook repo as a sibling directory; the symlink then resolves and all `docs/macos/...` paths below work. Edits to these docs are committed in the playbook repo, not here.
+
+A consolidated reference of every macOS-specific technique used in this codebase lives at `docs/macos/macos-cookbook.md`. Organized by subsystem, anchored to `file:line` in real source. Use it before re-deriving how to do `dlopen`, MediaRemote, Carbon hotkeys, AX, IPC, etc.
 
 For **reusable, cross-project macOS playbooks** (distilled from NemoNotch + Peekaboo + Ironsmith + Raycast, organized by macOS development block — `window/` `media/` `permissions/` `keychain/` `ipc/` `architecture/` etc., plus `ai-codegen/` `native-feel/` `design-system/` domain modules), see the knowledge base at `docs/macos/index.md`. The cookbook above is NemoNotch's precise `file:line` map; the playbooks are the generalized patterns + Pitfalls + checklists that cite it.
 

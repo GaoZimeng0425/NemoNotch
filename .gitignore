@@ -18,3 +18,7 @@ build.log
 
 # xcodebuild coverage artifact
 *.profraw
+
+# macOS playbook lives in its own repo (git@github.com:GaoZimeng0425/macos-playbook.git);
+# docs/macos is a local symlink to a sibling checkout, not tracked here.
+/docs/macos
