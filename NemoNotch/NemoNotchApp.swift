@@ -113,6 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         _ = LogService.shared
 
+        // Warm the OpenRouter-backed model-context overlay (offline-safe; the
+        // curated hardcoded table still resolves every lookup if this lags).
+        if !UITestMode.isActive { ModelContextWindow.warm() }
+
         let settings = AppSettings()
         let media = MediaService(disableLiveUpdates: UITestMode.isActive)
         let calendar = CalendarService()
