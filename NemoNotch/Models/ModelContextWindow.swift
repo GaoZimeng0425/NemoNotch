@@ -10,6 +10,7 @@ enum ModelContextWindow {
         "gemini-3.5-pro": 4_194_304,
         "mimo-v2-pro": 1_000_000,
         "glm-5.1": 200_000,
+        "glm-5.2": 1_000_000,
     ]
     static let defaultValue = 200_000
 
