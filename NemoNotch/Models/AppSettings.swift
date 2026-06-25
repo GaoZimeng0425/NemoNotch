@@ -88,6 +88,7 @@ final class AppSettings {
     static let claudeEnabledKey = "claudeEnabled"
     static let geminiEnabledKey = "geminiEnabled"
     static let hermesEnabledKey = "hermesEnabled"
+    static let opencodeEnabledKey = "opencodeEnabled"
     static let completionFlashEnabledKey = "completionFlashEnabled"
 
     var claudeEnabled: Bool {
@@ -96,6 +97,10 @@ final class AppSettings {
 
     var geminiEnabled: Bool {
         didSet { UserDefaults.standard.set(geminiEnabled, forKey: Self.geminiEnabledKey) }
+    }
+
+    var opencodeEnabled: Bool {
+        didSet { UserDefaults.standard.set(opencodeEnabled, forKey: Self.opencodeEnabledKey) }
     }
 
     var hermesEnabled: Bool {
@@ -166,6 +171,8 @@ final class AppSettings {
             .object(forKey: Self.claudeEnabledKey) as? Bool ?? true
         geminiEnabled = UserDefaults.standard
             .object(forKey: Self.geminiEnabledKey) as? Bool ?? true
+        opencodeEnabled = UserDefaults.standard
+            .object(forKey: Self.opencodeEnabledKey) as? Bool ?? true
         hermesEnabled = UserDefaults.standard
             .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
         completionFlashEnabled = UserDefaults.standard
