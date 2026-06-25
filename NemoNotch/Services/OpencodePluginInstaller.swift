@@ -17,7 +17,6 @@ enum OpencodePluginInstaller {
 
     static func install() throws {
         try writePlugin()
-        LogService.info("opencode plugin installed at \(pluginPath)", category: "OpencodePluginInstaller")
     }
 
     static func uninstall() throws {

@@ -36,6 +36,9 @@ final class OpencodeProvider: AIProvider {
         do {
             try OpencodePluginInstaller.uninstall()
             isHookInstalled = false
+            store.removeAll(source: .opencode)
+            timeoutTimer?.invalidate()
+            timeoutTimer = nil
         } catch {
             LogService.error("Failed to uninstall opencode plugin: \(error)", category: "OpencodeProvider")
         }

@@ -17,5 +17,7 @@ struct OpencodePluginInstallerTests {
         #expect(src.contains("Stop"))
         #expect(src.contains("permission.ask"))
         #expect(src.contains("session.idle"))
+        #expect(src.contains("PreCompact"))
+        #expect(src.contains("session.compacted"))
     }
 }
