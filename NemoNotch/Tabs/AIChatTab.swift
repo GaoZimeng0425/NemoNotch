@@ -19,6 +19,7 @@ struct AIChatTab: View {
             switch session.source {
             case .claude: return appSettings.claudeEnabled
             case .gemini: return appSettings.geminiEnabled
+            case .opencode: return appSettings.opencodeEnabled
             }
         }
     }
@@ -89,6 +90,7 @@ struct AIChatTab: View {
         switch dominantSource {
         case .claude: "Claude Code"
         case .gemini: "Gemini CLI"
+        case .opencode: "opencode"
         case .none: "AI Sessions"
         }
     }
@@ -362,6 +364,10 @@ struct AIChatTab: View {
                     case .gemini:
                         Image(systemName: "sparkles")
                             .font(.system(size: 19, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    case .opencode:
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                     }
                 } else {
@@ -646,6 +652,10 @@ struct AIChatTab: View {
             Image(systemName: "sparkles")
                 .font(.system(size: size * 0.85, weight: .semibold))
                 .foregroundStyle(sourceTint(source))
+        case .opencode:
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .font(.system(size: size * 0.8, weight: .semibold))
+                .foregroundStyle(sourceTint(source))
         }
     }
 
@@ -703,6 +713,7 @@ struct AIChatTab: View {
         switch source {
         case .claude: "Claude"
         case .gemini: "Gemini"
+        case .opencode: "opencode"
         }
     }
 
@@ -710,6 +721,7 @@ struct AIChatTab: View {
         switch source {
         case .claude: "C"
         case .gemini: "G"
+        case .opencode: "O"
         }
     }
 
@@ -717,6 +729,7 @@ struct AIChatTab: View {
         switch source {
         case .claude: NotchTheme.accentText
         case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
+        case .opencode: Color(red: 0.55, green: 0.78, blue: 0.55)
         }
     }
 

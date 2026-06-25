@@ -84,6 +84,7 @@ final class HookServer {
                 NotchConstants.setHookServerPort(port)
                 try? HookInstaller.ensureScriptExists()
                 try? HermesHookInstaller.refreshScript()
+                try? OpencodePluginInstaller.refreshScript()
             } else {
                 NotchConstants.setHookServerPort(port)
             }
