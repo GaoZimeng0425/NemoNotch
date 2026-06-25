@@ -14,12 +14,19 @@ struct HooksSection: View {
                 aiService.geminiProvider.installHooks()
             }
         }
+        if !aiService.opencodeProvider.isHookInstalled {
+            Button("menu.install_opencode_hooks") {
+                aiService.opencodeProvider.installHooks()
+            }
+        }
         if showsAnyHook {
             Divider()
         }
     }
 
     private var showsAnyHook: Bool {
-        !aiService.claudeProvider.isHookInstalled || !aiService.geminiProvider.isHookInstalled
+        !aiService.claudeProvider.isHookInstalled
+            || !aiService.geminiProvider.isHookInstalled
+            || !aiService.opencodeProvider.isHookInstalled
     }
 }

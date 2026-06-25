@@ -988,6 +988,22 @@
         }
       }
     },
+    "menu.install_opencode_hooks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install opencode hooks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装 opencode 钩子"
+          }
+        }
+      }
+    },
     "menu.next_track" : {
       "localizations" : {
         "en" : {

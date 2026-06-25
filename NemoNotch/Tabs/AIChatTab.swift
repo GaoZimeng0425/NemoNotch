@@ -38,12 +38,19 @@ struct AIChatTab: View {
         )
     }
 
+    private var opencodeKind: ProviderCardKind {
+        Self.kind(
+            enabled: appSettings.opencodeEnabled,
+            installed: aiService.opencodeProvider.isHookInstalled
+        )
+    }
+
     private var hasAnyReadyProvider: Bool {
-        claudeKind == .ready || geminiKind == .ready
+        claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready
     }
 
     private var hasRecoveryCards: Bool {
-        claudeKind != .ready || geminiKind != .ready
+        claudeKind != .ready || geminiKind != .ready || opencodeKind != .ready
     }
 
     private static func kind(enabled: Bool, installed: Bool) -> ProviderCardKind {
@@ -74,8 +81,12 @@ struct AIChatTab: View {
         allSessions.count(where: { $0.source == .gemini })
     }
 
+    private var opencodeCount: Int {
+        allSessions.count(where: { $0.source == .opencode })
+    }
+
     private var hasMixedSources: Bool {
-        claudeCount > 0 && geminiCount > 0
+        [claudeCount, geminiCount, opencodeCount].count(where: { $0 > 0 }) > 1
     }
 
     private var dominantSource: AISource? {
@@ -99,6 +110,7 @@ struct AIChatTab: View {
         let sourceParts = hasMixedSources ? [
             claudeCount > 0 ? "Claude \(claudeCount)" : nil,
             geminiCount > 0 ? "Gemini \(geminiCount)" : nil,
+            opencodeCount > 0 ? "opencode \(opencodeCount)" : nil,
         ].compactMap(\.self) : []
 
         let activeParts = [
@@ -157,6 +169,18 @@ struct AIChatTab: View {
                     appSettings.geminiEnabled = true
                     if !aiService.geminiProvider.isHookInstalled {
                         aiService.geminiProvider.installHooks()
+                    }
+                }
+            }
+            if opencodeKind != .ready {
+                providerCard(
+                    source: .opencode,
+                    name: "opencode",
+                    kind: opencodeKind
+                ) {
+                    appSettings.opencodeEnabled = true
+                    if !aiService.opencodeProvider.isHookInstalled {
+                        aiService.opencodeProvider.installHooks()
                     }
                 }
             }
