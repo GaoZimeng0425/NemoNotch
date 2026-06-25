@@ -9,6 +9,7 @@ struct HookEvent: Codable, Sendable {
     let cwd: String?
     let source: String?
     let cliSource: String?
+    let model: String?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -20,6 +21,7 @@ struct HookEvent: Codable, Sendable {
         cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
         source = try container.decodeIfPresent(String.self, forKey: .source)
         cliSource = try container.decodeIfPresent(String.self, forKey: .cliSource)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -31,5 +33,6 @@ struct HookEvent: Codable, Sendable {
         case cwd
         case source
         case cliSource = "cli_source"
+        case model
     }
 }
