@@ -1,0 +1,39 @@
+#!/bin/sh
+# NemoNotch repo guard (source of truth: .githooks/pre-commit)
+# Installed into the real hooks dir by .githooks/install.sh — DO NOT edit the
+# installed copy; edit this file and re-run install.sh.
+#
+# Rules:
+#   main/master : no direct commits (PR-only; locally use `git pull --ff-only`)
+#   develop     : direct commits allowed; but a merge resolved through conflicts
+#                 must come from feature/* or hotfix/*
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+case "$branch" in
+  main|master)
+    echo "" >&2
+    echo "✋ 禁止直接 commit 到 $branch。" >&2
+    echo "   $branch 只能通过 GitHub PR 合并 develop;本地用 git pull --ff-only。" >&2
+    echo "   (应急绕过: git commit --no-verify)" >&2
+    echo "" >&2
+    exit 1 ;;
+esac
+
+# Conflict-resolved merges finish via `git commit`, which runs pre-commit
+# (pre-merge-commit is skipped when a merge has conflicts). Re-check the source.
+if [ "$branch" = "develop" ] && [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  msg=$(git rev-parse --git-path MERGE_MSG)
+  src=$(sed -n "1s/.*Merge \(remote-tracking \)*branch '\([^']*\)'.*/\2/p" "$msg" 2>/dev/null)
+  src=${src#origin/}
+  case "$src" in
+    ""|feature/*|hotfix/*|fix/*|feat/*|develop) : ;;
+    *)
+      echo "" >&2
+      echo "✋ 只能把 feature/* 或 hotfix/* 合并进 develop (检测到来源: $src)。" >&2
+      echo "   (应急绕过: git commit --no-verify)" >&2
+      echo "" >&2
+      exit 1 ;;
+  esac
+fi
+exit 0

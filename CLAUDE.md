@@ -344,6 +344,13 @@ Workflow:
 2. After development, merge back to develop. After testing, merge develop to main
 3. Release: tag from main (`vX.Y.Z`)
 
+**Enforced guards (per-clone, run once: `sh .githooks/install.sh`):** Source lives in `.githooks/` and is copied into the shared `.git` dir so it stays active across every branch and worktree. The guards make the rules above mechanical:
+
+- `pre-commit` / `pre-merge-commit` hooks: **block any commit or merge on `main`** (PR-only; locally use `git pull --ff-only`), and only allow `feature/*` / `hotfix/*` (or `origin/develop` self-sync) to merge into `develop`. Direct commits to `develop` stay allowed. Bypass with `--no-verify` in emergencies.
+- Config: `pull.ff=only` (main never silently diverges), `branch.develop.rebase=true`, `branch.develop.mergeoptions=--no-ff` (feature merges keep a merge commit).
+
+**Worktree workflow (parallel features):** `git feat <name>` creates `feature/<name>` off `origin/develop` in a sibling worktree at `../NemoNotch-worktrees/<name>`; `git feat-done <name>` merges it back to `develop` (`--no-ff`) and tears the worktree down; `git feat-list` shows all worktrees. See `docs/git-worktree-workflow.md`.
+
 ### Testing
 
 - Unit tests live in `NemoNotchTests/`, written with **Swift Testing** (`import Testing`, `@Test`, `#expect`). Do not use XCTest for new code.

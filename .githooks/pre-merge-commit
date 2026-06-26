@@ -1,0 +1,37 @@
+#!/bin/sh
+# NemoNotch repo guard (source of truth: .githooks/pre-merge-commit)
+# Installed into the real hooks dir by .githooks/install.sh — DO NOT edit the
+# installed copy; edit this file and re-run install.sh.
+#
+# Rules:
+#   main/master : no merge commits at all (PR-only)
+#   develop     : may only merge feature/* or hotfix/* (and self-sync develop)
+#
+# Note: fast-forward updates create no commit, so this hook does not run for
+# them — `git pull --ff-only` stays unaffected.
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+case "$branch" in
+  main|master)
+    echo "" >&2
+    echo "✋ 禁止在 $branch 上创建 merge 提交。" >&2
+    echo "   $branch 只能通过 GitHub PR 合并 develop;本地用 git pull --ff-only。" >&2
+    echo "   (应急绕过: git merge --no-verify ...)" >&2
+    echo "" >&2
+    exit 1 ;;
+  develop)
+    msg=$(git rev-parse --git-path MERGE_MSG)
+    src=$(sed -n "1s/.*Merge \(remote-tracking \)*branch '\([^']*\)'.*/\2/p" "$msg" 2>/dev/null)
+    src=${src#origin/}
+    case "$src" in
+      ""|feature/*|hotfix/*|fix/*|feat/*|develop) : ;;
+      *)
+        echo "" >&2
+        echo "✋ 只能把 feature/* 或 hotfix/* 合并进 develop (检测到来源: $src)。" >&2
+        echo "   (应急绕过: git merge --no-verify ...)" >&2
+        echo "" >&2
+        exit 1 ;;
+    esac ;;
+esac
+exit 0
