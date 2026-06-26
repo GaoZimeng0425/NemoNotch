@@ -85,9 +85,17 @@ final class AICLIMonitorService {
         )
 
         if source == "unknown" {
-            let combined = "\(event.message ?? "") \(event.toolName ?? "") \(event.cwd ?? "")".lowercased()
-            if combined.contains("gemini") || combined.contains("glm") {
-                source = "gemini"
+            // opencode session ids are `ses_…`; a foreign untagged emitter
+            // (e.g. another opencode plugin) can race ahead of our tagged event,
+            // so attribute by id format before the Claude fallback creates a
+            // `.claude` phantom for an opencode session.
+            if event.sessionId?.hasPrefix("ses_") == true {
+                source = "opencode"
+            } else {
+                let combined = "\(event.message ?? "") \(event.toolName ?? "") \(event.cwd ?? "")".lowercased()
+                if combined.contains("gemini") || combined.contains("glm") {
+                    source = "gemini"
+                }
             }
         }
 
