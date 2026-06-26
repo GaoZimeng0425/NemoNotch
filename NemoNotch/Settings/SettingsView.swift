@@ -255,156 +255,233 @@ struct SettingsView: View {
     // MARK: - AI CLI Hooks
 
     private var claudeView: some View {
-        VStack(spacing: 16) {
-            // Claude Code
-            hookSection(
-                name: "Claude Code",
-                icon: "sparkles",
-                isInstalled: aiService.claudeProvider.isHookInstalled,
-                onInstall: {
-                    appSettings.claudeEnabled = true
-                    aiService.claudeProvider.installHooks()
-                },
-                onUninstall: {
-                    appSettings.claudeEnabled = false
-                    aiService.claudeProvider.uninstallHooks()
-                }
-            )
+        ScrollView {
+            VStack(spacing: 10) {
+                // Claude Code
+                hookCard(
+                    name: "Claude Code",
+                    tint: Self.claudeTint,
+                    isInstalled: aiService.claudeProvider.isHookInstalled,
+                    logo: { ClaudeCrabIcon(size: 20, color: Self.claudeTint) },
+                    onInstall: {
+                        appSettings.claudeEnabled = true
+                        aiService.claudeProvider.installHooks()
+                    },
+                    onUninstall: {
+                        appSettings.claudeEnabled = false
+                        aiService.claudeProvider.uninstallHooks()
+                    }
+                )
 
-            Divider()
+                // Gemini CLI
+                hookCard(
+                    name: "Gemini CLI",
+                    tint: Self.geminiTint,
+                    isInstalled: aiService.geminiProvider.isHookInstalled,
+                    logo: {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Self.geminiTint)
+                    },
+                    onInstall: {
+                        appSettings.geminiEnabled = true
+                        aiService.geminiProvider.installHooks()
+                    },
+                    onUninstall: {
+                        appSettings.geminiEnabled = false
+                        aiService.geminiProvider.uninstallHooks()
+                    }
+                )
 
-            // Gemini CLI
-            hookSection(
-                name: "Gemini CLI",
-                icon: "sparkles",
-                isInstalled: aiService.geminiProvider.isHookInstalled,
-                onInstall: {
-                    appSettings.geminiEnabled = true
-                    aiService.geminiProvider.installHooks()
-                },
-                onUninstall: {
-                    appSettings.geminiEnabled = false
-                    aiService.geminiProvider.uninstallHooks()
-                }
-            )
+                // opencode
+                hookCard(
+                    name: "opencode",
+                    tint: Self.opencodeTint,
+                    isInstalled: aiService.opencodeProvider.isHookInstalled,
+                    logo: { OpencodeLogoIcon(size: 19, color: Self.opencodeTint) },
+                    onInstall: {
+                        appSettings.opencodeEnabled = true
+                        aiService.opencodeProvider.installHooks()
+                    },
+                    onUninstall: {
+                        appSettings.opencodeEnabled = false
+                        aiService.opencodeProvider.uninstallHooks()
+                    }
+                )
 
-            Divider()
+                // Hermes Agent
+                hookCard(
+                    name: "Hermes Agent",
+                    tint: Self.hermesTint,
+                    isInstalled: hermesService.isHookInstalled,
+                    logo: {
+                        Image("HermesIcon")
+                            .renderingMode(.original)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 22, height: 22)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    },
+                    onInstall: {
+                        appSettings.hermesEnabled = true
+                        hermesService.installHooks()
+                    },
+                    onUninstall: {
+                        appSettings.hermesEnabled = false
+                        hermesService.uninstallHooks()
+                    }
+                )
 
-            // Hermes Agent
-            hookSection(
-                name: "Hermes Agent",
-                icon: "brain",
-                isInstalled: hermesService.isHookInstalled,
-                onInstall: {
-                    appSettings.hermesEnabled = true
-                    hermesService.installHooks()
-                },
-                onUninstall: {
-                    appSettings.hermesEnabled = false
-                    hermesService.uninstallHooks()
-                }
-            )
+                // OpenClaw — connect/disconnect/revoke semantics rather than hooks.
+                providerCard(
+                    name: "OpenClaw",
+                    tint: Self.openClawTint,
+                    isOn: openClawService.gatewayOnline,
+                    onLabel: "settings.openclaw.connected \(openClawService.deviceIdShort)",
+                    offLabel: "settings.openclaw.disconnected",
+                    logo: {
+                        Image(systemName: "brain")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(Self.openClawTint)
+                    },
+                    actions: {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            if appSettings.openClawEnabled {
+                                Button("settings.openclaw.disconnect") {
+                                    appSettings.openClawEnabled = false
+                                    openClawService.disconnect()
+                                }
+                                .controlSize(.small)
+                            } else {
+                                Button("settings.openclaw.connect") {
+                                    appSettings.openClawEnabled = true
+                                    openClawService.connect()
+                                }
+                                .controlSize(.small)
+                                .buttonStyle(.borderedProminent)
+                            }
 
-            Divider()
+                            if openClawService.gatewayOnline {
+                                Button("settings.openclaw.remove_device", role: .destructive) {
+                                    openClawService.removeDeviceSelf()
+                                }
+                                .controlSize(.small)
+                                .disabled(openClawService.isRemovingDevice)
+                            }
+                        }
+                    }
+                )
 
-            // OpenClaw — different semantics from hooks (connect/disconnect/revoke),
-            // so it gets its own view shape instead of reusing hookSection.
-            openClawSection
-
-            Text("settings.hooks_description")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
-
-            if aiService.serverRunning {
-                Label("settings.server_running", systemImage: "antenna.radiowaves.left.and.right")
+                Text("settings.hooks_description")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
 
-            Spacer()
+                if aiService.serverRunning {
+                    Label("settings.server_running", systemImage: "antenna.radiowaves.left.and.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
         }
-        .padding()
     }
 
-    private func hookSection(
+    // MARK: - Provider Cards
+
+    // Per-provider brand tints, tuned to read on both light and dark windows
+    // (the Settings window follows the system appearance, unlike the dark-only
+    // NotchTheme used inside the notch panel).
+    private static let claudeTint = Color(red: 0.93, green: 0.49, blue: 0.19)
+    private static let geminiTint = Color(red: 0.26, green: 0.52, blue: 0.96)
+    private static let opencodeTint = Color(red: 0.30, green: 0.66, blue: 0.40)
+    private static let hermesTint = Color(red: 0.52, green: 0.43, blue: 0.92)
+    private static let openClawTint = Color(red: 0.14, green: 0.62, blue: 0.60)
+
+    /// A hook-based provider card with install / reinstall / uninstall actions.
+    private func hookCard(
         name: String,
-        icon: String,
+        tint: Color,
         isInstalled: Bool,
+        @ViewBuilder logo: () -> some View,
         onInstall: @escaping () -> Void,
         onUninstall: @escaping () -> Void
     ) -> some View {
-        VStack(spacing: 8) {
-            if isInstalled {
-                Label("settings.hooks_installed \(name)", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.title3)
-            } else {
-                Label("settings.hooks_not_installed \(name)", systemImage: "xmark.circle.fill")
-                    .foregroundStyle(.red)
-                    .font(.title3)
-            }
-
-            HStack(spacing: 12) {
-                Button(isInstalled ? "settings.reinstall" : "settings.install_hooks") {
-                    onInstall()
-                }
-                .controlSize(.large)
-
-                if isInstalled {
-                    Button("settings.uninstall_hooks", role: .destructive) {
-                        onUninstall()
+        providerCard(
+            name: name,
+            tint: tint,
+            isOn: isInstalled,
+            onLabel: "settings.status.installed",
+            offLabel: "settings.status.not_installed",
+            logo: logo,
+            actions: {
+                VStack(alignment: .trailing, spacing: 6) {
+                    if isInstalled {
+                        Button("settings.reinstall", action: onInstall)
+                            .controlSize(.small)
+                        Button("settings.uninstall_hooks", role: .destructive, action: onUninstall)
+                            .controlSize(.small)
+                    } else {
+                        Button("settings.install_hooks", action: onInstall)
+                            .controlSize(.small)
+                            .buttonStyle(.borderedProminent)
                     }
-                    .controlSize(.large)
                 }
             }
-        }
+        )
     }
 
-    private var openClawSection: some View {
-        VStack(spacing: 8) {
-            Label("settings.openclaw.title", systemImage: "brain")
-                .font(.title3)
-                .foregroundStyle(.primary)
-
-            if openClawService.gatewayOnline {
-                Label(
-                    "settings.openclaw.connected \(openClawService.deviceIdShort)",
-                    systemImage: "checkmark.circle.fill"
+    /// Generic provider card shell: tinted logo chip + name + on/off status row
+    /// + trailing actions. Used for both hook providers and OpenClaw.
+    private func providerCard(
+        name: String,
+        tint: Color,
+        isOn: Bool,
+        onLabel: LocalizedStringKey,
+        offLabel: LocalizedStringKey,
+        @ViewBuilder logo: () -> some View,
+        @ViewBuilder actions: () -> some View
+    ) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(tint.opacity(0.16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(tint.opacity(0.32), lineWidth: 1)
                 )
-                .foregroundStyle(.green)
-                .font(.title3)
-            } else {
-                Label("settings.openclaw.disconnected", systemImage: "xmark.circle.fill")
-                    .foregroundStyle(.red)
-                    .font(.title3)
-            }
+                .frame(width: 40, height: 40)
+                .overlay { logo() }
 
-            HStack(spacing: 12) {
-                if appSettings.openClawEnabled {
-                    Button("settings.openclaw.disconnect") {
-                        appSettings.openClawEnabled = false
-                        openClawService.disconnect()
-                    }
-                    .controlSize(.large)
-                } else {
-                    Button("settings.openclaw.connect") {
-                        appSettings.openClawEnabled = true
-                        openClawService.connect()
-                    }
-                    .controlSize(.large)
-                }
-
-                if openClawService.gatewayOnline {
-                    Button("settings.openclaw.remove_device", role: .destructive) {
-                        openClawService.removeDeviceSelf()
-                    }
-                    .controlSize(.large)
-                    .disabled(openClawService.isRemovingDevice)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                HStack(spacing: 4) {
+                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle.dashed")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isOn ? Color.green : Color.secondary)
+                    Text(isOn ? onLabel : offLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
+
+            Spacer(minLength: 8)
+
+            actions()
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 
     // MARK: - Notification List
