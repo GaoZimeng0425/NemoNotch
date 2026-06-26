@@ -130,6 +130,8 @@ struct BadgeIconView: View {
             Image(systemName: "sparkle")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.blue)
+        case .opencode:
+            OpencodeLogoIcon(size: 13, color: Color(red: 0.55, green: 0.78, blue: 0.55))
         }
     }
 

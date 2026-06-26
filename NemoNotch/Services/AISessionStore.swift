@@ -23,9 +23,13 @@ final class AISessionStore {
 
     // MARK: - Reads
 
-    func get(_ id: String) -> AISessionState? { sessions[id] }
+    func get(_ id: String) -> AISessionState? {
+        sessions[id]
+    }
 
-    func contains(_ id: String) -> Bool { sessions[id] != nil }
+    func contains(_ id: String) -> Bool {
+        sessions[id] != nil
+    }
 
     /// Filter the sorted view by provider source. Used by per-provider UI
     /// surfaces (e.g. badges that only care about Claude state).
@@ -67,6 +71,9 @@ final class AISessionStore {
     @discardableResult
     func mutateOrCreate(_ id: String, source: AISource, _ block: (inout AISessionState) -> Void) -> AISessionState {
         var session = sessions[id] ?? AISessionState(sessionId: id, source: source)
+        // The caller's cli_source is authoritative: correct a session that a
+        // different provider created first (the untagged-event phantom race).
+        session.source = source
         block(&session)
         sessions[id] = session
         rebuildSorted()

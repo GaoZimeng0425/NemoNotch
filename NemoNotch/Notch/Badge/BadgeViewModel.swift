@@ -43,6 +43,7 @@ final class BadgeViewModel {
             let providerEnabled: Bool = switch session.source {
             case .claude: appSettings.claudeEnabled
             case .gemini: appSettings.geminiEnabled
+            case .opencode: appSettings.opencodeEnabled
             }
             return providerEnabled && (session.phase.isActive || session.phase.needsAttention)
         }

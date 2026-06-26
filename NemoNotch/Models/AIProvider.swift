@@ -3,6 +3,7 @@ import Foundation
 enum AISource: String, Codable, CaseIterable {
     case claude
     case gemini
+    case opencode
 }
 
 @MainActor
@@ -17,7 +18,11 @@ protocol AIProvider: AnyObject, Observable {
 
 struct AISessionState: Identifiable {
     let id: String
-    let source: AISource
+    /// Mutable so an explicit per-event `cli_source` can correct a session that
+    /// was first created by another provider (e.g. an untagged event minting a
+    /// `.claude` phantom before the opencode-tagged event arrives). See
+    /// `AISessionStore.mutateOrCreate`.
+    var source: AISource
     var phase: SessionPhase = .idle
     var currentTool: String?
     var cwd: String?
@@ -133,6 +138,8 @@ struct AISessionState: Identifiable {
             return formatClaudeModel(model)
         case .gemini:
             return formatGeminiModel(model)
+        case .opencode:
+            return formatOpencodeModel(model)
         }
     }
 
@@ -160,6 +167,15 @@ struct AISessionState: Identifiable {
         }
         return cleaned
             .replacingOccurrences(of: "-preview", with: "")
+            .split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    private func formatOpencodeModel(_ model: String) -> String {
+        // opencode model ids are "vendor/model" (e.g. "anthropic/claude-sonnet-4-5").
+        let bare = model.split(separator: "/").last.map(String.init) ?? model
+        return bare
             .split(separator: "-")
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
             .joined(separator: " ")
