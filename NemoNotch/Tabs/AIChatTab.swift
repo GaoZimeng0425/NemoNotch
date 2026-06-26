@@ -11,6 +11,7 @@ struct AIChatTab: View {
     @Environment(AppSettings.self) var appSettings
     @State private var selectedSessionId: String?
     @State private var showContextDetail = false
+    @State private var heroBreathe = false
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
 
@@ -47,10 +48,6 @@ struct AIChatTab: View {
 
     private var hasAnyReadyProvider: Bool {
         claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready
-    }
-
-    private var hasRecoveryCards: Bool {
-        claudeKind != .ready || geminiKind != .ready || opencodeKind != .ready
     }
 
     private static func kind(enabled: Bool, installed: Bool) -> ProviderCardKind {
@@ -135,10 +132,8 @@ struct AIChatTab: View {
     }
 
     var body: some View {
-        if !hasAnyReadyProvider, hasRecoveryCards, allSessions.isEmpty {
-            recoveryCards
-        } else if allSessions.isEmpty {
-            idleState
+        if allSessions.isEmpty {
+            emptyConsole
         } else if let sessionId = selectedSessionId, let session = sessionById(sessionId) {
             chatDetail(session: session)
         } else {
@@ -146,101 +141,140 @@ struct AIChatTab: View {
         }
     }
 
-    private var recoveryCards: some View {
-        VStack(spacing: 10) {
-            if claudeKind != .ready {
-                providerCard(
-                    source: .claude,
-                    name: "Claude Code",
-                    kind: claudeKind
-                ) {
-                    appSettings.claudeEnabled = true
-                    if !aiService.claudeProvider.isHookInstalled {
-                        aiService.claudeProvider.installHooks()
+    // MARK: - Empty state
+
+    private var emptyConsole: some View {
+        VStack(spacing: 16) {
+            emptyHero
+            providerStatusList
+            emptyFooter
+        }
+        .frame(maxWidth: 360)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+    }
+
+    private var emptyHero: some View {
+        VStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [NotchTheme.accent, NotchTheme.accentHot],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 48, height: 48)
+                .overlay {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .opacity(heroBreathe ? 0.55 : 1.0)
+                }
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                        heroBreathe = true
                     }
                 }
-            }
-            if geminiKind != .ready {
-                providerCard(
-                    source: .gemini,
-                    name: "Gemini CLI",
-                    kind: geminiKind
-                ) {
-                    appSettings.geminiEnabled = true
-                    if !aiService.geminiProvider.isHookInstalled {
-                        aiService.geminiProvider.installHooks()
-                    }
+            Text(hasAnyReadyProvider ? "ai.empty.title_ready" : "ai.empty.title_setup")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(NotchTheme.textPrimary)
+            Text(hasAnyReadyProvider ? "ai.empty.subtitle_ready" : "ai.empty.subtitle_setup")
+                .font(.system(size: 12))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var providerStatusList: some View {
+        VStack(spacing: 0) {
+            providerStatusRow(source: .claude, name: "Claude Code", kind: claudeKind) {
+                appSettings.claudeEnabled = true
+                if !aiService.claudeProvider.isHookInstalled {
+                    aiService.claudeProvider.installHooks()
                 }
             }
-            if opencodeKind != .ready {
-                providerCard(
-                    source: .opencode,
-                    name: "opencode",
-                    kind: opencodeKind
-                ) {
-                    appSettings.opencodeEnabled = true
-                    if !aiService.opencodeProvider.isHookInstalled {
-                        aiService.opencodeProvider.installHooks()
-                    }
+            Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
+            providerStatusRow(source: .gemini, name: "Gemini CLI", kind: geminiKind) {
+                appSettings.geminiEnabled = true
+                if !aiService.geminiProvider.isHookInstalled {
+                    aiService.geminiProvider.installHooks()
+                }
+            }
+            Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
+            providerStatusRow(source: .opencode, name: "opencode", kind: opencodeKind) {
+                appSettings.opencodeEnabled = true
+                if !aiService.opencodeProvider.isHookInstalled {
+                    aiService.opencodeProvider.installHooks()
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .notchCard(radius: 10, fill: NotchTheme.surface)
     }
 
-    private func providerCard(
+    @ViewBuilder
+    private func providerStatusRow(
         source: AISource,
         name: String,
         kind: ProviderCardKind,
         onAction: @escaping () -> Void
     ) -> some View {
         let isPassive = kind == .reenable
-        return VStack(spacing: 8) {
-            sourceIcon(source, size: isPassive ? 22 : 26)
-                .opacity(isPassive ? 0.65 : 1.0)
+        HStack(spacing: 10) {
+            sourceIcon(source, size: 16)
+                .opacity(isPassive ? 0.6 : 1.0)
             Text(name)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(isPassive ? NotchTheme.textSecondary : NotchTheme.textPrimary)
-            Text(isPassive ? "ai.currently_off" : "ai.hooks_not_installed")
-                .font(.system(size: 10))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .multilineTextAlignment(.center)
-            Button(action: onAction) {
-                Text(isPassive ? "ai.enable" : "ai.install_hooks")
-                    .font(.system(size: 11, weight: .semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
-            .background(
-                Group {
-                    if isPassive {
-                        Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1)
-                    } else {
-                        Capsule().fill(NotchTheme.accent.opacity(0.18))
-                    }
+            Spacer(minLength: 8)
+            switch kind {
+            case .ready:
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(sourceTint(source))
+                        .frame(width: 6, height: 6)
+                    Text("ai.ready")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(NotchTheme.textSecondary)
                 }
-            )
-            .clipShape(Capsule())
-            .foregroundStyle(NotchTheme.accent)
+            case .install:
+                Button(action: onAction) {
+                    Text("ai.install_hooks")
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .background(Capsule().fill(NotchTheme.accent.opacity(0.18)))
+                .clipShape(Capsule())
+                .foregroundStyle(NotchTheme.accent)
+            case .reenable:
+                Button(action: onAction) {
+                    Text("ai.enable")
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .background(Capsule().stroke(NotchTheme.accent.opacity(0.55), lineWidth: 1))
+                .clipShape(Capsule())
+                .foregroundStyle(NotchTheme.accent)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .notchCard(radius: 10, fill: NotchTheme.surface)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
     }
 
-    private var idleState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(NotchTheme.textSecondary)
-            Text("ai.no_active_sessions")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
+    private var emptyFooter: some View {
+        VStack(spacing: 6) {
+            if hasAnyReadyProvider {
+                Text("ai.empty.run_hint")
+                    .font(.system(size: 10))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .multilineTextAlignment(.center)
+            }
             serverStatus
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var serverStatus: some View {
