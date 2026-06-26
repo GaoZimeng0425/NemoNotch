@@ -33,8 +33,9 @@ What it configures:
 ## Daily commands
 
 ```sh
-git feat <name>        # feature/<name> off origin/develop, in a sibling worktree
+git feat <name>        # feature/<name> off local develop, in a sibling worktree
                        #   ../NemoNotch-worktrees/<name>
+                       #   (warns if local develop is behind origin/develop)
 cd ../NemoNotch-worktrees/<name>
 # ...work, commit freely on the feature branch...
 

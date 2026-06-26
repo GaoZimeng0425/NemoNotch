@@ -22,14 +22,22 @@ if git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
   exit 1
 fi
 
-git -C "$main_wt" fetch origin develop --quiet 2>/dev/null || true
-base=develop
-if git -C "$main_wt" show-ref --verify --quiet refs/remotes/origin/develop; then
-  base=origin/develop
+if ! git -C "$main_wt" show-ref --verify --quiet refs/heads/develop; then
+  echo "✋ 本地没有 develop 分支。" >&2
+  exit 1
 fi
 
-git -C "$main_wt" worktree add -b "$branch" "$wt" "$base"
+# Warn (don't block) if local develop is behind origin/develop.
+git -C "$main_wt" fetch origin develop --quiet 2>/dev/null || true
+if git -C "$main_wt" show-ref --verify --quiet refs/remotes/origin/develop; then
+  behind=$(git -C "$main_wt" rev-list --count develop..origin/develop 2>/dev/null || echo 0)
+  if [ "${behind:-0}" -gt 0 ]; then
+    echo "⚠️  本地 develop 落后 origin/develop $behind 个提交;建议先在 develop 上 git pull。" >&2
+  fi
+fi
+
+git -C "$main_wt" worktree add -b "$branch" "$wt" develop
 echo ""
-echo "✅ $branch  @  $wt   (off $base)"
+echo "✅ $branch  @  $wt   (off develop)"
 echo "   下一步:  cd \"$wt\""
 echo "   完成后:  git feat-done $name"
