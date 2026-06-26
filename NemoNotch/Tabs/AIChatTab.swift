@@ -19,6 +19,7 @@ struct AIChatTab: View {
             switch session.source {
             case .claude: return appSettings.claudeEnabled
             case .gemini: return appSettings.geminiEnabled
+            case .opencode: return appSettings.opencodeEnabled
             }
         }
     }
@@ -37,12 +38,19 @@ struct AIChatTab: View {
         )
     }
 
+    private var opencodeKind: ProviderCardKind {
+        Self.kind(
+            enabled: appSettings.opencodeEnabled,
+            installed: aiService.opencodeProvider.isHookInstalled
+        )
+    }
+
     private var hasAnyReadyProvider: Bool {
-        claudeKind == .ready || geminiKind == .ready
+        claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready
     }
 
     private var hasRecoveryCards: Bool {
-        claudeKind != .ready || geminiKind != .ready
+        claudeKind != .ready || geminiKind != .ready || opencodeKind != .ready
     }
 
     private static func kind(enabled: Bool, installed: Bool) -> ProviderCardKind {
@@ -73,8 +81,12 @@ struct AIChatTab: View {
         allSessions.count(where: { $0.source == .gemini })
     }
 
+    private var opencodeCount: Int {
+        allSessions.count(where: { $0.source == .opencode })
+    }
+
     private var hasMixedSources: Bool {
-        claudeCount > 0 && geminiCount > 0
+        [claudeCount, geminiCount, opencodeCount].count(where: { $0 > 0 }) > 1
     }
 
     private var dominantSource: AISource? {
@@ -89,6 +101,7 @@ struct AIChatTab: View {
         switch dominantSource {
         case .claude: "Claude Code"
         case .gemini: "Gemini CLI"
+        case .opencode: "opencode"
         case .none: "AI Sessions"
         }
     }
@@ -97,6 +110,7 @@ struct AIChatTab: View {
         let sourceParts = hasMixedSources ? [
             claudeCount > 0 ? "Claude \(claudeCount)" : nil,
             geminiCount > 0 ? "Gemini \(geminiCount)" : nil,
+            opencodeCount > 0 ? "opencode \(opencodeCount)" : nil,
         ].compactMap(\.self) : []
 
         let activeParts = [
@@ -155,6 +169,18 @@ struct AIChatTab: View {
                     appSettings.geminiEnabled = true
                     if !aiService.geminiProvider.isHookInstalled {
                         aiService.geminiProvider.installHooks()
+                    }
+                }
+            }
+            if opencodeKind != .ready {
+                providerCard(
+                    source: .opencode,
+                    name: "opencode",
+                    kind: opencodeKind
+                ) {
+                    appSettings.opencodeEnabled = true
+                    if !aiService.opencodeProvider.isHookInstalled {
+                        aiService.opencodeProvider.installHooks()
                     }
                 }
             }
@@ -362,6 +388,10 @@ struct AIChatTab: View {
                     case .gemini:
                         Image(systemName: "sparkles")
                             .font(.system(size: 19, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    case .opencode:
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                     }
                 } else {
@@ -646,6 +676,10 @@ struct AIChatTab: View {
             Image(systemName: "sparkles")
                 .font(.system(size: size * 0.85, weight: .semibold))
                 .foregroundStyle(sourceTint(source))
+        case .opencode:
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .font(.system(size: size * 0.8, weight: .semibold))
+                .foregroundStyle(sourceTint(source))
         }
     }
 
@@ -703,6 +737,7 @@ struct AIChatTab: View {
         switch source {
         case .claude: "Claude"
         case .gemini: "Gemini"
+        case .opencode: "opencode"
         }
     }
 
@@ -710,6 +745,7 @@ struct AIChatTab: View {
         switch source {
         case .claude: "C"
         case .gemini: "G"
+        case .opencode: "O"
         }
     }
 
@@ -717,6 +753,7 @@ struct AIChatTab: View {
         switch source {
         case .claude: NotchTheme.accentText
         case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
+        case .opencode: Color(red: 0.55, green: 0.78, blue: 0.55)
         }
     }
 
