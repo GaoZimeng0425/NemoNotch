@@ -424,9 +424,7 @@ struct AIChatTab: View {
                             .font(.system(size: 19, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                     case .opencode:
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                        OpencodeLogoIcon(size: 22, color: .white)
                     }
                 } else {
                     HStack(spacing: 0) {
@@ -711,9 +709,7 @@ struct AIChatTab: View {
                 .font(.system(size: size * 0.85, weight: .semibold))
                 .foregroundStyle(sourceTint(source))
         case .opencode:
-            Image(systemName: "chevron.left.forwardslash.chevron.right")
-                .font(.system(size: size * 0.8, weight: .semibold))
-                .foregroundStyle(sourceTint(source))
+            OpencodeLogoIcon(size: size, color: sourceTint(source))
         }
     }
 

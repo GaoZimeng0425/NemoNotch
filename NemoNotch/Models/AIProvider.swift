@@ -18,7 +18,11 @@ protocol AIProvider: AnyObject, Observable {
 
 struct AISessionState: Identifiable {
     let id: String
-    let source: AISource
+    /// Mutable so an explicit per-event `cli_source` can correct a session that
+    /// was first created by another provider (e.g. an untagged event minting a
+    /// `.claude` phantom before the opencode-tagged event arrives). See
+    /// `AISessionStore.mutateOrCreate`.
+    var source: AISource
     var phase: SessionPhase = .idle
     var currentTool: String?
     var cwd: String?
