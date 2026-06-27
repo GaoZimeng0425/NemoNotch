@@ -45,8 +45,11 @@ jobs:
 
       - name: Create DMG
         run: |
+          mkdir -p build/dmg_staging
+          cp -R build/export/NemoNotch.app build/dmg_staging/
+          ln -s /Applications build/dmg_staging/Applications
           hdiutil create -volname NemoNotch \
-            -srcfolder build/export/NemoNotch.app \
+            -srcfolder build/dmg_staging \
             -ov -format UDZO \
             build/NemoNotch.dmg
 
