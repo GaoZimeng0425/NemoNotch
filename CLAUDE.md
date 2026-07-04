@@ -417,8 +417,8 @@ All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check the
 
 ## Build & Release
 
-- One-click build: `./build.sh`, auto Archive → export .app → generate DMG
-- Output: `build/NemoNotch.dmg`
+- One-click build: `./build.sh` (arm64, default), `./build.sh --x86` (Intel), or `./build.sh --arm` (explicit) — auto Archive → export .app → generate DMG. Single-arch only (no universal binary); each build passes `ARCHS` to `xcodebuild`
+- Output: `build/NemoNotch-<arch>.dmg` (e.g. `build/NemoNotch-arm64.dmg`, `build/NemoNotch-x86_64.dmg`) — arch-suffixed so `--arm` and `--x86` builds don't overwrite each other
 - Supporting files: `ExportOptions.plist` (export config), `build.sh` (build script)
 - Currently skips signing (`CODE_SIGN_IDENTITY="-"`), configure signing and notarization for official distribution
 
@@ -429,5 +429,5 @@ When the user says "release":
 1. Confirm all changes are committed to main
 2. Create version tag (format `vX.Y.Z`, e.g. `v0.1.0`)
 3. Push tag to origin: `git push origin <tag>`
-4. GitHub Actions auto-builds and publishes DMG to Releases (workflow: `.github/workflows/release.yml`)
+4. GitHub Actions auto-builds and publishes **two DMGs** (`NemoNotch-arm64.dmg` for Apple Silicon, `NemoNotch-x86_64.dmg` for Intel) to Releases via a `matrix.arch` build (workflow: `.github/workflows/release.yml`)
 5. Build status: `https://github.com/GaoZimeng0425/NemoNotch/actions`

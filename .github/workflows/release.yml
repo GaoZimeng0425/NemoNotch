@@ -12,20 +12,27 @@ jobs:
   build:
     runs-on: macos-15
 
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
 
-      - name: Build archive
+      - name: Build archive (${{ matrix.arch }})
         run: |
           xcodebuild archive \
             -project NemoNotch.xcodeproj \
             -scheme NemoNotch \
             -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
+            -destination 'platform=macOS' \
             -archivePath build/NemoNotch.xcarchive \
+            ARCHS="${{ matrix.arch }}" \
+            ONLY_ACTIVE_ARCH=NO \
             MACOSX_DEPLOYMENT_TARGET=26.2 \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
@@ -43,7 +50,7 @@ jobs:
         run: |
           codesign --force --deep --sign - build/export/NemoNotch.app
 
-      - name: Create DMG
+      - name: Create DMG (${{ matrix.arch }})
         run: |
           mkdir -p build/dmg_staging
           cp -R build/export/NemoNotch.app build/dmg_staging/
@@ -51,10 +58,10 @@ jobs:
           hdiutil create -volname NemoNotch \
             -srcfolder build/dmg_staging \
             -ov -format UDZO \
-            build/NemoNotch.dmg
+            build/NemoNotch-${{ matrix.arch }}.dmg
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/NemoNotch.dmg
+          files: build/NemoNotch-${{ matrix.arch }}.dmg
           generate_release_notes: true
