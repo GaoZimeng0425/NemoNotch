@@ -8,6 +8,12 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Least-privilege token: only the release step (softprops/action-gh-release)
+# needs write access to create the release and upload DMG assets; checkout
+# only reads. No PR/issues/packages/deployments are touched.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15
