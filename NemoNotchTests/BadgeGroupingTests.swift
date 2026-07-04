@@ -84,4 +84,12 @@ struct BadgeGroupingTests {
         #expect(c.groups.count == 2)
         #expect(c.overflow == 0)
     }
+
+    @Test("Exactly cap groups → all visible, no overflow")
+    func atCapBoundary() {
+        let items: [BadgeItem] = [ai(id: "s1"), .media, .calendar, .pomodoro(phase: .work)]
+        let c = BadgeGrouping.cluster(items, cap: 4)
+        #expect(c.groups.count == 4)
+        #expect(c.overflow == 0)
+    }
 }

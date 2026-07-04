@@ -274,11 +274,15 @@ struct CompactBadgesView: View {
             .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeSpread)))
         }
         if cluster.overflow > 0 {
-            BadgeCountChip(text: "+\(cluster.overflow)")
-                .position(
-                    x: notchLeftEdge - spread - CGFloat(cluster.groups.count) * NotchConstants.badgeStackStep,
-                    y: notchCenterY
-                )
+            Button { primary.map(onBadgeTap) } label: {
+                BadgeCountChip(text: "+\(cluster.overflow)")
+            }
+            .buttonStyle(.plain)
+            .position(
+                x: notchLeftEdge - spread - CGFloat(cluster.groups.count) * NotchConstants.badgeStackStep,
+                y: notchCenterY
+            )
+            .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeSpread)))
         }
     }
 
