@@ -3,7 +3,6 @@ import SwiftUI
 enum BadgeRenderStyle {
     case compactLeft
     case compactRight
-    case row
 }
 
 // MARK: - BadgeIconView
@@ -37,7 +36,7 @@ struct BadgeIconView: View {
     @ViewBuilder
     private func notificationBadge(bundleID: String, count: Int) -> some View {
         switch style {
-        case .compactLeft, .row:
+        case .compactLeft:
             if let data = notificationService.badges[bundleID] {
                 ZStack(alignment: .bottomTrailing) {
                     Image(nsImage: data.icon)
@@ -72,12 +71,12 @@ struct BadgeIconView: View {
     private var mediaBadge: some View {
         let isPlaying = mediaService.playbackState.isPlaying
         switch style {
-        case .compactLeft, .row:
+        case .compactLeft:
             VinylDiscView(
                 isPlaying: isPlaying,
                 artworkData: mediaService.playbackState.artworkData,
                 appIcon: mediaService.appIcon,
-                size: style == .row ? 18 : 20
+                size: 20
             )
         case .compactRight:
             AudioEqualizerView(isActive: isPlaying, maxHeight: 10, barWidth: 1.5, color: NotchTheme.accent)
@@ -116,8 +115,6 @@ struct BadgeIconView: View {
                     .frame(width: 8, height: 8)
                     .frame(width: 18, height: 18)
             }
-        case .row:
-            aiSourceIcon(source: source, status: status)
         }
     }
 
@@ -140,17 +137,17 @@ struct BadgeIconView: View {
     @ViewBuilder
     private func agentsBadge(state: AgentMonitorState, emoji: String) -> some View {
         switch style {
-        case .compactLeft, .row:
+        case .compactLeft:
             if emoji.isEmpty {
                 Image("HermesIcon")
                     .renderingMode(.original)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: style == .row ? 14 : 13, height: style == .row ? 14 : 13)
+                    .frame(width: 13, height: 13)
                     .clipShape(RoundedRectangle(cornerRadius: 2))
             } else {
                 Text(emoji)
-                    .font(.system(size: style == .row ? 11 : 10))
+                    .font(.system(size: 10))
             }
         case .compactRight:
             Image(systemName: state.icon)
@@ -176,7 +173,7 @@ struct BadgeIconView: View {
     @ViewBuilder
     private var calendarBadge: some View {
         switch style {
-        case .compactLeft, .row:
+        case .compactLeft:
             Image(systemName: "calendar")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(NotchTheme.textPrimary)
@@ -205,13 +202,6 @@ struct BadgeIconView: View {
             )
             .opacity(piePausedOpacity)
             .modifier(PomodoroPulseModifier(token: pomodoroService.pulseToken))
-        case .row:
-            PomodoroPieView(
-                remainingFraction: pomodoroService.remainingFraction,
-                phase: phase,
-                style: .row
-            )
-            .opacity(piePausedOpacity)
         }
     }
 
@@ -229,7 +219,7 @@ struct BadgeIconView: View {
 // MARK: - CompactBadgesView
 
 struct CompactBadgesView: View {
-    let items: [BadgeItem]
+    let cluster: BadgeCluster
     let shownHasActiveBadge: Bool
     let notchLeftEdge: CGFloat
     let notchRightEdge: CGFloat
@@ -239,51 +229,18 @@ struct CompactBadgesView: View {
     let mediaService: MediaService
     let pomodoroService: PomodoroTimerService
 
-    private var hasMultipleBadges: Bool {
-        items.count >= 2
+    /// Tapping anywhere opens the highest-priority group's tab.
+    private var primary: BadgeItem? {
+        cluster.groups.first?.representative
     }
 
     var body: some View {
         let spread: CGFloat = shownHasActiveBadge ? NotchConstants.badgeSpread : 0
-        let primaryItem = items.first
         ZStack {
-            if let item = primaryItem {
-                Button {
-                    onBadgeTap(item)
-                } label: {
-                    BadgeIconView(
-                        item: item, style: .compactLeft,
-                        notificationService: notificationService,
-                        mediaService: mediaService,
-                        pomodoroService: pomodoroService
-                    )
-                }
-                .buttonStyle(.plain)
-                .position(x: notchLeftEdge - spread, y: notchCenterY)
-                .opacity(shownHasActiveBadge ? 1 : 0)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(x: NotchConstants.badgeSpread)),
-                    removal: .opacity.combined(with: .offset(x: NotchConstants.badgeSpread))
-                ))
-                Button {
-                    onBadgeTap(item)
-                } label: {
-                    BadgeIconView(
-                        item: item, style: .compactRight,
-                        notificationService: notificationService,
-                        mediaService: mediaService,
-                        pomodoroService: pomodoroService
-                    )
-                }
-                .buttonStyle(.plain)
-                .position(x: notchRightEdge + spread, y: notchCenterY)
-                .opacity(shownHasActiveBadge ? 1 : 0)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(x: -NotchConstants.badgeSpread)),
-                    removal: .opacity.combined(with: .offset(x: -NotchConstants.badgeSpread))
-                ))
-            }
+            leftFan(spread: spread)
+            rightFan(spread: spread)
         }
+        .opacity(shownHasActiveBadge ? 1 : 0)
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: spread
@@ -293,41 +250,79 @@ struct CompactBadgesView: View {
             value: shownHasActiveBadge
         )
     }
+
+    // Left: overlapping logos. Highest priority (index 0) hugs the notch and is
+    // frontmost; lower-priority logos fan leftward behind it. A trailing "+K"
+    // chip sits at the far (backmost) end when groups overflowed.
+    @ViewBuilder
+    private func leftFan(spread: CGFloat) -> some View {
+        ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
+            Button { primary.map(onBadgeTap) } label: {
+                BadgeIconView(
+                    item: group.representative, style: .compactLeft,
+                    notificationService: notificationService,
+                    mediaService: mediaService,
+                    pomodoroService: pomodoroService
+                )
+            }
+            .buttonStyle(.plain)
+            .zIndex(Double(cluster.groups.count - index))
+            .position(
+                x: notchLeftEdge - spread - CGFloat(index) * NotchConstants.badgeStackStep,
+                y: notchCenterY
+            )
+            .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeSpread)))
+        }
+        if cluster.overflow > 0 {
+            BadgeCountChip(text: "+\(cluster.overflow)")
+                .position(
+                    x: notchLeftEdge - spread - CGFloat(cluster.groups.count) * NotchConstants.badgeStackStep,
+                    y: notchCenterY
+                )
+        }
+    }
+
+    // Right: statuses in priority order, highest hugging the notch. A count chip
+    // overlays any group with more than one member.
+    private func rightFan(spread: CGFloat) -> some View {
+        ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
+            Button { primary.map(onBadgeTap) } label: {
+                BadgeIconView(
+                    item: group.representative, style: .compactRight,
+                    notificationService: notificationService,
+                    mediaService: mediaService,
+                    pomodoroService: pomodoroService
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if group.count > 1 {
+                        BadgeCountChip(text: "\(group.count)")
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .position(
+                x: notchRightEdge + spread + CGFloat(index) * NotchConstants.badgeStatusStep,
+                y: notchCenterY
+            )
+            .transition(.opacity.combined(with: .offset(x: -NotchConstants.badgeSpread)))
+        }
+    }
 }
 
-// MARK: - BadgeRowView
+// MARK: - BadgeCountChip
 
-struct BadgeRowView: View {
-    let items: [BadgeItem]
-    let notchCenterX: CGFloat
-    let notchCenterY: CGFloat
-    let onBadgeTap: (BadgeItem) -> Void
-    let notificationService: NotificationService
-    let mediaService: MediaService
-    let pomodoroService: PomodoroTimerService
+/// Small rounded count pill, matching the notification badge count style.
+private struct BadgeCountChip: View {
+    let text: String
 
     var body: some View {
-        let secondaryBadges = Array(items.dropFirst())
-        HStack(spacing: NotchConstants.badgeRowSpacing) {
-            ForEach(secondaryBadges) { item in
-                Button {
-                    onBadgeTap(item)
-                } label: {
-                    BadgeIconView(
-                        item: item, style: .row,
-                        notificationService: notificationService,
-                        mediaService: mediaService,
-                        pomodoroService: pomodoroService
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .transition(.asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.8)),
-            removal: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.8))
-        ))
-        .position(x: notchCenterX, y: notchCenterY)
+        Text(text)
+            .font(.system(size: 7, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 2)
+            .padding(.vertical, 0.5)
+            .background(NotchTheme.accent)
+            .clipShape(Capsule())
     }
 }
 
