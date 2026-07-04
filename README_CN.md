@@ -51,7 +51,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 - **全局快捷键** — 切换面板开关：在设置 → 快捷键里自行配置（默认无）。切换标签页默认 `⌥⌘1-5`。所有快捷键均可自定义，基于 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **自动切换** — 智能检测活跃服务（AI 工作中、音乐播放中）自动切到对应标签
 - **活动光晕** — AI/Agent 忙碌时（运行中或等待审批），展开的刘海下半内边缘会泛起一层应用主题橘色的柔和模糊光晕，到中部渐隐消失（不遮挡正文）
-- **完成闪光** — 当 AI 会话或 Agent 完成一轮任务（working→idle）时，NemoNotch 在所有屏幕边缘播放一次全屏橘色边缘光晕，并在刘海旁以 HUD 胶囊样式显示完成的项目/Agent 名称。短时间内的多次完成会节流合并，仅更新 Toast 而不重复播放闪光。可在设置中开关。
+- **完成闪光** — 当 AI 会话或 Agent 完成一轮任务（working→idle）时，NemoNotch 在所有屏幕边缘播放一次全屏橘色边缘光晕，并在屏幕下方居中显示一个更大的 Toast 胶囊（宽度随文字自适应），列出完成的项目/Agent 名称。番茄钟阶段结束提醒也复用同一个统一 Toast。短时间内的多次完成会节流合并，仅更新 Toast 而不重复播放闪光。可在设置中开关。
 
   <p align="center">
     <img src="docs/images/completion-flash.png" alt="完成闪光 — 全屏橘色边缘光晕 + 刘海旁完成提示 Toast" width="720">

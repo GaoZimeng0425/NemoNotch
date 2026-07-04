@@ -94,6 +94,21 @@ enum NotchConstants {
     /// Peak opacity of the edge glow at the top of the flash.
     static let completionGlowOpacity: Double = 0.9
 
+    /// Completion toast capsule — rendered in the full-screen flash overlay,
+    /// horizontally centered with its vertical center this fraction of the
+    /// screen height up from the bottom edge.
+    static let completionToastBottomFraction: CGFloat = 0.15
+    /// Toast capsule sizing (deliberately larger than the volume/brightness
+    /// HUD capsule — this is a full-screen completion alert, not a corner HUD).
+    /// The capsule hugs its text via horizontal padding; `maxWidth` is only an
+    /// upper bound that truncates very long names, not a fixed width.
+    static let completionToastHeight: CGFloat = 48
+    static let completionToastMaxWidth: CGFloat = 560
+    static let completionToastHPadding: CGFloat = 22
+    static let completionToastIconSize: CGFloat = 20
+    static let completionToastFontSize: CGFloat = 16
+    static let completionToastCountFontSize: CGFloat = 14
+
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///
     /// AF_UNIX socket files were previously used but proved unworkable on this

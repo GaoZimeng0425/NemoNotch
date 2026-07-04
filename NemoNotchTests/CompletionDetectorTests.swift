@@ -4,7 +4,11 @@ import Testing
 @Suite("CompletionDetector")
 struct CompletionDetectorTests {
     private func c(_ key: String, _ name: String, _ active: Bool) -> CompletionCandidate {
-        CompletionCandidate(key: key, name: name, isActive: active)
+        CompletionCandidate(key: key, name: name, isActive: active, source: .ai(.claude))
+    }
+
+    private func item(_ name: String, _ source: CompletionSource = .ai(.claude)) -> CompletionItem {
+        CompletionItem(name: name, source: source)
     }
 
     @Test("first sample never reports completions")
@@ -19,7 +23,15 @@ struct CompletionDetectorTests {
         var d = CompletionDetector()
         _ = d.step([c("ai:1", "Proj", true)])
         let result = d.step([c("ai:1", "Proj", false)])
-        #expect(result == ["Proj"])
+        #expect(result.map(\.name) == ["Proj"])
+    }
+
+    @Test("completed item carries its source")
+    func completedCarriesSource() {
+        var d = CompletionDetector()
+        _ = d.step([CompletionCandidate(key: "ai:1", name: "Proj", isActive: true, source: .ai(.gemini))])
+        let result = d.step([CompletionCandidate(key: "ai:1", name: "Proj", isActive: false, source: .ai(.gemini))])
+        #expect(result == [item("Proj", .ai(.gemini))])
     }
 
     @Test("idle staying idle does not report")
@@ -51,7 +63,7 @@ struct CompletionDetectorTests {
         var d = CompletionDetector()
         _ = d.step([c("ai:1", "A", true), c("agent:x", "B", true)])
         let result = d.step([c("ai:1", "A", false), c("agent:x", "B", false)])
-        #expect(Set(result) == ["A", "B"])
+        #expect(Set(result.map(\.name)) == ["A", "B"])
     }
 
     @Test("a removed session is not a completion")
@@ -62,9 +74,12 @@ struct CompletionDetectorTests {
         #expect(result.isEmpty)
     }
 
-    @Test("merge dedups preserving order")
+    @Test("merge dedups by name preserving order")
     func mergeDedups() {
-        let merged = CompletionFlashNames.merge(existing: ["A", "B"], new: ["B", "C"])
-        #expect(merged == ["A", "B", "C"])
+        let merged = CompletionFlashNames.merge(
+            existing: [item("A"), item("B")],
+            new: [item("B"), item("C")]
+        )
+        #expect(merged.map(\.name) == ["A", "B", "C"])
     }
 }

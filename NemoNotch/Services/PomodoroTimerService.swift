@@ -54,6 +54,8 @@ final class PomodoroTimerService {
     private let historyStore: PomodoroHistoryStore
     private let appSettings: AppSettings
     private let permissionMonitor: NotificationPermissionMonitor?
+    /// Optional so tests can construct the timer without the UI overlay stack.
+    private let completionFlash: CompletionFlashService?
 
     // MARK: - Privates
 
@@ -71,12 +73,14 @@ final class PomodoroTimerService {
         taskStore: TaskStore,
         historyStore: PomodoroHistoryStore,
         appSettings: AppSettings,
-        permissionMonitor: NotificationPermissionMonitor?
+        permissionMonitor: NotificationPermissionMonitor?,
+        completionFlash: CompletionFlashService? = nil
     ) {
         self.taskStore = taskStore
         self.historyStore = historyStore
         self.appSettings = appSettings
         self.permissionMonitor = permissionMonitor
+        self.completionFlash = completionFlash
         LogService.info("PomodoroTimerService init", category: "PomodoroTimer")
 
         sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -401,6 +405,11 @@ final class PomodoroTimerService {
 
         // 3. Notch ring pulse
         pulseToken = UUID()
+
+        // 4. Unified completion toast (bottom-center capsule, shared with
+        //    AI/agent completion). No full-screen flash — the pulse above is
+        //    Pomodoro's visual channel.
+        completionFlash?.showCompletionToast(names: [endAlertTitle(phase: phase)])
     }
 
     private func endAlertTitle(phase: PomodoroPhase) -> String {

@@ -72,9 +72,17 @@ final class CompletionFlashWindowController {
         }
     }
 
+    /// The single screen that renders the toast capsule: the built-in display
+    /// when present (matching `NotchView.isHUDScreen`), else the first screen.
+    private static func toastScreenID() -> UInt32? {
+        let target = NSScreen.screens.first(where: { $0.isBuiltInDisplay }) ?? NSScreen.screens.first
+        return target?.displayID
+    }
+
     private func makeWindow(for screen: NSScreen) -> CompletionFlashWindow {
         let window = CompletionFlashWindow(rect: screen.frame)
-        let host = NSHostingView(rootView: CompletionFlashView(service: service))
+        let showsToast = screen.displayID == Self.toastScreenID()
+        let host = NSHostingView(rootView: CompletionFlashView(service: service, showsToast: showsToast))
         host.frame = NSRect(origin: .zero, size: screen.frame.size)
         host.wantsLayer = true
         host.layer?.backgroundColor = .clear

@@ -14,7 +14,6 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
     @Environment(PomodoroTimerService.self) var pomodoroService
-    @Environment(CompletionFlashService.self) var completionFlash
 
     private var hardwareNotchSize: NSSize {
         coordinator.notchSize
@@ -149,18 +148,6 @@ struct NotchView: View {
                     )
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
-            // Completion toast — reuses the HUD anchor/position, only on the
-            // HUD screen. Rendered above the HUD overlay if both are visible.
-            if isHUDScreen, completionFlash.toastVisible, !completionFlash.toastNames.isEmpty {
-                CompletionToastView(names: completionFlash.toastNames)
-                    .zIndex(4)
-                    .position(
-                        x: notchCenterX,
-                        y: hardwareNotchSize.height + NotchConstants.hudTopPadding + NotchConstants.hudHeight / 2
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
         .onAppear { initializeBadgeViewModel() }
         .onChange(of: badgeViewModel?.activeBadgeItems ?? []) { _, newTypes in
@@ -170,10 +157,6 @@ struct NotchView: View {
             badgeViewModel?.checkApprovalSound(isOpen: effectiveStatus == .opened)
         }
         .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
-        .animation(
-            .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
-            value: completionFlash.toastVisible
-        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .environment(\.locale, appSettings.currentLocale)

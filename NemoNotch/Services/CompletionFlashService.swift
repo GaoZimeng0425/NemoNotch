@@ -11,8 +11,8 @@ final class CompletionFlashService {
     /// Drives the edge-glow level, 0...1 (scaled by `completionGlowOpacity` in
     /// the view). Animated through the double-pulse curve inside `withAnimation`.
     private(set) var flashLevel: Double = 0
-    /// Project/agent names shown in the current toast.
-    private(set) var toastNames: [String] = []
+    /// Finished units (name + source logo) shown in the current toast.
+    private(set) var toastItems: [CompletionItem] = []
     /// Whether the toast is currently shown.
     private(set) var toastVisible = false
 
@@ -54,7 +54,8 @@ final class CompletionFlashService {
                 key: "ai:\(session.id)",
                 name: session.projectFolder ?? session.displayTitle,
                 // Active == .working only; a session merely .waiting is not "working".
-                isActive: session.status == .working
+                isActive: session.status == .working,
+                source: .ai(session.source)
             ))
         }
         for monitor in registry.installedMonitors {
@@ -62,7 +63,8 @@ final class CompletionFlashService {
                 result.append(CompletionCandidate(
                     key: "agent:\(agent.id)",
                     name: agent.name,
-                    isActive: agent.state != .idle
+                    isActive: agent.state != .idle,
+                    source: .agent
                 ))
             }
         }
@@ -94,8 +96,27 @@ final class CompletionFlashService {
             LogService.debug("Completion ignored — flash disabled", category: "CompletionFlash")
             return
         }
-        LogService.debug("Completion detected: \(completed)", category: "CompletionFlash")
-        handle(names: completed)
+        LogService.debug("Completion detected: \(completed.map(\.name))", category: "CompletionFlash")
+        handle(items: completed)
+    }
+
+    // MARK: - External toast (no flash)
+
+    /// Show the unified completion toast without firing the full-screen edge
+    /// glow — used by the Pomodoro end alert, whose visual channel is the notch
+    /// ring pulse rather than the glow. Merges into a visible toast if one is
+    /// up. Deliberately leaves the flash cooldown untouched so it can never
+    /// swallow a subsequent AI/agent flash.
+    func showCompletionToast(names: [String]) {
+        guard settings.completionFlashEnabled else {
+            LogService.debug("Completion toast ignored — completion flash disabled", category: "CompletionFlash")
+            return
+        }
+        let items = names.map { CompletionItem(name: $0, source: .pomodoro) }
+        let base = toastVisible ? toastItems : []
+        toastItems = CompletionFlashNames.merge(existing: base, new: items)
+        showToast()
+        LogService.debug("Completion toast shown (no flash): \(toastItems.map(\.name))", category: "CompletionFlash")
     }
 
     // MARK: - UI test
@@ -104,21 +125,22 @@ final class CompletionFlashService {
     /// given names, with no auto-reset/cooldown. Only used under `--uitest --flash`.
     func holdForUITest(names: [String]) {
         flashLevel = 1
-        toastNames = names
+        // Show a Claude-sourced item so the screenshot demonstrates the source logo.
+        toastItems = names.map { CompletionItem(name: $0, source: .ai(.claude)) }
         toastVisible = true
         LogService.debug("Flash held for UI test: \(names)", category: "CompletionFlash")
     }
 
     // MARK: - Throttle / merge
 
-    private func handle(names: [String]) {
+    private func handle(items: [CompletionItem]) {
         if inCooldown {
-            toastNames = CompletionFlashNames.merge(existing: toastNames, new: names)
+            toastItems = CompletionFlashNames.merge(existing: toastItems, new: items)
             restartToastDismiss()
-            LogService.debug("Merged into active toast: \(toastNames)", category: "CompletionFlash")
+            LogService.debug("Merged into active toast: \(toastItems.map(\.name))", category: "CompletionFlash")
         } else {
             triggerFlash()
-            toastNames = CompletionFlashNames.merge(existing: [], new: names)
+            toastItems = CompletionFlashNames.merge(existing: [], new: items)
             showToast()
             startCooldown()
         }
