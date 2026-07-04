@@ -10,11 +10,50 @@ import SwiftUI
 /// service through the double-pulse curve). Purely visual — never intercepts events.
 struct CompletionFlashView: View {
     let service: CompletionFlashService
+    /// Only one screen renders the toast (the built-in/primary display) so a
+    /// multi-monitor setup doesn't show a duplicate capsule per screen. The
+    /// edge glow still flashes every screen.
+    var showsToast: Bool = true
 
     /// Warm near-white center — the "hot" core of the neon tube.
     private static let core = Color(red: 1.0, green: 0.93, blue: 0.82)
 
     var body: some View {
+        ZStack {
+            glow
+                .opacity(NotchConstants.completionGlowOpacity * service.flashLevel)
+                .allowsHitTesting(false)
+                .ignoresSafeArea()
+
+            if showsToast {
+                toast
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    /// The unified completion capsule, horizontally centered with its vertical
+    /// center at `completionToastBottomFraction` of the screen height up from
+    /// the bottom edge. Fades/slides in on `service.toastVisible`.
+    private var toast: some View {
+        GeometryReader { geo in
+            if service.toastVisible, !service.toastItems.isEmpty {
+                CompletionToastView(items: service.toastItems)
+                    .position(
+                        x: geo.size.width / 2,
+                        y: geo.size.height * (1 - NotchConstants.completionToastBottomFraction)
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(
+            .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
+            value: service.toastVisible
+        )
+    }
+
+    private var glow: some View {
         ZStack {
             // Wide ambient bloom — the glow spilling softly inward from the edge.
             edge(
@@ -46,9 +85,6 @@ struct CompletionFlashView: View {
                 opacity: 1
             )
         }
-        .opacity(NotchConstants.completionGlowOpacity * service.flashLevel)
-        .allowsHitTesting(false)
-        .ignoresSafeArea()
     }
 
     /// One additive edge stroke: a blurred rectangle border, `.screen`-blended

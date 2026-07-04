@@ -178,7 +178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             taskStore: tasks,
             historyStore: history,
             appSettings: settings,
-            permissionMonitor: notificationPermission
+            permissionMonitor: notificationPermission,
+            completionFlash: completionFlash
         )
         taskStore = tasks
         historyStore = history
