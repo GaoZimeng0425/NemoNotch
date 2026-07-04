@@ -18,10 +18,12 @@ enum NotchConstants {
     /// empty. Absorbs momentary idle dips (e.g. an agent briefly returning to
     /// .idle between tool calls) so the right-edge badge doesn't slide in/out.
     static let badgeEmptyGrace: Duration = .milliseconds(600)
-
-    // Badge row
-    static let badgeRowHeight: CGFloat = 24
-    static let badgeRowSpacing: CGFloat = 10
+    /// Max badge groups shown collapsed; extras fold into a "+K" chip.
+    static let badgeGroupCap: Int = 4
+    /// Horizontal step between overlapping left logos (smaller than a logo → fan overlap).
+    static let badgeStackStep: CGFloat = 11
+    /// Horizontal step between right-side status indicators.
+    static let badgeStatusStep: CGFloat = 15
 
     // Badge layout
     static let closedWidthInset: CGFloat = 4

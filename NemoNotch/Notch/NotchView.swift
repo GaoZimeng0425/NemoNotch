@@ -65,12 +65,10 @@ struct NotchView: View {
         switch effectiveStatus {
         case .closed:
             let hasBadge = badgeViewModel?.shownHasActiveBadge ?? false
-            let multiBadges = badgeViewModel?.hasMultipleBadges ?? false
             let extraWidth: CGFloat = hasBadge ? NotchConstants.badgePadding * 2 : 0
-            let extraHeight: CGFloat = (multiBadges && hasBadge) ? NotchConstants.badgeRowHeight : 0
             return CGSize(
                 width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
-                height: hardwareNotchSize.height + extraHeight
+                height: hardwareNotchSize.height
             )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
@@ -86,7 +84,6 @@ struct NotchView: View {
 
     var body: some View {
         let shown = badgeViewModel?.shownHasActiveBadge ?? false
-        let items = badgeViewModel?.displayedBadgeItems ?? []
 
         ZStack(alignment: .top) {
             notchShape(shown: shown)
@@ -102,7 +99,7 @@ struct NotchView: View {
 
             if effectiveStatus == .closed {
                 CompactBadgesView(
-                    items: items,
+                    cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
                     shownHasActiveBadge: shown,
                     notchLeftEdge: notchLeftEdge,
                     notchRightEdge: notchRightEdge,
@@ -113,20 +110,6 @@ struct NotchView: View {
                     pomodoroService: pomodoroService
                 )
                 .zIndex(1)
-
-                if badgeViewModel?.hasMultipleBadges == true {
-                    BadgeRowView(
-                        items: items,
-                        notchCenterX: notchCenterX,
-                        notchCenterY: hardwareNotchSize.height + NotchConstants.badgeRowHeight / 2,
-                        onBadgeTap: handleBadgeTap,
-                        notificationService: notificationService,
-                        mediaService: mediaService,
-                        pomodoroService: pomodoroService
-                    )
-                    .zIndex(1)
-                    .opacity(shown ? 1 : 0)
-                }
             }
 
             contentPanel

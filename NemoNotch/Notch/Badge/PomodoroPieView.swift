@@ -2,7 +2,6 @@ import SwiftUI
 
 enum PomodoroPieStyle {
     case badge // 14pt; thin background ring
-    case row // 12pt; same look as badge, smaller
     case compact // 22pt; inline use in the active row
 }
 
@@ -14,7 +13,6 @@ struct PomodoroPieView: View {
     private var size: CGFloat {
         switch style {
         case .badge: return 14
-        case .row: return 12
         case .compact: return 22
         }
     }
@@ -22,7 +20,6 @@ struct PomodoroPieView: View {
     private var ringLineWidth: CGFloat {
         switch style {
         case .badge: return 2.5
-        case .row: return 2
         case .compact: return 4
         }
     }

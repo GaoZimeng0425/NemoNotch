@@ -99,8 +99,9 @@ final class BadgeViewModel {
         !activeBadgeItems.isEmpty
     }
 
-    var hasMultipleBadges: Bool {
-        displayedBadgeItems.count >= 2
+    /// Display-ready grouped/capped layout for the collapsed compact badges.
+    var badgeCluster: BadgeCluster {
+        BadgeGrouping.cluster(displayedBadgeItems, cap: NotchConstants.badgeGroupCap)
     }
 
     /// Activity glow for the expanded notch: amber while a session awaits
