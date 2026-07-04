@@ -22,6 +22,9 @@ case "${1:-}" in
 esac
 echo "==> Target architecture: $ARCH"
 
+# Arch-suffixed DMG so --arm and --x86 builds don't overwrite each other.
+DMG_NAME="$DMG_NAME-$ARCH"
+
 # Clean previous build
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
