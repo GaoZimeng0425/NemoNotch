@@ -177,7 +177,8 @@ enum HookInstaller {
 
     static func uninstall(_ target: HookTarget) throws {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["hooks"] is [String: Any] else {
             return
         }
         let settings = applyUninstall(json, target: target)
