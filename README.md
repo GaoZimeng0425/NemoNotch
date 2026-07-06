@@ -37,7 +37,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 | Tab | Description |
 |-----|-------------|
 | **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous/seek), album artwork, progress bar — works with any player that reports Now Playing (Apple Music, Spotify, browsers, Podcasts, NetEase Music, …) via a Perl bridge to the system media controls; **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, 3-hour hourly forecast |
-| **AI Chat** | Unified Claude Code, Gemini CLI & opencode monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
+| **AI Chat** | Unified Claude Code, Gemini CLI, opencode & zcode monitoring — session list, conversation details, permission approval, context usage bar, subagent tracking, model display |
 | **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
 | **Launcher** | App icon grid, search filter, quick-launch custom app list |
 | **Pomodoro** | Classic 25/5/15 cycle with persistent TODO list, per-task completed-pomodoro counts, hotkey-summoned centered QuickStart panel, end-of-phase sound + system notification, collapsed-notch 🍅 + remaining-time pie |
@@ -46,7 +46,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 ### Highlights
 
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
-- **Multi-AI Provider** — Unified interface for Claude Code, Gemini CLI, and opencode with hook event listening, session tracking, and permission interception. opencode integrates via a NemoNotch-written plugin (`~/.config/opencode/plugin/nemonotch-notify.ts`) that POSTs lifecycle events to NemoNotch's hook server — badge, completion flash, toast, and AI tab status card all work automatically
+- **Multi-AI Provider** — Unified interface for Claude Code, Gemini CLI, opencode, and zcode with hook event listening, session tracking, and permission interception. opencode integrates via a NemoNotch-written plugin (`~/.config/opencode/plugin/nemonotch-notify.ts`) that POSTs lifecycle events to NemoNotch's hook server — badge, completion flash, toast, and AI tab status card all work automatically. zcode (GLM-based, Claude-Code-compatible) reuses Claude's hook pipeline directly (no plugin needed) — notify + live status only, no conversation/token parsing or notch-side approval
 - **AI usage quota** — shows your Claude Code, Codex, and Gemini usage quotas (utilization % + reset countdown) as a card in the AI tab, read from each CLI's OAuth credential. The Codex and Gemini sections appear automatically when those CLIs are signed in.
 - **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
