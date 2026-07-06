@@ -12,7 +12,10 @@ enum NotchConstants {
     static let clickHitboxInset: CGFloat = 10
 
     // Badge
-    static let badgePadding: CGFloat = 36
+    /// Breathing room past the furthest-fanned badge's center, added on each
+    /// side when sizing the collapsed black shape so it fully contains the fan.
+    /// Chosen so a single badge yields the historical +72pt total width.
+    static let badgeEdgeMargin: CGFloat = 20
     static let badgeSpread: CGFloat = 14
     /// Grace delay before collapsing the compact badges when activity drops to
     /// empty. Absorbs momentary idle dips (e.g. an agent briefly returning to

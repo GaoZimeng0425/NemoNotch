@@ -63,15 +63,32 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
-            let hasBadge = badgeViewModel?.shownHasActiveBadge ?? false
-            let extraWidth: CGFloat = hasBadge ? NotchConstants.badgePadding * 2 : 0
             return CGSize(
-                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + extraWidth,
+                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + closedBadgeExtraWidth,
                 height: hardwareNotchSize.height
             )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         }
+    }
+
+    /// Extra collapsed-shape width needed so the black notch fully contains the
+    /// fanned compact badges. The fans extend outward from the notch edges by
+    /// `badgeSpread + index * step` per group (`CompactBadgesView`), so the
+    /// shape must grow with the group count — a fixed padding left multi-group
+    /// fans overflowing the shape. Symmetric about center; covers the wider of
+    /// the two wings. A single badge yields the historical +72pt.
+    private var closedBadgeExtraWidth: CGFloat {
+        guard let vm = badgeViewModel, vm.shownHasActiveBadge else { return 0 }
+        let cluster = vm.badgeCluster
+        let leftSlots = cluster.groups.count + (cluster.overflow > 0 ? 1 : 0)
+        let rightSlots = cluster.groups.count
+        let leftExtent = NotchConstants.badgeSpread
+            + CGFloat(max(0, leftSlots - 1)) * NotchConstants.badgeStackStep
+        let rightExtent = NotchConstants.badgeSpread
+            + CGFloat(max(0, rightSlots - 1)) * NotchConstants.badgeStatusStep
+        let halfExtension = max(leftExtent, rightExtent) + NotchConstants.badgeEdgeMargin
+        return NotchConstants.closedWidthInset + 2 * halfExtension
     }
 
     private var notchCornerRadius: CGFloat {
