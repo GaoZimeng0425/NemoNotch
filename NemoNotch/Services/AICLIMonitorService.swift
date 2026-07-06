@@ -144,7 +144,8 @@ final class AICLIMonitorService {
         geminiProvider.isHookInstalled = HookInstaller.isInstalled(.gemini)
         try? OpencodePluginInstaller.install()
         opencodeProvider.isHookInstalled = OpencodePluginInstaller.isInstalled
-        if FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.zcode/cli/config.json") {
+        let zcodeEnabled = UserDefaults.standard.object(forKey: AppSettings.zcodeEnabledKey) as? Bool ?? true
+        if zcodeEnabled, FileManager.default.fileExists(atPath: HookTarget.zcode.settingsPath) {
             try? HookInstaller.install(.zcode)
         }
         zcodeProvider.isHookInstalled = HookInstaller.isInstalled(.zcode)

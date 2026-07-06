@@ -43,4 +43,19 @@ struct ZcodeHookInstallerTests {
         #expect(stop?.count == 1)
         #expect(settings["mcp"] != nil)
     }
+
+    @Test func flatTargetInstallWritesFlatHooksAndUninstallClears() throws {
+        var settings: [String: Any] = [:]
+        settings = HookInstaller.applyInstall(settings, target: .claude, command: "~/\(cmdSuffix)")
+        let hooks = try #require(settings["hooks"] as? [String: Any])
+        // Flat target: entries live directly under hooks.<Event>, NOT nested under events/enabled.
+        #expect(hooks["events"] == nil)
+        #expect(hooks["enabled"] == nil)
+        #expect(hooks["PreToolUse"] != nil)
+        #expect(HookInstaller.detectInstalled(settings, target: .claude) == true)
+
+        settings = HookInstaller.applyUninstall(settings, target: .claude)
+        #expect(HookInstaller.detectInstalled(settings, target: .claude) == false)
+        #expect(settings["hooks"] == nil) // hooks key removed when empty
+    }
 }

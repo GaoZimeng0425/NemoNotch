@@ -24,6 +24,18 @@ struct ZcodeProviderTests {
         #expect(store.get(sid)?.status == .waiting)
     }
 
+    @Test func notificationWaitsAndSessionEndRemoves() {
+        let store = AISessionStore()
+        let provider = ZcodeProvider(store: store)
+        let sid = "sess_notif"
+        provider.handleEvent(event(#"{"hook_event_name":"SessionStart","session_id":"\#(sid)"}"#))
+        provider.handleEvent(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
+        provider.handleEvent(event(#"{"hook_event_name":"Notification","session_id":"\#(sid)"}"#))
+        #expect(store.get(sid)?.status == .waiting)
+        provider.handleEvent(event(#"{"hook_event_name":"SessionEnd","session_id":"\#(sid)"}"#))
+        #expect(store.get(sid) == nil)
+    }
+
     @Test func preToolUseRecordsTool() {
         let store = AISessionStore()
         let provider = ZcodeProvider(store: store)
