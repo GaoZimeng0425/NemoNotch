@@ -24,8 +24,8 @@ enum HookTarget {
                 "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
             ]
         case .zcode: return [
-                "SessionStart", "SessionEnd", "UserPromptSubmit",
-                "PreToolUse", "PostToolUse", "Stop", "Notification",
+                "SessionStart", "UserPromptSubmit", "PreToolUse",
+                "PostToolUse", "PostToolUseFailure", "Stop",
             ]
         }
     }

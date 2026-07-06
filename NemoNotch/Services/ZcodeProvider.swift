@@ -90,9 +90,13 @@ final class ZcodeProvider: AIProvider {
                 s.lastEventTime = now
             }
 
-        case "Notification":
+        // A failed tool call still ends that tool; the agent gets the error and
+        // keeps working, so treat it like PostToolUse (back to processing).
+        case "PostToolUseFailure":
             store.mutateOrCreate(sessionId, source: .zcode) { s in
-                s.phase = s.phase.transition(to: .waitingForInput)
+                s.phase = s.phase.transition(to: .processing)
+                s.currentTool = nil
+                s.isPreToolUse = false
                 self.applyContext(to: &s, event: event)
                 s.lastEventTime = now
             }
@@ -106,9 +110,8 @@ final class ZcodeProvider: AIProvider {
                 s.lastEventTime = now
             }
 
-        case "SessionEnd":
-            store.remove(sessionId)
-
+        // zcode has no SessionEnd or Notification event (only SessionStart);
+        // ended sessions are reaped by the stale-session timeout below.
         default:
             break
         }

@@ -24,16 +24,30 @@ struct ZcodeProviderTests {
         #expect(store.get(sid)?.status == .waiting)
     }
 
-    @Test func notificationWaitsAndSessionEndRemoves() {
+    @Test func postToolUseFailureReturnsToProcessingAndClearsTool() {
         let store = AISessionStore()
         let provider = ZcodeProvider(store: store)
-        let sid = "sess_notif"
-        provider.handleEvent(event(#"{"hook_event_name":"SessionStart","session_id":"\#(sid)"}"#))
+        let sid = "sess_fail"
+        provider.handleEvent(event(#"{"hook_event_name":"PreToolUse","session_id":"\#(sid)","tool_name":"Bash"}"#))
+        #expect(store.get(sid)?.currentTool == "Bash")
+        provider
+            .handleEvent(event(#"{"hook_event_name":"PostToolUseFailure","session_id":"\#(sid)","tool_name":"Bash"}"#))
+        #expect(store.get(sid)?.currentTool == nil)
+        #expect(store.get(sid)?.status == .working)
+    }
+
+    /// zcode emits neither Notification nor SessionEnd — such events must be
+    /// ignored (no phantom state change, no removal), leaving cleanup to timeout.
+    @Test func unsupportedEventsAreIgnored() {
+        let store = AISessionStore()
+        let provider = ZcodeProvider(store: store)
+        let sid = "sess_unsupported"
         provider.handleEvent(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
+        #expect(store.get(sid)?.status == .working)
         provider.handleEvent(event(#"{"hook_event_name":"Notification","session_id":"\#(sid)"}"#))
-        #expect(store.get(sid)?.status == .waiting)
+        #expect(store.get(sid)?.status == .working) // unchanged — Notification not handled
         provider.handleEvent(event(#"{"hook_event_name":"SessionEnd","session_id":"\#(sid)"}"#))
-        #expect(store.get(sid) == nil)
+        #expect(store.get(sid) != nil) // still present — SessionEnd not handled
     }
 
     @Test func preToolUseRecordsTool() {
