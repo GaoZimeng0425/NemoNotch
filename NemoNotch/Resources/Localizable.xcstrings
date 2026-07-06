@@ -1100,6 +1100,22 @@
         }
       }
     },
+    "menu.install_zcode_hooks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install zcode hooks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装 zcode 钩子"
+          }
+        }
+      }
+    },
     "menu.next_track" : {
       "localizations" : {
         "en" : {

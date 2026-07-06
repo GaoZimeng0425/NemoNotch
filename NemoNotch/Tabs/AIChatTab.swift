@@ -47,8 +47,15 @@ struct AIChatTab: View {
         )
     }
 
+    private var zcodeKind: ProviderCardKind {
+        Self.kind(
+            enabled: appSettings.zcodeEnabled,
+            installed: aiService.zcodeProvider.isHookInstalled
+        )
+    }
+
     private var hasAnyReadyProvider: Bool {
-        claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready
+        claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready || zcodeKind == .ready
     }
 
     private static func kind(enabled: Bool, installed: Bool) -> ProviderCardKind {
@@ -83,8 +90,12 @@ struct AIChatTab: View {
         allSessions.count(where: { $0.source == .opencode })
     }
 
+    private var zcodeCount: Int {
+        allSessions.count(where: { $0.source == .zcode })
+    }
+
     private var hasMixedSources: Bool {
-        [claudeCount, geminiCount, opencodeCount].count(where: { $0 > 0 }) > 1
+        [claudeCount, geminiCount, opencodeCount, zcodeCount].count(where: { $0 > 0 }) > 1
     }
 
     private var dominantSource: AISource? {
@@ -110,6 +121,7 @@ struct AIChatTab: View {
             claudeCount > 0 ? "Claude \(claudeCount)" : nil,
             geminiCount > 0 ? "Gemini \(geminiCount)" : nil,
             opencodeCount > 0 ? "opencode \(opencodeCount)" : nil,
+            zcodeCount > 0 ? "zcode \(zcodeCount)" : nil,
         ].compactMap(\.self) : []
 
         let activeParts = [
@@ -208,6 +220,13 @@ struct AIChatTab: View {
                 appSettings.opencodeEnabled = true
                 if !aiService.opencodeProvider.isHookInstalled {
                     aiService.opencodeProvider.installHooks()
+                }
+            }
+            Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
+            providerStatusRow(source: .zcode, name: "zcode", kind: zcodeKind) {
+                appSettings.zcodeEnabled = true
+                if !aiService.zcodeProvider.isHookInstalled {
+                    aiService.zcodeProvider.installHooks()
                 }
             }
         }

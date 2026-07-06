@@ -309,6 +309,22 @@ struct SettingsView: View {
                     }
                 )
 
+                // zcode
+                hookCard(
+                    name: "zcode",
+                    tint: Self.zcodeTint,
+                    isInstalled: aiService.zcodeProvider.isHookInstalled,
+                    logo: { ZcodeLogoIcon(size: 19, color: Self.zcodeTint) },
+                    onInstall: {
+                        appSettings.zcodeEnabled = true
+                        aiService.zcodeProvider.installHooks()
+                    },
+                    onUninstall: {
+                        appSettings.zcodeEnabled = false
+                        aiService.zcodeProvider.uninstallHooks()
+                    }
+                )
+
                 // Hermes Agent
                 hookCard(
                     name: "Hermes Agent",
@@ -397,6 +413,7 @@ struct SettingsView: View {
     private static let claudeTint = Color(red: 0.93, green: 0.49, blue: 0.19)
     private static let geminiTint = Color(red: 0.26, green: 0.52, blue: 0.96)
     private static let opencodeTint = Color(red: 0.30, green: 0.66, blue: 0.40)
+    private static let zcodeTint = Color(red: 0.11, green: 0.44, blue: 0.96)
     private static let hermesTint = Color(red: 0.52, green: 0.43, blue: 0.92)
     private static let openClawTint = Color(red: 0.14, green: 0.62, blue: 0.60)
 
