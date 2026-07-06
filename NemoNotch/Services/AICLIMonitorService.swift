@@ -72,6 +72,7 @@ final class AICLIMonitorService {
         case .claude: claudeProvider.respondToPermission(sessionId: sessionId, approved: approved)
         case .gemini: geminiProvider.respondToPermission(sessionId: sessionId, approved: approved)
         case .opencode: opencodeProvider.respondToPermission(sessionId: sessionId, approved: approved)
+        case .zcode: break // zcode not yet wired to a provider (see Task 5/6)
         }
     }
 
@@ -117,6 +118,7 @@ final class AICLIMonitorService {
                 case .gemini: geminiProvider.handleEvent(event)
                 case .claude: claudeProvider.handleEvent(event)
                 case .opencode: opencodeProvider.handleEvent(event)
+                case .zcode: break // zcode not yet wired to a provider (see Task 5/6)
                 }
             } else {
                 claudeProvider.handleEvent(event)

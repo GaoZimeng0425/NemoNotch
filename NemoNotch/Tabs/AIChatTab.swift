@@ -21,6 +21,7 @@ struct AIChatTab: View {
             case .claude: return appSettings.claudeEnabled
             case .gemini: return appSettings.geminiEnabled
             case .opencode: return appSettings.opencodeEnabled
+            case .zcode: return appSettings.zcodeEnabled
             }
         }
     }
@@ -99,6 +100,7 @@ struct AIChatTab: View {
         case .claude: "Claude Code"
         case .gemini: "Gemini CLI"
         case .opencode: "opencode"
+        case .zcode: "zcode"
         case .none: "AI Sessions"
         }
     }
@@ -425,6 +427,8 @@ struct AIChatTab: View {
                             .foregroundStyle(.white)
                     case .opencode:
                         OpencodeLogoIcon(size: 22, color: .white)
+                    case .zcode:
+                        ZcodeLogoIcon(size: 22, color: .white)
                     }
                 } else {
                     HStack(spacing: 0) {
@@ -710,6 +714,8 @@ struct AIChatTab: View {
                 .foregroundStyle(sourceTint(source))
         case .opencode:
             OpencodeLogoIcon(size: size, color: sourceTint(source))
+        case .zcode:
+            ZcodeLogoIcon(size: size, color: sourceTint(source))
         }
     }
 
@@ -768,6 +774,7 @@ struct AIChatTab: View {
         case .claude: "Claude"
         case .gemini: "Gemini"
         case .opencode: "opencode"
+        case .zcode: "zcode"
         }
     }
 
@@ -776,6 +783,7 @@ struct AIChatTab: View {
         case .claude: "C"
         case .gemini: "G"
         case .opencode: "O"
+        case .zcode: "Z"
         }
     }
 
@@ -784,6 +792,7 @@ struct AIChatTab: View {
         case .claude: NotchTheme.accentText
         case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
         case .opencode: Color(red: 0.55, green: 0.78, blue: 0.55)
+        case .zcode: Color(red: 0.11, green: 0.44, blue: 0.96)
         }
     }
 

@@ -129,6 +129,8 @@ struct BadgeIconView: View {
                 .foregroundStyle(.blue)
         case .opencode:
             OpencodeLogoIcon(size: 13, color: Color(red: 0.55, green: 0.78, blue: 0.55))
+        case .zcode:
+            ZcodeLogoIcon(size: 13, color: Color(red: 0.11, green: 0.44, blue: 0.96))
         }
     }
 

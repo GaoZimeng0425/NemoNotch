@@ -44,6 +44,7 @@ final class BadgeViewModel {
             case .claude: appSettings.claudeEnabled
             case .gemini: appSettings.geminiEnabled
             case .opencode: appSettings.opencodeEnabled
+            case .zcode: appSettings.zcodeEnabled
             }
             return providerEnabled && (session.phase.isActive || session.phase.needsAttention)
         }
