@@ -30,4 +30,24 @@ struct AISourceRoutingTests {
         service.hookServer.onEventReceived?(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
         #expect(service.store.get(sid)?.source == .opencode)
     }
+
+    /// zcode: an explicit cli_source routes to zcode.
+    @Test func taggedZcodeEventRoutesToZcode() {
+        let service = AICLIMonitorService()
+        let sid = "sess_zc_tagged"
+        service.hookServer
+            .onEventReceived?(
+                event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)","cli_source":"zcode"}"#)
+            )
+        #expect(service.store.get(sid)?.source == .zcode)
+    }
+
+    /// zcode: an untagged event for a `sess_`-prefixed session routes to zcode,
+    /// not Claude. (`sess_` is distinct from opencode's `ses_`.)
+    @Test func untaggedZcodeSessionRoutesToZcode() {
+        let service = AICLIMonitorService()
+        let sid = "sess_zc_untagged"
+        service.hookServer.onEventReceived?(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
+        #expect(service.store.get(sid)?.source == .zcode)
+    }
 }
