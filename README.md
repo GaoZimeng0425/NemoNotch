@@ -112,28 +112,22 @@ NemoNotch draws inspiration from the following open-source projects:
 
 ### Media & Playback
 
-- [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote framework integration, media key interception
-- [**Tuneful**](https://github.com/martinfekete10/Tuneful) — Now playing info & UI
-- [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — CLI tool for now playing info
 - [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — Perl bridge for media control on macOS 15.4+ (bypasses the private-API signature gate)
 
 ### Window Management & Shortcuts
 
 - [**Loop**](https://github.com/MrKai77/Loop) — Global hotkey registration, window operations
-- [**DSFQuickActionBar**](https://github.com/dagronf/DSFQuickActionBar) — Floating search bar component
 
 ### Display & System Monitoring
 
 - [**MonitorControl**](https://github.com/MonitorControl/MonitorControl) — Display brightness reading via DisplayServices API
 
-### Menu Bar & System Tools
+### System Tools
 
 - [**eul**](https://github.com/gao-sun/eul) — Menu bar architecture, Combine reactive patterns
-- [**menubar_runcat**](https://github.com/Kyome22/menubar_runcat) — Menu bar status animation
 
-### Launcher & UI Components
+### UI Components
 
-- [**sol**](https://github.com/ospfranco/sol) — App launcher architecture
 - [**Luminare**](https://github.com/MrKai77/Luminare) — SwiftUI component library & design language
 
 ### AI & Desktop Integration
