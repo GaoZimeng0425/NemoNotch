@@ -112,28 +112,22 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 
 ### 媒体与播放控制
 
-- [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote 框架集成、媒体键拦截
-- [**Tuneful**](https://github.com/martinfekete10/Tuneful) — 播放信息获取与 UI 展示
-- [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — 命令行获取播放信息
 - [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — macOS 15.4+ 媒体控制的 Perl 桥（绕过私有 API 签名限制）
 
 ### 窗口管理与快捷键
 
 - [**Loop**](https://github.com/MrKai77/Loop) — 全局快捷键注册、窗口操作引擎
-- [**DSFQuickActionBar**](https://github.com/dagronf/DSFQuickActionBar) — 浮动搜索栏组件
 
 ### 显示器与系统监控
 
 - [**MonitorControl**](https://github.com/MonitorControl/MonitorControl) — 通过 DisplayServices API 读取屏幕亮度
 
-### 菜单栏与系统工具
+### 系统工具
 
 - [**eul**](https://github.com/gao-sun/eul) — 菜单栏架构设计、Combine 响应式模式
-- [**menubar_runcat**](https://github.com/Kyome22/menubar_runcat) — 菜单栏状态动画
 
-### 启动器与 UI 组件
+### UI 组件
 
-- [**sol**](https://github.com/ospfranco/sol) — 应用启动器架构
 - [**Luminare**](https://github.com/MrKai77/Luminare) — SwiftUI 组件库与设计语言
 
 ### AI 与桌面集成

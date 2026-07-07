@@ -25,6 +25,14 @@ echo "==> Target architecture: $ARCH"
 # Arch-suffixed DMG so --arm and --x86 builds don't overwrite each other.
 DMG_NAME="$DMG_NAME-$ARCH"
 
+# Version from the latest release tag globally (v0.5.4 -> 0.5.4) so local DMGs
+# carry a real version instead of pbxproj's dev placeholder; build number =
+# commit count. Falls back to 0.0.0 when the repo has no tag yet.
+VERSION="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 | sed 's/^v//')"
+VERSION="${VERSION:-0.0.0}"
+BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+echo "==> Version: $VERSION (build $BUILD_NUMBER)"
+
 # Clean previous build
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -38,6 +46,8 @@ xcodebuild archive \
   -destination 'platform=macOS' \
   ARCHS="$ARCH" \
   ONLY_ACTIVE_ARCH=NO \
+  MARKETING_VERSION="$VERSION" \
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \

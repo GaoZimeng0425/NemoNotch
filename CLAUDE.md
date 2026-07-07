@@ -358,6 +358,7 @@ Workflow:
 **Enforced guards (per-clone, run once: `sh .githooks/install.sh`):** Source lives in `.githooks/` and is copied into the shared `.git` dir so it stays active across every branch and worktree. The guards make the rules above mechanical:
 
 - `pre-commit` / `pre-merge-commit` hooks: **block any commit or merge on `main`** (PR-only; locally use `git pull --ff-only`), and only allow `feature/*` / `hotfix/*` (or `origin/develop` self-sync) to merge into `develop`. Direct commits to `develop` stay allowed. Bypass with `--no-verify` in emergencies.
+- `pre-commit` also **normalizes any staged `*.xcstrings`** via `scripts/xcstrings.py format` (re-adds it), so String Catalog edits from Xcode's GUI, the script, or by hand all commit in Xcode's canonical format with a minimal diff — see [Localization](#localization-string-catalog).
 - Config: `pull.ff=only` (main never silently diverges), `branch.develop.rebase=true`, `branch.develop.mergeoptions=--no-ff` (feature merges keep a merge commit).
 
 **Worktree workflow (parallel features):** `git feat <name>` creates `feature/<name>` off `origin/develop` in a sibling worktree at `../NemoNotch-worktrees/<name>`; `git feat-done <name>` merges it back to `develop` (`--no-ff`) and tears the worktree down; `git feat-list` shows all worktrees. See `docs/git-worktree-workflow.md`.
@@ -368,6 +369,16 @@ Workflow:
 - Test pure logic — parsers, encoders, state transitions. Skip ScriptingBridge / AX / NSWindow integration tests (they need real macOS permissions and are flaky in CI).
 - Run locally: `xcodebuild test -project NemoNotch.xcodeproj -scheme NemoNotch -destination 'platform=macOS'`.
 - New tests must pass before merging to `develop`.
+
+### Localization (String Catalog)
+
+All UI strings live in `NemoNotch/Resources/Localizable.xcstrings` (a JSON String Catalog, en + zh-Hans). The catalog is kept in **Xcode's own String Catalog format** — `"key" : value` (a space on **both** sides of the colon), 2-space indent, `ensure_ascii=False` so CJK stays literal, insertion order preserved (**never sorted**), empty objects expanded to the multi-line `{\n\n<indent>}` form, and **no trailing newline**. This format is what Xcode's editor writes, so editing in the Xcode GUI produces zero churn.
+
+- **Edit freely — in the Xcode GUI editor, via `scripts/xcstrings.py`, or by hand.** A `pre-commit` hook runs `scripts/xcstrings.py format` on any staged `*.xcstrings`, normalizing it byte-for-byte to Xcode's format before commit, so no matter how it was edited the committed diff is minimal. The trap this avoids: a naive `json.dump(indent=2)` uses `": "` and can sort keys, reformatting *every line* — never write the catalog that way; go through `scripts/xcstrings.py` (whose `dump_canonical()` reproduces Xcode's bytes exactly).
+  - `scripts/xcstrings.py set [file] KEY --en "…" --zh "…"` — add/update a fully-`translated` key (avoids build-time `state:"new"` re-extraction), then rewrites canonically.
+  - `scripts/xcstrings.py format [file]` — normalize in place (no-op if already canonical); `check [file]` — exit non-zero if not canonical.
+  - `file` defaults to `NemoNotch/Resources/Localizable.xcstrings`.
+- The `%@` / `%1$@` / empty-object entries already in the catalog are Xcode's auto-extracted placeholders — leave them; they are not build noise.
 
 ### Coding Conventions
 
@@ -430,6 +441,7 @@ All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check the
 - Output: `build/NemoNotch-<arch>.dmg` (e.g. `build/NemoNotch-arm64.dmg`, `build/NemoNotch-x86_64.dmg`) — arch-suffixed so `--arm` and `--x86` builds don't overwrite each other
 - Supporting files: `ExportOptions.plist` (export config), `build.sh` (build script)
 - Currently skips signing (`CODE_SIGN_IDENTITY="-"`), configure signing and notarization for official distribution
+- **Version is injected at build time, not stored in pbxproj.** pbxproj's `MARKETING_VERSION` (`1.0`) is only a local Xcode/dev-run placeholder (shown in Settings → About). `build.sh` overrides `MARKETING_VERSION` from the latest global `vX.Y.Z` tag (build number = commit count); the release workflow overrides it from the **pushed tag** (`GITHUB_REF_NAME`, build number = Actions run number). So the About tab and DMG always show the real release version — bumping `release.sh`'s tag is all that's needed.
 
 ### Release Process
 

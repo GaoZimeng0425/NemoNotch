@@ -31,6 +31,11 @@ jobs:
 
       - name: Build archive (${{ matrix.arch }})
         run: |
+          # Version comes from the pushed tag (e.g. v0.5.0 -> 0.5.0); the build
+          # number is the monotonic Actions run number. pbxproj's MARKETING_VERSION
+          # is only a local-dev placeholder — the release always uses the tag.
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Building version $VERSION (build ${{ github.run_number }})"
           xcodebuild archive \
             -project NemoNotch.xcodeproj \
             -scheme NemoNotch \
@@ -40,6 +45,8 @@ jobs:
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO \
             MACOSX_DEPLOYMENT_TARGET=26.2 \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
