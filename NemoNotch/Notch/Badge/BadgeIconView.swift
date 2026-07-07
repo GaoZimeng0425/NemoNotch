@@ -129,6 +129,8 @@ struct BadgeIconView: View {
                 .foregroundStyle(.blue)
         case .opencode:
             OpencodeLogoIcon(size: 13, color: Color(red: 0.55, green: 0.78, blue: 0.55))
+        case .zcode:
+            ZcodeLogoIcon(size: 13, color: Color(red: 0.11, green: 0.44, blue: 0.96))
         }
     }
 
@@ -286,21 +288,21 @@ struct CompactBadgesView: View {
         }
     }
 
-    // Right: statuses in priority order, highest hugging the notch. A count chip
-    // overlays any group with more than one member.
+    // Right: statuses in priority order, highest hugging the notch. A group of
+    // more than one (same-app instances) shows just its count, centered in the
+    // slot, in place of the status indicator.
     private func rightFan(spread: CGFloat) -> some View {
         ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
             Button { primary.map(onBadgeTap) } label: {
-                BadgeIconView(
-                    item: group.representative, style: .compactRight,
-                    notificationService: notificationService,
-                    mediaService: mediaService,
-                    pomodoroService: pomodoroService
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    if group.count > 1 {
-                        BadgeCountChip(text: "\(group.count)")
-                    }
+                if group.count > 1 {
+                    BadgeCountChip(text: "\(group.count)", fontSize: 10)
+                } else {
+                    BadgeIconView(
+                        item: group.representative, style: .compactRight,
+                        notificationService: notificationService,
+                        mediaService: mediaService,
+                        pomodoroService: pomodoroService
+                    )
                 }
             }
             .buttonStyle(.plain)
@@ -316,15 +318,18 @@ struct CompactBadgesView: View {
 // MARK: - BadgeCountChip
 
 /// Small rounded count pill, matching the notification badge count style.
+/// `fontSize` defaults to the compact overlay size; the right-fan standalone
+/// count passes a larger value so it reads as the slot's primary content.
 private struct BadgeCountChip: View {
     let text: String
+    var fontSize: CGFloat = 7
 
     var body: some View {
         Text(text)
-            .font(.system(size: 7, weight: .bold, design: .rounded))
+            .font(.system(size: fontSize, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
-            .padding(.horizontal, 2)
-            .padding(.vertical, 0.5)
+            .padding(.horizontal, fontSize < 9 ? 2 : 4)
+            .padding(.vertical, fontSize < 9 ? 0.5 : 1)
             .background(NotchTheme.accent)
             .clipShape(Capsule())
     }

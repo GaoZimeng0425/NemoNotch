@@ -67,6 +67,8 @@ struct CompletionToastView: View {
                 .foregroundStyle(Color(red: 0.42, green: 0.55, blue: 0.95))
         case .ai(.opencode):
             OpencodeLogoIcon(size: s, color: .white)
+        case .ai(.zcode):
+            ZcodeLogoIcon(size: s, color: Color(red: 0.11, green: 0.44, blue: 0.96))
         case .agent:
             Image(systemName: "cpu")
                 .font(.system(size: s * 0.9, weight: .semibold))

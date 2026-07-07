@@ -21,6 +21,7 @@ struct AIChatTab: View {
             case .claude: return appSettings.claudeEnabled
             case .gemini: return appSettings.geminiEnabled
             case .opencode: return appSettings.opencodeEnabled
+            case .zcode: return appSettings.zcodeEnabled
             }
         }
     }
@@ -46,8 +47,15 @@ struct AIChatTab: View {
         )
     }
 
+    private var zcodeKind: ProviderCardKind {
+        Self.kind(
+            enabled: appSettings.zcodeEnabled,
+            installed: aiService.zcodeProvider.isHookInstalled
+        )
+    }
+
     private var hasAnyReadyProvider: Bool {
-        claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready
+        claudeKind == .ready || geminiKind == .ready || opencodeKind == .ready || zcodeKind == .ready
     }
 
     private static func kind(enabled: Bool, installed: Bool) -> ProviderCardKind {
@@ -82,8 +90,12 @@ struct AIChatTab: View {
         allSessions.count(where: { $0.source == .opencode })
     }
 
+    private var zcodeCount: Int {
+        allSessions.count(where: { $0.source == .zcode })
+    }
+
     private var hasMixedSources: Bool {
-        [claudeCount, geminiCount, opencodeCount].count(where: { $0 > 0 }) > 1
+        [claudeCount, geminiCount, opencodeCount, zcodeCount].count(where: { $0 > 0 }) > 1
     }
 
     private var dominantSource: AISource? {
@@ -99,6 +111,7 @@ struct AIChatTab: View {
         case .claude: "Claude Code"
         case .gemini: "Gemini CLI"
         case .opencode: "opencode"
+        case .zcode: "zcode"
         case .none: "AI Sessions"
         }
     }
@@ -108,6 +121,7 @@ struct AIChatTab: View {
             claudeCount > 0 ? "Claude \(claudeCount)" : nil,
             geminiCount > 0 ? "Gemini \(geminiCount)" : nil,
             opencodeCount > 0 ? "opencode \(opencodeCount)" : nil,
+            zcodeCount > 0 ? "zcode \(zcodeCount)" : nil,
         ].compactMap(\.self) : []
 
         let activeParts = [
@@ -206,6 +220,13 @@ struct AIChatTab: View {
                 appSettings.opencodeEnabled = true
                 if !aiService.opencodeProvider.isHookInstalled {
                     aiService.opencodeProvider.installHooks()
+                }
+            }
+            Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
+            providerStatusRow(source: .zcode, name: "zcode", kind: zcodeKind) {
+                appSettings.zcodeEnabled = true
+                if !aiService.zcodeProvider.isHookInstalled {
+                    aiService.zcodeProvider.installHooks()
                 }
             }
         }
@@ -425,6 +446,8 @@ struct AIChatTab: View {
                             .foregroundStyle(.white)
                     case .opencode:
                         OpencodeLogoIcon(size: 22, color: .white)
+                    case .zcode:
+                        ZcodeLogoIcon(size: 22, color: .white)
                     }
                 } else {
                     HStack(spacing: 0) {
@@ -710,6 +733,8 @@ struct AIChatTab: View {
                 .foregroundStyle(sourceTint(source))
         case .opencode:
             OpencodeLogoIcon(size: size, color: sourceTint(source))
+        case .zcode:
+            ZcodeLogoIcon(size: size, color: sourceTint(source))
         }
     }
 
@@ -768,6 +793,7 @@ struct AIChatTab: View {
         case .claude: "Claude"
         case .gemini: "Gemini"
         case .opencode: "opencode"
+        case .zcode: "zcode"
         }
     }
 
@@ -776,6 +802,7 @@ struct AIChatTab: View {
         case .claude: "C"
         case .gemini: "G"
         case .opencode: "O"
+        case .zcode: "Z"
         }
     }
 
@@ -784,6 +811,7 @@ struct AIChatTab: View {
         case .claude: NotchTheme.accentText
         case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
         case .opencode: Color(red: 0.55, green: 0.78, blue: 0.55)
+        case .zcode: Color(red: 0.11, green: 0.44, blue: 0.96)
         }
     }
 

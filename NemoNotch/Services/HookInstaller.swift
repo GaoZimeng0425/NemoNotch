@@ -3,11 +3,13 @@ import Foundation
 enum HookTarget {
     case claude
     case gemini
+    case zcode
 
     var settingsPath: String {
         switch self {
         case .claude: return NSHomeDirectory() + "/.claude/settings.json"
         case .gemini: return NSHomeDirectory() + "/.gemini/settings.json"
+        case .zcode: return NSHomeDirectory() + "/.zcode/cli/config.json"
         }
     }
 
@@ -21,6 +23,19 @@ enum HookTarget {
                 "SessionStart", "SessionEnd", "Notification",
                 "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool",
             ]
+        case .zcode: return [
+                "SessionStart", "UserPromptSubmit", "PreToolUse",
+                "PostToolUse", "PostToolUseFailure", "Stop",
+            ]
+        }
+    }
+
+    /// zcode nests hooks under `hooks.events.<Event>` with a sibling
+    /// `hooks.enabled = true` flag, unlike Claude/Gemini's flat `hooks.<Event>`.
+    var usesNestedEventsContainer: Bool {
+        switch self {
+        case .zcode: return true
+        case .claude, .gemini: return false
         }
     }
 }
@@ -32,7 +47,7 @@ enum HookInstaller {
         "~/.NemoNotch/hooks/hook-sender.sh"
     }
 
-    private static let scriptVersion = "# version: 13"
+    private static let scriptVersion = "# version: 14"
 
     /// Case-insensitive suffix match so we recognize both the older
     /// "~/.nemonotch/hooks/hook-sender.sh" and the current
@@ -42,17 +57,98 @@ enum HookInstaller {
         return command.lowercased().hasSuffix("nemonotch/hooks/hook-sender.sh")
     }
 
-    static func isInstalled(_ target: HookTarget) -> Bool {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let hooks = json["hooks"] as? [String: Any] else {
-            return false
+    /// Reads the event→entries map for `target`, unwrapping zcode's nested
+    /// `hooks.events` container.
+    static func readEvents(_ settings: [String: Any], target: HookTarget) -> [String: Any] {
+        let hooks = settings["hooks"] as? [String: Any] ?? [:]
+        if target.usesNestedEventsContainer {
+            return hooks["events"] as? [String: Any] ?? [:]
         }
+        return hooks
+    }
+
+    /// Writes the event→entries map back, re-wrapping zcode's nested container
+    /// (and setting `enabled = true`). Drops the `hooks` key when empty.
+    static func writeEvents(_ events: [String: Any], into settings: inout [String: Any], target: HookTarget) {
+        if target.usesNestedEventsContainer {
+            var hooks = settings["hooks"] as? [String: Any] ?? [:]
+            if events.isEmpty {
+                hooks.removeValue(forKey: "events")
+                hooks.removeValue(forKey: "enabled")
+            } else {
+                hooks["events"] = events
+                hooks["enabled"] = true
+            }
+            if hooks.isEmpty {
+                settings.removeValue(forKey: "hooks")
+            } else {
+                settings["hooks"] = hooks
+            }
+        } else {
+            if events.isEmpty {
+                settings.removeValue(forKey: "hooks")
+            } else {
+                settings["hooks"] = events
+            }
+        }
+    }
+
+    /// Pure install transform: strips all our old entries from every event, then
+    /// registers `target.hookEvents` pointing at `command`.
+    static func applyInstall(_ settings: [String: Any], target: HookTarget, command: String) -> [String: Any] {
+        var out = settings
+        var events = readEvents(out, target: target)
+
+        for (event, entries) in events {
+            if var eventEntries = entries as? [[String: Any]] {
+                eventEntries.removeAll { entry in
+                    guard let inner = entry["hooks"] as? [[String: Any]] else { return false }
+                    return inner.contains { isOurHookCommand($0["command"] as? String) }
+                }
+                if eventEntries.isEmpty { events.removeValue(forKey: event) }
+                else { events[event] = eventEntries }
+            }
+        }
+
+        let hookEntry: [String: Any] = [
+            "matcher": "",
+            "hooks": [["type": "command", "command": command]],
+        ]
         for event in target.hookEvents {
-            if let entries = hooks[event] as? [[String: Any]],
+            var entries = events[event] as? [[String: Any]] ?? []
+            entries.append(hookEntry)
+            events[event] = entries
+        }
+
+        writeEvents(events, into: &out, target: target)
+        return out
+    }
+
+    /// Pure uninstall transform: removes only our entries from `target.hookEvents`.
+    static func applyUninstall(_ settings: [String: Any], target: HookTarget) -> [String: Any] {
+        var out = settings
+        var events = readEvents(out, target: target)
+        for event in target.hookEvents {
+            guard var entries = events[event] as? [[String: Any]] else { continue }
+            entries.removeAll { entry in
+                guard let inner = entry["hooks"] as? [[String: Any]] else { return false }
+                return inner.contains { isOurHookCommand($0["command"] as? String) }
+            }
+            if entries.isEmpty { events.removeValue(forKey: event) }
+            else { events[event] = entries }
+        }
+        writeEvents(events, into: &out, target: target)
+        return out
+    }
+
+    /// Pure detection: any of `target.hookEvents` holds one of our entries.
+    static func detectInstalled(_ settings: [String: Any], target: HookTarget) -> Bool {
+        let events = readEvents(settings, target: target)
+        for event in target.hookEvents {
+            if let entries = events[event] as? [[String: Any]],
                entries.contains(where: { entry in
-                   guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                   return innerHooks.contains { isOurHookCommand($0["command"] as? String) }
+                   guard let inner = entry["hooks"] as? [[String: Any]] else { return false }
+                   return inner.contains { isOurHookCommand($0["command"] as? String) }
                }) {
                 return true
             }
@@ -60,74 +156,32 @@ enum HookInstaller {
         return false
     }
 
+    static func isInstalled(_ target: HookTarget) -> Bool {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        return detectInstalled(json, target: target)
+    }
+
     static func install(_ target: HookTarget) throws {
         try ensureScriptExists()
-
         var settings: [String: Any] = [:]
         if let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             settings = json
         }
-
-        var hooks = settings["hooks"] as? [String: Any] ?? [:]
-
-        // 1. Clean up ALL existing nemonotch hooks from ALL events first
-        for (event, entries) in hooks {
-            if var eventEntries = entries as? [[String: Any]] {
-                eventEntries.removeAll { entry in
-                    guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                    return innerHooks.contains { isOurHookCommand($0["command"] as? String) }
-                }
-                if eventEntries.isEmpty {
-                    hooks.removeValue(forKey: event)
-                } else {
-                    hooks[event] = eventEntries
-                }
-            }
-        }
-
-        // 2. Register only currently supported events
-        let hookEntry: [String: Any] = [
-            "matcher": "",
-            "hooks": [["type": "command", "command": hookCommand]],
-        ]
-
-        for event in target.hookEvents {
-            var entries = hooks[event] as? [[String: Any]] ?? []
-            entries.append(hookEntry)
-            hooks[event] = entries
-        }
-
-        settings["hooks"] = hooks
+        settings = applyInstall(settings, target: target, command: hookCommand)
         try writeSettings(settings, to: target)
     }
 
     static func uninstall(_ target: HookTarget) throws {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
-              var settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var hooks = settings["hooks"] as? [String: Any] else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["hooks"] is [String: Any] else {
             return
         }
-
-        for event in target.hookEvents {
-            guard var entries = hooks[event] as? [[String: Any]] else { continue }
-            entries.removeAll { entry in
-                guard let innerHooks = entry["hooks"] as? [[String: Any]] else { return false }
-                return innerHooks.contains { isOurHookCommand($0["command"] as? String) }
-            }
-            if entries.isEmpty {
-                hooks.removeValue(forKey: event)
-            } else {
-                hooks[event] = entries
-            }
-        }
-
-        if hooks.isEmpty {
-            settings.removeValue(forKey: "hooks")
-        } else {
-            settings["hooks"] = hooks
-        }
-
+        let settings = applyUninstall(json, target: target)
         try writeSettings(settings, to: target)
     }
 
@@ -154,7 +208,7 @@ enum HookInstaller {
         #!/bin/bash
         \(scriptVersion)
         \(portMarker)
-        # hook-sender.sh — forwards Claude Code / Gemini CLI hook events to NemoNotch over TCP loopback.
+        # hook-sender.sh — forwards Claude Code / Gemini CLI / zcode hook events to NemoNotch over TCP loopback.
         # Bails instantly when the desktop server isn't running, so the CLI never blocks waiting for nc.
         URL_BASE="http://127.0.0.1:\(port)"
         curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || exit 0
@@ -162,6 +216,8 @@ enum HookInstaller {
         # Detect which CLI invoked this hook
         if [ -n "$GEMINI_SESSION_ID" ]; then
             CLI_SOURCE="gemini"
+        elif [ -n "$ZCODE_SESSION_ID" ]; then
+            CLI_SOURCE="zcode"
         elif [ -n "$CLAUDE_SESSION_ID" ]; then
             CLI_SOURCE="claude"
         else
@@ -169,12 +225,15 @@ enum HookInstaller {
             COMMAND_LINE=$(ps -o args= -p "$PARENT_PID" 2>/dev/null || echo "")
             if echo "$COMMAND_LINE" | grep -q "gemini"; then
                 CLI_SOURCE="gemini"
+            elif echo "$COMMAND_LINE" | grep -qi "zcode"; then
+                CLI_SOURCE="zcode"
             elif echo "$COMMAND_LINE" | grep -q "claude"; then
                 CLI_SOURCE="claude"
             else
                 PARENT=$(ps -o comm= -p "$PARENT_PID" 2>/dev/null || echo "")
                 case "$PARENT" in
                     *gemini*)  CLI_SOURCE="gemini" ;;
+                    *[zZ]code*) CLI_SOURCE="zcode" ;;
                     *claude*)  CLI_SOURCE="claude" ;;
                     *)         CLI_SOURCE="unknown" ;;
                 esac

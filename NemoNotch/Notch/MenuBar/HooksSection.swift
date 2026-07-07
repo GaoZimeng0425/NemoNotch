@@ -19,6 +19,11 @@ struct HooksSection: View {
                 aiService.opencodeProvider.installHooks()
             }
         }
+        if !aiService.zcodeProvider.isHookInstalled {
+            Button("menu.install_zcode_hooks") {
+                aiService.zcodeProvider.installHooks()
+            }
+        }
         if showsAnyHook {
             Divider()
         }
@@ -28,5 +33,6 @@ struct HooksSection: View {
         !aiService.claudeProvider.isHookInstalled
             || !aiService.geminiProvider.isHookInstalled
             || !aiService.opencodeProvider.isHookInstalled
+            || !aiService.zcodeProvider.isHookInstalled
     }
 }

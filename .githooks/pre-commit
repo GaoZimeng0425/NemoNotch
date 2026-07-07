@@ -36,4 +36,24 @@ if [ "$branch" = "develop" ] && [ -f "$(git rev-parse --git-path MERGE_HEAD)" ];
       exit 1 ;;
   esac
 fi
+
+# Normalize any staged String Catalog to the canonical Xcode format, so hand-,
+# script-, or Xcode-GUI-edited *.xcstrings all commit as byte-identical to what
+# Xcode writes → minimal diffs. See scripts/xcstrings.py + CLAUDE.md → Localization.
+staged_xcstrings=$(git diff --cached --name-only --diff-filter=ACM -- '*.xcstrings')
+if [ -n "$staged_xcstrings" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    root=$(git rev-parse --show-toplevel)
+    echo "$staged_xcstrings" | while IFS= read -r f; do
+      [ -f "$root/$f" ] || continue
+      if python3 "$root/scripts/xcstrings.py" format "$root/$f" >/dev/null; then
+        git add -- "$f"
+      else
+        echo "⚠️  xcstrings format failed for $f — committing as-is" >&2
+      fi
+    done
+  else
+    echo "⚠️  python3 not found — skipping .xcstrings normalization" >&2
+  fi
+fi
 exit 0

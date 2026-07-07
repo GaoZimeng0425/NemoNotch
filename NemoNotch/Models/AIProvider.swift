@@ -4,6 +4,7 @@ enum AISource: String, Codable, CaseIterable {
     case claude
     case gemini
     case opencode
+    case zcode
 }
 
 @MainActor
@@ -140,6 +141,8 @@ struct AISessionState: Identifiable {
             return formatGeminiModel(model)
         case .opencode:
             return formatOpencodeModel(model)
+        case .zcode:
+            return formatZcodeModel(model)
         }
     }
 
@@ -178,6 +181,14 @@ struct AISessionState: Identifiable {
         return bare
             .split(separator: "-")
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    private func formatZcodeModel(_ model: String) -> String {
+        // zcode runs GLM models, e.g. "glm-4.6" → "GLM 4.6".
+        model
+            .split(separator: "-")
+            .map { $0.lowercased() == "glm" ? "GLM" : String($0) }
             .joined(separator: " ")
     }
 }

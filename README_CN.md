@@ -37,7 +37,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 | 标签 | 功能 |
 |------|------|
 | **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲/拖动进度）、专辑封面、进度条 —— 通过 Perl 桥接系统媒体控制，支持任何上报 Now Playing 的播放器（Apple Music、Spotify、浏览器、Podcasts、网易云音乐……）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、3 小时逐时预报 |
-| **AI Chat** | 统一 Claude Code、Gemini CLI 与 opencode 监控 — 会话列表、对话详情、权限审批、Context 用量进度条、子代理追踪、模型显示 |
+| **AI Chat** | 统一 Claude Code、Gemini CLI、opencode 与 zcode 监控 — 会话列表、子代理追踪、模型显示；对话详情、权限审批与 Context 用量进度条仅限 Claude Code 与 Gemini CLI |
 | **智能体** | 多代理系统状态监控，支持 OpenClaw（WebSocket）和 Hermes-agent（HTTP API），实时代理工作状态追踪 |
 | **启动器** | 应用图标网格、搜索过滤、快速启动自定义应用列表 |
 | **番茄钟** | 经典 25/5/15 周期（每 4 个工作长休息），快捷键呼出居中浮窗一键启动，notch 折叠态显示 🍅 + 饼图剩余时间；TODO 列表持久化，每个任务累计番茄钟数；结束时播放声音 + 系统通知 |
@@ -46,7 +46,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 ### 核心特性
 
 - **Notch 浮动面板** — 窗口悬浮在刘海区域，自动检测屏幕 Notch 尺寸
-- **多 AI 提供商** — 统一界面支持 Claude Code、Gemini CLI 与 opencode，集成 Hook 事件监听、会话追踪和权限拦截。opencode 通过 NemoNotch 编写的插件（`~/.config/opencode/plugin/nemonotch-notify.ts`）集成，将生命周期事件 POST 到 NemoNotch 的 Hook 服务器 —— 刘海 badge、完成闪光、Toast 与 AI 标签页状态卡片均自动生效
+- **多 AI 提供商** — 统一界面支持 Claude Code、Gemini CLI、opencode 与 zcode，集成 Hook 事件监听和会话追踪；权限拦截仅限 Claude Code 与 Gemini CLI。opencode 通过 NemoNotch 编写的插件（`~/.config/opencode/plugin/nemonotch-notify.ts`）集成，将生命周期事件 POST 到 NemoNotch 的 Hook 服务器 —— 刘海 badge、完成闪光、Toast 与 AI 标签页状态卡片均自动生效。zcode（基于 GLM、与 Claude Code 兼容）直接复用 Claude 的 Hook 管线（无需插件）—— 仅提供通知与实时状态，不解析对话/Token，也不支持刘海内审批
 - **AI 用量配额** —— 在 AI 标签页以卡片展示 Claude Code、Codex 与 Gemini 的用量配额（使用率 % + 重置倒计时），数据来自各 CLI 的 OAuth 凭证。检测到 Codex / Gemini CLI 已登录时自动显示对应段。
 - **全局快捷键** — 切换面板开关：在设置 → 快捷键里自行配置（默认无）。切换标签页默认 `⌥⌘1-5`。所有快捷键均可自定义，基于 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **自动切换** — 智能检测活跃服务（AI 工作中、音乐播放中）自动切到对应标签
@@ -112,28 +112,22 @@ NemoNotch 的开发借鉴了以下优秀开源项目的设计与实现：
 
 ### 媒体与播放控制
 
-- [**PlayStatus**](https://github.com/nbolar/PlayStatus) — MediaRemote 框架集成、媒体键拦截
-- [**Tuneful**](https://github.com/martinfekete10/Tuneful) — 播放信息获取与 UI 展示
-- [**nowplaying-cli**](https://github.com/kirtan-shah/nowplaying-cli) — 命令行获取播放信息
 - [**mediaremote-adapter**](https://github.com/ejbills/mediaremote-adapter) — macOS 15.4+ 媒体控制的 Perl 桥（绕过私有 API 签名限制）
 
 ### 窗口管理与快捷键
 
 - [**Loop**](https://github.com/MrKai77/Loop) — 全局快捷键注册、窗口操作引擎
-- [**DSFQuickActionBar**](https://github.com/dagronf/DSFQuickActionBar) — 浮动搜索栏组件
 
 ### 显示器与系统监控
 
 - [**MonitorControl**](https://github.com/MonitorControl/MonitorControl) — 通过 DisplayServices API 读取屏幕亮度
 
-### 菜单栏与系统工具
+### 系统工具
 
 - [**eul**](https://github.com/gao-sun/eul) — 菜单栏架构设计、Combine 响应式模式
-- [**menubar_runcat**](https://github.com/Kyome22/menubar_runcat) — 菜单栏状态动画
 
-### 启动器与 UI 组件
+### UI 组件
 
-- [**sol**](https://github.com/ospfranco/sol) — 应用启动器架构
 - [**Luminare**](https://github.com/MrKai77/Luminare) — SwiftUI 组件库与设计语言
 
 ### AI 与桌面集成
