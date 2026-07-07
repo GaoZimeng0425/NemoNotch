@@ -31,6 +31,19 @@ jobs:
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
 
+      # Resolve SPM dependencies BEFORE arming the CodeQL tracer. SPM fetches by
+      # spawning a git subprocess; under the build tracer that fetch can hang
+      # (seen stuck at "Fetching …mediaremote-adapter.git", which is pinned by
+      # revision so it always hits the network). Pre-resolving into the same
+      # derivedData the traced build reuses means the build never fetches under
+      # trace — it just compiles already-checked-out sources.
+      - name: Resolve Swift packages (untraced)
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NemoNotch.xcodeproj \
+            -scheme NemoNotch \
+            -derivedDataPath build/DerivedData
+
       # One job, two languages: `actions` (YAML) needs no build and is extracted
       # at init; `swift` needs a real compile, so we build manually below.
       - name: Initialize CodeQL
@@ -38,16 +51,18 @@ jobs:
         with:
           languages: swift, actions
 
-      # Manual Swift build — mirrors release.yml's known-good invocation
-      # (archive -> build, dropped -archivePath). The build tracer armed by
-      # init intercepts xcodebuild and populates the swift database; the
-      # actions database is already complete from init.
+      # Manual Swift build — the build tracer armed by init intercepts
+      # xcodebuild and populates the swift database; the actions database is
+      # already complete from init. Uses Debug (not Release): CodeQL extracts
+      # its database from the compiler frontend/AST, so it needs a successful
+      # compile, NOT optimized codegen — Debug skips whole-module optimization
+      # and compiles several times faster for an identical database.
       - name: Build for CodeQL
         run: |
           xcodebuild build \
             -project NemoNotch.xcodeproj \
             -scheme NemoNotch \
-            -configuration Release \
+            -configuration Debug \
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
             ARCHS=arm64 \
