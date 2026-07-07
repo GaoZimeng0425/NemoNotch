@@ -441,6 +441,7 @@ All reference projects are located at `/Users/gaozimeng/Learn/macOS/`. Check the
 - Output: `build/NemoNotch-<arch>.dmg` (e.g. `build/NemoNotch-arm64.dmg`, `build/NemoNotch-x86_64.dmg`) — arch-suffixed so `--arm` and `--x86` builds don't overwrite each other
 - Supporting files: `ExportOptions.plist` (export config), `build.sh` (build script)
 - Currently skips signing (`CODE_SIGN_IDENTITY="-"`), configure signing and notarization for official distribution
+- **Version is injected at build time, not stored in pbxproj.** pbxproj's `MARKETING_VERSION` (`1.0`) is only a local Xcode/dev-run placeholder (shown in Settings → About). `build.sh` overrides `MARKETING_VERSION` from the latest global `vX.Y.Z` tag (build number = commit count); the release workflow overrides it from the **pushed tag** (`GITHUB_REF_NAME`, build number = Actions run number). So the About tab and DMG always show the real release version — bumping `release.sh`'s tag is all that's needed.
 
 ### Release Process
 
