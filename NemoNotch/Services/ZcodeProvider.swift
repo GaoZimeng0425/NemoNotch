@@ -150,15 +150,21 @@ final class ZcodeProvider: AIProvider {
         let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
 
         for session in store.sessions(for: .zcode) where session.lastEventTime < demoteCutoff {
-            if case .waitingForInput = session.phase {
-                store.mutate(session.id) { s in
-                    s.phase = s.phase.transition(to: .idle)
-                }
-                LogService.info(
-                    "Demoted silent zcode session \(session.id.prefix(8)) to idle",
-                    category: "ZcodeProvider"
-                )
+            // Demote ANY active phase, not just .waitingForInput. zcode has no
+            // SessionEnd event, and a manually-aborted or Stop-missed session is
+            // left in .processing with no signal to clear it — without this, the
+            // notch badge would spin for up to 30 min (removeStaleThreshold).
+            if case .idle = session.phase { continue }
+            if case .ended = session.phase { continue }
+            store.mutate(session.id) { s in
+                s.phase = s.phase.transition(to: .idle)
+                s.currentTool = nil
+                s.isPreToolUse = false
             }
+            LogService.info(
+                "Demoted silent zcode session \(session.id.prefix(8)) to idle",
+                category: "ZcodeProvider"
+            )
         }
 
         for session in store.sessions(for: .zcode) where session.lastEventTime < removeCutoff {

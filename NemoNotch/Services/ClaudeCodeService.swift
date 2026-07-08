@@ -360,15 +360,20 @@ final class ClaudeProvider: AIProvider {
         let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
 
         for session in store.sessions(for: .claude) where session.lastEventTime < demoteCutoff {
-            if case .waitingForInput = session.phase {
-                store.mutate(session.id) { s in
-                    s.phase = s.phase.transition(to: .idle)
-                }
-                LogService.info(
-                    "Demoted silent session \(session.id.prefix(8)) to idle (\(Int(now.timeIntervalSince(session.lastEventTime)))s silent)",
-                    category: "ClaudeProvider"
-                )
+            // Demote ANY active phase, not just .waitingForInput — an aborted or
+            // Stop-missed session stuck in .processing would otherwise spin for
+            // up to 30 min (removeStaleThreshold).
+            if case .idle = session.phase { continue }
+            if case .ended = session.phase { continue }
+            store.mutate(session.id) { s in
+                s.phase = s.phase.transition(to: .idle)
+                s.currentTool = nil
+                s.isPreToolUse = false
             }
+            LogService.info(
+                "Demoted silent session \(session.id.prefix(8)) to idle (\(Int(now.timeIntervalSince(session.lastEventTime)))s silent)",
+                category: "ClaudeProvider"
+            )
         }
 
         for session in store.sessions(for: .claude) where session.lastEventTime < removeCutoff {
