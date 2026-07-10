@@ -16,6 +16,14 @@ final class UsageQuotaService: LifecycleAware {
     private(set) var hasCodexCredential = false
 
     private let claudeKeychainService = "Claude Code-credentials"
+    /// When true, resolve the Claude OAuth token via the `/usr/bin/security` CLI
+    /// (`find-generic-password -w`) instead of `SecItemCopyMatching`. The CLI runs
+    /// as an Apple-signed binary in the user session, so it silently returns the
+    /// plaintext for the ACL-less `Claude Code-credentials` item — no consent
+    /// dialog and no `needsAuthorization` gate (this is how Claude Usage and
+    /// similar apps read it). Flip to `false` to restore the Security-framework
+    /// path; the two branches are otherwise interchangeable.
+    private let useSecurityCLIForClaudeKeychain = true
     private let claudeCredentialsURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".claude/.credentials.json")
     /// Local read cache of the last good Claude token (accessToken + expiresAt only).
@@ -211,14 +219,21 @@ final class UsageQuotaService: LifecycleAware {
                 )
             }
         }
-        // No usable cache or file — resolve from the Keychain without ever prompting
-        // here, and cache the blob (token + expiry only) on success so subsequent
-        // refreshes can skip the Keychain entirely.
-        return readKeychainCredential(provider: .claude, service: claudeKeychainService) { data in
+        // No usable cache or file — resolve from the Keychain. Two interchangeable
+        // paths: the `/usr/bin/security` CLI (silent for the ACL-less Claude item,
+        // never prompts) or the Security-framework read (may need authorization).
+        let parse: (Data) -> UsageCredential? = { data in
             let credential = try? UsageCredentialParser.parseClaudeCredentials(data: data, now: now)
             if credential?.status == .valid { self.writeClaudeCache(from: data) }
             return credential
         }
+        if useSecurityCLIForClaudeKeychain {
+            return readKeychainCredentialViaSecurityCLI(
+                service: claudeKeychainService,
+                parse: parse
+            )
+        }
+        return readKeychainCredential(provider: .claude, service: claudeKeychainService, parse: parse)
     }
 
     /// Writes a minimal copy of the Claude credential — accessToken + expiresAt
@@ -341,6 +356,56 @@ final class UsageQuotaService: LifecycleAware {
         return readKeychainCredential(provider: .codex, service: codexKeychainService) {
             try? UsageCredentialParser.parseCodexCredentials(data: $0)
         }
+    }
+
+    /// Keychain-only credential resolution via the `/usr/bin/security` CLI. This
+    /// is the same path Claude Usage (and other third-party apps) take: shelling
+    /// out to `/usr/bin/security find-generic-password -s <service> -w` returns
+    /// the plaintext blob for the ACL-less `Claude Code-credentials` item without
+    /// ever surfacing the macOS consent dialog — the CLI is an Apple-signed binary
+    /// running in the user session, so it reads the login keychain silently. The
+    /// `-w` (with password) flag is the read; failure (item absent / unreadable)
+    /// maps to `.notFound`. `parse` turns the blob into a credential the same way
+    /// the Security-framework path does, and writes the local cache on success.
+    @discardableResult
+    private func readKeychainCredentialViaSecurityCLI(
+        service: String,
+        parse: (Data) -> UsageCredential?
+    ) -> UsageCredential {
+        guard let data = Self.securityCLICredentialBlob(service: service) else {
+            LogService.info(
+                "security CLI: no Claude keychain blob (not found or unreadable)",
+                category: "UsageQuotaService"
+            )
+            return UsageCredential(token: nil, status: .notFound, message: "Claude keychain item not found")
+        }
+        if let credential = parse(data) { return credential }
+        return UsageCredential(token: nil, status: .parseError, message: "Claude keychain blob unparseable")
+    }
+
+    /// Runs `/usr/bin/security find-generic-password -s <service> -w` and returns
+    /// its stdout as `Data` (the CLI prints the plaintext keychain blob there).
+    /// Returns nil on any non-zero exit or missing binary — callers treat that as
+    /// "no credential". `execve`-style (no shell) so the service name is a real
+    /// argv element, never a shell-injection vector.
+    private nonisolated static func securityCLICredentialBlob(service: String) -> Data? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", service, "-w"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle(forWritingAtPath: "/dev/null")
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, !data.isEmpty else { return nil }
+        // The CLI prints the plaintext + a trailing newline; trim it.
+        guard let text = String(data: data, encoding: .utf8) else { return data }
+        return Data(text.trimmingCharacters(in: .whitespacesAndNewlines).utf8)
     }
 
     /// Keychain-only credential resolution that NEVER prompts on this (automatic)
