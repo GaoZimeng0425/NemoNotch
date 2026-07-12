@@ -274,6 +274,7 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 - `MediaRemote.swift` now only **registers system notifications** to trigger refresh / `setCanBeNowPlayingApplication`; its old `sendCommand` / `skip` / `setElapsedTime` (and the `Command` enum) were removed — in-process control is gated since 15.4
 - `MediaBridge`, `MediaAutomationPermissionMonitor`, and the `ScriptingBridge/` Spotify/Music interfaces were **deleted** — control no longer needs AppleScript/Automation, and the authoritative `isPlaying` read they provided is no longer needed (the CLI playback-rate + guard self-heal, see below). The Automation `PermissionCard` and the `NSAppleEventsUsageDescription` Info.plist key are gone too.
 - When debugging "info lost" issues, prioritize investigating NowPlayingCLI daemon state / dylib extraction (`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`) / perl script, rather than modifying MediaRemote.swift
+- **Artwork accent color**: `MediaService.artworkAccent` holds the album art's dominant color, extracted by `ArtworkColor` (`NemoNotch/Helpers/ArtworkColor.swift` — HSB hue-bucket weighted voting on a 40×40 downsample, saturation/brightness boost + perceived-brightness floor; grayscale → `nil`). Recomputed off the main actor whenever the artwork bytes change. The Overview media card tints its halo glow, progress scrubber, and play button with it (falling back to `NotchTheme.accent`).
 
 **Play/Pause state reconcile flow**:
 

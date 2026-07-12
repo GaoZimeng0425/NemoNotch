@@ -215,6 +215,12 @@ private struct OverviewMediaSection: View {
         mediaService.playbackState
     }
 
+    /// Album-derived accent tinting the glow, scrubber, and play button;
+    /// falls back to the theme accent for grayscale / missing artwork.
+    private var accent: Color {
+        mediaService.artworkAccent ?? NotchTheme.accent
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             artwork
@@ -235,6 +241,17 @@ private struct OverviewMediaSection: View {
                 appIcon: mediaService.appIcon,
                 size: 80
             )
+            .background {
+                // Mood-light halo behind the vinyl in the album's dominant
+                // color — bright while playing, embers when paused.
+                Circle()
+                    .fill(accent)
+                    .scaleEffect(1.12)
+                    .blur(radius: 14)
+                    .opacity(state.isPlaying ? 0.45 : 0.12)
+                    .animation(.easeInOut(duration: 0.6), value: state.isPlaying)
+                    .animation(.easeInOut(duration: 0.6), value: accent)
+            }
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
             if let appIcon = mediaService.appIcon {
@@ -275,9 +292,11 @@ private struct OverviewMediaSection: View {
                 position: state.position,
                 duration: state.duration,
                 enabled: mediaService.supportsSeeking,
+                tint: accent,
                 onScrub: { fraction in mediaService.seek(toFraction: fraction) }
             )
             .frame(height: 12)
+            .animation(.easeInOut(duration: 0.6), value: accent)
 
             HStack {
                 Text(formatTime(state.position))
@@ -321,7 +340,8 @@ private struct OverviewMediaSection: View {
                     .contentTransition(.symbolEffect(.replace))
                     .animation(.snappy(duration: 0.2), value: state.isPlaying)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(NotchTheme.accent))
+                    .background(Circle().fill(accent))
+                    .animation(.easeInOut(duration: 0.6), value: accent)
             }
             .buttonStyle(.plain)
 
@@ -359,6 +379,7 @@ private struct ProgressScrubber: View {
     let position: Double
     let duration: Double
     let enabled: Bool
+    var tint: Color = NotchTheme.accent
     let onScrub: (Double) -> Void
 
     @State private var dragFraction: Double?
@@ -381,7 +402,7 @@ private struct ProgressScrubber: View {
                     .fill(NotchTheme.surfaceEmphasis)
                     .frame(height: barHeight)
                 Capsule()
-                    .fill(NotchTheme.accent.opacity(0.85))
+                    .fill(tint.opacity(0.85))
                     .frame(width: geo.size.width * CGFloat(fraction), height: barHeight)
             }
             .frame(maxHeight: .infinity)
