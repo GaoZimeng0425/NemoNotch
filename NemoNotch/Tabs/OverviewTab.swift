@@ -16,9 +16,9 @@ struct OverviewTab: View {
             let numGaps: CGFloat = hasTrack ? 2 : 1
             let totalCardWidth = geo.size.width - gap * numGaps
 
-            let calendarWidth = totalCardWidth * (hasTrack ? 2.0 / 5.0 : 2.0 / 3.0)
+            let calendarWidth = totalCardWidth * (hasTrack ? 1.8 / 5.0 : 2.0 / 3.0)
             let mediaWidth = totalCardWidth * 2.0 / 5.0
-            let weatherWidth = totalCardWidth * (hasTrack ? 1.0 / 5.0 : 1.0 / 3.0)
+            let weatherWidth = totalCardWidth * (hasTrack ? 1.2 / 5.0 : 1.0 / 3.0)
 
             HStack(alignment: .top, spacing: gap) {
                 OverviewCalendarSection()
@@ -473,7 +473,7 @@ private struct OverviewWeatherSection: View {
                 .lineLimit(1)
 
             HStack(spacing: 2) {
-                Image(systemName: conditionIcon)
+                Image(systemName: weatherService.symbolName)
                     .font(.system(size: 13))
                     .foregroundStyle(NotchTheme.textSecondary)
                 Text("\(Int(weatherService.temperature))°")
@@ -497,6 +497,21 @@ private struct OverviewWeatherSection: View {
                 statItem(label: String(localized: "weather.wind_speed"), value: "\(Int(weatherService.windSpeed))km/h")
             }
 
+            if !weatherService.dailyForecast.isEmpty {
+                Divider()
+                    .background(NotchTheme.stroke)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 2)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(weatherService.dailyForecast, id: \.date) { day in
+                            dailyRow(day)
+                        }
+                    }
+                }
+            }
+
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
@@ -516,29 +531,20 @@ private struct OverviewWeatherSection: View {
         }
     }
 
-    private var conditionIcon: String {
-        let lower = weatherService.condition.lowercased()
-        if lower.contains("sunny") || lower.contains("clear") {
-            return "sun.max.fill"
+    private func dailyRow(_ day: DailyForecast) -> some View {
+        HStack(spacing: 4) {
+            Text(day.label())
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .lineLimit(1)
+                .frame(width: 28, alignment: .leading)
+            Image(systemName: day.kind.symbol(isDay: true))
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textSecondary)
+            Spacer(minLength: 0)
+            Text("\(Int(day.high))°/\(Int(day.low))°")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(NotchTheme.textSecondary)
         }
-        if lower.contains("partly cloudy") {
-            return "cloud.sun.fill"
-        }
-        if lower.contains("cloudy") || lower.contains("overcast") {
-            return "cloud.fill"
-        }
-        if lower.contains("rain") || lower.contains("drizzle") {
-            return "cloud.rain.fill"
-        }
-        if lower.contains("snow") {
-            return "snowflake"
-        }
-        if lower.contains("thunder") {
-            return "cloud.bolt.fill"
-        }
-        if lower.contains("fog") || lower.contains("mist") {
-            return "cloud.fog.fill"
-        }
-        return "cloud.sun.fill"
     }
 }

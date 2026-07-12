@@ -45,7 +45,7 @@ graph TB
         CS["CalendarService<br/>EventKit"]
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
-        WS["WeatherService<br/>wttr.in"]
+        WS["WeatherService<br/>Open-Meteo primary + wttr.in fallback"]
         UQS["UsageQuotaService<br/>Claude + Codex + Gemini usage quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]

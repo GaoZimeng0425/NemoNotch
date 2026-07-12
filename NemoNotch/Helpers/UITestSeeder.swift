@@ -107,6 +107,7 @@ enum UITestSeeder {
     private static func seedWeather(_ weather: WeatherService) {
         weather.cityName = "San Francisco"
         weather.condition = "Partly Cloudy"
+        weather.symbolName = "cloud.sun.fill"
         weather.temperature = 21
         weather.feelsLike = 20
         weather.highTemp = 24
@@ -118,6 +119,18 @@ enum UITestSeeder {
             ("16:00", 21, "Partly Cloudy"),
             ("17:00", 19, "Cloudy"),
         ]
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "yyyy-MM-dd"
+        let kinds: [WeatherKind] = [.partlyCloudy, .clear, .rain, .overcast, .showers]
+        weather.dailyForecast = kinds.enumerated().map { offset, kind in
+            let date = Calendar.current.date(byAdding: .day, value: offset, to: Date()) ?? Date()
+            return DailyForecast(
+                date: dayFormatter.string(from: date),
+                kind: kind,
+                high: 24 - Double(offset),
+                low: 15 - Double(offset)
+            )
+        }
         weather.isLoaded = true
     }
 
