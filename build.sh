@@ -75,3 +75,26 @@ hdiutil create -volname "$APP_NAME" \
 
 echo "==> Done: $BUILD_DIR/$DMG_NAME.dmg"
 ls -lh "$BUILD_DIR/$DMG_NAME.dmg"
+
+# ----------------------------------------------------------------------------
+# Deploy: kill the running app, replace /Applications copy, relaunch.
+# The freshly exported .app is at $BUILD_DIR/export/$APP_NAME.app; we copy it
+# into /Applications and open it so you can try the new build immediately.
+# ----------------------------------------------------------------------------
+APP_BUNDLE="$BUILD_DIR/export/$APP_NAME.app"
+INSTALL_PATH="/Applications/$APP_NAME.app"
+
+echo "==> Closing running $APP_NAME..."
+# Graceful quit first, then force-kill any survivors. Ignore errors so a
+# not-yet-running app doesn't abort the script.
+osascript -e "tell application \"$APP_NAME\" to quit" 2>/dev/null || true
+sleep 1
+pkill -x "$APP_NAME" 2>/dev/null || true
+
+echo "==> Installing to $INSTALL_PATH..."
+rm -rf "$INSTALL_PATH"
+cp -R "$APP_BUNDLE" "$INSTALL_PATH"
+
+echo "==> Launching $APP_NAME..."
+open "$INSTALL_PATH"
+echo "==> All done. $APP_NAME is running from /Applications."

@@ -38,16 +38,49 @@ enum HookTarget {
         case .claude, .gemini: return false
         }
     }
+
+    /// The `matcher` string written on each hook entry. zcode's matcher is a
+    /// case-sensitive regular expression (NOT a glob) tested against the tool
+    /// name / event value, and a `>=1 character` rule rejects the entire hooks
+    /// config when any matcher is empty. `"*"` is an *invalid* regex (a quantifier
+    /// with no preceding atom) that silently never matches — so zcode must use
+    /// `".*"` to match all tools. Claude/Gemini accept (and historically used) `""`.
+    var defaultMatcher: String {
+        switch self {
+        case .zcode: return ".*"
+        case .claude, .gemini: return ""
+        }
+    }
+
+    /// Whether this target's hook runner requires `type: "process"` entries.
+    /// zcode v2's hook parser only collects hooks whose inner entry is
+    /// `type: "process"` and runs `command` directly via `child_process.spawn`
+    /// (no shell) — entries typed `type: "command"` are silently dropped, so a
+    /// "command" hook is registered but never fires. Claude/Gemini use
+    /// `type: "command"`, executed through a shell (so `~` expands).
+    var requiresProcessHookType: Bool {
+        switch self {
+        case .zcode: return true
+        case .claude, .gemini: return false
+        }
+    }
 }
 
 enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
-    private static var hookCommand: String {
-        "~/.NemoNotch/hooks/hook-sender.sh"
-    }
 
     private static let scriptVersion = "# version: 14"
+
+    /// The command string for `target`. Claude/Gemini run hooks through a shell
+    /// so `~` expands; zcode's `type:"process"` runs `spawn(command, args)` with
+    /// no shell, so it needs the absolute home path.
+    private static func hookCommand(for target: HookTarget) -> String {
+        switch target {
+        case .zcode: return hookScriptPath // absolute, e.g. /Users/.../.NemoNotch/hooks/hook-sender.sh
+        case .claude, .gemini: return "~/.NemoNotch/hooks/hook-sender.sh"
+        }
+    }
 
     /// Case-insensitive suffix match so we recognize both the older
     /// "~/.nemonotch/hooks/hook-sender.sh" and the current
@@ -105,14 +138,30 @@ enum HookInstaller {
                     guard let inner = entry["hooks"] as? [[String: Any]] else { return false }
                     return inner.contains { isOurHookCommand($0["command"] as? String) }
                 }
-                if eventEntries.isEmpty { events.removeValue(forKey: event) }
-                else { events[event] = eventEntries }
+                if eventEntries.isEmpty {
+                    events.removeValue(forKey: event)
+                } else {
+                    events[event] = eventEntries
+                }
             }
         }
 
+        // zcode v2's hook parser only collects `type:"process"` entries (it
+        // silently drops `type:"command"`); Claude/Gemini use `type:"command"`.
+        // The command path form also differs: zcode runs `spawn(command, args)`
+        // with no shell, so the caller must pass an absolute path for zcode,
+        // whereas Claude/Gemini run through a shell so `~` expands.
+        var innerHook: [String: Any] = [
+            "type": target.requiresProcessHookType ? "process" : "command",
+            "command": command,
+        ]
+        if target.requiresProcessHookType {
+            innerHook["timeoutMs"] = 30_000
+        }
+
         let hookEntry: [String: Any] = [
-            "matcher": "",
-            "hooks": [["type": "command", "command": command]],
+            "matcher": target.defaultMatcher,
+            "hooks": [innerHook],
         ]
         for event in target.hookEvents {
             var entries = events[event] as? [[String: Any]] ?? []
@@ -134,8 +183,11 @@ enum HookInstaller {
                 guard let inner = entry["hooks"] as? [[String: Any]] else { return false }
                 return inner.contains { isOurHookCommand($0["command"] as? String) }
             }
-            if entries.isEmpty { events.removeValue(forKey: event) }
-            else { events[event] = entries }
+            if entries.isEmpty {
+                events.removeValue(forKey: event)
+            } else {
+                events[event] = entries
+            }
         }
         writeEvents(events, into: &out, target: target)
         return out
@@ -171,7 +223,7 @@ enum HookInstaller {
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             settings = json
         }
-        settings = applyInstall(settings, target: target, command: hookCommand)
+        settings = applyInstall(settings, target: target, command: hookCommand(for: target))
         try writeSettings(settings, to: target)
     }
 

@@ -16,6 +16,12 @@ final class NotchCoordinator {
     private(set) var activeScreen: NSScreen?
     private var dismissState = HotkeyDismissState()
     private var hotkeyAutoCloseTimer: Timer?
+    /// Screen whose closed notch the cursor is currently dwelling on. Drives
+    /// the collapsed shape's hover "peek" growth in NotchView.
+    private(set) var hoverScreenID: UInt32?
+    private var hoverOpenTask: Task<Void, Never>?
+    private var closeGraceTask: Task<Void, Never>?
+    private var lastCloseAt: Date = .distantPast
     private var escMonitor: Any?
     var autoSelectTab: (() -> Tab?)?
     var appSettings: AppSettings?
@@ -182,6 +188,7 @@ final class NotchCoordinator {
 
     func notchOpen(tab: Tab? = nil, on screen: NSScreen? = nil, viaHotkey: Bool = false) {
         guard status == .closed else { return }
+        clearHover()
         let target = screen ?? NSScreen.screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         guard let target, let slot = slots[target.displayID] else { return }
 
@@ -210,6 +217,9 @@ final class NotchCoordinator {
     func notchClose() {
         dismissState.reset()
         cancelHotkeyAutoCloseTimer()
+        cancelGraceClose()
+        clearHover()
+        lastCloseAt = Date()
         uninstallEscMonitor()
         let openedScreen = activeScreen
         withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
@@ -234,7 +244,9 @@ final class NotchCoordinator {
             guard let self else { return }
             guard !(status == .opened && activeScreen?.displayID == displayID) else { return }
             slot.passThrough.isBlocking = false
-            if slot.window.isKeyWindow { slot.window.resignKey() }
+            if slot.window.isKeyWindow {
+                slot.window.resignKey()
+            }
             LogService.debug(
                 "NotchCoordinator: blocking released after close fade (display \(displayID))",
                 category: "NotchCoordinator"
@@ -294,20 +306,84 @@ final class NotchCoordinator {
     private func handleMouseMove(_ location: NSPoint) {
         switch status {
         case .closed:
-            guard let screen = screen(at: location) else { return }
-            if NSMouseInRect(location, hitboxRect(for: screen), false) {
-                notchOpen(on: screen)
+            guard let screen = screen(at: location),
+                  NSMouseInRect(location, hitboxRect(for: screen), false) else {
+                clearHover()
+                return
             }
+            beginHover(on: screen)
         case .opened:
             guard let active = activeScreen else { return }
             let contentHit = contentRect(for: active, hitInset: NotchConstants.closeHitboxInset)
             let mouseInside = NSMouseInRect(location, contentHit, false)
+            if mouseInside {
+                cancelGraceClose()
+            }
             switch dismissState.observe(mouseInside: mouseInside) {
             case .ignore: break
             case .markedEntered: cancelHotkeyAutoCloseTimer()
-            case .shouldClose: notchClose()
+            case .shouldClose: scheduleGraceClose()
             }
         }
+    }
+
+    // MARK: - Hover guards
+
+    /// Start (or continue) the hover dwell on `screen`. The peek state flips
+    /// immediately; the actual open fires only after `hoverOpenDelay` with the
+    /// cursor re-verified inside the hitbox — a swipe-through never opens.
+    /// Hover (unlike a click) also cannot reopen within `hoverReopenSuppression`
+    /// of the last close, so an ESC / click-outside close with the cursor still
+    /// parked on the notch doesn't bounce right back open.
+    private func beginHover(on screen: NSScreen) {
+        if hoverScreenID != screen.displayID {
+            hoverScreenID = screen.displayID
+        }
+        guard hoverOpenTask == nil,
+              Date().timeIntervalSince(lastCloseAt) >= NotchConstants.hoverReopenSuppression
+        else { return }
+        hoverOpenTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(NotchConstants.hoverOpenDelay))
+            guard let self, !Task.isCancelled else { return }
+            hoverOpenTask = nil
+            guard status == .closed, let hovered = hoverScreenID else { return }
+            let location = NSEvent.mouseLocation
+            guard let current = self.screen(at: location),
+                  current.displayID == hovered,
+                  NSMouseInRect(location, hitboxRect(for: current), false) else {
+                clearHover()
+                return
+            }
+            notchOpen(on: current)
+        }
+    }
+
+    private func clearHover() {
+        guard hoverScreenID != nil || hoverOpenTask != nil else { return }
+        hoverOpenTask?.cancel()
+        hoverOpenTask = nil
+        hoverScreenID = nil
+    }
+
+    /// Close only if the cursor is still outside after `hoverCloseGrace` —
+    /// absorbs a clipped corner or jittery exit. Re-entry cancels.
+    private func scheduleGraceClose() {
+        guard closeGraceTask == nil else { return }
+        closeGraceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(NotchConstants.hoverCloseGrace))
+            guard let self, !Task.isCancelled else { return }
+            closeGraceTask = nil
+            guard status == .opened, let active = activeScreen else { return }
+            let contentHit = contentRect(for: active, hitInset: NotchConstants.closeHitboxInset)
+            if !NSMouseInRect(NSEvent.mouseLocation, contentHit, false) {
+                notchClose()
+            }
+        }
+    }
+
+    private func cancelGraceClose() {
+        closeGraceTask?.cancel()
+        closeGraceTask = nil
     }
 
     private func handleMouseDown() {

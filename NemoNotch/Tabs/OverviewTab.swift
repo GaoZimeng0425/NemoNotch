@@ -16,9 +16,9 @@ struct OverviewTab: View {
             let numGaps: CGFloat = hasTrack ? 2 : 1
             let totalCardWidth = geo.size.width - gap * numGaps
 
-            let calendarWidth = totalCardWidth * (hasTrack ? 2.0 / 5.0 : 2.0 / 3.0)
+            let calendarWidth = totalCardWidth * (hasTrack ? 1.8 / 5.0 : 2.0 / 3.0)
             let mediaWidth = totalCardWidth * 2.0 / 5.0
-            let weatherWidth = totalCardWidth * (hasTrack ? 1.0 / 5.0 : 1.0 / 3.0)
+            let weatherWidth = totalCardWidth * (hasTrack ? 1.2 / 5.0 : 1.0 / 3.0)
 
             HStack(alignment: .top, spacing: gap) {
                 OverviewCalendarSection()
@@ -166,10 +166,14 @@ private struct CalendarEventRow: View {
         .opacity(event.meetingURL != nil ? 1 : event.isPast ? 0.5 : 1)
         .contentShape(Rectangle())
         .onHover { hovering in
-            if event.meetingURL != nil { isHovered = hovering }
+            if event.meetingURL != nil {
+                isHovered = hovering
+            }
         }
         .onTapGesture {
-            if let url = event.meetingURL { NSWorkspace.shared.open(url) }
+            if let url = event.meetingURL {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 
@@ -180,7 +184,9 @@ private struct CalendarEventRow: View {
     }()
 
     private var eventTimeRange: String {
-        if event.isAllDay { return String(localized: "calendar.all_day") }
+        if event.isAllDay {
+            return String(localized: "calendar.all_day")
+        }
         return "\(Self.timeFormatter.string(from: event.startDate)) - \(Self.timeFormatter.string(from: event.endDate))"
     }
 }
@@ -209,6 +215,12 @@ private struct OverviewMediaSection: View {
         mediaService.playbackState
     }
 
+    /// Album-derived accent tinting the glow, scrubber, and play button;
+    /// falls back to the theme accent for grayscale / missing artwork.
+    private var accent: Color {
+        mediaService.artworkAccent ?? NotchTheme.accent
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             artwork
@@ -219,6 +231,10 @@ private struct OverviewMediaSection: View {
         .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
         .notchCard(radius: 8, fill: NotchTheme.surface)
+        .onAppear { showsSeekButtons = mediaService.supportsSeeking }
+        .onChange(of: mediaService.supportsSeeking) { _, canSeek in
+            updateSeekVisibility(canSeek)
+        }
     }
 
     private var artwork: some View {
@@ -229,6 +245,17 @@ private struct OverviewMediaSection: View {
                 appIcon: mediaService.appIcon,
                 size: 80
             )
+            .background {
+                // Mood-light halo behind the vinyl in the album's dominant
+                // color — bright while playing, embers when paused.
+                Circle()
+                    .fill(accent)
+                    .scaleEffect(1.12)
+                    .blur(radius: 14)
+                    .opacity(state.isPlaying ? 0.45 : 0.12)
+                    .animation(.easeInOut(duration: 0.6), value: state.isPlaying)
+                    .animation(.easeInOut(duration: 0.6), value: accent)
+            }
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
             if let appIcon = mediaService.appIcon {
@@ -251,10 +278,11 @@ private struct OverviewMediaSection: View {
 
     private var trackInfo: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(state.title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-                .lineLimit(1)
+            MarqueeText(
+                text: state.title,
+                font: .system(size: 11, weight: .semibold),
+                color: NotchTheme.textPrimary
+            )
             Text(state.artist)
                 .font(.system(size: 10))
                 .foregroundStyle(NotchTheme.textSecondary)
@@ -269,14 +297,18 @@ private struct OverviewMediaSection: View {
                 position: state.position,
                 duration: state.duration,
                 enabled: mediaService.supportsSeeking,
+                tint: accent,
                 onScrub: { fraction in mediaService.seek(toFraction: fraction) }
             )
             .frame(height: 12)
+            .animation(.easeInOut(duration: 0.6), value: accent)
 
             HStack {
                 Text(formatTime(state.position))
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundStyle(NotchTheme.textTertiary)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.25), value: state.position)
                 Spacer()
                 Text(formatTime(state.duration))
                     .font(.system(size: 8, design: .monospaced))
@@ -285,53 +317,126 @@ private struct OverviewMediaSection: View {
         }
     }
 
+    @State private var prevNudge: CGFloat = 0
+    @State private var nextNudge: CGFloat = 0
+    @State private var backWiggle: Double = 0
+    @State private var forwardWiggle: Double = 0
+
+    /// Debounced `supportsSeeking` for the seek buttons' structural presence.
+    /// During a track change the CLI briefly reports duration 0, which would
+    /// remove and re-insert the ±15s buttons (a visible flash). Turning on is
+    /// immediate; turning off requires the unseekable state to persist.
+    @State private var showsSeekButtons = false
+    @State private var seekDropTask: Task<Void, Never>?
+
+    private func updateSeekVisibility(_ canSeek: Bool) {
+        seekDropTask?.cancel()
+        seekDropTask = nil
+        if canSeek {
+            showsSeekButtons = true
+        } else {
+            seekDropTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return }
+                showsSeekButtons = false
+            }
+        }
+    }
+
     private var controls: some View {
-        let canSeek = mediaService.supportsSeeking
+        let canSeek = showsSeekButtons
         return HStack(spacing: canSeek ? 6 : 10) {
-            Button(action: { mediaService.previousTrack() }) {
+            Button(action: {
+                nudge($prevNudge, toward: -3)
+                mediaService.previousTrack()
+            }) {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+            .offset(x: prevNudge)
 
             if canSeek {
-                Button(action: { mediaService.skipBackward() }) {
+                Button(action: {
+                    wiggle($backWiggle, degrees: -11)
+                    mediaService.skipBackward()
+                }) {
                     Image(systemName: "gobackward.15")
                         .font(.system(size: 18))
                         .foregroundStyle(NotchTheme.textSecondary)
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .rotationEffect(.degrees(backWiggle))
             }
 
             Button(action: { mediaService.togglePlayPause() }) {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.black.opacity(0.85))
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(.snappy(duration: 0.2), value: state.isPlaying)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(NotchTheme.accent))
+                    .background(Circle().fill(accent))
+                    .animation(.easeInOut(duration: 0.6), value: accent)
             }
             .buttonStyle(.plain)
 
             if canSeek {
-                Button(action: { mediaService.skipForward() }) {
+                Button(action: {
+                    wiggle($forwardWiggle, degrees: 11)
+                    mediaService.skipForward()
+                }) {
                     Image(systemName: "goforward.15")
                         .font(.system(size: 18))
                         .foregroundStyle(NotchTheme.textSecondary)
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .rotationEffect(.degrees(forwardWiggle))
             }
 
-            Button(action: { mediaService.nextTrack() }) {
+            Button(action: {
+                nudge($nextNudge, toward: 3)
+                mediaService.nextTrack()
+            }) {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+            .offset(x: nextNudge)
+        }
+    }
+
+    // Press micro-interactions (Atoll's nudge/wiggle springs): track-change
+    // buttons shove briefly toward the skip direction, seek buttons twitch a
+    // few degrees and settle back.
+
+    private func nudge(_ offset: Binding<CGFloat>, toward amount: CGFloat) {
+        withAnimation(.spring(response: 0.16, dampingFraction: 0.72)) {
+            offset.wrappedValue = amount
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) {
+                offset.wrappedValue = 0
+            }
+        }
+    }
+
+    private func wiggle(_ angle: Binding<Double>, degrees: Double) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.52)) {
+            angle.wrappedValue = degrees
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.76)) {
+                angle.wrappedValue = 0
+            }
         }
     }
 
@@ -349,32 +454,38 @@ private struct ProgressScrubber: View {
     let position: Double
     let duration: Double
     let enabled: Bool
+    var tint: Color = NotchTheme.accent
     let onScrub: (Double) -> Void
 
     @State private var dragFraction: Double?
     @State private var isHovering = false
 
     private var fraction: Double {
-        if let dragFraction { return dragFraction }
+        if let dragFraction {
+            return dragFraction
+        }
         guard duration > 0 else { return 0 }
         return max(0, min(1, position / duration))
     }
 
     var body: some View {
         GeometryReader { geo in
-            let barHeight: CGFloat = (isHovering || dragFraction != nil) ? 6 : 4
+            // Three-tier track thickness: resting → hover → actively dragging
+            // (the extra step plus the bouncy settle makes the grab feel
+            // physical, à la Atoll's slider).
+            let barHeight: CGFloat = dragFraction != nil ? 9 : (isHovering ? 6 : 4)
             ZStack(alignment: .leading) {
                 Color.clear // hit area
                 Capsule()
                     .fill(NotchTheme.surfaceEmphasis)
                     .frame(height: barHeight)
                 Capsule()
-                    .fill(NotchTheme.accent.opacity(0.85))
+                    .fill(tint.opacity(0.85))
                     .frame(width: geo.size.width * CGFloat(fraction), height: barHeight)
             }
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .animation(.easeOut(duration: 0.12), value: barHeight)
+            .animation(.bouncy.speed(1.4), value: barHeight)
             .onHover { hovering in
                 guard enabled else { return }
                 isHovering = hovering
@@ -387,7 +498,9 @@ private struct ProgressScrubber: View {
                         dragFraction = f
                     }
                     .onEnded { _ in
-                        if let f = dragFraction { onScrub(f) }
+                        if let f = dragFraction {
+                            onScrub(f)
+                        }
                         dragFraction = nil
                     }
                     : nil
@@ -438,7 +551,7 @@ private struct OverviewWeatherSection: View {
                 .lineLimit(1)
 
             HStack(spacing: 2) {
-                Image(systemName: conditionIcon)
+                Image(systemName: weatherService.symbolName)
                     .font(.system(size: 13))
                     .foregroundStyle(NotchTheme.textSecondary)
                 Text("\(Int(weatherService.temperature))°")
@@ -462,6 +575,21 @@ private struct OverviewWeatherSection: View {
                 statItem(label: String(localized: "weather.wind_speed"), value: "\(Int(weatherService.windSpeed))km/h")
             }
 
+            if !weatherService.dailyForecast.isEmpty {
+                Divider()
+                    .background(NotchTheme.stroke)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 2)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(weatherService.dailyForecast, id: \.date) { day in
+                            dailyRow(day)
+                        }
+                    }
+                }
+            }
+
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
@@ -481,15 +609,20 @@ private struct OverviewWeatherSection: View {
         }
     }
 
-    private var conditionIcon: String {
-        let lower = weatherService.condition.lowercased()
-        if lower.contains("sunny") || lower.contains("clear") { return "sun.max.fill" }
-        if lower.contains("partly cloudy") { return "cloud.sun.fill" }
-        if lower.contains("cloudy") || lower.contains("overcast") { return "cloud.fill" }
-        if lower.contains("rain") || lower.contains("drizzle") { return "cloud.rain.fill" }
-        if lower.contains("snow") { return "snowflake" }
-        if lower.contains("thunder") { return "cloud.bolt.fill" }
-        if lower.contains("fog") || lower.contains("mist") { return "cloud.fog.fill" }
-        return "cloud.sun.fill"
+    private func dailyRow(_ day: DailyForecast) -> some View {
+        HStack(spacing: 4) {
+            Text(day.label())
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .lineLimit(1)
+                .frame(width: 28, alignment: .leading)
+            Image(systemName: day.kind.symbol(isDay: true))
+                .font(.system(size: 9))
+                .foregroundStyle(NotchTheme.textSecondary)
+            Spacer(minLength: 0)
+            Text("\(Int(day.high))°/\(Int(day.low))°")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(NotchTheme.textSecondary)
+        }
     }
 }

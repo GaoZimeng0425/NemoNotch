@@ -1,5 +1,6 @@
 import AppKit
 @preconcurrency import Foundation
+import SwiftUI
 
 private struct NowPlayingInfoBox: @unchecked Sendable {
     let info: [String: Any]?
@@ -10,7 +11,12 @@ private struct NowPlayingInfoBox: @unchecked Sendable {
 final class MediaService {
     var playbackState = PlaybackState()
     var appIcon: NSImage?
+    /// Dominant color of the current artwork, extracted off the main actor on
+    /// every artwork change. `nil` when there is no artwork or it is
+    /// effectively grayscale — consumers fall back to `NotchTheme.accent`.
+    var artworkAccent: Color?
 
+    private var artworkAccentTask: Task<Void, Never>?
     private var pollTimer: Timer?
     private var progressTimer: Timer?
     private var reconcileTask: Task<Void, Never>?
@@ -186,7 +192,9 @@ final class MediaService {
                 Task { @MainActor [weak self] in
                     guard let self, playbackState.isPlaying, playbackState.duration > 0 else { return }
                     let next = min(playbackState.duration, playbackState.position + 0.5)
-                    if next > playbackState.position { playbackState.position = next }
+                    if next > playbackState.position {
+                        playbackState.position = next
+                    }
                 }
             }
         } else if !isPlaying, progressTimer != nil {
@@ -226,6 +234,7 @@ final class MediaService {
             if !playbackState.isEmpty {
                 playbackState = PlaybackState()
                 appIcon = nil
+                updateArtworkAccent(nil, changed: true)
             }
             updateProgressTimer(isPlaying: false)
             return
@@ -276,7 +285,9 @@ final class MediaService {
         if resolvedIsPlaying, let timestamp = info["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date {
             let elapsed = Date().timeIntervalSince(timestamp)
             position = max(0, position + elapsed)
-            if duration > 0 { position = min(position, duration) }
+            if duration > 0 {
+                position = min(position, duration)
+            }
         }
 
         let artworkData = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data
@@ -285,6 +296,7 @@ final class MediaService {
             if !playbackState.isEmpty {
                 playbackState = PlaybackState()
                 appIcon = nil
+                updateArtworkAccent(nil, changed: true)
             }
             updateProgressTimer(isPlaying: false)
             return
@@ -295,6 +307,7 @@ final class MediaService {
 
         let previousBundleID = playbackState.appBundleIdentifier
         let resolvedBundleID = bundleID ?? previousBundleID
+        let previousArtworkData = playbackState.artworkData
 
         playbackState = PlaybackState(
             title: title,
@@ -311,7 +324,29 @@ final class MediaService {
         if let resolvedBundleID, !resolvedBundleID.isEmpty {
             applyPlayingApp(bundleID: resolvedBundleID, changed: resolvedBundleID != previousBundleID)
         }
+        updateArtworkAccent(artworkData, changed: artworkData != previousArtworkData)
         updateProgressTimer(isPlaying: resolvedIsPlaying)
+    }
+
+    /// Recompute `artworkAccent` when the artwork bytes change. The pixel
+    /// scan runs detached off the main actor; a newer artwork cancels any
+    /// in-flight extraction.
+    private func updateArtworkAccent(_ data: Data?, changed: Bool) {
+        guard changed else { return }
+        artworkAccentTask?.cancel()
+        artworkAccentTask = nil
+        guard let data else {
+            artworkAccent = nil
+            return
+        }
+        artworkAccentTask = Task { [weak self] in
+            let color = await Task.detached(priority: .utility) {
+                ArtworkColor.accent(from: data)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            artworkAccent = color
+            LogService.debug("[Media] artwork accent extracted: \(color.map { "\($0)" } ?? "nil")", category: "media")
+        }
     }
 
     private func applyPlayingApp(bundleID: String, changed: Bool) {

@@ -59,13 +59,25 @@ struct NotchView: View {
 
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
+    /// Direction of the last tab change (set in `selectTab` before the switch)
+    /// so the slide transition enters from the side you're heading toward.
+    @State private var tabSlideForward = true
+
+    /// Cursor is dwelling on this screen's collapsed notch (the coordinator is
+    /// counting down to a hover-open). Grows the shape slightly as a "peek"
+    /// affordance during the dwell.
+    private var isClosedHovering: Bool {
+        effectiveStatus == .closed && coordinator.hoverScreenID == screen.displayID
+    }
 
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
             return CGSize(
-                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + closedBadgeExtraWidth,
+                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + closedBadgeExtraWidth
+                    + (isClosedHovering ? NotchConstants.closedHoverExtraWidth : 0),
                 height: hardwareNotchSize.height
+                    + (isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0)
             )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
@@ -91,10 +103,26 @@ struct NotchView: View {
         return NotchConstants.closedWidthInset + 2 * halfExtension
     }
 
-    private var notchCornerRadius: CGFloat {
+    private var notchTopCornerRadius: CGFloat {
         switch effectiveStatus {
-        case .closed: NotchConstants.cornerRadiusClosed
-        case .opened: NotchConstants.cornerRadiusOpened
+        case .closed: NotchConstants.cornerRadiusTopClosed
+        case .opened: NotchConstants.cornerRadiusTopOpened
+        }
+    }
+
+    private var notchBottomCornerRadius: CGFloat {
+        switch effectiveStatus {
+        case .closed: NotchConstants.cornerRadiusBottomClosed
+        case .opened: NotchConstants.cornerRadiusBottomOpened
+        }
+    }
+
+    /// Open gets a lively spring with a hint of bounce; close runs fully
+    /// damped so the collapse lands crisply without a terminal jiggle.
+    private var notchStateAnimation: Animation {
+        switch effectiveStatus {
+        case .opened: .spring(duration: NotchConstants.openSpringDuration, bounce: 0.1)
+        case .closed: .spring(duration: NotchConstants.closeSpringDuration)
         }
     }
 
@@ -103,7 +131,7 @@ struct NotchView: View {
 
         ZStack(alignment: .top) {
             notchShape(shown: shown)
-                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+                .animation(notchStateAnimation, value: effectiveStatus)
                 .animation(
                     .spring(
                         duration: NotchConstants.tabSwitchSpringDuration,
@@ -125,6 +153,14 @@ struct NotchView: View {
                     mediaService: mediaService,
                     pomodoroService: pomodoroService
                 )
+                // Pseudo-continuity with the expanding panel: on open the
+                // badges scale up and fade (reading as "growing into the
+                // content"), on close they condense back in. Anchored at the
+                // notch so the growth radiates from where the panel comes from.
+                .transition(
+                    .scale(scale: 1.35, anchor: .top)
+                        .combined(with: .opacity)
+                )
                 .zIndex(1)
             }
 
@@ -139,19 +175,26 @@ struct NotchView: View {
                     ),
                     value: coordinator.selectedTab
                 )
-                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+                .animation(notchStateAnimation, value: effectiveStatus)
                 .zIndex(1)
 
-            NotchTabBar(
+            // Chin bar: single three-column row straddling the hardware notch.
+            // Left = tabs, middle = clear notch-width spacer, right = actions.
+            // The outer frame (openedWidth) constrains everything inside, so
+            // content can never spill past the notch shell.
+            NotchChinBar(
                 tabs: enabledTabs,
                 selected: coordinator.selectedTab,
-                trailingX: notchLeftEdge - 8,
-                centerY: hardwareNotchSize.height / 2,
-                onSelect: selectTab
+                openedWidth: coordinator.openedWidth,
+                notchWidth: hardwareNotchSize.width,
+                chinHeight: hardwareNotchSize.height,
+                onSelect: selectTab,
+                onClose: { coordinator.notchClose() }
             )
+            .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
             .opacity(effectiveStatus == .opened ? 1 : 0)
             .allowsHitTesting(effectiveStatus == .opened)
-            .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+            .animation(notchStateAnimation, value: effectiveStatus)
             .zIndex(2)
 
             // HUD overlay - render only on the primary HUD screen so it
@@ -229,8 +272,8 @@ struct NotchView: View {
         }
         .frame(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         .clipShape(.rect(
-            bottomLeadingRadius: NotchConstants.cornerRadiusOpened,
-            bottomTrailingRadius: NotchConstants.cornerRadiusOpened
+            bottomLeadingRadius: NotchConstants.cornerRadiusBottomOpened,
+            bottomTrailingRadius: NotchConstants.cornerRadiusBottomOpened
         ))
     }
 
@@ -247,7 +290,16 @@ struct NotchView: View {
             tabContent
         }
         .id(coordinator.selectedTab)
-        .transition(.opacity)
+        // Direction-aware slide-in, plain fade-out. Only the entering page
+        // moves: a removal transition is captured at insertion time, so a
+        // direction-dependent removal always exits with the PREVIOUS switch's
+        // direction (visibly wrong on rapid back-and-forth switching). The
+        // insertion reads fresh state, and its motion alone carries the
+        // directional cue while spatial separation kills the ghosting.
+        .transition(.asymmetric(
+            insertion: .move(edge: tabSlideForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .opacity
+        ))
         .animation(
             .spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce),
             value: coordinator.selectedTab
@@ -310,7 +362,8 @@ struct NotchView: View {
         NotchBackgroundView(
             status: effectiveStatus,
             notchSize: notchSize,
-            cornerRadius: notchCornerRadius,
+            topCornerRadius: notchTopCornerRadius,
+            bottomCornerRadius: notchBottomCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing,
             glow: notchGlow
         )
@@ -318,11 +371,20 @@ struct NotchView: View {
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shown
         )
+        .animation(
+            .spring(duration: NotchConstants.hoverPeekSpringDuration, bounce: 0.25),
+            value: isClosedHovering
+        )
         .animation(.easeInOut(duration: NotchConstants.fadeNormalDuration), value: notchGlow)
     }
 
     private func selectTab(_ tab: Tab) {
         guard tab != coordinator.selectedTab else { return }
+        let tabs = enabledTabs
+        if let from = tabs.firstIndex(of: coordinator.selectedTab),
+           let to = tabs.firstIndex(of: tab) {
+            tabSlideForward = to > from
+        }
         coordinator.selectedTab = tab
     }
 }

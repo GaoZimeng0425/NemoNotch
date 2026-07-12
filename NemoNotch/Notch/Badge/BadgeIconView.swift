@@ -79,7 +79,12 @@ struct BadgeIconView: View {
                 size: 20
             )
         case .compactRight:
-            AudioEqualizerView(isActive: isPlaying, maxHeight: 10, barWidth: 1.5, color: NotchTheme.accent)
+            AudioEqualizerView(
+                isActive: isPlaying,
+                maxHeight: 10,
+                barWidth: 1.5,
+                color: mediaService.artworkAccent ?? NotchTheme.accent
+            )
         }
     }
 
@@ -208,12 +213,16 @@ struct BadgeIconView: View {
     }
 
     private var emojiOpacity: Double {
-        if case .paused = pomodoroService.state { return 0.55 }
+        if case .paused = pomodoroService.state {
+            return 0.55
+        }
         return 1.0
     }
 
     private var piePausedOpacity: Double {
-        if case .paused = pomodoroService.state { return 0.7 }
+        if case .paused = pomodoroService.state {
+            return 0.7
+        }
         return 1.0
     }
 }

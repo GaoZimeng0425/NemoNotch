@@ -45,7 +45,7 @@ graph TB
         CS["CalendarService<br/>EventKit"]
         LS["LauncherService<br/>App search & launch"]
         NS["NotificationService<br/>Dock Accessibility API"]
-        WS["WeatherService<br/>wttr.in"]
+        WS["WeatherService<br/>Open-Meteo primary + wttr.in fallback"]
         UQS["UsageQuotaService<br/>Claude + Codex + Gemini usage quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
@@ -216,6 +216,8 @@ sequenceDiagram
 
 **Hotkey-aware dismiss:** When the notch is opened via global hotkey, it does NOT close on mouse-move-outside until either (a) the mouse enters the content area at least once, (b) 3 seconds elapse with no mouse entry (`NotchConstants.hotkeyAutoCloseDelay`), or (c) the user presses ESC / hotkey / clicks outside. Mouse-hover open path is unchanged. State machine lives in `HotkeyDismissState`.
 
+**Hover guards (anti-flicker):** The mouse open/close path in `NotchCoordinator` carries three protections: a **hover-open dwell** (`hoverOpenDelay`, 0.3s — the cursor must stay in the closed-notch hitbox before a hover-open fires, re-verified at expiry; clicks still open immediately), a **close grace** (`hoverCloseGrace`, 100ms — leaving the opened content collapses only if the cursor is still outside after the grace; re-entry cancels), and a **reopen suppression** (`hoverReopenSuppression`, 0.35s after any close, during which hover — but not a click — cannot reopen; prevents an ESC/click-outside close from bouncing straight back open when the cursor is still parked on the notch). While the dwell counts down, `hoverScreenID` drives a springy "peek" growth of the collapsed shape (+8pt w / +6pt h) in `NotchView` as the pre-open affordance.
+
 **Permission UI pattern:** Calendar, Location, and Notification permissions are NOT auto-requested on launch. Instead the relevant Tab/Settings section renders a `PermissionCard` with a "Grant" button. AX uses the same card but only links to System Settings (no programmatic request API). Card lives at `NemoNotch/Helpers/PermissionCard.swift`. Notification permission ships in the Pomodoro settings page (`PomodoroSettingsView`), backed by `NotificationPermissionMonitor`.
 
 **Pomodoro hotkeys:** `openPomodoro` opens the Pomodoro tab; `openQuickStart` toggles the centered draggable `QuickStartWindow` (`NemoNotch/Notch/QuickStartWindow.swift` / `QuickStartWindowController.swift`). Neither has a default binding — users must set them in Settings → Pomodoro.
@@ -272,6 +274,7 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 - `MediaRemote.swift` now only **registers system notifications** to trigger refresh / `setCanBeNowPlayingApplication`; its old `sendCommand` / `skip` / `setElapsedTime` (and the `Command` enum) were removed — in-process control is gated since 15.4
 - `MediaBridge`, `MediaAutomationPermissionMonitor`, and the `ScriptingBridge/` Spotify/Music interfaces were **deleted** — control no longer needs AppleScript/Automation, and the authoritative `isPlaying` read they provided is no longer needed (the CLI playback-rate + guard self-heal, see below). The Automation `PermissionCard` and the `NSAppleEventsUsageDescription` Info.plist key are gone too.
 - When debugging "info lost" issues, prioritize investigating NowPlayingCLI daemon state / dylib extraction (`~/Library/Application Support/NemoNotch/MediaRemoteMini.dylib`) / perl script, rather than modifying MediaRemote.swift
+- **Artwork accent color**: `MediaService.artworkAccent` holds the album art's dominant color, extracted by `ArtworkColor` (`NemoNotch/Helpers/ArtworkColor.swift` — HSB hue-bucket weighted voting on a 40×40 downsample, saturation/brightness boost + perceived-brightness floor; grayscale → `nil`). Recomputed off the main actor whenever the artwork bytes change. The Overview media card tints its halo glow, progress scrubber, and play button with it (falling back to `NotchTheme.accent`).
 
 **Play/Pause state reconcile flow**:
 

@@ -57,6 +57,8 @@ struct PomodoroActiveBlock: View {
                 helpKey: pauseResumeLabel,
                 action: onPauseResume
             )
+            .contentTransition(.symbolEffect(.replace))
+            .animation(.snappy(duration: 0.2), value: pauseResumeIcon)
             iconButton(
                 systemName: "checkmark",
                 tint: Color(red: 0.34, green: 0.78, blue: 0.51),
@@ -94,12 +96,16 @@ struct PomodoroActiveBlock: View {
     }
 
     private var pauseResumeLabel: LocalizedStringKey {
-        if case .paused = timerService.state { return "pomodoro.action.resume" }
+        if case .paused = timerService.state {
+            return "pomodoro.action.resume"
+        }
         return "pomodoro.action.pause"
     }
 
     private var pauseResumeIcon: String {
-        if case .paused = timerService.state { return "play.fill" }
+        if case .paused = timerService.state {
+            return "play.fill"
+        }
         return "pause.fill"
     }
 
@@ -148,7 +154,9 @@ struct PomodoroActiveBlock: View {
     }
 
     private var emojiOpacity: Double {
-        if case .paused = timerService.state { return 0.55 }
+        if case .paused = timerService.state {
+            return 0.55
+        }
         return 1.0
     }
 
@@ -161,8 +169,12 @@ struct PomodoroActiveBlock: View {
     }
 
     private var currentTaskID: UUID? {
-        if case let .running(ctx) = timerService.state { return ctx.taskID }
-        if case let .paused(ctx) = timerService.state { return ctx.taskID }
+        if case let .running(ctx) = timerService.state {
+            return ctx.taskID
+        }
+        if case let .paused(ctx) = timerService.state {
+            return ctx.taskID
+        }
         return nil
     }
 

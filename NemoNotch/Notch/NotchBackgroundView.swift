@@ -3,7 +3,8 @@ import SwiftUI
 struct NotchBackgroundView: View {
     let status: NotchCoordinator.Status
     let notchSize: CGSize
-    let cornerRadius: CGFloat
+    let topCornerRadius: CGFloat
+    let bottomCornerRadius: CGFloat
     let spacing: CGFloat
     var glow: NotchGlow = .none
 
@@ -72,7 +73,7 @@ struct NotchBackgroundView: View {
                 if let glowColor {
                     NotchGlowRing(
                         color: glowColor,
-                        cornerRadius: cornerRadius,
+                        cornerRadius: bottomCornerRadius,
                         notchSize: notchSize
                     )
                     .blendMode(.screen)
@@ -81,7 +82,7 @@ struct NotchBackgroundView: View {
         }
         .mask(notchBackgroundMaskGroup)
         .frame(
-            width: notchSize.width + cornerRadius * 2,
+            width: notchSize.width + topCornerRadius * 2,
             height: notchSize.height
         )
         .shadow(
@@ -95,44 +96,44 @@ struct NotchBackgroundView: View {
             .foregroundStyle(.black)
             .frame(width: notchSize.width, height: notchSize.height)
             .clipShape(.rect(
-                bottomLeadingRadius: cornerRadius,
-                bottomTrailingRadius: cornerRadius
+                bottomLeadingRadius: bottomCornerRadius,
+                bottomTrailingRadius: bottomCornerRadius
             ))
             .overlay {
                 ZStack(alignment: .topTrailing) {
                     Rectangle()
-                        .frame(width: cornerRadius, height: cornerRadius)
+                        .frame(width: topCornerRadius, height: topCornerRadius)
                         .foregroundStyle(.black)
                     Rectangle()
-                        .clipShape(.rect(topTrailingRadius: cornerRadius))
+                        .clipShape(.rect(topTrailingRadius: topCornerRadius))
                         .foregroundStyle(.white)
                         .frame(
-                            width: cornerRadius + spacing,
-                            height: cornerRadius + spacing
+                            width: topCornerRadius + spacing,
+                            height: topCornerRadius + spacing
                         )
                         .blendMode(.destinationOut)
                 }
                 .compositingGroup()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .offset(x: -cornerRadius - spacing + 0.5, y: -0.5)
+                .offset(x: -topCornerRadius - spacing + 0.5, y: -0.5)
             }
             .overlay {
                 ZStack(alignment: .topLeading) {
                     Rectangle()
-                        .frame(width: cornerRadius, height: cornerRadius)
+                        .frame(width: topCornerRadius, height: topCornerRadius)
                         .foregroundStyle(.black)
                     Rectangle()
-                        .clipShape(.rect(topLeadingRadius: cornerRadius))
+                        .clipShape(.rect(topLeadingRadius: topCornerRadius))
                         .foregroundStyle(.white)
                         .frame(
-                            width: cornerRadius + spacing,
-                            height: cornerRadius + spacing
+                            width: topCornerRadius + spacing,
+                            height: topCornerRadius + spacing
                         )
                         .blendMode(.destinationOut)
                 }
                 .compositingGroup()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .offset(x: cornerRadius + spacing - 0.5, y: -0.5)
+                .offset(x: topCornerRadius + spacing - 0.5, y: -0.5)
             }
     }
 }

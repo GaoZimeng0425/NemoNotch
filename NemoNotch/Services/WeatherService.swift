@@ -7,6 +7,7 @@ import Foundation
 final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware {
     var temperature: Double = 0
     var condition: String = "--"
+    var symbolName: String = "cloud.sun.fill"
     var feelsLike: Double = 0
     var highTemp: Double = 0
     var lowTemp: Double = 0
@@ -14,6 +15,7 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
     var windSpeed: Double = 0
     var cityName: String = ""
     var hourlyForecast: [(time: String, temp: Double, icon: String)] = []
+    var dailyForecast: [DailyForecast] = []
     var isLoaded: Bool = false
     var locationAuthorizationStatus: CLAuthorizationStatus = .notDetermined
 
@@ -21,6 +23,8 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
     private var timer: Timer?
     private var lastLocation: CLLocation?
     private var customCity: String = ""
+    /// Last coordinate successfully reverse-geocoded (Open-Meteo path).
+    private var geocodedLocation: CLLocation?
 
     override init() {
         super.init()
@@ -104,70 +108,123 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
     }
 
     private func fetchWeather(coordinate: CLLocationCoordinate2D? = nil) {
-        // uitest 下保留 UITestSeeder 注入的假天气,禁止真实网络请求覆盖(并避免无谓的 wttr.in 调用)。
-        if UITestMode.isActive { return }
-        let lang = Locale.current.language.languageCode?.identifier ?? "en"
-        var urlStr: String
-        if !customCity.isEmpty {
-            let encoded = customCity.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? customCity
-            urlStr = "https://wttr.in/\(encoded)?format=j1&lang=\(lang)"
-        } else if let coord = coordinate {
-            urlStr = "https://wttr.in/\(coord.latitude),\(coord.longitude)?format=j1&lang=\(lang)"
-        } else {
-            urlStr = "https://wttr.in/?format=j1&lang=\(lang)"
+        // uitest 下保留 UITestSeeder 注入的假天气,禁止真实网络请求覆盖(并避免无谓的网络调用)。
+        if UITestMode.isActive {
+            return
         }
-
-        guard let url = URL(string: urlStr) else { return }
-
+        let coordinate = coordinate ?? lastLocation?.coordinate
         Task {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-                parseWeather(json)
-            } catch {
-                LogService.warn("Weather fetch failed: \(error.localizedDescription)", category: "Weather")
+            if !customCity.isEmpty {
+                await fetchFromWTTR(city: customCity, coordinate: nil)
+            } else if let coordinate {
+                // Open-Meteo primary (keyless, stable); wttr.in as fallback.
+                if await fetchFromOpenMeteo(coordinate: coordinate) {
+                    return
+                }
+                await fetchFromWTTR(city: nil, coordinate: coordinate)
+            } else {
+                // No location yet — wttr.in geolocates by IP.
+                await fetchFromWTTR(city: nil, coordinate: nil)
             }
         }
     }
 
-    private func parseWeather(_ json: [String: Any]) {
-        guard let current = json["current_condition"] as? [[String: Any]], let now = current.first else { return }
-
-        temperature = Double(now["temp_C"] as? String ?? "0") ?? 0
-        feelsLike = Double(now["FeelsLikeC"] as? String ?? "0") ?? 0
-        humidity = Int(now["humidity"] as? String ?? "0") ?? 0
-        windSpeed = Double(now["windspeedKmph"] as? String ?? "0") ?? 0
-
-        if let desc = (now["weatherDesc"] as? [[String: String]])?.first?["value"] {
-            condition = desc
+    /// Returns false on any failure so the caller can fall back to wttr.in.
+    private func fetchFromOpenMeteo(coordinate: CLLocationCoordinate2D) async -> Bool {
+        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
+        components.queryItems = [
+            URLQueryItem(name: "latitude", value: String(format: "%.4f", coordinate.latitude)),
+            URLQueryItem(name: "longitude", value: String(format: "%.4f", coordinate.longitude)),
+            URLQueryItem(
+                name: "current",
+                value: "temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day"
+            ),
+            URLQueryItem(name: "hourly", value: "temperature_2m,weather_code"),
+            URLQueryItem(name: "daily", value: "temperature_2m_max,temperature_2m_min,weather_code"),
+            URLQueryItem(name: "forecast_days", value: "7"),
+            // Cap the hourly block to the next few hours; daily still spans 7 days.
+            URLQueryItem(name: "forecast_hours", value: "6"),
+            URLQueryItem(name: "timezone", value: "auto"),
+        ]
+        guard let url = components.url else { return false }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200 ..< 300).contains(status) else {
+                LogService.warn("Open-Meteo HTTP \(status), falling back to wttr.in", category: "Weather")
+                return false
+            }
+            try apply(WeatherParser.parseOpenMeteo(data: data))
+            LogService.debug("Weather fetched from Open-Meteo", category: "Weather")
+            resolveCityName(for: coordinate)
+            return true
+        } catch {
+            LogService.warn(
+                "Open-Meteo fetch failed, falling back to wttr.in: \(error.localizedDescription)",
+                category: "Weather"
+            )
+            return false
         }
+    }
 
-        if let weather = json["weather"] as? [[String: Any]], let today = weather.first {
-            highTemp = Double(today["maxtempC"] as? String ?? "0") ?? 0
-            lowTemp = Double(today["mintempC"] as? String ?? "0") ?? 0
+    private func fetchFromWTTR(city: String?, coordinate: CLLocationCoordinate2D?) async {
+        let location: String = if let city, !city.isEmpty {
+            city.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? city
+        } else if let coordinate {
+            "\(coordinate.latitude),\(coordinate.longitude)"
+        } else {
+            ""
+        }
+        guard let url = URL(string: "https://wttr.in/\(location)?format=j1") else { return }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200 ..< 300).contains(status) else {
+                LogService.error("wttr.in HTTP \(status)", category: "Weather")
+                return
+            }
+            let snapshot = try WeatherParser.parseWTTR(data: data)
+            apply(snapshot)
+            if let name = snapshot.cityName {
+                cityName = name
+            }
+            LogService.debug("Weather fetched from wttr.in", category: "Weather")
+        } catch {
+            LogService.error("wttr.in fetch failed: \(error.localizedDescription)", category: "Weather")
+        }
+    }
 
-            if let hourly = today["hourly"] as? [[String: Any]] {
-                let currentHour = Calendar.current.component(.hour, from: Date())
-                let allItems: [(String, Double, String)] = hourly.compactMap { h in
-                    guard let time = h["time"] as? String,
-                          let temp = h["tempC"] as? String else { return nil }
-                    let hour = Int(time) ?? 0
-                    let descArray = h["weatherDesc"] as? [[String: String]]
-                    let icon = descArray?.first?["value"] ?? ""
-                    let formatted = String(format: "%02d:00", hour)
-                    return (formatted, Double(temp) ?? 0, icon)
+    private func apply(_ snapshot: WeatherSnapshot) {
+        temperature = snapshot.temperature
+        feelsLike = snapshot.feelsLike
+        highTemp = snapshot.highTemp
+        lowTemp = snapshot.lowTemp
+        humidity = snapshot.humidity
+        windSpeed = snapshot.windSpeed
+        condition = snapshot.kind.localizedDescription
+        symbolName = snapshot.kind.symbol(isDay: snapshot.isDay)
+        hourlyForecast = snapshot.hourly
+        dailyForecast = snapshot.days
+        isLoaded = true
+    }
+
+    /// Open-Meteo returns no place name — reverse-geocode instead, at most
+    /// once per ~1 km of movement (CLGeocoder is rate-limited).
+    private func resolveCityName(for coordinate: CLLocationCoordinate2D) {
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        if let done = geocodedLocation, done.distance(from: location) < 1000, !cityName.isEmpty {
+            return
+        }
+        Task {
+            do {
+                let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
+                if let name = placemarks.first?.locality ?? placemarks.first?.name {
+                    cityName = name
+                    geocodedLocation = location
                 }
-                hourlyForecast = allItems.filter { item in
-                    let h = Int(item.0.prefix(2)) ?? 0
-                    return h >= currentHour
-                }.prefix(3).map(\.self)
+            } catch {
+                LogService.warn("Reverse geocoding failed: \(error.localizedDescription)", category: "Weather")
             }
         }
-
-        if let area = json["nearest_area"] as? [[String: Any]], let first = area.first {
-            cityName = (first["areaName"] as? [[String: String]])?.first?["value"] ?? ""
-        }
-
-        isLoaded = true
     }
 }
