@@ -50,6 +50,23 @@ enum NotchConstants {
     /// before auto-collapsing. Cancelled the moment the mouse enters content.
     static let hotkeyAutoCloseDelay: TimeInterval = 3.0
 
+    /// Hover guards (anti-flicker, Atoll-style)
+    /// Dwell time the cursor must stay in the closed-notch hitbox before a
+    /// hover-open fires; a swipe-through never opens. Clicks open immediately.
+    static let hoverOpenDelay: TimeInterval = 0.30
+    /// Grace after the cursor leaves the opened content before closing, so a
+    /// clipped corner or jittery exit doesn't collapse the panel.
+    static let hoverCloseGrace: TimeInterval = 0.10
+    /// Window after a close during which hover cannot reopen the notch (a
+    /// click still can). Prevents an instant reopen when the cursor is still
+    /// parked on the notch after an ESC / click-outside close.
+    static let hoverReopenSuppression: TimeInterval = 0.35
+    /// Closed-shape "peek" growth while the cursor dwells on the notch — the
+    /// pre-open affordance shown during `hoverOpenDelay`.
+    static let closedHoverExtraWidth: CGFloat = 8
+    static let closedHoverExtraHeight: CGFloat = 6
+    static let hoverPeekSpringDuration: Double = 0.32
+
     /// Close animation
     static let closeContentFadeDuration: Double = 0.1
 

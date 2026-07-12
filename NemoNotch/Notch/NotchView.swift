@@ -60,12 +60,21 @@ struct NotchView: View {
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
 
+    /// Cursor is dwelling on this screen's collapsed notch (the coordinator is
+    /// counting down to a hover-open). Grows the shape slightly as a "peek"
+    /// affordance during the dwell.
+    private var isClosedHovering: Bool {
+        effectiveStatus == .closed && coordinator.hoverScreenID == screen.displayID
+    }
+
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
             return CGSize(
-                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + closedBadgeExtraWidth,
+                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + closedBadgeExtraWidth
+                    + (isClosedHovering ? NotchConstants.closedHoverExtraWidth : 0),
                 height: hardwareNotchSize.height
+                    + (isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0)
             )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
@@ -341,6 +350,10 @@ struct NotchView: View {
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shown
+        )
+        .animation(
+            .spring(duration: NotchConstants.hoverPeekSpringDuration, bounce: 0.25),
+            value: isClosedHovering
         )
         .animation(.easeInOut(duration: NotchConstants.fadeNormalDuration), value: notchGlow)
     }
