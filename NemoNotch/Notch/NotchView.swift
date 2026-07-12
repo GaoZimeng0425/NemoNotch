@@ -59,6 +59,9 @@ struct NotchView: View {
 
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
+    /// Direction of the last tab change (set in `selectTab` before the switch)
+    /// so the slide transition enters from the side you're heading toward.
+    @State private var tabSlideForward = true
 
     /// Cursor is dwelling on this screen's collapsed notch (the coordinator is
     /// counting down to a hover-open). Grows the shape slightly as a "peek"
@@ -149,6 +152,14 @@ struct NotchView: View {
                     notificationService: notificationService,
                     mediaService: mediaService,
                     pomodoroService: pomodoroService
+                )
+                // Pseudo-continuity with the expanding panel: on open the
+                // badges scale up and fade (reading as "growing into the
+                // content"), on close they condense back in. Anchored at the
+                // notch so the growth radiates from where the panel comes from.
+                .transition(
+                    .scale(scale: 1.35, anchor: .top)
+                        .combined(with: .opacity)
                 )
                 .zIndex(1)
             }
@@ -279,7 +290,16 @@ struct NotchView: View {
             tabContent
         }
         .id(coordinator.selectedTab)
-        .transition(.opacity)
+        // Direction-aware slide-in, plain fade-out. Only the entering page
+        // moves: a removal transition is captured at insertion time, so a
+        // direction-dependent removal always exits with the PREVIOUS switch's
+        // direction (visibly wrong on rapid back-and-forth switching). The
+        // insertion reads fresh state, and its motion alone carries the
+        // directional cue while spatial separation kills the ghosting.
+        .transition(.asymmetric(
+            insertion: .move(edge: tabSlideForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .opacity
+        ))
         .animation(
             .spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce),
             value: coordinator.selectedTab
@@ -360,6 +380,11 @@ struct NotchView: View {
 
     private func selectTab(_ tab: Tab) {
         guard tab != coordinator.selectedTab else { return }
+        let tabs = enabledTabs
+        if let from = tabs.firstIndex(of: coordinator.selectedTab),
+           let to = tabs.firstIndex(of: tab) {
+            tabSlideForward = to > from
+        }
         coordinator.selectedTab = tab
     }
 }
