@@ -142,13 +142,20 @@ struct NotchView: View {
                 .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
                 .zIndex(1)
 
-            NotchTabBar(
+            // Chin bar: single three-column row straddling the hardware notch.
+            // Left = tabs, middle = clear notch-width spacer, right = actions.
+            // The outer frame (openedWidth) constrains everything inside, so
+            // content can never spill past the notch shell.
+            NotchChinBar(
                 tabs: enabledTabs,
                 selected: coordinator.selectedTab,
-                trailingX: notchLeftEdge - 8,
-                centerY: hardwareNotchSize.height / 2,
-                onSelect: selectTab
+                openedWidth: coordinator.openedWidth,
+                notchWidth: hardwareNotchSize.width,
+                chinHeight: hardwareNotchSize.height,
+                onSelect: selectTab,
+                onClose: { coordinator.notchClose() }
             )
+            .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
             .opacity(effectiveStatus == .opened ? 1 : 0)
             .allowsHitTesting(effectiveStatus == .opened)
             .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)

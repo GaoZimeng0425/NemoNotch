@@ -1,83 +1,172 @@
 import SwiftUI
 
-/// Tab icons strip that lives in the notch's left chin area.
+/// The single-row chin bar that straddles the hardware notch when expanded.
 ///
-/// Owns its own sizing (icon size, spacing, font) so layout decisions stay in
-/// one place. Each tab's hit area is expanded with padding (absorbing the
-/// visual gap) so users don't have to land on the SF Symbol glyph itself.
+/// Layout is a three-column `HStack(spacing: 0)` — the same pattern as
+/// boring.notch's `BoringHeader`:
 ///
-/// Placement: caller passes `trailingX` — the x-coord where the rightmost
-/// icon's right edge should sit (typically `notchLeftEdge - 8`). The component
-/// centers itself horizontally based on its own visual width.
-struct NotchTabBar: View {
+///     ┌──────────────┬────────────────┬──────────────┐
+///     │  left (flex) │  middle (fixed)│  right (flex)│
+///     │  tabs ◀      │  = notch width │       ▶ close│
+///     │  .leading    │  (clear spacer)│  .trailing   │
+///     └──────────────┴────────────────┴──────────────┘
+///        maxWidth: .infinity   width: notchW   maxWidth: .infinity
+///
+/// Because the outer frame is `openedWidth` and the middle column is fixed at
+/// the hardware notch width, the two flex columns each receive exactly
+/// `(openedWidth - notchWidth) / 2` points. Tab and action content is
+/// hard-constrained inside those allocations, so it can **never** spill past
+/// the notch shell — the original failure mode with absolute `.position()`.
+struct NotchChinBar: View {
     let tabs: [Tab]
     let selected: Tab
-    let trailingX: CGFloat
-    let centerY: CGFloat
+    let openedWidth: CGFloat
+    let notchWidth: CGFloat
+    let chinHeight: CGFloat
     let onSelect: (Tab) -> Void
+    let onClose: () -> Void
 
-    /// Add state to track bounces per tab to avoid animation when de-selecting.
-    /// We only increment this when the user clicks a tab.
+    @Namespace private var capsuleAnimation
+    @State private var hoveredTab: Tab?
+    @State private var hoveredAction: ActionKey?
     @State private var bounceTriggers: [Tab: Int] = [:]
 
-    var body: some View {
-        let count = tabs.count
-        let iconSize: CGFloat = count > 5 ? 16 : 18
-        let spacing: CGFloat = count > 5 ? 3 : 4
-        let fontSize: CGFloat = count > 5 ? 10 : 11
-        let visualWidth = CGFloat(count) * iconSize + CGFloat(count - 1) * spacing
-        // Each tab absorbs half the original HStack spacing into its own
-        // horizontal padding, so the visible gap stays identical while the
-        // hit-test rect grows. Vertical padding adds finger-friendly room.
-        let hitHPadding = spacing / 2
-        let hitVPadding: CGFloat = 4
+    private enum ActionKey: String { case settings, close }
 
-        return HStack(spacing: 0) {
-            ForEach(tabs) { tab in
-                tabButton(
-                    tab: tab,
-                    iconSize: iconSize,
-                    fontSize: fontSize,
-                    hitHPadding: hitHPadding,
-                    hitVPadding: hitVPadding
-                )
-            }
+    var body: some View {
+        HStack(spacing: 0) {
+            tabStrip
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+            // Middle column: a clear spacer exactly as wide as the hardware
+            // notch, so tab/action content never sits under the notch itself.
+            Color.clear
+                .frame(width: notchWidth, height: chinHeight)
+
+            actionStrip
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .position(x: trailingX - visualWidth / 2, y: centerY)
+        .frame(width: openedWidth, height: chinHeight)
     }
 
-    private func tabButton(
-        tab: Tab,
-        iconSize: CGFloat,
-        fontSize: CGFloat,
-        hitHPadding: CGFloat,
-        hitVPadding: CGFloat
-    ) -> some View {
+    // MARK: - Tabs (left column)
+
+    @ViewBuilder
+    private var tabStrip: some View {
+        if tabs.isEmpty {
+            EmptyView()
+        } else {
+            let sideWidth = (openedWidth - notchWidth) / 2
+            let spacing: CGFloat = 2
+            let capsuleHeight: CGFloat = 24
+            let capsuleWidth = idealCapsuleWidth(
+                sideWidth: sideWidth,
+                count: tabs.count,
+                spacing: spacing
+            )
+
+            HStack(spacing: spacing) {
+                ForEach(tabs) { tab in
+                    tabCapsule(
+                        tab: tab,
+                        width: capsuleWidth,
+                        height: capsuleHeight
+                    )
+                }
+            }
+        }
+    }
+
+    /// Capsule width that stays comfortable but clamps down when many tabs
+    /// would otherwise overflow the left column's allocation.
+    private func idealCapsuleWidth(sideWidth: CGFloat, count: Int, spacing: CGFloat) -> CGFloat {
+        let ideal: CGFloat = 30
+        let available = sideWidth - CGFloat(max(0, count - 1)) * spacing
+        let perTab = count > 0 ? available / CGFloat(count) : ideal
+        return max(18, min(ideal, floor(perTab)))
+    }
+
+    private func tabCapsule(tab: Tab, width: CGFloat, height: CGFloat) -> some View {
         let isSelected = tab == selected
+        let isHovered = hoveredTab == tab
         return Button {
-            // Only increment the bounce trigger for the tab that was clicked.
-            // This ensures the SF Symbol animation only plays on activation.
             bounceTriggers[tab, default: 0] += 1
-            onSelect(tab)
+            withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+                onSelect(tab)
+            }
         } label: {
             Image(systemName: tab.icon)
-                .font(.system(size: fontSize, weight: isSelected ? .semibold : .regular, design: .rounded))
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .rounded))
                 .symbolEffect(.bounce.down, value: bounceTriggers[tab, default: 0])
-                .foregroundStyle(isSelected ? NotchTheme.accent : NotchTheme.textTertiary)
-                .frame(width: iconSize, height: iconSize)
-                .background(
-                    RoundedRectangle(cornerRadius: iconSize / 3, style: .continuous)
-                        .fill(isSelected ? NotchTheme.surfaceEmphasis : .clear)
-                )
-                .padding(.horizontal, hitHPadding)
-                .padding(.vertical, hitVPadding)
-                .contentShape(Rectangle())
+                .foregroundStyle(isSelected ? NotchTheme.accent : NotchTheme.textSecondary)
+                .frame(width: width, height: height)
+                .background(alignment: .center) {
+                    // Sliding selection capsule: only the selected tab's capsule
+                    // is visible and acts as the matched-geometry source, so
+                    // it glides between tabs on selection change.
+                    if isSelected {
+                        Capsule(style: .continuous)
+                            .fill(NotchTheme.surfaceEmphasis)
+                            .matchedGeometryEffect(id: "tabSelection", in: capsuleAnimation)
+                    } else if isHovered {
+                        Capsule(style: .continuous)
+                            .fill(NotchTheme.surface)
+                    }
+                }
+                .contentShape(Capsule(style: .continuous))
         }
-        .buttonStyle(NotchTabButtonStyle())
+        .buttonStyle(NotchChinButtonStyle())
+        .onHover { hovering in
+            hoveredTab = hovering ? tab : (hoveredTab == tab ? nil : hoveredTab)
+        }
+    }
+
+    // MARK: - Actions (right column)
+
+    @ViewBuilder
+    private var actionStrip: some View {
+        let capsuleHeight: CGFloat = 24
+        let capsuleWidth: CGFloat = 30
+
+        HStack(spacing: 2) {
+            SettingsLink {
+                actionLabel(icon: "gearshape", width: capsuleWidth, height: capsuleHeight)
+            }
+            .buttonStyle(NotchChinButtonStyle())
+            .onHover { hovering in
+                hoveredAction = hovering ? .settings : (hoveredAction == .settings ? nil : hoveredAction)
+            }
+
+            Button(action: onClose) {
+                actionLabel(icon: "xmark", width: capsuleWidth, height: capsuleHeight)
+            }
+            .buttonStyle(NotchChinButtonStyle())
+            .onHover { hovering in
+                hoveredAction = hovering ? .close : (hoveredAction == .close ? nil : hoveredAction)
+            }
+        }
+    }
+
+    private func actionLabel(icon: String, width: CGFloat, height: CGFloat) -> some View {
+        let isHovered = hoveredAction == (icon == "gearshape" ? ActionKey.settings : ActionKey.close)
+        return Image(systemName: icon)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .foregroundStyle(NotchTheme.textSecondary)
+            .frame(width: width, height: height)
+            .background(alignment: .center) {
+                if isHovered {
+                    Capsule(style: .continuous)
+                        .fill(NotchTheme.surface)
+                }
+            }
+            .contentShape(Capsule(style: .continuous))
     }
 }
 
-private struct NotchTabButtonStyle: ButtonStyle {
+/// Shared press feedback for chin buttons (tabs + actions): gentle scale-down
+/// + dim while held. Hover/selection capsule fills are handled in each label
+/// so the full capsule width gets the background, not just the icon.
+private struct NotchChinButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
