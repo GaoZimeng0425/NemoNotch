@@ -231,6 +231,10 @@ private struct OverviewMediaSection: View {
         .padding(6)
         .frame(maxHeight: .infinity, alignment: .center)
         .notchCard(radius: 8, fill: NotchTheme.surface)
+        .onAppear { showsSeekButtons = mediaService.supportsSeeking }
+        .onChange(of: mediaService.supportsSeeking) { _, canSeek in
+            updateSeekVisibility(canSeek)
+        }
     }
 
     private var artwork: some View {
@@ -274,10 +278,11 @@ private struct OverviewMediaSection: View {
 
     private var trackInfo: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(state.title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-                .lineLimit(1)
+            MarqueeText(
+                text: state.title,
+                font: .system(size: 11, weight: .semibold),
+                color: NotchTheme.textPrimary
+            )
             Text(state.artist)
                 .font(.system(size: 10))
                 .foregroundStyle(NotchTheme.textSecondary)
@@ -312,25 +317,59 @@ private struct OverviewMediaSection: View {
         }
     }
 
+    @State private var prevNudge: CGFloat = 0
+    @State private var nextNudge: CGFloat = 0
+    @State private var backWiggle: Double = 0
+    @State private var forwardWiggle: Double = 0
+
+    /// Debounced `supportsSeeking` for the seek buttons' structural presence.
+    /// During a track change the CLI briefly reports duration 0, which would
+    /// remove and re-insert the ±15s buttons (a visible flash). Turning on is
+    /// immediate; turning off requires the unseekable state to persist.
+    @State private var showsSeekButtons = false
+    @State private var seekDropTask: Task<Void, Never>?
+
+    private func updateSeekVisibility(_ canSeek: Bool) {
+        seekDropTask?.cancel()
+        seekDropTask = nil
+        if canSeek {
+            showsSeekButtons = true
+        } else {
+            seekDropTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return }
+                showsSeekButtons = false
+            }
+        }
+    }
+
     private var controls: some View {
-        let canSeek = mediaService.supportsSeeking
+        let canSeek = showsSeekButtons
         return HStack(spacing: canSeek ? 6 : 10) {
-            Button(action: { mediaService.previousTrack() }) {
+            Button(action: {
+                nudge($prevNudge, toward: -3)
+                mediaService.previousTrack()
+            }) {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+            .offset(x: prevNudge)
 
             if canSeek {
-                Button(action: { mediaService.skipBackward() }) {
+                Button(action: {
+                    wiggle($backWiggle, degrees: -11)
+                    mediaService.skipBackward()
+                }) {
                     Image(systemName: "gobackward.15")
                         .font(.system(size: 18))
                         .foregroundStyle(NotchTheme.textSecondary)
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .rotationEffect(.degrees(backWiggle))
             }
 
             Button(action: { mediaService.togglePlayPause() }) {
@@ -346,22 +385,58 @@ private struct OverviewMediaSection: View {
             .buttonStyle(.plain)
 
             if canSeek {
-                Button(action: { mediaService.skipForward() }) {
+                Button(action: {
+                    wiggle($forwardWiggle, degrees: 11)
+                    mediaService.skipForward()
+                }) {
                     Image(systemName: "goforward.15")
                         .font(.system(size: 18))
                         .foregroundStyle(NotchTheme.textSecondary)
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .rotationEffect(.degrees(forwardWiggle))
             }
 
-            Button(action: { mediaService.nextTrack() }) {
+            Button(action: {
+                nudge($nextNudge, toward: 3)
+                mediaService.nextTrack()
+            }) {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(NotchTheme.textSecondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+            .offset(x: nextNudge)
+        }
+    }
+
+    // Press micro-interactions (Atoll's nudge/wiggle springs): track-change
+    // buttons shove briefly toward the skip direction, seek buttons twitch a
+    // few degrees and settle back.
+
+    private func nudge(_ offset: Binding<CGFloat>, toward amount: CGFloat) {
+        withAnimation(.spring(response: 0.16, dampingFraction: 0.72)) {
+            offset.wrappedValue = amount
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) {
+                offset.wrappedValue = 0
+            }
+        }
+    }
+
+    private func wiggle(_ angle: Binding<Double>, degrees: Double) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.52)) {
+            angle.wrappedValue = degrees
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.76)) {
+                angle.wrappedValue = 0
+            }
         }
     }
 
@@ -395,7 +470,10 @@ private struct ProgressScrubber: View {
 
     var body: some View {
         GeometryReader { geo in
-            let barHeight: CGFloat = (isHovering || dragFraction != nil) ? 6 : 4
+            // Three-tier track thickness: resting → hover → actively dragging
+            // (the extra step plus the bouncy settle makes the grab feel
+            // physical, à la Atoll's slider).
+            let barHeight: CGFloat = dragFraction != nil ? 9 : (isHovering ? 6 : 4)
             ZStack(alignment: .leading) {
                 Color.clear // hit area
                 Capsule()
@@ -407,7 +485,7 @@ private struct ProgressScrubber: View {
             }
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .animation(.easeOut(duration: 0.12), value: barHeight)
+            .animation(.bouncy.speed(1.4), value: barHeight)
             .onHover { hovering in
                 guard enabled else { return }
                 isHovering = hovering
