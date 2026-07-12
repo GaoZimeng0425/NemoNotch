@@ -166,10 +166,14 @@ private struct CalendarEventRow: View {
         .opacity(event.meetingURL != nil ? 1 : event.isPast ? 0.5 : 1)
         .contentShape(Rectangle())
         .onHover { hovering in
-            if event.meetingURL != nil { isHovered = hovering }
+            if event.meetingURL != nil {
+                isHovered = hovering
+            }
         }
         .onTapGesture {
-            if let url = event.meetingURL { NSWorkspace.shared.open(url) }
+            if let url = event.meetingURL {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 
@@ -180,7 +184,9 @@ private struct CalendarEventRow: View {
     }()
 
     private var eventTimeRange: String {
-        if event.isAllDay { return String(localized: "calendar.all_day") }
+        if event.isAllDay {
+            return String(localized: "calendar.all_day")
+        }
         return "\(Self.timeFormatter.string(from: event.startDate)) - \(Self.timeFormatter.string(from: event.endDate))"
     }
 }
@@ -277,6 +283,8 @@ private struct OverviewMediaSection: View {
                 Text(formatTime(state.position))
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundStyle(NotchTheme.textTertiary)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.25), value: state.position)
                 Spacer()
                 Text(formatTime(state.duration))
                     .font(.system(size: 8, design: .monospaced))
@@ -310,6 +318,8 @@ private struct OverviewMediaSection: View {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.black.opacity(0.85))
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(.snappy(duration: 0.2), value: state.isPlaying)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(NotchTheme.accent))
             }
@@ -355,7 +365,9 @@ private struct ProgressScrubber: View {
     @State private var isHovering = false
 
     private var fraction: Double {
-        if let dragFraction { return dragFraction }
+        if let dragFraction {
+            return dragFraction
+        }
         guard duration > 0 else { return 0 }
         return max(0, min(1, position / duration))
     }
@@ -387,7 +399,9 @@ private struct ProgressScrubber: View {
                         dragFraction = f
                     }
                     .onEnded { _ in
-                        if let f = dragFraction { onScrub(f) }
+                        if let f = dragFraction {
+                            onScrub(f)
+                        }
                         dragFraction = nil
                     }
                     : nil
@@ -483,13 +497,27 @@ private struct OverviewWeatherSection: View {
 
     private var conditionIcon: String {
         let lower = weatherService.condition.lowercased()
-        if lower.contains("sunny") || lower.contains("clear") { return "sun.max.fill" }
-        if lower.contains("partly cloudy") { return "cloud.sun.fill" }
-        if lower.contains("cloudy") || lower.contains("overcast") { return "cloud.fill" }
-        if lower.contains("rain") || lower.contains("drizzle") { return "cloud.rain.fill" }
-        if lower.contains("snow") { return "snowflake" }
-        if lower.contains("thunder") { return "cloud.bolt.fill" }
-        if lower.contains("fog") || lower.contains("mist") { return "cloud.fog.fill" }
+        if lower.contains("sunny") || lower.contains("clear") {
+            return "sun.max.fill"
+        }
+        if lower.contains("partly cloudy") {
+            return "cloud.sun.fill"
+        }
+        if lower.contains("cloudy") || lower.contains("overcast") {
+            return "cloud.fill"
+        }
+        if lower.contains("rain") || lower.contains("drizzle") {
+            return "cloud.rain.fill"
+        }
+        if lower.contains("snow") {
+            return "snowflake"
+        }
+        if lower.contains("thunder") {
+            return "cloud.bolt.fill"
+        }
+        if lower.contains("fog") || lower.contains("mist") {
+            return "cloud.fog.fill"
+        }
         return "cloud.sun.fill"
     }
 }

@@ -91,10 +91,26 @@ struct NotchView: View {
         return NotchConstants.closedWidthInset + 2 * halfExtension
     }
 
-    private var notchCornerRadius: CGFloat {
+    private var notchTopCornerRadius: CGFloat {
         switch effectiveStatus {
-        case .closed: NotchConstants.cornerRadiusClosed
-        case .opened: NotchConstants.cornerRadiusOpened
+        case .closed: NotchConstants.cornerRadiusTopClosed
+        case .opened: NotchConstants.cornerRadiusTopOpened
+        }
+    }
+
+    private var notchBottomCornerRadius: CGFloat {
+        switch effectiveStatus {
+        case .closed: NotchConstants.cornerRadiusBottomClosed
+        case .opened: NotchConstants.cornerRadiusBottomOpened
+        }
+    }
+
+    /// Open gets a lively spring with a hint of bounce; close runs fully
+    /// damped so the collapse lands crisply without a terminal jiggle.
+    private var notchStateAnimation: Animation {
+        switch effectiveStatus {
+        case .opened: .spring(duration: NotchConstants.openSpringDuration, bounce: 0.1)
+        case .closed: .spring(duration: NotchConstants.closeSpringDuration)
         }
     }
 
@@ -103,7 +119,7 @@ struct NotchView: View {
 
         ZStack(alignment: .top) {
             notchShape(shown: shown)
-                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+                .animation(notchStateAnimation, value: effectiveStatus)
                 .animation(
                     .spring(
                         duration: NotchConstants.tabSwitchSpringDuration,
@@ -139,7 +155,7 @@ struct NotchView: View {
                     ),
                     value: coordinator.selectedTab
                 )
-                .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+                .animation(notchStateAnimation, value: effectiveStatus)
                 .zIndex(1)
 
             // Chin bar: single three-column row straddling the hardware notch.
@@ -158,7 +174,7 @@ struct NotchView: View {
             .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
             .opacity(effectiveStatus == .opened ? 1 : 0)
             .allowsHitTesting(effectiveStatus == .opened)
-            .animation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1), value: effectiveStatus)
+            .animation(notchStateAnimation, value: effectiveStatus)
             .zIndex(2)
 
             // HUD overlay - render only on the primary HUD screen so it
@@ -236,8 +252,8 @@ struct NotchView: View {
         }
         .frame(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         .clipShape(.rect(
-            bottomLeadingRadius: NotchConstants.cornerRadiusOpened,
-            bottomTrailingRadius: NotchConstants.cornerRadiusOpened
+            bottomLeadingRadius: NotchConstants.cornerRadiusBottomOpened,
+            bottomTrailingRadius: NotchConstants.cornerRadiusBottomOpened
         ))
     }
 
@@ -317,7 +333,8 @@ struct NotchView: View {
         NotchBackgroundView(
             status: effectiveStatus,
             notchSize: notchSize,
-            cornerRadius: notchCornerRadius,
+            topCornerRadius: notchTopCornerRadius,
+            bottomCornerRadius: notchBottomCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing,
             glow: notchGlow
         )

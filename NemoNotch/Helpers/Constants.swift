@@ -143,8 +143,14 @@ enum NotchConstants {
     // Tab content
     static let tabContentPadding: CGFloat = 16
     static let tabBarTopPadding: CGFloat = 10
-    static let cornerRadiusClosed: CGFloat = 8
-    static let cornerRadiusOpened: CGFloat = 24
+    /// Notch shape corner radii. The top flare (where the shape meets the menu
+    /// bar) and the bottom corners animate independently across open/close: the
+    /// top stays tight so the opened panel still reads as a notch, while the
+    /// bottom rounds out more.
+    static let cornerRadiusTopClosed: CGFloat = 6
+    static let cornerRadiusTopOpened: CGFloat = 19
+    static let cornerRadiusBottomClosed: CGFloat = 8
+    static let cornerRadiusBottomOpened: CGFloat = 24
     static let notchBackgroundSpacing: CGFloat = 16
 
     // HUD overlay
