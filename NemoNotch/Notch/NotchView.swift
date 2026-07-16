@@ -192,7 +192,6 @@ struct NotchView: View {
         }
         .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .ignoresSafeArea()
         .environment(\.locale, appSettings.currentLocale)
         .contextMenu {
             SettingsLink {
@@ -442,19 +441,15 @@ struct NotchView: View {
         coordinator.selectedTab = tab
     }
 
-    /// Opens the Settings window. The notch must close first so that
-    /// `restorePreviousApp()` (called inside `notchClose`) doesn't yank focus
-    /// back to the previously-active app and bury the Settings window behind
-    /// it. Uses `@Environment(\.openSettings)` — the official SwiftUI API —
-    /// which doesn't depend on responder-chain state the way `sendAction`
-    /// does.
+    /// Opens the Settings window and closes the notch without the 0.1s delay
+    /// that caused perceived lag.
+    ///
+    /// Order matters: open Settings *first* so it's already frontmost when
+    /// `notchClose`'s `restorePreviousApp()` runs. The coordinator's suppress
+    /// flag ensures focus stays on Settings instead of bouncing to the
+    /// previously-active app.
     private func openSettings() {
-        coordinator.notchClose()
-        // Defer until the close spring has begun fading the panel, so the
-        // previous-app restore logic has already run and won't interfere.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSApp.activate(ignoringOtherApps: true)
-            openSettingsAction()
-        }
+        openSettingsAction()
+        coordinator.notchClose(suppressAppRestore: true)
     }
 }
