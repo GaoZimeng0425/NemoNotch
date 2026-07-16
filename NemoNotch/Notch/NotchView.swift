@@ -378,11 +378,16 @@ struct NotchView: View {
     /// width needed.
     @ViewBuilder
     private func collapsedNotch(shown: Bool) -> some View {
-        CompactBadgesView(
+        // Both the width floor and the middle-column spacer use the physical
+        // notch width minus the stroke inset — the inset is how the shape stays
+        // visually flush with the notch slot (not overshooting it). Coins sit
+        // outside this core; the background flexes to cover them when present.
+        let notchCore = hardwareNotchSize.width - NotchConstants.closedWidthInset
+        return CompactBadgesView(
             cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
             shownHasActiveBadge: shown,
-            notchMinWidth: hardwareNotchSize.width,
-            notchCoreWidth: hardwareNotchSize.width,
+            notchMinWidth: notchCore,
+            notchCoreWidth: notchCore,
             onBadgeTap: handleBadgeTap,
             notificationService: notificationService,
             mediaService: mediaService,

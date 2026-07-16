@@ -265,30 +265,24 @@ struct CompactBadgesView: View {
     // notch. The notch shape rides behind as a `.background` and flexes to this
     // resolved width — no pre-computed width needed.
     var body: some View {
-        // Padding only when badges are present — an empty state must not add
-        // width (the `minWidth` floor alone spans the physical notch, and any
-        // padding on empty columns would push the shape past the notch).
-        let pad: CGFloat? = shownHasActiveBadge ? NotchConstants.badgeNotchGap : nil
+        let pad: CGFloat = shownHasActiveBadge ? NotchConstants.badgeNotchGap : 0
 
         HStack(spacing: 0) {
-            // Left column: logos, trailing-aligned so the highest-priority coin
-            // (index 0, first in the HStack) hugs the notch on its right edge.
-            // Horizontal padding: trailing pushes that coin off the notch slot,
-            // leading keeps the outermost coin off the shape edge.
+            // index 0 hugs the notch because it's the trailing/leading element
+            // of each column's own HStack. The padding clears both the notch
+            // slot and the shape edge — but only when badges are present. Note
+            // `.padding(.horizontal, nil)` is NOT a no-op in SwiftUI (it applies
+            // a system-default 16pt), so we branch to truly omit it when nil.
             leftColumn
                 .padding(.horizontal, pad)
-                .frame(maxWidth: .infinity, alignment: .trailing)
 
             // Middle column: clear spacer exactly as wide as the notch core, so
             // the left/right coins straddle it like the expanded chin bar does.
             Color.clear
                 .frame(width: notchCoreWidth, height: NotchConstants.badgeCoinDiameter)
 
-            // Right column: statuses, leading-aligned so index 0 hugs the notch
-            // on its left edge (mirror of the left column).
             rightColumn
                 .padding(.horizontal, pad)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .fixedSize(horizontal: true, vertical: false)
         .frame(minWidth: notchMinWidth)
