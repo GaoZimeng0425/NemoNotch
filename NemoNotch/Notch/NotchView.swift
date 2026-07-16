@@ -77,8 +77,11 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
+            // Width is content-driven (the collapsed branch sizes to its badge
+            // coins and the shape flexes as a `.background`); this width only
+            // feeds `NotchBackgroundView`'s height + a fallback reference.
             return CGSize(
-                width: hardwareNotchSize.width - NotchConstants.closedWidthInset + closedBadgeExtraWidth
+                width: hardwareNotchSize.width - NotchConstants.closedWidthInset
                     + (isClosedHovering ? NotchConstants.closedHoverExtraWidth : 0),
                 height: hardwareNotchSize.height
                     + (isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0)
@@ -86,25 +89,6 @@ struct NotchView: View {
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         }
-    }
-
-    /// Extra collapsed-shape width needed so the black notch fully contains the
-    /// fanned compact badges. The fans extend outward from the notch edges by
-    /// `badgeSpread + index * step` per group (`CompactBadgesView`), so the
-    /// shape must grow with the group count — a fixed padding left multi-group
-    /// fans overflowing the shape. Symmetric about center; covers the wider of
-    /// the two wings. A single badge yields the historical +72pt.
-    private var closedBadgeExtraWidth: CGFloat {
-        guard let vm = badgeViewModel, vm.shownHasActiveBadge else { return 0 }
-        let cluster = vm.badgeCluster
-        let leftSlots = cluster.groups.count + (cluster.overflow > 0 ? 1 : 0)
-        let rightSlots = cluster.groups.count
-        let leftExtent = NotchConstants.badgeSpread
-            + CGFloat(max(0, leftSlots - 1)) * NotchConstants.badgeStackStep
-        let rightExtent = NotchConstants.badgeSpread
-            + CGFloat(max(0, rightSlots - 1)) * NotchConstants.badgeStackStep
-        let halfExtension = max(leftExtent, rightExtent) + NotchConstants.badgeEdgeMargin
-        return NotchConstants.closedWidthInset + 2 * halfExtension
     }
 
     private var notchTopCornerRadius: CGFloat {
@@ -135,37 +119,25 @@ struct NotchView: View {
         let shown = badgeViewModel?.shownHasActiveBadge ?? false
 
         ZStack(alignment: .top) {
-            notchShape(shown: shown)
-                .animation(notchStateAnimation, value: effectiveStatus)
-                .animation(
-                    .spring(
-                        duration: NotchConstants.tabSwitchSpringDuration,
-                        bounce: NotchConstants.tabSwitchSpringBounce
-                    ),
-                    value: coordinator.selectedTab
-                )
-                .zIndex(0)
-
             if effectiveStatus == .closed {
-                CompactBadgesView(
-                    cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
-                    shownHasActiveBadge: shown,
-                    notchClosedWidth: notchSize.width,
-                    notchCoreWidth: hardwareNotchSize.width - NotchConstants.closedWidthInset,
-                    onBadgeTap: handleBadgeTap,
-                    notificationService: notificationService,
-                    mediaService: mediaService,
-                    pomodoroService: pomodoroService
-                )
-                // Pseudo-continuity with the expanding panel: on open the
-                // badges scale up and fade (reading as "growing into the
-                // content"), on close they condense back in. Anchored at the
-                // notch so the growth radiates from where the panel comes from.
-                .transition(
-                    .scale(scale: 1.35, anchor: .top)
-                        .combined(with: .opacity)
-                )
-                .zIndex(1)
+                // Collapsed: content-driven width. The badge coins define the
+                // width; the notch shape rides as a `.background` and flexes to
+                // match. No pre-computed width needed.
+                collapsedNotch(shown: shown)
+                    .zIndex(0)
+            } else {
+                // Opened: fixed-width notch shape with content/chin layered
+                // above — unchanged from the original layout.
+                notchShape(shown: shown)
+                    .animation(notchStateAnimation, value: effectiveStatus)
+                    .animation(
+                        .spring(
+                            duration: NotchConstants.tabSwitchSpringDuration,
+                            bounce: NotchConstants.tabSwitchSpringBounce
+                        ),
+                        value: coordinator.selectedTab
+                    )
+                    .zIndex(0)
             }
 
             // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
@@ -399,6 +371,45 @@ struct NotchView: View {
         effectiveStatus == .closed ? .none : (badgeViewModel?.glowState ?? .none)
     }
 
+    /// Collapsed notch: content-driven width. The badge view sizes to its coins
+    /// + notch core (via `.fixedSize`), floored at the physical notch width so
+    /// an empty state still spans the notch. The notch shape rides as a
+    /// `.background` so it flexes to exactly this width — no pre-computed badge
+    /// width needed.
+    @ViewBuilder
+    private func collapsedNotch(shown: Bool) -> some View {
+        CompactBadgesView(
+            cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
+            shownHasActiveBadge: shown,
+            notchMinWidth: hardwareNotchSize.width,
+            notchCoreWidth: hardwareNotchSize.width,
+            onBadgeTap: handleBadgeTap,
+            notificationService: notificationService,
+            mediaService: mediaService,
+            pomodoroService: pomodoroService
+        )
+        .frame(height: hardwareNotchSize.height
+            + (isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0))
+        .background(alignment: .top) { notchShape(shown: shown) }
+        .animation(notchStateAnimation, value: effectiveStatus)
+        .animation(
+            .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
+            value: shown
+        )
+        .animation(
+            .spring(duration: NotchConstants.hoverPeekSpringDuration, bounce: 0.25),
+            value: isClosedHovering
+        )
+        // Pseudo-continuity with the expanding panel: on open the badges scale
+        // up and fade (reading as "growing into the content"), on close they
+        // condense back in. Anchored at the notch so the growth radiates from
+        // where the panel comes from.
+        .transition(
+            .scale(scale: 1.35, anchor: .top)
+                .combined(with: .opacity)
+        )
+    }
+
     private func notchShape(shown: Bool) -> some View {
         NotchBackgroundView(
             status: effectiveStatus,
@@ -406,7 +417,8 @@ struct NotchView: View {
             topCornerRadius: notchTopCornerRadius,
             bottomCornerRadius: notchBottomCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing,
-            glow: notchGlow
+            glow: notchGlow,
+            flexibleWidth: effectiveStatus == .closed
         )
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),

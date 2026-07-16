@@ -233,8 +233,10 @@ struct BadgeIconView: View {
 struct CompactBadgesView: View {
     let cluster: BadgeCluster
     let shownHasActiveBadge: Bool
-    /// Total width of the collapsed black shape (already badge-expanded).
-    let notchClosedWidth: CGFloat
+    /// Minimum width (the physical notch core) so an empty/low-badge state
+    /// still spans the notch. The actual width is driven by coin content via
+    /// `.fixedSize` — grows past this floor as badges accumulate.
+    let notchMinWidth: CGFloat
     /// Width of the central notch core the two columns straddle; the middle
     /// spacer is exactly this wide so the left/right coins sit just outside it.
     let notchCoreWidth: CGFloat
@@ -255,11 +257,21 @@ struct CompactBadgesView: View {
         NotchConstants.badgeCoinDiameter - NotchConstants.badgeStackStep
     }
 
+    // The three columns size to their content: the coin HStacks are intrinsic,
+    // the middle spacer is the physical notch core. `.fixedSize` makes the
+    // HStack report its natural width (coins + notch core) instead of letting
+    // the `maxWidth:.infinity` columns expand to the screen. `.frame(minWidth:)`
+    // then applies the physical-notch floor so an empty state still spans the
+    // notch. The notch shape rides behind as a `.background` and flexes to this
+    // resolved width — no pre-computed width needed.
     var body: some View {
         HStack(spacing: 0) {
             // Left column: logos, trailing-aligned so the highest-priority coin
             // (index 0, first in the HStack) hugs the notch on its right edge.
+            // Horizontal padding: trailing pushes that coin off the notch slot,
+            // leading keeps the outermost coin off the shape's edge.
             leftColumn
+                .padding(.horizontal, NotchConstants.badgeNotchGap)
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
             // Middle column: clear spacer exactly as wide as the notch core, so
@@ -268,11 +280,13 @@ struct CompactBadgesView: View {
                 .frame(width: notchCoreWidth, height: NotchConstants.badgeCoinDiameter)
 
             // Right column: statuses, leading-aligned so index 0 hugs the notch
-            // on its left edge.
+            // on its left edge (mirror of the left column).
             rightColumn
+                .padding(.horizontal, NotchConstants.badgeNotchGap)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: notchClosedWidth)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(minWidth: notchMinWidth)
         .opacity(shownHasActiveBadge ? 1 : 0)
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
