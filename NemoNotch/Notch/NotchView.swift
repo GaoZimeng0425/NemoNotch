@@ -14,6 +14,7 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
     @Environment(PomodoroTimerService.self) var pomodoroService
+    @Environment(\.openSettings) private var openSettingsAction
 
     private var hardwareNotchSize: NSSize {
         coordinator.notchSize
@@ -444,14 +445,16 @@ struct NotchView: View {
     /// Opens the Settings window. The notch must close first so that
     /// `restorePreviousApp()` (called inside `notchClose`) doesn't yank focus
     /// back to the previously-active app and bury the Settings window behind
-    /// it. By opening Settings *after* the close animation, the Settings
-    /// window becomes the app's key window and stays frontmost.
+    /// it. Uses `@Environment(\.openSettings)` — the official SwiftUI API —
+    /// which doesn't depend on responder-chain state the way `sendAction`
+    /// does.
     private func openSettings() {
         coordinator.notchClose()
         // Defer until the close spring has begun fading the panel, so the
         // previous-app restore logic has already run and won't interfere.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            NSApp.activate(ignoringOtherApps: true)
+            openSettingsAction()
         }
     }
 }
