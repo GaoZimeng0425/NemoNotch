@@ -141,9 +141,6 @@ final class NotchCoordinator {
     private func makeSlot(for screen: NSScreen) -> NotchWindowSlot {
         let wf = Self.windowFrame(for: screen)
         let window = NotchWindow(rect: wf)
-        // Suppress the system's default order-front fade so the reveal is
-        // fully under our control via the alpha gate below.
-        window.animationBehavior = .none
         let passThrough = PassThroughView(frame: NSRect(x: 0, y: 0, width: wf.width, height: wf.height))
         passThrough.wantsLayer = true
         passThrough.layer?.backgroundColor = .clear
@@ -161,18 +158,7 @@ final class NotchCoordinator {
 
         passThrough.addSubview(hosting.view)
         window.contentView = passThrough
-
-        // Alpha gate: order the window in while invisible, then reveal it
-        // only after the first layout pass has settled. Any residual first-
-        // frame geometry adjustment (now that PassThroughView reports a zero
-        // safe area instead of the physical-notch inset) happens at alpha 0,
-        // so the user never sees it. Mirrors Atoll's positionWindow(changeAlpha:)
-        // approach.
-        window.alphaValue = 0
         window.orderFrontRegardless()
-        DispatchQueue.main.async { [weak window] in
-            window?.alphaValue = 1
-        }
 
         return NotchWindowSlot(
             displayID: screen.displayID,

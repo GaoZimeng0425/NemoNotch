@@ -11,6 +11,13 @@ class NotchWindow: NSWindow {
 
         isOpaque = false
         alphaValue = 1
+        // The window server's default order-front "zoom pop" scales the window
+        // ~98%→100% around its center over ~240ms. This window is 430pt tall
+        // and top-aligned to the screen, so the pop starts the notch shape a
+        // few points BELOW the physical notch and slides it up — a visible
+        // launch glitch that no SwiftUI/window.frame instrumentation can see
+        // (it lives in the window server's presentation transform).
+        animationBehavior = .none
         level = .statusBar + 8
         backgroundColor = .clear
         hasShadow = false
@@ -21,8 +28,13 @@ class NotchWindow: NSWindow {
         collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
     }
 
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
+    }
 }
 
 final class PassThroughView: NSView {
@@ -30,7 +42,9 @@ final class PassThroughView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let view = super.hitTest(point)
-        if view !== self { return view }
+        if view !== self {
+            return view
+        }
         return isBlocking ? self : nil
     }
 
