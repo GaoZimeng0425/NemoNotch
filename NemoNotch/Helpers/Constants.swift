@@ -23,10 +23,13 @@ enum NotchConstants {
     static let badgeEmptyGrace: Duration = .milliseconds(600)
     /// Max badge groups shown collapsed; extras fold into a "+K" chip.
     static let badgeGroupCap: Int = 4
-    /// Horizontal step between overlapping left logos (smaller than a logo → fan overlap).
+    /// Horizontal step between overlapping coins. Smaller than a coin diameter
+    /// → the left logo fan and right status fan both overlap into a legible
+    /// stack (mirrored about the notch).
     static let badgeStackStep: CGFloat = 11
-    /// Horizontal step between right-side status indicators.
-    static let badgeStatusStep: CGFloat = 15
+    /// Diameter of the dark disc behind each compact badge coin. Larger than
+    /// the step so stacked coins reveal a clear rim of the one beneath.
+    static let badgeCoinDiameter: CGFloat = 22
 
     // Badge layout
     static let closedWidthInset: CGFloat = 4

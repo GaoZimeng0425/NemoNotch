@@ -30,14 +30,6 @@ struct NotchView: View {
         screen.frame.width / 2
     }
 
-    private var notchLeftEdge: CGFloat {
-        notchCenterX - hardwareNotchSize.width / 2
-    }
-
-    private var notchRightEdge: CGFloat {
-        notchCenterX + hardwareNotchSize.width / 2
-    }
-
     /// Per-screen view of the coordinator's global status. Non-active screens
     /// always render the collapsed state so that only the mouse-targeted
     /// screen visually expands.
@@ -110,7 +102,7 @@ struct NotchView: View {
         let leftExtent = NotchConstants.badgeSpread
             + CGFloat(max(0, leftSlots - 1)) * NotchConstants.badgeStackStep
         let rightExtent = NotchConstants.badgeSpread
-            + CGFloat(max(0, rightSlots - 1)) * NotchConstants.badgeStatusStep
+            + CGFloat(max(0, rightSlots - 1)) * NotchConstants.badgeStackStep
         let halfExtension = max(leftExtent, rightExtent) + NotchConstants.badgeEdgeMargin
         return NotchConstants.closedWidthInset + 2 * halfExtension
     }
@@ -158,9 +150,8 @@ struct NotchView: View {
                 CompactBadgesView(
                     cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
                     shownHasActiveBadge: shown,
-                    notchLeftEdge: notchLeftEdge,
-                    notchRightEdge: notchRightEdge,
-                    notchCenterY: hardwareNotchSize.height / 2,
+                    notchClosedWidth: notchSize.width,
+                    notchCoreWidth: hardwareNotchSize.width - NotchConstants.closedWidthInset,
                     onBadgeTap: handleBadgeTap,
                     notificationService: notificationService,
                     mediaService: mediaService,
@@ -197,24 +188,8 @@ struct NotchView: View {
                     .zIndex(1)
             }
 
-            // Chin bar: single three-column row straddling the hardware notch.
-            // Left = tabs, middle = clear notch-width spacer, right = actions.
-            // The outer frame (openedWidth) constrains everything inside, so
-            // content can never spill past the notch shell.
-            NotchChinBar(
-                tabs: enabledTabs,
-                selected: coordinator.selectedTab,
-                openedWidth: coordinator.openedWidth,
-                notchWidth: hardwareNotchSize.width,
-                chinHeight: hardwareNotchSize.height,
-                onSelect: selectTab,
-                onClose: { coordinator.notchClose() }
-            )
-            .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
-            .opacity(effectiveStatus == .opened ? 1 : 0)
-            .allowsHitTesting(effectiveStatus == .opened)
-            .animation(notchStateAnimation, value: effectiveStatus)
-            .zIndex(2)
+            chinBar
+                .zIndex(2)
 
             // HUD overlay - render only on the primary HUD screen so it
             // doesn't flash on every connected display simultaneously.
@@ -292,6 +267,29 @@ struct NotchView: View {
         default:
             coordinator.notchOpen(tab: item.tab)
         }
+    }
+
+    // MARK: - Chin bar (extracted to keep body type-checkable)
+
+    /// Three-column row straddling the hardware notch: tabs on the left,
+    /// a clear notch-width spacer in the middle, actions on the right.
+    /// The outer frame (openedWidth) constrains everything inside, so content
+    /// can never spill past the notch shell.
+    private var chinBar: some View {
+        NotchChinBar(
+            tabs: enabledTabs,
+            selected: coordinator.selectedTab,
+            openedWidth: coordinator.openedWidth,
+            notchWidth: hardwareNotchSize.width,
+            chinHeight: hardwareNotchSize.height,
+            onSelect: selectTab,
+            onSettings: openSettings,
+            onQuit: { NSApp.terminate(nil) }
+        )
+        .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
+        .opacity(effectiveStatus == .opened ? 1 : 0)
+        .allowsHitTesting(effectiveStatus == .opened)
+        .animation(notchStateAnimation, value: effectiveStatus)
     }
 
     // MARK: - Content panel (drops down from notch)
@@ -429,5 +427,19 @@ struct NotchView: View {
             tabSlideForward = to > from
         }
         coordinator.selectedTab = tab
+    }
+
+    /// Opens the Settings window. The notch must close first so that
+    /// `restorePreviousApp()` (called inside `notchClose`) doesn't yank focus
+    /// back to the previously-active app and bury the Settings window behind
+    /// it. By opening Settings *after* the close animation, the Settings
+    /// window becomes the app's key window and stays frontmost.
+    private func openSettings() {
+        coordinator.notchClose()
+        // Defer until the close spring has begun fading the panel, so the
+        // previous-app restore logic has already run and won't interfere.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
     }
 }
