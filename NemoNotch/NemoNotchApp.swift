@@ -114,9 +114,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         _ = LogService.shared
 
-        // 主线程卡顿探针:抓 watchdog 杀进程前那一轮主 runloop 卡在哪个业务函数。
-        MainThreadProbe.shared.install()
-
         // Warm the OpenRouter-backed model-context overlay (offline-safe; the
         // curated hardcoded table still resolves every lookup if this lags).
         if !UITestMode.isActive { ModelContextWindow.warm() }
