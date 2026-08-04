@@ -55,7 +55,12 @@ final class CompletionFlashService {
                 name: session.projectFolder ?? session.displayTitle,
                 // Active == .working only; a session merely .waiting is not "working".
                 isActive: session.status == .working,
-                source: .ai(session.source)
+                source: .ai(session.source),
+                subtitle: session.displayTitle,
+                tool: session.currentTool,
+                model: session.displayModel,
+                tokenDisplay: session.tokenDisplay,
+                duration: Date().timeIntervalSince(session.sessionStart)
             ))
         }
         for monitor in registry.installedMonitors {
