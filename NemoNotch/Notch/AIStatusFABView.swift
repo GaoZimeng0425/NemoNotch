@@ -1,21 +1,102 @@
 import AppKit
 import SwiftUI
 
-/// The floating AI-status button. Collapsed = draggable capsule showing the
-/// running-session count; expanded = a list+detail panel.
+/// The floating AI-status button. A SINGLE root view whose body is a `ZStack`
+/// of three always-present layers (background shape, capsule content, panel
+/// content) — the capsule↔panel transition is driven entirely by SwiftUI
+/// value-bound `.animation(_:value: isExpanded)`, mirroring `NotchView`. The
+/// hosting window is a fixed canvas that never resizes on toggle, so there is
+/// no flicker from re-hosting or `setFrame(animate:)`.
 struct AIStatusFABView: View {
     @Environment(AISessionStore.self) var store
     @Environment(\.aiStatusController) var controller
 
+    private var isExpanded: Bool { controller?.isExpanded ?? false }
+
     var body: some View {
-        if controller?.isExpanded == true {
-            panel
-        } else {
-            capsule
+        ZStack(alignment: .topTrailing) {
+            // Layer 0 — the morphing background shape. Its frame + corner radius
+            // are functions of `isExpanded`; the value-bound animation tweens
+            // them (capsule pill ↔ panel 14pt rounded rect). This is the
+            // "stretch" carrier, analogous to `NotchBackgroundView`.
+            backgroundShape
+                .animation(fabStateAnimation, value: isExpanded)
+                .zIndex(0)
+
+            // Layer 1 — capsule content (shown when collapsed). Always present;
+            // faded/scaled out when expanding so it reads as "growing into" the
+            // panel, like `NotchView`'s CompactBadgesView.
+            capsuleContent
+                .opacity(isExpanded ? 0 : 1)
+                .scaleEffect(isExpanded ? 0.8 : 1, anchor: .topTrailing)
+                .allowsHitTesting(!isExpanded)
+                .animation(fabStateAnimation, value: isExpanded)
+                // The whole capsule is the drag handle in collapsed state.
+                .background(DragHandleView { controller?.beginWindowDrag(with: $0) })
+                .zIndex(1)
+
+            // Layer 2 — panel content (shown when expanded). Always present;
+            // faded/scaled in on expand, like `NotchView`'s contentPanel.
+            panelContent
+                .opacity(isExpanded ? 1 : 0)
+                .scaleEffect(isExpanded ? 1 : 0.85, anchor: .topTrailing)
+                .allowsHitTesting(isExpanded)
+                .animation(fabStateAnimation, value: isExpanded)
+                .zIndex(2)
         }
+        // Anchor the visible shape to the top-right of the fixed canvas; the
+        // transparent remainder (bottom-left) click-throughs via PassThroughView.
+        .frame(
+            width: NotchConstants.aiStatusFabPanelWidth + NotchConstants.aiStatusFabShadowPad * 2,
+            height: NotchConstants.aiStatusFabPanelHeight + NotchConstants.aiStatusFabShadowPad * 2,
+            alignment: .topTrailing
+        )
     }
 
-    // MARK: - Derived
+    // MARK: - Spring animation (matches NotchView's notchStateAnimation)
+
+    private var fabStateAnimation: Animation {
+        if isExpanded {
+            return .spring(duration: NotchConstants.aiStatusFabOpenSpringDuration, bounce: 0.1)
+        }
+        return .spring(duration: NotchConstants.aiStatusFabCloseSpringDuration)
+    }
+
+    // MARK: - Layer 0: background shape
+
+    private var backgroundShape: some View {
+        let shapeW = isExpanded
+            ? NotchConstants.aiStatusFabPanelWidth
+            : capsuleWidth
+        let shapeH = isExpanded
+            ? NotchConstants.aiStatusFabPanelHeight
+            : NotchConstants.aiStatusFabCapsuleHeight
+        // Collapsed → radius = height/2 yields a pill; expanded → 14pt.
+        let radius: CGFloat = isExpanded
+            ? NotchConstants.aiStatusFabCornerRadius
+            : NotchConstants.aiStatusFabCapsuleHeight / 2
+        return RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [NotchTheme.panelRaised, NotchTheme.panelBase],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .frame(width: shapeW, height: shapeH)
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(NotchTheme.stroke, lineWidth: 0.6)
+            )
+            .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
+    }
+
+    /// Capsule width hugs its content; approximate for the collapsed shape.
+    private var capsuleWidth: CGFloat {
+        // "N running" + dot + padding. Wide enough for 2-digit counts.
+        130
+    }
+
+    // MARK: - Layer 1: capsule content
 
     private var workingSessions: [AISessionState] {
         store.sortedSessions.filter { $0.status == .working }
@@ -23,9 +104,7 @@ struct AIStatusFABView: View {
 
     private var workingCount: Int { workingSessions.count }
 
-    // MARK: - Collapsed capsule
-
-    private var capsule: some View {
+    private var capsuleContent: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(
@@ -46,17 +125,13 @@ struct AIStatusFABView: View {
                 .foregroundStyle(NotchTheme.textSecondary)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .frame(height: NotchConstants.aiStatusFabCapsuleHeight)
         .fixedSize(horizontal: true, vertical: false)
-        .background(.black)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(NotchTheme.stroke, lineWidth: 0.6))
-        .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
         .contentShape(Capsule())
         .onTapGesture { controller?.toggleExpanded() }
     }
 
-    // MARK: - Expanded panel (layout B: list + detail)
+    // MARK: - Layer 2: panel content (layout B: list + detail)
 
     @State private var selectedSessionId: String?
 
@@ -65,7 +140,7 @@ struct AIStatusFABView: View {
         return workingSessions.first
     }
 
-    private var panel: some View {
+    private var panelContent: some View {
         VStack(spacing: 0) {
             header
             Divider().background(NotchTheme.stroke)
@@ -76,22 +151,13 @@ struct AIStatusFABView: View {
                 detailPane
             }
         }
-        .frame(width: NotchConstants.aiStatusFabPanelWidth)
-        .background(
-            RoundedRectangle(cornerRadius: NotchConstants.aiStatusFabCornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [NotchTheme.panelRaised, NotchTheme.panelBase],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
+        .frame(
+            width: NotchConstants.aiStatusFabPanelWidth,
+            height: NotchConstants.aiStatusFabPanelHeight
         )
-        .overlay(
+        .clipShape(
             RoundedRectangle(cornerRadius: NotchConstants.aiStatusFabCornerRadius, style: .continuous)
-                .stroke(NotchTheme.stroke, lineWidth: 0.6)
         )
-        .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
-        .padding(NotchConstants.openedShadowRadius + 6) // room for shadow blur
     }
 
     private var header: some View {
@@ -123,11 +189,9 @@ struct AIStatusFABView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        // Expanded-state drag handle. In expanded state
-        // `isMovableByWindowBackground` is false (so list-row taps don't start a
-        // drag); dragging is moved here, to the header, via performDrag. The
-        // NSView's mouseDown forwards the event to the controller, which calls
-        // `window.performDrag(with:)`. The collapse button sits above this
+        // Expanded-state drag handle. `isMovableByWindowBackground` is false
+        // (so list-row taps don't start a drag); dragging is moved here, to the
+        // header, via performDrag. The collapse button sits above this
         // background and still receives its taps normally.
         .background(DragHandleView { controller?.beginWindowDrag(with: $0) })
     }
@@ -138,10 +202,8 @@ struct AIStatusFABView: View {
                 ForEach(workingSessions) { session in
                     let isSelected = session.id == selectedSession?.id
                     HStack(spacing: 7) {
-                        Circle()
-                            .fill(NotchTheme.accent)
-                            .frame(width: 6, height: 6)
-                            .shadow(color: NotchTheme.accent.opacity(0.7), radius: 3)
+                        statusDot(session.status)
+                        sourceBadge(session.source)
                         Text(session.displayTitle)
                             .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
                             .foregroundStyle(isSelected ? NotchTheme.textPrimary : NotchTheme.textSecondary)
@@ -236,7 +298,50 @@ struct AIStatusFABView: View {
         .clipShape(Capsule(style: .continuous))
     }
 
-    // MARK: - Source icon (inlined switch; reuses the public icon components)
+    // MARK: - Status dot (traffic-light semantics)
+
+    /// Green = working, yellow = waiting (input/approval), gray = idle.
+    @ViewBuilder
+    private func statusDot(_ status: ClaudeStatus) -> some View {
+        let color = statusColor(status)
+        Circle()
+            .fill(color)
+            .frame(width: 7, height: 7)
+            .shadow(color: color.opacity(0.7), radius: 3)
+    }
+
+    private func statusColor(_ status: ClaudeStatus) -> Color {
+        switch status {
+        case .working: Color(red: 0.30, green: 0.85, blue: 0.45) // green
+        case .waiting: Color(red: 0.98, green: 0.75, blue: 0.20) // yellow
+        case .idle: NotchTheme.textTertiary // gray
+        }
+    }
+
+    // MARK: - Source badge / icon (reuses the public icon components)
+
+    private func sourceBadge(_ source: AISource) -> some View {
+        let tint = sourceTint(source)
+        return HStack(spacing: 3) {
+            sourceIcon(source, size: 10)
+            Text(sourceLabel(source))
+        }
+        .font(.system(size: 9, weight: .bold, design: .rounded))
+        .foregroundStyle(tint)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(tint.opacity(0.14))
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    private func sourceLabel(_ source: AISource) -> String {
+        switch source {
+        case .claude: "Claude"
+        case .gemini: "Gemini"
+        case .opencode: "opencode"
+        case .zcode: "zcode"
+        }
+    }
 
     @ViewBuilder
     private func sourceIcon(_ source: AISource, size: CGFloat) -> some View {
@@ -265,10 +370,10 @@ struct AIStatusFABView: View {
     }
 }
 
-// MARK: - Header drag handle
+// MARK: - Drag handle
 
-/// Transparent AppKit view placed behind the expanded panel's header. Its
-/// `mouseDown` forwards the event to `onDrag`, which calls
+/// Transparent AppKit view placed behind the capsule body and the expanded
+/// panel's header. Its `mouseDown` forwards the event to `onDrag`, which calls
 /// `AIStatusWindowController.beginWindowDrag(with:)` → `window.performDrag`.
 ///
 /// This is the idiomatic SwiftUI→AppKit bridge for `performDrag`: SwiftUI's
@@ -276,13 +381,13 @@ struct AIStatusFABView: View {
 /// needs one to run AppKit's drag-tracking loop. `mouseDown` is the only entry
 /// point that hands us the real event.
 ///
-/// Installed as a `.background` of the header `HStack`, so SwiftUI's hosted
-/// controls (the collapse button) render in a layer above this view and keep
-/// receiving their taps — AppKit routes a click to the topmost hit view first,
-/// and the SwiftUI hosting view claims points that land on its interactive
-/// content. This view only sees `mouseDown` for the empty header padding.
+/// Installed as a `.background`, so SwiftUI's hosted controls render in a layer
+/// above this view and keep receiving their taps — AppKit routes a click to the
+/// topmost hit view first, and the SwiftUI hosting view claims points that land
+/// on its interactive content. This view only sees `mouseDown` for empty
+/// padding regions.
 ///
-/// `acceptsFirstMouse` returns true so a click onto the header (a non-activating
+/// `acceptsFirstMouse` returns true so a click onto the FAB (a non-activating
 /// panel) starts the drag immediately without a preliminary focus click.
 private struct DragHandleView: NSViewRepresentable {
     let onDrag: (NSEvent) -> Void

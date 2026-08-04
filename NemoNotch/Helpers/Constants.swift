@@ -137,6 +137,15 @@ enum NotchConstants {
     static let aiStatusFabEdgeMargin: CGFloat = 24
     static let aiStatusFabCornerRadius: CGFloat = 14
     static let aiStatusFabFadeDuration: Double = 0.24
+    // Fixed-canvas sizing (the window never resizes on expand/collapse, mirroring
+    // NotchWindow). Canvas = panel size + shadow blur room on both axes.
+    static let aiStatusFabPanelHeight: CGFloat = 280
+    static let aiStatusFabShadowPad: CGFloat = 20
+    // Collapsed capsule geometry — corner radius = height/2 yields a pill.
+    static let aiStatusFabCapsuleHeight: CGFloat = 32
+    // Open/close spring durations match NotchCoordinator's notch transitions.
+    static let aiStatusFabOpenSpringDuration: Double = 0.314
+    static let aiStatusFabCloseSpringDuration: Double = 0.24
 
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///

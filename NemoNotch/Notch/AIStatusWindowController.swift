@@ -32,49 +32,26 @@ final class AIStatusWindowController: NSObject {
 
     func collapse() {
         guard isExpanded else { return }
-        isExpanded = false
-        // Collapsed capsule is dragged via its background (the whole capsule is
-        // the drag handle); re-enable background-drag for that state.
-        window?.isMovableByWindowBackground = true
-        rehostAndResize()
+        // Drive the SwiftUI morph via a value-bound spring — mirrors
+        // `NotchCoordinator.notchClose`. The window is NOT resized and the
+        // hosting root is NOT rebuilt (both were the source of the flicker);
+        // the capsule↔panel transition is fully SwiftUI-internal.
+        withAnimation(.spring(duration: NotchConstants.aiStatusFabCloseSpringDuration)) {
+            isExpanded = false
+        }
     }
 
     private func expand() {
-        isExpanded = true
-        // In expanded state the list rows must not start a window drag, so the
-        // background can no longer be the drag handle. Dragging moves to the
-        // header (see `DragHandleView` in AIStatusFABView, which calls
-        // `beginWindowDrag`).
-        window?.isMovableByWindowBackground = false
-        rehostAndResize()
+        withAnimation(.spring(duration: NotchConstants.aiStatusFabOpenSpringDuration, bounce: 0.1)) {
+            isExpanded = true
+        }
     }
 
-    /// Entry point for the header drag gesture (expanded state). The header's
-    /// `DragHandleView` (an NSViewRepresentable) forwards its `mouseDown` event
-    /// here so AppKit can run its standard window-drag tracking loop.
+    /// Entry point for drag gestures (capsule body + expanded header). The
+    /// `DragHandleView` (an NSViewRepresentable) in AIStatusFABView forwards its
+    /// `mouseDown` event here so AppKit can run its standard window-drag loop.
     func beginWindowDrag(with event: NSEvent) {
         window?.performDrag(with: event)
-    }
-
-    /// Rebuild the hosting root (so the view swaps capsule↔panel) and resize
-    /// the window to fit, keeping the top-right anchor stable as the size
-    /// changes. Animated via `setFrame(..., animate: true)`.
-    private func rehostAndResize() {
-        guard let w = window, let host = hostingController else { return }
-        host.rootView = AnyView(
-            AIStatusFABView()
-                .environment(store)
-                .environment(appSettings)
-                .environment(\.aiStatusController, self)
-        )
-        let fitting = host.view.fittingSize
-        // Keep the top-right anchor stable as the size changes.
-        let current = w.frame
-        let origin = CGPoint(
-            x: current.maxX - fitting.width,
-            y: current.maxY - fitting.height
-        )
-        w.setFrame(CGRect(origin: origin, size: fitting), display: true, animate: true)
     }
 
     // MARK: - Observation + show/hide
@@ -127,12 +104,18 @@ final class AIStatusWindowController: NSObject {
             host.view.wantsLayer = true
             host.view.layer?.backgroundColor = NSColor.clear.cgColor
             hostingController = host
-            w.contentViewController = host
+            // Wrap the hosting view in a PassThroughView so empty canvas regions
+            // click through to whatever is behind (mirrors NotchWindow). `isBlocking`
+            // stays true: hitTest returns the SwiftUI subview for points that land on
+            // interactive content, and nil for the transparent canvas.
+            let passThrough = PassThroughView(frame: NSRect(origin: .zero, size: w.frame.size))
+            passThrough.isBlocking = true
+            host.view.frame = passThrough.bounds
+            passThrough.addSubview(host.view)
+            w.contentView = passThrough
         }
-        w.setContentSize(hostingController!.view.fittingSize)
-        // applyPosition reads w.frame.size to clamp into visibleFrame, so it
-        // MUST run after setContentSize (otherwise it sees the stale 10x10 init
-        // rect on first show after restart).
+        // Fixed canvas: do NOT call setContentSize(fittingSize) here — the window
+        // was created at the full panel footprint and never resizes on toggle.
         applyPosition(to: w)
         w.delegate = self
         w.alphaValue = 0
@@ -159,7 +142,6 @@ final class AIStatusWindowController: NSObject {
         // not a stale panel. Pairs with the !isExpanded gate in
         // evaluateVisibility.
         isExpanded = false
-        window?.isMovableByWindowBackground = true
         guard let w = window else { return }
         if immediate {
             w.orderOut(nil)
