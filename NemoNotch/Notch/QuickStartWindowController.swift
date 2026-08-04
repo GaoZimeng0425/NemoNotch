@@ -183,4 +183,5 @@ final class QuickStartWindowController {
 
 extension EnvironmentValues {
     @Entry var quickStartController: QuickStartWindowController?
+    @Entry var aiStatusController: AIStatusWindowController?
 }
