@@ -98,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
     private(set) var usageQuotaService: UsageQuotaService?
     private(set) var quickStartController: QuickStartWindowController?
+    private(set) var aiStatusController: AIStatusWindowController?
     private(set) var completionFlashService: CompletionFlashService?
     private(set) var completionFlashWindowController: CompletionFlashWindowController?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
@@ -112,6 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         _ = LogService.shared
+
+        // 主线程卡顿探针:抓 watchdog 杀进程前那一轮主 runloop 卡在哪个业务函数。
+        MainThreadProbe.shared.install()
 
         // Warm the OpenRouter-backed model-context overlay (offline-safe; the
         // curated hardcoded table still resolves every lookup if this lags).
@@ -191,8 +195,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appSettings: settings,
             notificationMonitor: notificationPermission
         )
+        aiStatusController = AIStatusWindowController(
+            store: aiMonitor.store,
+            appSettings: settings
+        )
 
         let qsController = quickStartController
+        let aiController = aiStatusController
         let notchCoordinator = NotchCoordinator { coordinator, screen in
             AnyView(
                 NotchView(screen: screen)
@@ -216,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(pomodoro)
                     .environment(notificationPermission)
                     .environment(\.quickStartController, qsController)
+                    .environment(\.aiStatusController, aiController)
             )
         }
         notchCoordinator.autoSelectTab = { [weak self] in
