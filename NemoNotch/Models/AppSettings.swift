@@ -91,6 +91,8 @@ final class AppSettings {
     static let opencodeEnabledKey = "opencodeEnabled"
     static let zcodeEnabledKey = "zcodeEnabled"
     static let completionFlashEnabledKey = "completionFlashEnabled"
+    static let aiStatusFabEnabledKey = "aiStatusFabEnabled"
+    static let aiStatusFabPositionKey = "aiStatusFabPosition"
 
     var claudeEnabled: Bool {
         didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
@@ -116,6 +118,12 @@ final class AppSettings {
 
     var completionFlashEnabled: Bool {
         didSet { UserDefaults.standard.set(completionFlashEnabled, forKey: Self.completionFlashEnabledKey) }
+    }
+
+    // MARK: - AI status FAB
+
+    var aiStatusFabEnabled: Bool {
+        didSet { UserDefaults.standard.set(aiStatusFabEnabled, forKey: Self.aiStatusFabEnabledKey) }
     }
 
     var currentLocale: Locale {
@@ -184,6 +192,8 @@ final class AppSettings {
             .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
         completionFlashEnabled = UserDefaults.standard
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
+        aiStatusFabEnabled = UserDefaults.standard
+            .object(forKey: Self.aiStatusFabEnabledKey) as? Bool ?? true
     }
 
     private static let defaultApps: [AppItem] = [

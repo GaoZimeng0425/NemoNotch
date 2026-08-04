@@ -3283,6 +3283,40 @@
         }
       }
     },
+    "settings.ai_status_fab.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show floating AI-status button while sessions run"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话运行时显示悬浮 AI 状态按钮"
+          }
+        }
+      }
+    },
+    "settings.ai_status_fab.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Status Button"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 状态按钮"
+          }
+        }
+      }
+    },
     "settings.default_tab" : {
       "localizations" : {
         "en" : {
