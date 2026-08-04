@@ -1,4 +1,5 @@
 @testable import NemoNotch
+import Foundation
 import Testing
 
 @Suite("CompletionDetector")
@@ -81,5 +82,79 @@ struct CompletionDetectorTests {
             new: [item("B"), item("C")]
         )
         #expect(merged.map(\.name) == ["A", "B", "C"])
+    }
+
+    // MARK: - Rich-field pass-through
+
+    private func rich(
+        _ key: String,
+        _ name: String,
+        _ active: Bool,
+        subtitle: String? = nil,
+        tool: String? = nil,
+        model: String? = nil,
+        tokenDisplay: String? = nil,
+        duration: TimeInterval? = nil
+    ) -> CompletionCandidate {
+        CompletionCandidate(
+            key: key, name: name, isActive: active, source: .ai(.claude),
+            subtitle: subtitle, tool: tool, model: model,
+            tokenDisplay: tokenDisplay, duration: duration
+        )
+    }
+
+    @Test("completion item carries rich fields from the candidate")
+    func richFieldsCarriedThrough() {
+        var d = CompletionDetector()
+        _ = d.step([rich("ai:1", "NemoNotch", true,
+                          subtitle: "fix auth bug", tool: "Edit",
+                          model: "Sonnet 4.5", tokenDisplay: "12.4k", duration: 134)])
+        let result = d.step([rich("ai:1", "NemoNotch", false,
+                                  subtitle: "fix auth bug", tool: "Edit",
+                                  model: "Sonnet 4.5", tokenDisplay: "12.4k", duration: 134)])
+        #expect(result.count == 1)
+        let item = result[0]
+        #expect(item.subtitle == "fix auth bug")
+        #expect(item.tool == "Edit")
+        #expect(item.model == "Sonnet 4.5")
+        #expect(item.tokenDisplay == "12.4k")
+        #expect(item.duration == 134)
+    }
+
+    @Test("rich fields default to nil when not supplied")
+    func richFieldsDefaultNil() {
+        var d = CompletionDetector()
+        _ = d.step([c("ai:1", "Proj", true)])
+        let result = d.step([c("ai:1", "Proj", false)])
+        #expect(result.count == 1)
+        #expect(result[0].subtitle == nil)
+        #expect(result[0].tool == nil)
+        #expect(result[0].model == nil)
+        #expect(result[0].tokenDisplay == nil)
+        #expect(result[0].duration == nil)
+    }
+
+    @Test("merge overwrites same-name item fields with newer non-nil values")
+    func mergeOverwritesFields() {
+        var existing = item("A")
+        existing.subtitle = "old subtitle"
+        var incoming = item("A")
+        incoming.subtitle = "new subtitle"
+        incoming.tool = "Edit"
+        let merged = CompletionFlashNames.merge(existing: [existing], new: [incoming])
+        #expect(merged.count == 1)
+        #expect(merged[0].subtitle == "new subtitle")
+        #expect(merged[0].tool == "Edit")
+    }
+
+    @Test("merge keeps existing field when newer is nil")
+    func mergeKeepsExistingOnNil() {
+        var existing = item("A")
+        existing.subtitle = "kept"
+        var incoming = item("A")  // subtitle nil
+        incoming.tool = "Edit"
+        let merged = CompletionFlashNames.merge(existing: [existing], new: [incoming])
+        #expect(merged[0].subtitle == "kept")
+        #expect(merged[0].tool == "Edit")
     }
 }
