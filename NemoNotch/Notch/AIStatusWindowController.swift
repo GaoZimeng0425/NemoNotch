@@ -33,12 +33,27 @@ final class AIStatusWindowController: NSObject {
     func collapse() {
         guard isExpanded else { return }
         isExpanded = false
+        // Collapsed capsule is dragged via its background (the whole capsule is
+        // the drag handle); re-enable background-drag for that state.
+        window?.isMovableByWindowBackground = true
         rehostAndResize()
     }
 
     private func expand() {
         isExpanded = true
+        // In expanded state the list rows must not start a window drag, so the
+        // background can no longer be the drag handle. Dragging moves to the
+        // header (see `DragHandleView` in AIStatusFABView, which calls
+        // `beginWindowDrag`).
+        window?.isMovableByWindowBackground = false
         rehostAndResize()
+    }
+
+    /// Entry point for the header drag gesture (expanded state). The header's
+    /// `DragHandleView` (an NSViewRepresentable) forwards its `mouseDown` event
+    /// here so AppKit can run its standard window-drag tracking loop.
+    func beginWindowDrag(with event: NSEvent) {
+        window?.performDrag(with: event)
     }
 
     /// Rebuild the hosting root (so the view swaps capsule↔panel) and resize
@@ -88,7 +103,8 @@ final class AIStatusWindowController: NSObject {
         }
         if workingCount > 0 {
             show()
-        } else {
+        } else if !isExpanded {
+            // Preserve the user's expand intent — never auto-hide the panel.
             scheduleHide()
         }
     }
@@ -113,8 +129,11 @@ final class AIStatusWindowController: NSObject {
             hostingController = host
             w.contentViewController = host
         }
-        applyPosition(to: w)
         w.setContentSize(hostingController!.view.fittingSize)
+        // applyPosition reads w.frame.size to clamp into visibleFrame, so it
+        // MUST run after setContentSize (otherwise it sees the stale 10x10 init
+        // rect on first show after restart).
+        applyPosition(to: w)
         w.delegate = self
         w.alphaValue = 0
         w.orderFront(nil)
@@ -135,6 +154,12 @@ final class AIStatusWindowController: NSObject {
 
     private func hide(immediate: Bool) {
         hideTask?.cancel()
+        // Defensive: any hide path (idle timer OR the settings-toggle forced
+        // hide) must reset isExpanded so the next show() renders the capsule,
+        // not a stale panel. Pairs with the !isExpanded gate in
+        // evaluateVisibility.
+        isExpanded = false
+        window?.isMovableByWindowBackground = true
         guard let w = window else { return }
         if immediate {
             w.orderOut(nil)

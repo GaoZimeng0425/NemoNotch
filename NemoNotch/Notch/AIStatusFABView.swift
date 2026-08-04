@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The floating AI-status button. Collapsed = draggable capsule showing the
@@ -122,6 +123,13 @@ struct AIStatusFABView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        // Expanded-state drag handle. In expanded state
+        // `isMovableByWindowBackground` is false (so list-row taps don't start a
+        // drag); dragging is moved here, to the header, via performDrag. The
+        // NSView's mouseDown forwards the event to the controller, which calls
+        // `window.performDrag(with:)`. The collapse button sits above this
+        // background and still receives its taps normally.
+        .background(DragHandleView { controller?.beginWindowDrag(with: $0) })
     }
 
     private var sessionList: some View {
@@ -253,6 +261,65 @@ struct AIStatusFABView: View {
         case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
         case .opencode: Color(red: 0.55, green: 0.78, blue: 0.55)
         case .zcode: Color(red: 0.11, green: 0.44, blue: 0.96)
+        }
+    }
+}
+
+// MARK: - Header drag handle
+
+/// Transparent AppKit view placed behind the expanded panel's header. Its
+/// `mouseDown` forwards the event to `onDrag`, which calls
+/// `AIStatusWindowController.beginWindowDrag(with:)` → `window.performDrag`.
+///
+/// This is the idiomatic SwiftUI→AppKit bridge for `performDrag`: SwiftUI's
+/// `DragGesture` doesn't expose the underlying `NSEvent`, but `performDrag`
+/// needs one to run AppKit's drag-tracking loop. `mouseDown` is the only entry
+/// point that hands us the real event.
+///
+/// Installed as a `.background` of the header `HStack`, so SwiftUI's hosted
+/// controls (the collapse button) render in a layer above this view and keep
+/// receiving their taps — AppKit routes a click to the topmost hit view first,
+/// and the SwiftUI hosting view claims points that land on its interactive
+/// content. This view only sees `mouseDown` for the empty header padding.
+///
+/// `acceptsFirstMouse` returns true so a click onto the header (a non-activating
+/// panel) starts the drag immediately without a preliminary focus click.
+private struct DragHandleView: NSViewRepresentable {
+    let onDrag: (NSEvent) -> Void
+
+    func makeNSView(context: Context) -> HandleView {
+        HandleView(onDrag: onDrag)
+    }
+
+    func updateNSView(_ nsView: HandleView, context: Context) {
+        nsView.onDrag = onDrag
+    }
+
+    final class HandleView: NSView {
+        var onDrag: (NSEvent) -> Void
+
+        init(onDrag: @escaping (NSEvent) -> Void) {
+            self.onDrag = onDrag
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override var acceptsFirstResponder: Bool { false }
+        override var isFlipped: Bool { true }
+        // Non-activating panel: accept the first mouse so the drag starts
+        // immediately without a preliminary focus click.
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            // Only left-button starts a window drag; let other buttons fall
+            // through to default handling.
+            guard event.buttonNumber == 0 else {
+                super.mouseDown(with: event)
+                return
+            }
+            onDrag(event)
         }
     }
 }
