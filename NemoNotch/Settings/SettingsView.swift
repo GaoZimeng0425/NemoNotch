@@ -116,6 +116,13 @@ struct SettingsView: View {
                     set: { appSettings.completionFlashEnabled = $0 }
                 ))
             }
+
+            Section("settings.ai_status_fab.header") {
+                Toggle("settings.ai_status_fab.enabled", isOn: Binding(
+                    get: { appSettings.aiStatusFabEnabled },
+                    set: { appSettings.aiStatusFabEnabled = $0 }
+                ))
+            }
         }
         .formStyle(.grouped)
         .padding()

@@ -129,6 +129,15 @@ enum NotchConstants {
     static let completionToastFontSize: CGFloat = 16
     static let completionToastCountFontSize: CGFloat = 14
 
+    // MARK: - AI status FAB
+
+    static let aiStatusFabPanelWidth: CGFloat = 420
+    static let aiStatusFabListColumnWidth: CGFloat = 168
+    static let aiStatusFabHideDelay: TimeInterval = 3
+    static let aiStatusFabEdgeMargin: CGFloat = 24
+    static let aiStatusFabCornerRadius: CGFloat = 14
+    static let aiStatusFabFadeDuration: Double = 0.24
+
     /// Hook server: TCP loopback (HTTP) on this default port.
     ///
     /// AF_UNIX socket files were previously used but proved unworkable on this
