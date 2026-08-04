@@ -31,10 +31,14 @@ struct AIStatusFABView: View {
                 .scaleEffect(isExpanded ? 0.8 : 1, anchor: .topTrailing)
                 .allowsHitTesting(!isExpanded)
                 .animation(fabStateAnimation, value: isExpanded)
-                // Single drag-or-tap handle on the whole capsule: drag moves the
-                // window, a click (no movement) toggles expand. No SwiftUI
-                // .onTapGesture here — it would race with this mouseDown loop.
-                .background(
+                // The drag/click handle sits in `.overlay` (above the capsule
+                // content), NOT `.background`. SwiftUI's hosting view dispatches
+                // AppKit mouseDown to the topmost hit view first; an overlay
+                // NSView is above the content, so it reliably receives mouseDown.
+                // With `.background`, the SwiftUI content above would swallow the
+                // event (it has no gesture after we removed .onTapGesture, so
+                // SwiftUI would drop it instead of forwarding to the background).
+                .overlay(
                     DragHandleView(
                         onDrag: { controller?.beginWindowDrag(with: $0) },
                         onTap: { controller?.toggleExpanded() }
