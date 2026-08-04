@@ -2,12 +2,15 @@ import AppKit
 import SwiftUI
 
 @MainActor
+@Observable
 final class AIStatusWindowController: NSObject {
-    private var window: AIStatusWindow?
-    private var hostingController: NSHostingController<AnyView>?
-    private var hideTask: Task<Void, Never>?
-    private let store: AISessionStore
-    private let appSettings: AppSettings
+    private(set) var isExpanded = false
+
+    @ObservationIgnored private var window: AIStatusWindow?
+    @ObservationIgnored private var hostingController: NSHostingController<AnyView>?
+    @ObservationIgnored private var hideTask: Task<Void, Never>?
+    @ObservationIgnored private let store: AISessionStore
+    @ObservationIgnored private let appSettings: AppSettings
 
     init(store: AISessionStore, appSettings: AppSettings) {
         self.store = store
@@ -24,12 +27,39 @@ final class AIStatusWindowController: NSObject {
     // MARK: - Public (called by the SwiftUI view)
 
     func toggleExpanded() {
-        // Expanded panel is added in Task 7; for now the capsule has no expand
-        // target, so this is a no-op stub that Task 7 replaces.
+        if isExpanded { collapse() } else { expand() }
     }
 
     func collapse() {
-        // Task 7 implements the expanded→collapsed transition.
+        guard isExpanded else { return }
+        isExpanded = false
+        rehostAndResize()
+    }
+
+    private func expand() {
+        isExpanded = true
+        rehostAndResize()
+    }
+
+    /// Rebuild the hosting root (so the view swaps capsule↔panel) and resize
+    /// the window to fit, keeping the top-right anchor stable as the size
+    /// changes. Animated via `setFrame(..., animate: true)`.
+    private func rehostAndResize() {
+        guard let w = window, let host = hostingController else { return }
+        host.rootView = AnyView(
+            AIStatusFABView()
+                .environment(store)
+                .environment(appSettings)
+                .environment(\.aiStatusController, self)
+        )
+        let fitting = host.view.fittingSize
+        // Keep the top-right anchor stable as the size changes.
+        let current = w.frame
+        let origin = CGPoint(
+            x: current.maxX - fitting.width,
+            y: current.maxY - fitting.height
+        )
+        w.setFrame(CGRect(origin: origin, size: fitting), display: true, animate: true)
     }
 
     // MARK: - Observation + show/hide
