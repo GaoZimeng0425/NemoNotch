@@ -31,8 +31,15 @@ struct AIStatusFABView: View {
                 .scaleEffect(isExpanded ? 0.8 : 1, anchor: .topTrailing)
                 .allowsHitTesting(!isExpanded)
                 .animation(fabStateAnimation, value: isExpanded)
-                // The whole capsule is the drag handle in collapsed state.
-                .background(DragHandleView { controller?.beginWindowDrag(with: $0) })
+                // Single drag-or-tap handle on the whole capsule: drag moves the
+                // window, a click (no movement) toggles expand. No SwiftUI
+                // .onTapGesture here — it would race with this mouseDown loop.
+                .background(
+                    DragHandleView(
+                        onDrag: { controller?.beginWindowDrag(with: $0) },
+                        onTap: { controller?.toggleExpanded() }
+                    )
+                )
                 .zIndex(1)
 
             // Layer 2 — panel content (shown when expanded). Always present;
@@ -123,12 +130,14 @@ struct AIStatusFABView: View {
             Text("running")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(NotchTheme.textSecondary)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
+        // Fill the capsule width so content sits at the start (leading) edge,
+        // matching the morphing background shape's footprint.
+        .frame(width: capsuleWidth, alignment: .leading)
         .frame(height: NotchConstants.aiStatusFabCapsuleHeight)
-        .fixedSize(horizontal: true, vertical: false)
         .contentShape(Capsule())
-        .onTapGesture { controller?.toggleExpanded() }
     }
 
     // MARK: - Layer 2: panel content (layout B: list + detail)
@@ -322,25 +331,11 @@ struct AIStatusFABView: View {
 
     private func sourceBadge(_ source: AISource) -> some View {
         let tint = sourceTint(source)
-        return HStack(spacing: 3) {
-            sourceIcon(source, size: 10)
-            Text(sourceLabel(source))
-        }
-        .font(.system(size: 9, weight: .bold, design: .rounded))
-        .foregroundStyle(tint)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(tint.opacity(0.14))
-        .clipShape(Capsule(style: .continuous))
-    }
-
-    private func sourceLabel(_ source: AISource) -> String {
-        switch source {
-        case .claude: "Claude"
-        case .gemini: "Gemini"
-        case .opencode: "opencode"
-        case .zcode: "zcode"
-        }
+        return sourceIcon(source, size: 14)
+            .foregroundStyle(tint)
+            .frame(width: 20, height: 20)
+            .background(tint.opacity(0.14))
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
     @ViewBuilder
@@ -373,38 +368,37 @@ struct AIStatusFABView: View {
 // MARK: - Drag handle
 
 /// Transparent AppKit view placed behind the capsule body and the expanded
-/// panel's header. Its `mouseDown` forwards the event to `onDrag`, which calls
-/// `AIStatusWindowController.beginWindowDrag(with:)` → `window.performDrag`.
+/// panel's header. `mouseDown` runs a drag-vs-click tracking loop:
+///   - if the mouse moves beyond the drag threshold → `onDrag` → window drag;
+///   - if the mouse is released without moving → `onTap` (toggle expand/collapse).
 ///
-/// This is the idiomatic SwiftUI→AppKit bridge for `performDrag`: SwiftUI's
-/// `DragGesture` doesn't expose the underlying `NSEvent`, but `performDrag`
-/// needs one to run AppKit's drag-tracking loop. `mouseDown` is the only entry
-/// point that hands us the real event.
-///
-/// Installed as a `.background`, so SwiftUI's hosted controls render in a layer
-/// above this view and keep receiving their taps — AppKit routes a click to the
-/// topmost hit view first, and the SwiftUI hosting view claims points that land
-/// on its interactive content. This view only sees `mouseDown` for empty
-/// padding regions.
+/// This resolves the gesture conflict that arises when a SwiftUI `.onTapGesture`
+/// and a drag `.background` both claim the same press: there is a single
+/// AppKit entry point (`mouseDown`) that decides which gesture wins, so we do
+/// NOT pair this with a SwiftUI tap gesture on the same view.
 ///
 /// `acceptsFirstMouse` returns true so a click onto the FAB (a non-activating
-/// panel) starts the drag immediately without a preliminary focus click.
+/// panel) acts immediately without a preliminary focus click.
 private struct DragHandleView: NSViewRepresentable {
     let onDrag: (NSEvent) -> Void
+    var onTap: (() -> Void)? = nil
 
     func makeNSView(context: Context) -> HandleView {
-        HandleView(onDrag: onDrag)
+        HandleView(onDrag: onDrag, onTap: onTap)
     }
 
     func updateNSView(_ nsView: HandleView, context: Context) {
         nsView.onDrag = onDrag
+        nsView.onTap = onTap
     }
 
     final class HandleView: NSView {
         var onDrag: (NSEvent) -> Void
+        var onTap: (() -> Void)?
 
-        init(onDrag: @escaping (NSEvent) -> Void) {
+        init(onDrag: @escaping (NSEvent) -> Void, onTap: (() -> Void)?) {
             self.onDrag = onDrag
+            self.onTap = onTap
             super.init(frame: .zero)
         }
 
@@ -413,18 +407,38 @@ private struct DragHandleView: NSViewRepresentable {
 
         override var acceptsFirstResponder: Bool { false }
         override var isFlipped: Bool { true }
-        // Non-activating panel: accept the first mouse so the drag starts
-        // immediately without a preliminary focus click.
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
         override func mouseDown(with event: NSEvent) {
-            // Only left-button starts a window drag; let other buttons fall
-            // through to default handling.
+            // Only left-button is handled; let other buttons fall through.
             guard event.buttonNumber == 0 else {
                 super.mouseDown(with: event)
                 return
             }
-            onDrag(event)
+            let start = NSEvent.mouseLocation
+            // macOS drag threshold (a few px). Below this, the press is a click.
+            let threshold: CGFloat = 4
+            var didDrag = false
+
+            // Track until mouseUp. If the cursor exits the threshold, hand off
+            // to `window.performDrag` — which runs its own tracking loop and
+            // moves the window. Otherwise it's a click → onTap on release.
+            while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+                if next.type == .leftMouseUp { break }
+                let now = NSEvent.mouseLocation
+                if hypot(now.x - start.x, now.y - start.y) > threshold {
+                    didDrag = true
+                    onDrag(event)
+                    break
+                }
+            }
+            if !didDrag {
+                onTap?()
+            }
         }
     }
+}
+
+private func hypot(_ dx: CGFloat, _ dy: CGFloat) -> CGFloat {
+    (dx * dx + dy * dy).squareRoot()
 }
