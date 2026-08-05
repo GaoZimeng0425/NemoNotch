@@ -5,7 +5,6 @@ struct PlaybackState: Equatable {
     var artist: String = ""
     var album: String = ""
     var duration: TimeInterval = 0
-    var position: TimeInterval = 0
     var isPlaying: Bool = false
     var artworkData: Data?
     var appBundleIdentifier: String?

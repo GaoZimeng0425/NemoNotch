@@ -43,7 +43,6 @@ enum UITestSeeder {
         s.artist = "M83"
         s.album = "Hurry Up, We're Dreaming"
         s.duration = 244
-        s.position = 96
         s.isPlaying = true
         s.appName = "Music"
         // 留空 bundle id:UI 测试无需真实播放器图标,直接渲染 now-playing 卡。
@@ -54,6 +53,7 @@ enum UITestSeeder {
             glyph: "♪"
         )
         media.playbackState = s
+        media.playbackPosition = 96
     }
 
     private static func seedCalendar(_ calendar: CalendarService) {

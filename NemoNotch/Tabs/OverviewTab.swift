@@ -294,7 +294,7 @@ private struct OverviewMediaSection: View {
     private var progressBar: some View {
         VStack(spacing: 5) {
             ProgressScrubber(
-                position: state.position,
+                position: mediaService.playbackPosition,
                 duration: state.duration,
                 enabled: mediaService.supportsSeeking,
                 tint: accent,
@@ -304,11 +304,11 @@ private struct OverviewMediaSection: View {
             .animation(.easeInOut(duration: 0.6), value: accent)
 
             HStack {
-                Text(formatTime(state.position))
+                Text(formatTime(mediaService.playbackPosition))
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundStyle(NotchTheme.textTertiary)
                     .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.25), value: state.position)
+                    .animation(.snappy(duration: 0.25), value: mediaService.playbackPosition)
                 Spacer()
                 Text(formatTime(state.duration))
                     .font(.system(size: 8, design: .monospaced))
