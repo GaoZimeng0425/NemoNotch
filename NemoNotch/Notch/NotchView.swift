@@ -71,9 +71,9 @@ struct NotchView: View {
     /// 动画，SwiftUI 就每帧重新遍历整个 display list，而且每块屏幕一份。
     /// 实测占进程 CPU 的 55%、内存的 60%。
     ///
-    /// 卸载推迟到折叠动画播完，所以折叠观感与原先完全一致。
+    /// 进出动画交给 `.transition`（见 body），SwiftUI 会等移除动画播完才真正
+    /// 卸载，所以折叠观感与原先一致，也不需要手动延迟卸载。
     @State private var contentMounted = false
-    @State private var contentUnmountTask: Task<Void, Never>?
 
     /// Cursor is dwelling on this screen's collapsed notch (the coordinator is
     /// counting down to a hover-open). Grows the shape slightly as a "peek"
@@ -177,11 +177,12 @@ struct NotchView: View {
                 .zIndex(1)
             }
 
-            // 折叠后卸载整棵 tab 树（延迟到动画播完，见 contentMounted）。
+            // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
+            // .transition 承担：新插入的视图不会对绑定 effectiveStatus 的
+            // scaleEffect/opacity 做动画（没有上一个值可插值），只有 transition
+            // 才描述得了进出过程。
             if contentMounted {
                 contentPanel
-                    .scaleEffect(effectiveStatus == .opened ? 1 : 0.2, anchor: .top)
-                    .opacity(effectiveStatus == .opened ? 1 : 0)
                     .allowsHitTesting(effectiveStatus == .opened)
                     .animation(
                         .spring(
@@ -190,7 +191,9 @@ struct NotchView: View {
                         ),
                         value: coordinator.selectedTab
                     )
-                    .animation(notchStateAnimation, value: effectiveStatus)
+                    .transition(
+                        .scale(scale: 0.2, anchor: .top).combined(with: .opacity)
+                    )
                     .zIndex(1)
             }
 
@@ -227,7 +230,8 @@ struct NotchView: View {
         }
         .onAppear {
             initializeBadgeViewModel()
-            updateContentMount(for: effectiveStatus)
+            // 首帧按当前状态直接就位，不要动画。
+            contentMounted = effectiveStatus != .closed
         }
         .onChange(of: effectiveStatus) { _, status in
             updateContentMount(for: status)
@@ -253,21 +257,13 @@ struct NotchView: View {
         }
     }
 
-    /// 展开立即挂载；折叠等动画播完再卸载，避免内容瞬间消失。
+    /// 切换 contentPanel 的挂载。`withAnimation` 驱动 `.transition`，
+    /// SwiftUI 负责在移除动画播完之后才卸载视图树。
     private func updateContentMount(for status: NotchCoordinator.Status) {
-        contentUnmountTask?.cancel()
-        contentUnmountTask = nil
-
-        guard status == .closed else {
-            contentMounted = true
-            return
-        }
-        guard contentMounted else { return }
-
-        contentUnmountTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(NotchConstants.closeSpringDuration + 0.1))
-            guard !Task.isCancelled, effectiveStatus == .closed else { return }
-            contentMounted = false
+        let shouldMount = status != .closed
+        guard shouldMount != contentMounted else { return }
+        withAnimation(notchStateAnimation) {
+            contentMounted = shouldMount
         }
     }
 
