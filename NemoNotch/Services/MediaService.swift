@@ -183,6 +183,7 @@ final class MediaService {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 LogService.debug("[Media] poll timer", category: "media")
+                PerfProbe.hit("MediaService.pollTick@2s")
                 self?.updateNowPlaying()
             }
         }
@@ -196,11 +197,14 @@ final class MediaService {
         guard progressTimer == nil else { return }
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
+                PerfProbe.hit("MediaService.progressTick@0.5s")
                 guard let self,
                       playbackState.isPlaying,
                       playbackState.duration > 0 else { return }
                 let next = min(playbackState.duration, playbackPosition + 0.5)
                 if next > playbackPosition {
+                    // 这一次赋值会驱动订阅了播放进度的视图重绘。
+                    PerfProbe.hit("MediaService.progressAdvance")
                     playbackPosition = next
                 }
             }
@@ -210,8 +214,10 @@ final class MediaService {
     // ── Core data fetch ──────────────────────────────────────────────
 
     private func updateNowPlaying() {
+        PerfProbe.hit("MediaService.updateNowPlaying")
         if isUpdatingNowPlaying {
             needsFollowupUpdate = true
+            PerfProbe.hit("MediaService.updateNowPlaying.coalesced")
             return
         }
 
@@ -221,7 +227,9 @@ final class MediaService {
             let box = NowPlayingInfoBox(info: cliInfo)
             DispatchQueue.main.async {
                 guard let self else { return }
+                let applyProbe = PerfProbe.begin()
                 self.applyInfo(box.info)
+                PerfProbe.end("MediaService.applyInfo(含封面解码)", applyProbe)
                 self.isUpdatingNowPlaying = false
                 if self.needsFollowupUpdate {
                     self.needsFollowupUpdate = false

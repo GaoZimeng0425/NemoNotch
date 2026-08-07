@@ -288,6 +288,36 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 - `MediaService.supportsSeeking` is now simply `playbackState.duration > 0` (any finite timeline is seekable), not a per-player capability gate.
 - The old in-process `MediaRemote.skip(interval:)` / `setElapsedTime` and the AppleScript `MediaBridge.setPlayerPosition` paths were removed (along with all of `MediaBridge`) — the former is gated since 15.4, the latter is no longer needed now that absolute seek works through the bridge for Spotify too.
 
+### Collapsed-State View Tree
+
+**`opacity(0)` does not unmount a SwiftUI view — the whole subtree stays alive and keeps doing work.**
+
+`NotchView.contentPanel` used to be mounted unconditionally and merely hidden with `.opacity(effectiveStatus == .opened ? 1 : 0)` + `.scaleEffect(...)`. With the notch collapsed the entire tab tree therefore stayed in the view graph, so `OverviewTab`'s media card kept reacting to `mediaService.playbackPosition` — updated every 0.5s by `MediaService.progressTimer`, and each change fires a 0.25s `.animation(.snappy, value:)` (`OverviewTab.swift:311`), so roughly half the wall clock was spent mid-animation. **While any SwiftUI animation is active, ViewGraph re-walks the entire display list every frame**, and there is one `NotchView` per screen, so a two-display setup paid it twice.
+
+Measured (Release, music playing, comparable AI load): ~22% process CPU, 1774µs per main-runloop turn, 215MB RSS, and 4 live `VinylDiscView` instances (2 screens × badge + OverviewTab). `sample` attributed 52% of active main-thread time to `__NSWindowGetDisplayCycleObserverForLayout_block_invoke` → `NSHostingView.layout()` → `DisplayList.ViewUpdater.update` recursion — the same stack as the `cpu_resource` watchdog reports that had been killing the app at "90s cpu over 166s (54% average)". Pausing playback dropped CPU to 0.3%, which is what localized the problem to this path.
+
+This is the **second layer** of the same `cpu_resource` story, and the distinction matters. `fix(media): split playbackPosition out` (87b46bf) pulled `position` out of the `@Observable` `PlaybackState` struct so a progress tick no longer invalidated every view reading *any* field — that fixed the **body re-evaluation** storm in the attribute-graph layer. It does not address this one: even with zero `body` re-eval, an **active animation** makes the *render* layer re-walk the display list every frame for the entire mounted tree. Same trap as `CompletionFlashView`, whose `body` runs at only 0.7–2/s while its full-screen window stays permanently visible — **`body` frequency tells you nothing about render cost**, and reading one for the other is what makes this class of bug take several passes to find.
+
+Fix: `contentMounted` gates the mount, and unmounting is **deferred by `closeSpringDuration + 0.1`** so the collapse animation still plays with content present — visually identical, but the tree is released once collapsed. Result: 1242µs per turn (−30%), 175MB RSS, 2 `VinylDiscView` instances; ~10% CPU when AI is idle and music plays.
+
+When adding notch UI, keep in mind:
+
+- Never use `opacity` / `scaleEffect` / `frame(height: 0)` to "hide" an expensive subtree — they hide pixels, not work. Gate the mount instead.
+- An always-mounted `.animation(value:)` bound to a frequently-changing service property costs a full per-frame tree walk no matter how small the animated view is. Frequency of the trigger tells you nothing about its cost; only the tree size does.
+- Per-screen views multiply every such cost by the display count.
+- Animation driving style is a red herring here: rewriting `VinylDiscView` from a 20fps `@State` loop to a `repeatForever` animation, and `AudioEqualizerView` from animating `frame(height:)` (layout) to `scaleEffect` (transform), each measured **zero** CPU improvement — because both kept an animation *active*. Only unmounting helped. (The `scaleEffect` rewrite was reverted; `Capsule` corner radii distort under non-uniform scaling.)
+
+### Performance Probe
+
+`PerfProbe` (`NemoNotch/Helpers/PerfProbe.swift`) is an opt-in hotspot counter/timer. Disabled by default — the gate is one static `Bool` read — so call sites are safe to leave in hot paths permanently. Enable via `NEMONOTCH_PERF=1` (env) or `defaults write com.nemo.BrightnessApp.NemoNotch perfProbe -bool true`; window length via `NEMONOTCH_PERF_INTERVAL` (default 5s). Each window logs at `.info` (so Release builds are covered too): process CPU from `getrusage`, main-thread vs other-thread split from `thread_info`, hotspots sorted by **total time** (not frequency), raw call frequencies, and a visible-window snapshot with total megapixels participating in compositing.
+
+`MainThreadProbe` feeds every runloop turn into it as `MainRunloop.activeTurn`, which is how "main thread woken ~180×/s at ~1.8ms each" became visible at all — `MainThreadProbe`'s own 50ms single-turn threshold is blind to that pattern (many short turns rather than one long stall), and its `beforeWaiting` stack sampling cannot name the business function because the work has already returned by then.
+
+Two gotchas worth keeping:
+
+- Use `getrusage`, **not** `proc_pid_rusage` — on the current SDK `rusage_info_current`'s struct version disagrees with what the kernel writes back and the call SIGABRTs (verified).
+- `pthread_main_thread_np`, `THREAD_BASIC_INFO_COUNT`, `TH_USAGE_SCALE` and `TH_FLAGS_IDLE` are C macros and invisible to Swift; capture the main thread's mach port with `pthread_mach_thread_np(pthread_self())` from `start()` and hardcode the rest.
+
 ## Development Conventions
 
 ### Behavioral Guidelines

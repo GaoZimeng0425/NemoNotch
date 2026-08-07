@@ -15,6 +15,7 @@ struct BadgeIconView: View {
     let pomodoroService: PomodoroTimerService
 
     var body: some View {
+        let _ = PerfProbe.hit("BadgeIconView.body")
         switch item {
         case let .notification(bundleID, count):
             notificationBadge(bundleID: bundleID, count: count)

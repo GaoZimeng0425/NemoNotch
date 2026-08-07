@@ -19,6 +19,14 @@ struct CompletionFlashView: View {
     private static let core = Color(red: 1.0, green: 0.93, blue: 0.82)
 
     var body: some View {
+        // 承载窗口在 makeWindow 里 orderFrontRegardless 之后从不 orderOut,
+        // 所以 flashLevel 为 0 时这个全屏层依然可见、依然参与合成。
+        // `.idle` 命中就是"没有任何东西要显示却仍在重绘"的那部分。
+        let _ = PerfProbe.hit(
+            service.flashLevel == 0 && !service.toastVisible
+                ? "CompletionFlashView.body.idle(全屏窗口常驻可见但无内容)"
+                : "CompletionFlashView.body.active"
+        )
         ZStack {
             glow
                 .opacity(NotchConstants.completionGlowOpacity * service.flashLevel)

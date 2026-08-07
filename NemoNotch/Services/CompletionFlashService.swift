@@ -79,6 +79,7 @@ final class CompletionFlashService {
     // MARK: - Observation
 
     private func observe() {
+        let armProbe = PerfProbe.begin()
         withObservationTracking {
             // Touch the tracked state so onChange fires on any mutation.
             _ = store.sortedSessions.map { ($0.id, $0.status) }
@@ -86,12 +87,18 @@ final class CompletionFlashService {
                 _ = monitor.agents.mapValues { $0.state }
             }
         } onChange: {
+            // 若 evaluate() 又改动了被观察状态，这里会自激成死循环 ——
+            // onChange 频率远高于真实事件频率就是证据。
+            PerfProbe.hit("CompletionFlashService.observe.onChange")
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 observe() // re-arm before evaluating so no change is missed
+                let evalProbe = PerfProbe.begin()
                 evaluate()
+                PerfProbe.end("CompletionFlashService.evaluate", evalProbe)
             }
         }
+        PerfProbe.end("CompletionFlashService.observe.arm(读取全部会话快照)", armProbe)
     }
 
     private func evaluate() {

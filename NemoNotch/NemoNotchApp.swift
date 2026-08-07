@@ -118,6 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 诊断 cpu_resource 崩溃(主线程卡在 NSView 递归 layout,由 CA::Transaction 每帧驱动)。
         MainThreadProbe.shared.install()
 
+        // 热点频率/耗时探针。默认关闭,NEMONOTCH_PERF=1 开启 —— 用来定位
+        // "主线程没卡顿但 CPU 常驻偏高" 这类被 MainThreadProbe 阈值漏掉的消耗。
+        PerfProbe.start()
+
         // Warm the OpenRouter-backed model-context overlay (offline-safe; the
         // curated hardcoded table still resolves every lookup if this lags).
         if !UITestMode.isActive { ModelContextWindow.warm() }

@@ -71,12 +71,15 @@ final class SystemService: LifecycleAware {
     func update() {
         // uitest 下保留 UITestSeeder 注入的假数据,禁止实时采样覆盖。
         if UITestMode.isActive { return }
+        let probe = PerfProbe.begin()
+        defer { PerfProbe.end("SystemService.update@2s", probe) }
         updateCPU()
         updateMemory()
         updateBattery()
         updateDisk()
         updateNetwork()
-        updateProcesses()
+        // 进程枚举是这批采样里最贵的一项,单独计时。
+        PerfProbe.measure("SystemService.updateProcesses(进程枚举)") { updateProcesses() }
     }
 
     private func updateCPU() {

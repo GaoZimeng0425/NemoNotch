@@ -17,7 +17,10 @@ struct ClaudeCrabIcon: View {
     }
 
     var body: some View {
+        let _ = PerfProbe.hit("ClaudeCrabIcon.body")
         Canvas { context, canvasSize in
+            let probe = PerfProbe.begin()
+            defer { PerfProbe.end("ClaudeCrabIcon.canvasDraw", probe) }
             let scale = size / 52.0
             let xOffset = (canvasSize.width - 66 * scale) / 2
 
@@ -73,8 +76,13 @@ struct ClaudeCrabIcon: View {
         }
         .frame(width: size * (66.0 / 52.0), height: size)
         .onReceive(legTimer) { _ in
+            // `legTimer` 是无条件 autoconnect 的 stored property：即使 animateLegs
+            // 为 false 也会每 0.15s 触发。`.idle` 计数就是纯浪费的那部分。
+            PerfProbe.hit("ClaudeCrabIcon.timerTick")
             if animateLegs {
                 legPhase = (legPhase + 1) % 4
+            } else {
+                PerfProbe.hit("ClaudeCrabIcon.timerTick.idle")
             }
         }
     }
@@ -93,11 +101,14 @@ struct ProcessingSpinner: View {
     }
 
     var body: some View {
+        let _ = PerfProbe.hit("ProcessingSpinner.body")
         Text(symbols[phase % symbols.count])
             .font(.system(size: 13, weight: .bold))
             .foregroundColor(color)
             .frame(width: 18, height: 18, alignment: .center)
             .onReceive(timer) { _ in
+                // 同 ClaudeCrabIcon：timer 无条件常驻，不随可见性停止。
+                PerfProbe.hit("ProcessingSpinner.timerTick")
                 phase = (phase + 1) % symbols.count
             }
     }

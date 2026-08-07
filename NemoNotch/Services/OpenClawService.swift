@@ -600,6 +600,7 @@ final class OpenClawService {
         ttlTimer?.invalidate()
         ttlTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
+                PerfProbe.hit("OpenClawService.ttlTick@5s")
                 self?.cleanupStaleAgents()
             }
         }

@@ -75,12 +75,15 @@ final class NotificationService {
         guard pollTimer == nil else { return }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
+                PerfProbe.hit("NotificationService.pollTick@2s")
                 self?.pollDock()
             }
         }
     }
 
     private func pollDock() {
+        let probe = PerfProbe.begin()
+        defer { PerfProbe.end("NotificationService.pollDock@2s", probe) }
         isAXTrusted = AXIsProcessTrusted()
         guard !monitoredApps.isEmpty else { return }
 
@@ -98,7 +101,12 @@ final class NotificationService {
         }
 
         let dockApp = AXUIElementCreateApplication(dockPID)
+        // AX 是跨进程 IPC：这次递归遍历的每个元素都是一次往返，
+        // 每 2s 全量重扫 Dock 的成本在这里量化。
+        let axProbe = PerfProbe.begin()
         let allElements = getSubElements(root: dockApp)
+        PerfProbe.end("NotificationService.getSubElements(Dock AX 全量遍历)", axProbe)
+        PerfProbe.hit("NotificationService.axElementsVisited", count: allElements.count)
         LogService.debug(
             "NotificationService: found \(allElements.count) AX elements in Dock",
             category: "Notification"

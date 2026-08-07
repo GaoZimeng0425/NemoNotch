@@ -63,6 +63,18 @@ struct NotchView: View {
     /// so the slide transition enters from the side you're heading toward.
     @State private var tabSlideForward = true
 
+    /// 折叠时是否仍挂载 `contentPanel`。
+    ///
+    /// 原先 `contentPanel` 无条件挂载、仅靠 opacity/scale 隐藏，于是折叠状态下
+    /// 整个 tab 树依然活跃 —— `OverviewTab` 的媒体卡片会持续响应
+    /// `playbackPosition`（每 0.5s 一变，各自触发一段 0.25s 动画），只要有活跃
+    /// 动画，SwiftUI 就每帧重新遍历整个 display list，而且每块屏幕一份。
+    /// 实测占进程 CPU 的 55%、内存的 60%。
+    ///
+    /// 卸载推迟到折叠动画播完，所以折叠观感与原先完全一致。
+    @State private var contentMounted = false
+    @State private var contentUnmountTask: Task<Void, Never>?
+
     /// Cursor is dwelling on this screen's collapsed notch (the coordinator is
     /// counting down to a hover-open). Grows the shape slightly as a "peek"
     /// affordance during the dwell.
@@ -127,6 +139,7 @@ struct NotchView: View {
     }
 
     var body: some View {
+        let _ = PerfProbe.hit("NotchView.body")
         let shown = badgeViewModel?.shownHasActiveBadge ?? false
 
         ZStack(alignment: .top) {
@@ -164,19 +177,22 @@ struct NotchView: View {
                 .zIndex(1)
             }
 
-            contentPanel
-                .scaleEffect(effectiveStatus == .opened ? 1 : 0.2, anchor: .top)
-                .opacity(effectiveStatus == .opened ? 1 : 0)
-                .allowsHitTesting(effectiveStatus == .opened)
-                .animation(
-                    .spring(
-                        duration: NotchConstants.tabSwitchSpringDuration,
-                        bounce: NotchConstants.tabSwitchSpringBounce
-                    ),
-                    value: coordinator.selectedTab
-                )
-                .animation(notchStateAnimation, value: effectiveStatus)
-                .zIndex(1)
+            // 折叠后卸载整棵 tab 树（延迟到动画播完，见 contentMounted）。
+            if contentMounted {
+                contentPanel
+                    .scaleEffect(effectiveStatus == .opened ? 1 : 0.2, anchor: .top)
+                    .opacity(effectiveStatus == .opened ? 1 : 0)
+                    .allowsHitTesting(effectiveStatus == .opened)
+                    .animation(
+                        .spring(
+                            duration: NotchConstants.tabSwitchSpringDuration,
+                            bounce: NotchConstants.tabSwitchSpringBounce
+                        ),
+                        value: coordinator.selectedTab
+                    )
+                    .animation(notchStateAnimation, value: effectiveStatus)
+                    .zIndex(1)
+            }
 
             // Chin bar: single three-column row straddling the hardware notch.
             // Left = tabs, middle = clear notch-width spacer, right = actions.
@@ -209,7 +225,13 @@ struct NotchView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .onAppear { initializeBadgeViewModel() }
+        .onAppear {
+            initializeBadgeViewModel()
+            updateContentMount(for: effectiveStatus)
+        }
+        .onChange(of: effectiveStatus) { _, status in
+            updateContentMount(for: status)
+        }
         .onChange(of: badgeViewModel?.activeBadgeItems ?? []) { _, newTypes in
             badgeViewModel?.applyBadgeUpdate(newTypes: newTypes)
         }
@@ -228,6 +250,24 @@ struct NotchView: View {
             Button("notch.context.quit") {
                 NSApp.terminate(nil)
             }
+        }
+    }
+
+    /// 展开立即挂载；折叠等动画播完再卸载，避免内容瞬间消失。
+    private func updateContentMount(for status: NotchCoordinator.Status) {
+        contentUnmountTask?.cancel()
+        contentUnmountTask = nil
+
+        guard status == .closed else {
+            contentMounted = true
+            return
+        }
+        guard contentMounted else { return }
+
+        contentUnmountTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(NotchConstants.closeSpringDuration + 0.1))
+            guard !Task.isCancelled, effectiveStatus == .closed else { return }
+            contentMounted = false
         }
     }
 
