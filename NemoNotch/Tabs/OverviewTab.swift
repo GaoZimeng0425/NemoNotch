@@ -304,11 +304,16 @@ private struct OverviewMediaSection: View {
             .animation(.easeInOut(duration: 0.6), value: accent)
 
             HStack {
-                Text(formatTime(mediaService.playbackPosition))
+                // 动画绑格式化后的字符串，而不是 playbackPosition 本身：进度每
+                // 0.5s 推进一次，但这个标签是秒级的，所以有一半的推进显示值没
+                // 变。绑上游数值会让 numericText 在每次推进时都跑一段 0.25s 动
+                // 画（展开态下约一半时间都在动画中），其中一半是空转。
+                let elapsed = formatTime(mediaService.playbackPosition)
+                Text(elapsed)
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundStyle(NotchTheme.textTertiary)
                     .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.25), value: mediaService.playbackPosition)
+                    .animation(.snappy(duration: 0.25), value: elapsed)
                 Spacer()
                 Text(formatTime(state.duration))
                     .font(.system(size: 8, design: .monospaced))
