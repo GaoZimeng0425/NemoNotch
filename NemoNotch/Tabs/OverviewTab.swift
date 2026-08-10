@@ -221,6 +221,14 @@ private struct OverviewMediaSection: View {
         mediaService.artworkAccent ?? NotchTheme.accent
     }
 
+    /// Vinyl diameter. The halo's radius is derived from it so the two can't
+    /// drift apart.
+    private static let discSize: CGFloat = 80
+    /// How far the halo reaches past the vinyl, as a multiple of its radius.
+    /// 1.6 spills ~24pt beyond an 80pt disc — enough to read as light rather
+    /// than as an outline.
+    private static let haloScale: CGFloat = 1.6
+
     var body: some View {
         VStack(spacing: 6) {
             artwork
@@ -243,18 +251,32 @@ private struct OverviewMediaSection: View {
                 isPlaying: state.isPlaying,
                 artworkData: state.artworkData,
                 appIcon: mediaService.appIcon,
-                size: 80
+                size: Self.discSize
             )
             .background {
                 // Mood-light halo behind the vinyl in the album's dominant
                 // color — bright while playing, embers when paused.
-                Circle()
-                    .fill(accent)
-                    .scaleEffect(1.12)
-                    .blur(radius: 14)
-                    .opacity(state.isPlaying ? 0.45 : 0.12)
-                    .animation(.easeInOut(duration: 0.6), value: state.isPlaying)
-                    .animation(.easeInOut(duration: 0.6), value: accent)
+                //
+                // A radial falloff, not a blurred disc: the old
+                // Circle().fill().blur(14) was scaled only 1.12, so the opaque
+                // vinyl covered everything except a hard smudged rim. The
+                // stops ease out (rather than fading linearly) so the spill
+                // has no banding, and dropping the blur also drops an
+                // offscreen render pass.
+                RadialGradient(
+                    stops: [
+                        .init(color: accent, location: 0.45),
+                        .init(color: accent.opacity(0.5), location: 0.72),
+                        .init(color: accent.opacity(0), location: 1)
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: Self.discSize / 2
+                )
+                .scaleEffect(Self.haloScale)
+                .opacity(state.isPlaying ? 0.5 : 0.14)
+                .animation(.easeInOut(duration: 0.6), value: state.isPlaying)
+                .animation(.easeInOut(duration: 0.6), value: accent)
             }
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
@@ -273,7 +295,7 @@ private struct OverviewMediaSection: View {
                     }
             }
         }
-        .frame(height: 80)
+        .frame(height: Self.discSize)
     }
 
     private var trackInfo: some View {

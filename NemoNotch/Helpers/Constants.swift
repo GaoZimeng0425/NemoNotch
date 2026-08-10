@@ -42,6 +42,11 @@ enum NotchConstants {
     static let badgeSpringBounce: Double = 0.08
     static let tabSwitchSpringDuration: Double = 0.28
     static let tabSwitchSpringBounce: Double = 0.06
+    /// Horizontal offset the entering tab page slides in from. Deliberately
+    /// small: `.move(edge:)` enters from the container's edge, i.e. a ~800pt
+    /// dash in 0.28s, which reads as the page flying in. A short nudge carries
+    /// the same directional cue without the lurch.
+    static let tabSlideOffset: CGFloat = 26
     static let fadeFastDuration: Double = 0.16
     static let fadeNormalDuration: Double = 0.24
     static let pulseDuration: Double = 1.05

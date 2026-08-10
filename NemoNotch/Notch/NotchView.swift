@@ -330,10 +330,17 @@ struct NotchView: View {
         // moves: a removal transition is captured at insertion time, so a
         // direction-dependent removal always exits with the PREVIOUS switch's
         // direction (visibly wrong on rapid back-and-forth switching). The
-        // insertion reads fresh state, and its motion alone carries the
-        // directional cue while spatial separation kills the ghosting.
+        // insertion reads fresh state, so its motion alone carries the
+        // directional cue.
+        //
+        // The nudge is a short `.offset`, not `.move(edge:)`: the latter enters
+        // from the container's edge, so the page dashed ~800pt in 0.28s. The
+        // trade-off is that a small offset no longer separates the outgoing and
+        // incoming pages spatially, so they cross-fade in place — tune
+        // tabSlideOffset up if that reads as ghosting.
         .transition(.asymmetric(
-            insertion: .move(edge: tabSlideForward ? .trailing : .leading).combined(with: .opacity),
+            insertion: .offset(x: tabSlideForward ? NotchConstants.tabSlideOffset : -NotchConstants.tabSlideOffset)
+                .combined(with: .opacity),
             removal: .opacity
         ))
         .animation(
