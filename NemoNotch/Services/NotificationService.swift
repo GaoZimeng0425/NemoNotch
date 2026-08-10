@@ -16,6 +16,8 @@ final class NotificationService {
     private var monitoredApps: [String]
     private var pollTimer: Timer?
     private var iconCache: [String: NSImage] = [:]
+    /// 上次写进日志的 AX 授权状态；`nil` 表示还没记过。
+    private var loggedAXTrusted: Bool?
 
     init(monitoredApps: [String] = []) {
         self.monitoredApps = monitoredApps
@@ -81,16 +83,31 @@ final class NotificationService {
         }
     }
 
+    /// 只在授权状态**变化**时记一条。此前每轮轮询（2s）都写一条 "AX not
+    /// trusted"，未授权时它占到日志总量的 96%，4 小时就把 1MB 的文件写满，
+    /// 把真正有用的记录挤出了 7 个文件的保留窗口。
+    private func logAXStateIfChanged(_ trusted: Bool) {
+        guard loggedAXTrusted != trusted else { return }
+        loggedAXTrusted = trusted
+        if trusted {
+            LogService.info("AX authorized — Dock badge polling active", category: "Notification")
+        } else {
+            LogService.warn(
+                "AX not trusted — Dock badge polling inactive "
+                    + "(System Settings → Privacy & Security → Accessibility)",
+                category: "Notification"
+            )
+        }
+    }
+
     private func pollDock() {
         let probe = PerfProbe.begin()
         defer { PerfProbe.end("NotificationService.pollDock@2s", probe) }
         isAXTrusted = AXIsProcessTrusted()
         guard !monitoredApps.isEmpty else { return }
 
-        guard isAXTrusted else {
-            LogService.warn("NotificationService: AX not trusted", category: "Notification")
-            return
-        }
+        logAXStateIfChanged(isAXTrusted)
+        guard isAXTrusted else { return }
 
         // Get Dock PID
         guard let dockPID = NSRunningApplication.runningApplications(

@@ -370,10 +370,12 @@ Usage: `LogService.debug/info/warn/error("message", category: "xxx")`
 - **Service init/deinit**: `.info` level, marking lifecycle
 - **External interactions**: Network requests, IPC, file I/O, subprocess launch/exit — `.info` (success) or `.error` (failure)
 - **State changes**: Key property assignments (playback state, session phase, connection status) — `.debug` with before/after values
-- **Error paths**: All `catch`, `nil` fallbacks, permission denials, timeouts — `.warn` or `.error` with context
+- **Error paths**: All `catch`, `nil` fallbacks, permission denials, timeouts — `.warn` or `.error` with context. **Inside a polling loop, log the state *transition*, not every failed tick.** Taken literally this rule produced a real bug: `NotificationService` logged "AX not trusted" on every 2s poll, which grew to **96% of all log volume**, filled a 1MB file every 4 hours and pushed everything useful out of the 7-file retention window. Keep the last-logged state and emit only on change (`logAXStateIfChanged`).
 - **Async callback entry**: Timer, NotificationCenter, Delegate callbacks — `.debug` to confirm callback fired
 
 Category naming: use module name, e.g. `"MediaService"`, `"HookServer"`, `"NotchCoordinator"`, for easy filtering.
+
+**Timestamps are local time.** CocoaLumberjack's `DDLogFileFormatterDefault` **hardcodes UTC**, so file logs used to run 8h behind the wall clock and disagree with crash reports, `ps` and Console — trivially misread as "the process stopped hours ago" (it cost real time during the CPU investigation). `LogService` now installs a `DDLogFileFormatterDefault` with `timeZone = .current`. Caveat: the log **file names** are still UTC — they come from `DDLogFileManagerDefault`, which does not go through `logFormatter` — so `…2026-08-10--03-15-30.log` is an 11:15 local-time file.
 
 ### Git Workflow
 

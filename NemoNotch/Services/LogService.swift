@@ -18,6 +18,14 @@ final class LogService {
         logFileManager.maximumNumberOfLogFiles = 7
         fileLogger = DDFileLogger(logFileManager: logFileManager)
         fileLogger.rollingFrequency = 60 * 60 * 24
+        // CocoaLumberjack 的默认文件格式化器把时区**硬编码为 UTC**，于是日志
+        // 时间比崩溃报告 / ps / Console 的本地时间早 8 小时（CST）。排查时极易
+        // 把"刚写的日志"误读成"进程几小时前就停了"。这里换成本地时区，格式与
+        // 默认实现保持一致，历史日志的排版不变。
+        let localTimestamp = DateFormatter()
+        localTimestamp.dateFormat = "yyyy/MM/dd HH:mm:ss:SSS"
+        localTimestamp.timeZone = .current
+        fileLogger.logFormatter = DDLogFileFormatterDefault(dateFormatter: localTimestamp)
         DDLog.add(fileLogger)
 
         #if DEBUG
