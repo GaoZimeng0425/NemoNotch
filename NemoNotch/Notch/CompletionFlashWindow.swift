@@ -44,6 +44,43 @@ final class CompletionFlashWindowController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.rebuild() }
         }
+        observeOverlayVisibility()
+    }
+
+    /// Keep the windows on screen only while there is something to show.
+    ///
+    /// These are one full-screen window per display (5.2MP across two displays
+    /// here) hosting `.blendMode(.screen)` content. AppKit asks every *visible*
+    /// window whether it needs to re-layout on each display cycle — the pass is
+    /// driven by the window being on screen, not by whether its content changed
+    /// or is even opaque. They used to be `orderFrontRegardless()`'d at creation
+    /// and never ordered out, so that cost was permanent.
+    ///
+    /// The window therefore appears one runloop turn after the flash starts
+    /// (this observation lands via a `Task`). Harmless in practice: the glow
+    /// eases in from zero over `completionFlashRise`, so the frame that gets
+    /// missed is the fully-transparent one.
+    private func observeOverlayVisibility() {
+        withObservationTracking {
+            _ = service.overlayVisible
+        } onChange: {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                observeOverlayVisibility() // re-arm before applying so no change is missed
+                applyOverlayVisibility()
+            }
+        }
+    }
+
+    private func applyOverlayVisibility() {
+        let visible = service.overlayVisible
+        for window in windows.values {
+            if visible {
+                window.orderFrontRegardless()
+            } else {
+                window.orderOut(nil)
+            }
+        }
     }
 
     deinit {
@@ -87,7 +124,11 @@ final class CompletionFlashWindowController {
         host.wantsLayer = true
         host.layer?.backgroundColor = .clear
         window.contentView = host
-        window.orderFrontRegardless()
+        // Windows rebuilt mid-flash (display change) must match the current
+        // state rather than always coming up on screen.
+        if service.overlayVisible {
+            window.orderFrontRegardless()
+        }
         return window
     }
 }
