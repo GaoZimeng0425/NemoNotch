@@ -9,15 +9,41 @@ struct VinylDiscView: View {
     var size: CGFloat = 20
     var showDisc: Bool = true
 
-    @State private var angle: Double = 0
     @State private var cachedImage: NSImage?
-    @State private var isRotating = false
 
-    /// 一圈 6 秒 = 60°/s，与原先“每 50ms 转 3°”的转速一致。
-    private static let secondsPerTurn: Double = 6
+    /// 60°/s —— 与最初「每 50ms 转 3°」的转速一致。
+    private static let degreesPerSecond: Double = 60
 
     var body: some View {
-        let _ = PerfProbe.hit("VinylDiscView.body")
+        // 用 TimelineView 驱动，而不是 repeatForever 动画。
+        //
+        // `paused` 为 true 时驱动直接停下，并保持最后一帧的角度 —— 暂停既可靠
+        // 也不跳变。`repeatForever` 两点都做不到：它不会被 `disablesAnimations`
+        // 的赋值取消（暂停后唱片照转），而且动画期间 `angle` 已经等于目标值，
+        // 读不出当前插值到哪，只能清零，于是封面会瞬间跳回正上方。
+        //
+        // 注意 TimelineView 只看 `paused`，不看可见性：视图若「挂载但不可见」
+        // 它仍会每帧更新。折叠态目前是整棵树卸载（见 NotchView.contentMounted），
+        // 所以没问题 —— 但别再引入 opacity 式的隐藏。
+        TimelineView(.animation(paused: !isPlaying)) { context in
+            let _ = PerfProbe.hit("VinylDiscView.frame")
+            disc.rotationEffect(.degrees(Self.angle(at: context.date)))
+        }
+        .onChange(of: artworkData) { _, _ in cacheImage() }
+        .onChange(of: appIcon) { _, _ in cacheImage() }
+        .onAppear { cacheImage() }
+    }
+
+    /// 角度由绝对时间推导，不存任何状态 —— 暂停/恢复无需协调，视图重建也不会
+    /// 丢相位。代价是恢复播放时角度会跳到「当前时间对应的位置」，但那一跳发生
+    /// 在开始旋转的瞬间，随即被转动掩盖，比暂停时跳变自然得多。
+    private static func angle(at date: Date) -> Double {
+        (date.timeIntervalSinceReferenceDate * degreesPerSecond)
+            .truncatingRemainder(dividingBy: 360)
+    }
+
+    @ViewBuilder
+    private var disc: some View {
         ZStack {
             if showDisc {
                 Circle()
@@ -63,19 +89,6 @@ struct VinylDiscView: View {
                     )
             }
         }
-        .rotationEffect(.degrees(angle))
-        .onChange(of: artworkData) { _, _ in cacheImage() }
-        .onChange(of: appIcon) { _, _ in cacheImage() }
-        .onChange(of: isPlaying) { _, playing in
-            playing ? startRotation() : stopRotation()
-        }
-        .onAppear {
-            cacheImage()
-            if isPlaying { startRotation() }
-        }
-        // 关键：视图消失必须停转。缺这一行时，notch 折叠 / 切屏后旋转仍在跑，
-        // 新视图上来又起一份，稳态下会有多份同时转（实测 4 份）。
-        .onDisappear { stopRotation() }
     }
 
     private func cacheImage() {
@@ -85,36 +98,6 @@ struct VinylDiscView: View {
             cachedImage = icon
         } else {
             cachedImage = nil
-        }
-    }
-
-    /// 声明一次无限匀速旋转，由动画系统负责插值。
-    ///
-    /// 相比原先每 50ms 改一次 `@State`：那样每 tick 都会让 SwiftUI 认为数据变了
-    /// → 重跑 `body` → 重建视图树 → 提交 CA transaction，下游拖出
-    /// `NSHostingView.layout()` / `_layoutSubtreeWithOldSize:` 递归布局。
-    /// 现在 `angle` 只赋值一次，`body` 不再每帧重算。
-    private func startRotation() {
-        guard !isRotating else { return }
-        isRotating = true
-        PerfProbe.hit("VinylDiscView.startRotation")
-        withAnimation(.linear(duration: Self.secondsPerTurn).repeatForever(autoreverses: false)) {
-            angle = 360
-        }
-    }
-
-    /// `repeatForever` 不会自行结束，必须显式打断：用禁用动画的 transaction
-    /// 重设角度，动画才会被替换掉而不是继续挂着。
-    ///
-    /// 归零同时让暂停时封面回正（0° 是正朝向），比停在任意角度更自然。
-    private func stopRotation() {
-        guard isRotating else { return }
-        isRotating = false
-        PerfProbe.hit("VinylDiscView.stopRotation")
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            angle = 0
         }
     }
 }
