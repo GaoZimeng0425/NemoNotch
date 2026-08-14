@@ -439,10 +439,6 @@ struct NotchView: View {
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shown
         )
-        .animation(
-            .spring(duration: NotchConstants.hoverPeekSpringDuration, bounce: 0.25),
-            value: isClosedHovering
-        )
         .animation(.easeInOut(duration: NotchConstants.fadeNormalDuration), value: notchGlow)
     }
 
