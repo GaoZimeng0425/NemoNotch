@@ -78,14 +78,12 @@ struct NotchView: View {
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
-            // Width is content-driven (the collapsed branch sizes to its badge
-            // coins and the shape flexes as a `.background`); this width only
-            // feeds `NotchBackgroundView`'s height + a fallback reference.
+            // Hover peek is done via scaleEffect on the collapsed branch, so the
+            // shape size itself stays at the physical notch core (no per-axis
+            // frame tweaks that desync width/height).
             return CGSize(
-                width: hardwareNotchSize.width - NotchConstants.closedWidthInset
-                    + (isClosedHovering ? NotchConstants.closedHoverExtraWidth : 0),
+                width: hardwareNotchSize.width - NotchConstants.closedWidthInset,
                 height: hardwareNotchSize.height
-                    + (isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0)
             )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
@@ -393,9 +391,13 @@ struct NotchView: View {
             mediaService: mediaService,
             pomodoroService: pomodoroService
         )
-        .frame(height: hardwareNotchSize.height
-            + (isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0))
+        .frame(height: hardwareNotchSize.height)
         .background(alignment: .top) { notchShape(shown: shown) }
+        // Hover "peek": a uniform scale-up (anchored at top so it grows
+        // downward/outward from the menu bar, like the notch is leaning toward
+        // the cursor). Scale beats per-axis frame tweaks — width/height/corners
+        // all stay proportional, no lopsided growth.
+        .scaleEffect(isClosedHovering ? NotchConstants.closedHoverScale : 1, anchor: .top)
         .animation(notchStateAnimation, value: effectiveStatus)
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),

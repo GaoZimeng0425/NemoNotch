@@ -67,10 +67,10 @@ enum NotchConstants {
     /// click still can). Prevents an instant reopen when the cursor is still
     /// parked on the notch after an ESC / click-outside close.
     static let hoverReopenSuppression: TimeInterval = 0.35
-    /// Closed-shape "peek" growth while the cursor dwells on the notch — the
-    /// pre-open affordance shown during `hoverOpenDelay`.
-    static let closedHoverExtraWidth: CGFloat = 8
-    static let closedHoverExtraHeight: CGFloat = 6
+    /// Closed-shape "peek" scale-up while the cursor dwells on the notch — the
+    /// pre-open affordance shown during `hoverOpenDelay`. Applied as a uniform
+    /// scaleEffect (anchored at top) so width/height/corners grow together.
+    static let closedHoverScale: CGFloat = 1.05
     static let hoverPeekSpringDuration: Double = 0.32
 
     /// Close animation
