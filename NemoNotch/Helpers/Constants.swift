@@ -11,7 +11,7 @@ enum NotchConstants {
     static let closeHitboxInset: CGFloat = 20
     static let clickHitboxInset: CGFloat = 10
 
-    // Badge
+    /// Badge
     /// Gap between the notch slot and the nearest coin — pushes index 0 off the
     /// physical notch edge so badges don't hug it.
     static let badgeNotchGap: CGFloat = 8
@@ -67,9 +67,13 @@ enum NotchConstants {
     /// click still can). Prevents an instant reopen when the cursor is still
     /// parked on the notch after an ESC / click-outside close.
     static let hoverReopenSuppression: TimeInterval = 0.35
-    /// Closed-shape "peek" scale-up while the cursor dwells on the notch — the
-    /// pre-open affordance shown during `hoverOpenDelay`. Applied as a uniform
-    /// scaleEffect (anchored at top) so width/height/corners grow together.
+    /// Closed-shape "peek" growth while the cursor dwells on the notch — the
+    /// pre-open affordance shown during `hoverOpenDelay`. Multiplies both the
+    /// content-driven width and the height by this factor as real frame sizes,
+    /// not `scaleEffect` (`NotchBackgroundView` ends in `.drawingGroup()`, so
+    /// an ancestor `scaleEffect` would transform the rasterized layer instead
+    /// of redrawing the shape at its true size). One shared factor for both
+    /// axes keeps them from desyncing.
     static let closedHoverScale: CGFloat = 1.05
     static let hoverPeekSpringDuration: Double = 0.32
 

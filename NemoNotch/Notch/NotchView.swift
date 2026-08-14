@@ -75,15 +75,22 @@ struct NotchView: View {
         effectiveStatus == .closed && coordinator.hoverScreenID == screen.displayID
     }
 
+    /// Multiplies the closed shape's width/height by the same factor during
+    /// the hover-peek dwell, applied as real frame sizes further down (never
+    /// `scaleEffect` — see `NotchConstants.closedHoverScale`).
+    private var closedPeekScale: CGFloat {
+        isClosedHovering ? NotchConstants.closedHoverScale : 1
+    }
+
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
-            // Hover peek is done via scaleEffect on the collapsed branch, so the
-            // shape size itself stays at the physical notch core (no per-axis
-            // frame tweaks that desync width/height).
+            // Width is only a fallback reference — the collapsed shape is
+            // `flexibleWidth`, so its real width tracks the badge content's
+            // frame in `collapsedNotch`, not this value.
             return CGSize(
-                width: hardwareNotchSize.width - NotchConstants.closedWidthInset,
-                height: hardwareNotchSize.height
+                width: (hardwareNotchSize.width - NotchConstants.closedWidthInset) * closedPeekScale,
+                height: hardwareNotchSize.height * closedPeekScale
             )
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
@@ -381,23 +388,24 @@ struct NotchView: View {
         // visually flush with the notch slot (not overshooting it). Coins sit
         // outside this core; the background flexes to cover them when present.
         let notchCore = hardwareNotchSize.width - NotchConstants.closedWidthInset
+        // Hover "peek" grows both axes by the same factor as real frame sizes,
+        // not `scaleEffect`: `NotchBackgroundView` ends in `.drawingGroup()`,
+        // and an ancestor `scaleEffect` would transform that already-rasterized
+        // layer instead of redrawing the shape at its true size.
+        let peekWidth = notchCore * closedPeekScale
+        let peekHeight = hardwareNotchSize.height * closedPeekScale
         return CompactBadgesView(
             cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
             shownHasActiveBadge: shown,
-            notchMinWidth: notchCore,
-            notchCoreWidth: notchCore,
+            notchMinWidth: peekWidth,
+            notchCoreWidth: peekWidth,
             onBadgeTap: handleBadgeTap,
             notificationService: notificationService,
             mediaService: mediaService,
             pomodoroService: pomodoroService
         )
-        .frame(height: hardwareNotchSize.height)
+        .frame(height: peekHeight)
         .background(alignment: .top) { notchShape(shown: shown) }
-        // Hover "peek": a uniform scale-up (anchored at top so it grows
-        // downward/outward from the menu bar, like the notch is leaning toward
-        // the cursor). Scale beats per-axis frame tweaks — width/height/corners
-        // all stay proportional, no lopsided growth.
-        .scaleEffect(isClosedHovering ? NotchConstants.closedHoverScale : 1, anchor: .top)
         .animation(notchStateAnimation, value: effectiveStatus)
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
