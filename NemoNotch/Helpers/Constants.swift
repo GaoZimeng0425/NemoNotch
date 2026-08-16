@@ -29,8 +29,7 @@ enum NotchConstants {
     /// the step so stacked coins reveal a clear rim of the one beneath.
     static let badgeCoinDiameter: CGFloat = 22
 
-    // Badge layout
-    static let closedWidthInset: CGFloat = 4
+    /// Badge layout
     static let upcomingEventThresholdMinutes: Int = 15
 
     // Animation durations
@@ -68,14 +67,26 @@ enum NotchConstants {
     /// parked on the notch after an ESC / click-outside close.
     static let hoverReopenSuppression: TimeInterval = 0.35
     /// Closed-shape "peek" growth while the cursor dwells on the notch — the
-    /// pre-open affordance shown during `hoverOpenDelay`. Multiplies both the
-    /// content-driven width and the height by this factor as real frame sizes,
-    /// not `scaleEffect` (`NotchBackgroundView` ends in `.drawingGroup()`, so
-    /// an ancestor `scaleEffect` would transform the rasterized layer instead
-    /// of redrawing the shape at its true size). One shared factor for both
-    /// axes keeps them from desyncing.
-    static let closedHoverScale: CGFloat = 1.05
-    static let hoverPeekSpringDuration: Double = 0.32
+    /// pre-open affordance shown during `hoverOpenDelay`. Grows 4pt on each of
+    /// three sides (left, right, down) so the notch swells evenly outward
+    /// rather than dropping a tongue.
+    ///
+    /// Note the two are expressed differently: the shape is top-anchored, so
+    /// the width is a TOTAL split half per side (8 → 4pt each) while the height
+    /// is all downward (4 → 4pt). Atoll uses 8/8 (`ContentView.swift:924-925`),
+    /// which yields 4pt sideways but 8pt down; matching all three sides reads
+    /// more evenly here.
+    ///
+    /// These only read correctly because the collapsed shape now spans the
+    /// physical cutout exactly (the old `closedWidthInset` is gone — see
+    /// `NotchView.collapsedBadges`). While the shape was inset 4pt *narrower*
+    /// than the cutout, the first 4pt of any widening was swallowed by the
+    /// hardware hole and the remainder emerged as a 2-3pt antialiased sliver —
+    /// a translucent hairline, and out of step with the height, which had no
+    /// such dead zone.
+    static let closedHoverExtraWidth: CGFloat = 8
+    static let closedHoverExtraHeight: CGFloat = 4
+    static let hoverPeekSpringDuration: Double = 0.16
 
     /// Close animation
     static let closeContentFadeDuration: Double = 0.1

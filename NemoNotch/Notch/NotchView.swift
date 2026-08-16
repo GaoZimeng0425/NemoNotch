@@ -75,23 +75,42 @@ struct NotchView: View {
         effectiveStatus == .closed && coordinator.hoverScreenID == screen.displayID
     }
 
-    /// Multiplies the closed shape's width/height by the same factor during
-    /// the hover-peek dwell, applied as real frame sizes further down (never
-    /// `scaleEffect` — see `NotchConstants.closedHoverScale`).
-    private var closedPeekScale: CGFloat {
-        isClosedHovering ? NotchConstants.closedHoverScale : 1
+    /// Extra width/height (points) added to the closed shape during the
+    /// hover-peek dwell, so it swells left, right and down together.
+    private var closedPeekExtraWidth: CGFloat {
+        isClosedHovering ? NotchConstants.closedHoverExtraWidth : 0
+    }
+
+    private var closedPeekExtraHeight: CGFloat {
+        isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0
+    }
+
+    /// Live size of the collapsed badge row, measured every layout pass while
+    /// closed. This is what makes a single always-mounted shape possible: the
+    /// collapsed width is content-driven (badge coins define it), the opened
+    /// width is a constant, and `notchSize` needs both to come from one
+    /// animatable value. Measuring both axes together also keeps them from
+    /// desyncing — the badge row's own spring animates its frame, and the
+    /// shape simply tracks the result 1:1, exactly as the old flexible
+    /// `.background` did.
+    @State private var closedContentSize: CGSize = .zero
+
+    /// Collapsed shape size, floored at the physical notch so the first frame
+    /// (before any measurement lands) and the empty-badge state still span the
+    /// notch slot.
+    private var closedNotchSize: CGSize {
+        let floorWidth = hardwareNotchSize.width + closedPeekExtraWidth
+        let floorHeight = hardwareNotchSize.height + closedPeekExtraHeight
+        return CGSize(
+            width: max(closedContentSize.width, floorWidth),
+            height: max(closedContentSize.height, floorHeight)
+        )
     }
 
     private var notchSize: CGSize {
         switch effectiveStatus {
         case .closed:
-            // Width is only a fallback reference — the collapsed shape is
-            // `flexibleWidth`, so its real width tracks the badge content's
-            // frame in `collapsedNotch`, not this value.
-            return CGSize(
-                width: (hardwareNotchSize.width - NotchConstants.closedWidthInset) * closedPeekScale,
-                height: hardwareNotchSize.height * closedPeekScale
-            )
+            return closedNotchSize
         case .opened:
             return CGSize(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
         }
@@ -125,25 +144,33 @@ struct NotchView: View {
         let shown = badgeViewModel?.shownHasActiveBadge ?? false
 
         ZStack(alignment: .top) {
+            // ONE always-mounted shape for both states. It used to be branch-
+            // swapped (collapsed shape as a `.background` vs. opened shape as
+            // its own view), which changed view identity on open — SwiftUI can
+            // only cross-fade across an identity change, so the black shape
+            // never actually grew: the collapsed one ballooned out while a
+            // full-size opened one faded in, and both were semi-transparent
+            // mid-flight. Keeping one identity turns that into a real frame
+            // animation (size + corner radii interpolate), with no cross-fade
+            // and nothing translucent.
+            notchShape(shown: shown)
+                .animation(notchStateAnimation, value: effectiveStatus)
+                .animation(
+                    .spring(
+                        duration: NotchConstants.tabSwitchSpringDuration,
+                        bounce: NotchConstants.tabSwitchSpringBounce
+                    ),
+                    value: coordinator.selectedTab
+                )
+                .zIndex(0)
+
+            // Badges ride on top of the shape rather than owning it. Still
+            // conditionally mounted (they contain continuously-animating views
+            // like VinylDiscView — see `contentMounted`), but their removal no
+            // longer takes the shape with them.
             if effectiveStatus == .closed {
-                // Collapsed: content-driven width. The badge coins define the
-                // width; the notch shape rides as a `.background` and flexes to
-                // match. No pre-computed width needed.
-                collapsedNotch(shown: shown)
-                    .zIndex(0)
-            } else {
-                // Opened: fixed-width notch shape with content/chin layered
-                // above — unchanged from the original layout.
-                notchShape(shown: shown)
-                    .animation(notchStateAnimation, value: effectiveStatus)
-                    .animation(
-                        .spring(
-                            duration: NotchConstants.tabSwitchSpringDuration,
-                            bounce: NotchConstants.tabSwitchSpringBounce
-                        ),
-                        value: coordinator.selectedTab
-                    )
-                    .zIndex(0)
+                collapsedBadges(shown: shown)
+                    .zIndex(0.5)
             }
 
             // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
@@ -376,24 +403,28 @@ struct NotchView: View {
         effectiveStatus == .closed ? .none : (badgeViewModel?.glowState ?? .none)
     }
 
-    /// Collapsed notch: content-driven width. The badge view sizes to its coins
-    /// + notch core (via `.fixedSize`), floored at the physical notch width so
-    /// an empty state still spans the notch. The notch shape rides as a
-    /// `.background` so it flexes to exactly this width — no pre-computed badge
-    /// width needed.
+    /// Collapsed badge row. Sizes to its coins + notch core (via `.fixedSize`),
+    /// floored at the physical notch width so an empty state still spans the
+    /// notch. Its measured size drives `closedNotchSize`, so the always-mounted
+    /// shape behind it tracks this row exactly — the same effect the old
+    /// flexible `.background` had, but without the shape being owned (and
+    /// therefore unmounted) by this view.
     @ViewBuilder
-    private func collapsedNotch(shown: Bool) -> some View {
-        // Both the width floor and the middle-column spacer use the physical
-        // notch width minus the stroke inset — the inset is how the shape stays
-        // visually flush with the notch slot (not overshooting it). Coins sit
-        // outside this core; the background flexes to cover them when present.
-        let notchCore = hardwareNotchSize.width - NotchConstants.closedWidthInset
-        // Hover "peek" grows both axes by the same factor as real frame sizes,
-        // not `scaleEffect`: `NotchBackgroundView` ends in `.drawingGroup()`,
-        // and an ancestor `scaleEffect` would transform that already-rasterized
-        // layer instead of redrawing the shape at its true size.
-        let peekWidth = notchCore * closedPeekScale
-        let peekHeight = hardwareNotchSize.height * closedPeekScale
+    private func collapsedBadges(shown: Bool) -> some View {
+        // The middle-column spacer spans the physical cutout exactly. It used
+        // to be inset 4pt narrower, which left the shape smaller than the hole
+        // it sits in — invisible at rest and for the first 4pt of any hover
+        // growth, so the peek only surfaced as an antialiased sliver. Coins sit
+        // outside this core; the shape widens to cover them when present.
+        let notchCore = hardwareNotchSize.width
+        // Peek swells the row on three sides. Width is a total, so the row
+        // grows half of it per side and the coins ride outward with it; height
+        // is all downward (the row is top-anchored). Applied as real frame
+        // sizes, not `scaleEffect`: `NotchBackgroundView` ends in
+        // `.drawingGroup()`, and an ancestor `scaleEffect` would transform that
+        // already-rasterized layer instead of redrawing it at its true size.
+        let peekWidth = notchCore + closedPeekExtraWidth
+        let peekHeight = hardwareNotchSize.height + closedPeekExtraHeight
         return CompactBadgesView(
             cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
             shownHasActiveBadge: shown,
@@ -405,8 +436,6 @@ struct NotchView: View {
             pomodoroService: pomodoroService
         )
         .frame(height: peekHeight)
-        .background(alignment: .top) { notchShape(shown: shown) }
-        .animation(notchStateAnimation, value: effectiveStatus)
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shown
@@ -415,6 +444,16 @@ struct NotchView: View {
             .spring(duration: NotchConstants.hoverPeekSpringDuration, bounce: 0.25),
             value: isClosedHovering
         )
+        // Feed the measured size to the shape. Assigned WITHOUT `withAnimation`
+        // on purpose: this fires every layout pass, so during the badge/peek
+        // springs above it reports each interpolated size and the shape simply
+        // follows frame-by-frame. Wrapping it in its own animation would start
+        // a second spring chasing the first — the desync that made the shape
+        // look like a separate view from the badges.
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            guard effectiveStatus == .closed, size.width > 0, size.height > 0 else { return }
+            closedContentSize = size
+        }
         // Pseudo-continuity with the expanding panel: on open the badges scale
         // up and fade (reading as "growing into the content"), on close they
         // condense back in. Anchored at the notch so the growth radiates from
@@ -433,7 +472,11 @@ struct NotchView: View {
             bottomCornerRadius: notchBottomCornerRadius,
             spacing: NotchConstants.notchBackgroundSpacing,
             glow: notchGlow,
-            flexibleWidth: effectiveStatus == .closed
+            // Always fixed now: the collapsed width used to come from flexing
+            // to a parent badge row, but the shape has no such parent anymore —
+            // it takes the measured width through `notchSize` instead, which is
+            // what lets one view animate across both states.
+            flexibleWidth: false
         )
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
