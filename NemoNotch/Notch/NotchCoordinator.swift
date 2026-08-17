@@ -214,7 +214,7 @@ final class NotchCoordinator {
         installEscMonitor()
     }
 
-    func notchClose() {
+    func notchClose(suppressAppRestore: Bool = false) {
         dismissState.reset()
         cancelHotkeyAutoCloseTimer()
         cancelGraceClose()
@@ -226,7 +226,11 @@ final class NotchCoordinator {
             status = .closed
         }
         activeScreen = nil
-        restorePreviousApp()
+        if suppressAppRestore {
+            previousApp = nil
+        } else {
+            restorePreviousApp()
+        }
         // Keep the panel intercepting clicks until the close animation has
         // faded the content out. The tab bar and content stay visible during
         // the fade, so dropping `isBlocking` now would let a click in that

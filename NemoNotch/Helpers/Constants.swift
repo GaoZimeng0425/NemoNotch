@@ -11,25 +11,25 @@ enum NotchConstants {
     static let closeHitboxInset: CGFloat = 20
     static let clickHitboxInset: CGFloat = 10
 
-    // Badge
-    /// Breathing room past the furthest-fanned badge's center, added on each
-    /// side when sizing the collapsed black shape so it fully contains the fan.
-    /// Chosen so a single badge yields the historical +72pt total width.
-    static let badgeEdgeMargin: CGFloat = 20
-    static let badgeSpread: CGFloat = 14
+    /// Badge
+    /// Gap between the notch slot and the nearest coin — pushes index 0 off the
+    /// physical notch edge so badges don't hug it.
+    static let badgeNotchGap: CGFloat = 8
     /// Grace delay before collapsing the compact badges when activity drops to
     /// empty. Absorbs momentary idle dips (e.g. an agent briefly returning to
     /// .idle between tool calls) so the right-edge badge doesn't slide in/out.
     static let badgeEmptyGrace: Duration = .milliseconds(600)
     /// Max badge groups shown collapsed; extras fold into a "+K" chip.
     static let badgeGroupCap: Int = 4
-    /// Horizontal step between overlapping left logos (smaller than a logo → fan overlap).
+    /// Horizontal step between overlapping coins. Smaller than a coin diameter
+    /// → the left logo fan and right status fan both overlap into a legible
+    /// stack (mirrored about the notch).
     static let badgeStackStep: CGFloat = 11
-    /// Horizontal step between right-side status indicators.
-    static let badgeStatusStep: CGFloat = 15
+    /// Diameter of the dark disc behind each compact badge coin. Larger than
+    /// the step so stacked coins reveal a clear rim of the one beneath.
+    static let badgeCoinDiameter: CGFloat = 22
 
-    // Badge layout
-    static let closedWidthInset: CGFloat = 4
+    /// Badge layout
     static let upcomingEventThresholdMinutes: Int = 15
 
     // Animation durations
@@ -67,10 +67,26 @@ enum NotchConstants {
     /// parked on the notch after an ESC / click-outside close.
     static let hoverReopenSuppression: TimeInterval = 0.35
     /// Closed-shape "peek" growth while the cursor dwells on the notch — the
-    /// pre-open affordance shown during `hoverOpenDelay`.
+    /// pre-open affordance shown during `hoverOpenDelay`. Grows 4pt on each of
+    /// three sides (left, right, down) so the notch swells evenly outward
+    /// rather than dropping a tongue.
+    ///
+    /// Note the two are expressed differently: the shape is top-anchored, so
+    /// the width is a TOTAL split half per side (8 → 4pt each) while the height
+    /// is all downward (4 → 4pt). Atoll uses 8/8 (`ContentView.swift:924-925`),
+    /// which yields 4pt sideways but 8pt down; matching all three sides reads
+    /// more evenly here.
+    ///
+    /// These only read correctly because the collapsed shape now spans the
+    /// physical cutout exactly (the old `closedWidthInset` is gone — see
+    /// `NotchView.collapsedBadges`). While the shape was inset 4pt *narrower*
+    /// than the cutout, the first 4pt of any widening was swallowed by the
+    /// hardware hole and the remainder emerged as a 2-3pt antialiased sliver —
+    /// a translucent hairline, and out of step with the height, which had no
+    /// such dead zone.
     static let closedHoverExtraWidth: CGFloat = 8
-    static let closedHoverExtraHeight: CGFloat = 6
-    static let hoverPeekSpringDuration: Double = 0.32
+    static let closedHoverExtraHeight: CGFloat = 4
+    static let hoverPeekSpringDuration: Double = 0.16
 
     /// Close animation
     static let closeContentFadeDuration: Double = 0.1

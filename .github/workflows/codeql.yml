@@ -3,11 +3,31 @@ name: CodeQL
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '**.png'
+      - '**.sh'
+      - '.gitignore'
+      - '**.xcstrings'
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '**.png'
+      - '**.sh'
+      - '.gitignore'
+      - '**.xcstrings'
   schedule:
     # Weekly Monday ~06:27 UTC (off-round minute to avoid fleet spikes)
     - cron: '27 6 * * 1'
+
+# Cancel superseded runs on the same ref: a flurry of pushes to develop only
+# runs CodeQL on the latest commit, halving wasted runner minutes.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 # Least-privilege token: CodeQL needs security-events:write to upload SARIF,
 # actions:read for run context, contents:read for checkout. Nothing else.
@@ -31,6 +51,23 @@ jobs:
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
 
+      # Cache resolved SPM sources keyed on Package.resolved (NOT github.sha —
+      # that would miss every commit). On a hit the resolve step below is a
+      # no-op, avoiding the network fetch that can hang under the build tracer.
+      # NOTE: only source checkouts are cached, never DerivedData build
+      # artifacts — CodeQL builds its database by tracing compiler invocations,
+      # so an incremental compile that skips unchanged .o files would leave
+      # those files OUT of the database → silent false-negatives in scanning.
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/DerivedData/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-xcode26.3-${{ hashFiles('NemoNotch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode26.3-
+
       # Resolve SPM dependencies BEFORE arming the CodeQL tracer. SPM fetches by
       # spawning a git subprocess; under the build tracer that fetch can hang
       # (seen stuck at "Fetching …mediaremote-adapter.git", which is pinned by
@@ -50,6 +87,13 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: swift, actions
+          # paths-ignore lives under `config:` (NOT a top-level init input).
+          # NemoNotchTests holds 27 of 143 Swift files (19%); test code is high
+          # in security-noisy patterns (stringly-typed input, mock fixtures)
+          # but low in real vulnerability value, so we exclude it from analysis.
+          config: |
+            paths-ignore:
+              - NemoNotchTests
 
       # Manual Swift build — the build tracer armed by init intercepts
       # xcodebuild and populates the swift database; the actions database is

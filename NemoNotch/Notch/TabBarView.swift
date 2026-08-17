@@ -5,18 +5,19 @@ import SwiftUI
 /// Layout is a three-column `HStack(spacing: 0)` — the same pattern as
 /// boring.notch's `BoringHeader`:
 ///
-///     ┌──────────────┬────────────────┬──────────────┐
-///     │  left (flex) │  middle (fixed)│  right (flex)│
-///     │  tabs ◀      │  = notch width │       ▶ close│
-///     │  .leading    │  (clear spacer)│  .trailing   │
-///     └──────────────┴────────────────┴──────────────┘
+///     ┌──────────────┬────────────────┬──────────────────────┐
+///     │  left (flex) │  middle (fixed)│  right (flex)        │
+///     │      tabs ◀  │  = notch width │  ▶ tabs + settings + │
+///     │  .trailing   │  (clear spacer)│  quit  .leading      │
+///     └──────────────┴────────────────┴──────────────────────┘
 ///        maxWidth: .infinity   width: notchW   maxWidth: .infinity
 ///
-/// Because the outer frame is `openedWidth` and the middle column is fixed at
-/// the hardware notch width, the two flex columns each receive exactly
-/// `(openedWidth - notchWidth) / 2` points. Tab and action content is
-/// hard-constrained inside those allocations, so it can **never** spill past
-/// the notch shell — the original failure mode with absolute `.position()`.
+/// Both flex columns align toward the center notch (left `.trailing`,
+/// right `.leading`), so content hugs the notch edges with empty space on
+/// the outside. Each flex column also carries edge padding so content never
+/// touches the shell's outer edge. Tabs split between the two columns via
+/// `Tab.chinPlacement`: regular content tabs on the left, pomodoro joins the
+/// settings/quit cluster on the right.
 struct NotchChinBar: View {
     let tabs: [Tab]
     let selected: Tab
@@ -24,18 +25,31 @@ struct NotchChinBar: View {
     let notchWidth: CGFloat
     let chinHeight: CGFloat
     let onSelect: (Tab) -> Void
-    let onClose: () -> Void
+    let onSettings: () -> Void
+    let onQuit: () -> Void
 
     @Namespace private var capsuleAnimation
     @State private var hoveredTab: Tab?
     @State private var hoveredAction: ActionKey?
     @State private var bounceTriggers: [Tab: Int] = [:]
 
-    private enum ActionKey: String { case settings, close }
+    private enum ActionKey: String { case settings, quit }
+
+    /// Breathing room between the shell's outer edge and the first/last button.
+    private static let chinEdgePadding: CGFloat = 10
+
+    private var leftTabs: [Tab] {
+        tabs.filter { $0.chinPlacement == .left }
+    }
+
+    private var rightTabs: [Tab] {
+        tabs.filter { $0.chinPlacement == .right }
+    }
 
     var body: some View {
         HStack(spacing: 0) {
-            tabStrip
+            tabStrip(leftTabs)
+                .padding(.trailing, Self.chinEdgePadding)
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
             // Middle column: a clear spacer exactly as wide as the hardware
@@ -43,16 +57,17 @@ struct NotchChinBar: View {
             Color.clear
                 .frame(width: notchWidth, height: chinHeight)
 
-            actionStrip
+            rightColumn
+                .padding(.leading, Self.chinEdgePadding)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(width: openedWidth, height: chinHeight)
     }
 
-    // MARK: - Tabs (left column)
+    // MARK: - Tab strip (shared by both columns)
 
     @ViewBuilder
-    private var tabStrip: some View {
+    private func tabStrip(_ tabs: [Tab]) -> some View {
         if tabs.isEmpty {
             EmptyView()
         } else {
@@ -78,10 +93,11 @@ struct NotchChinBar: View {
     }
 
     /// Capsule width that stays comfortable but clamps down when many tabs
-    /// would otherwise overflow the left column's allocation.
+    /// would otherwise overflow a flex column's allocation. Accounts for the
+    /// edge padding so the total never exceeds the column.
     private func idealCapsuleWidth(sideWidth: CGFloat, count: Int, spacing: CGFloat) -> CGFloat {
         let ideal: CGFloat = 30
-        let available = sideWidth - CGFloat(max(0, count - 1)) * spacing
+        let available = sideWidth - Self.chinEdgePadding - CGFloat(max(0, count - 1)) * spacing
         let perTab = count > 0 ? available / CGFloat(count) : ideal
         return max(18, min(ideal, floor(perTab)))
     }
@@ -121,34 +137,39 @@ struct NotchChinBar: View {
         }
     }
 
-    // MARK: - Actions (right column)
+    // MARK: - Right column (right-side tabs + settings + quit)
 
     @ViewBuilder
-    private var actionStrip: some View {
+    private var rightColumn: some View {
         let capsuleHeight: CGFloat = 24
         let capsuleWidth: CGFloat = 30
 
         HStack(spacing: 2) {
-            SettingsLink {
-                actionLabel(icon: "gearshape", width: capsuleWidth, height: capsuleHeight)
+            // Right-side tabs (e.g. pomodoro) first, closest to the notch.
+            ForEach(rightTabs) { tab in
+                tabCapsule(tab: tab, width: capsuleWidth, height: capsuleHeight)
+            }
+
+            Button(action: onSettings) {
+                actionLabel(icon: "gearshape", key: .settings, width: capsuleWidth, height: capsuleHeight)
             }
             .buttonStyle(NotchChinButtonStyle())
             .onHover { hovering in
                 hoveredAction = hovering ? .settings : (hoveredAction == .settings ? nil : hoveredAction)
             }
 
-            Button(action: onClose) {
-                actionLabel(icon: "xmark", width: capsuleWidth, height: capsuleHeight)
+            Button(action: onQuit) {
+                actionLabel(icon: "power", key: .quit, width: capsuleWidth, height: capsuleHeight)
             }
             .buttonStyle(NotchChinButtonStyle())
             .onHover { hovering in
-                hoveredAction = hovering ? .close : (hoveredAction == .close ? nil : hoveredAction)
+                hoveredAction = hovering ? .quit : (hoveredAction == .quit ? nil : hoveredAction)
             }
         }
     }
 
-    private func actionLabel(icon: String, width: CGFloat, height: CGFloat) -> some View {
-        let isHovered = hoveredAction == (icon == "gearshape" ? ActionKey.settings : ActionKey.close)
+    private func actionLabel(icon: String, key: ActionKey, width: CGFloat, height: CGFloat) -> some View {
+        let isHovered = hoveredAction == key
         return Image(systemName: icon)
             .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundStyle(NotchTheme.textSecondary)
