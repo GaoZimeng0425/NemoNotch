@@ -97,6 +97,9 @@ final class AISessionStore {
     // MARK: - Internal
 
     private func rebuildSorted() {
+        // 每次 mutate 都全量重排；hook 事件密集时这里会被高频调用。
+        let probe = PerfProbe.begin()
+        defer { PerfProbe.end("AISessionStore.rebuildSorted", probe) }
         sortedSessions = sessions.values.sorted { $0.lastEventTime > $1.lastEventTime }
     }
 

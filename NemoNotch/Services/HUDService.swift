@@ -194,6 +194,10 @@ final class HUDService {
     }
 
     private func readBrightness() {
+        // 亮度轮询会在检测到变化时从 1s 提速到 0.1s，再自行回落。
+        // 若长期停留在高频（看命中频率），说明回落逻辑没生效。
+        let probe = PerfProbe.begin()
+        defer { PerfProbe.end("HUDService.readBrightness", probe) }
         guard let brightness = getBrightness() else { return }
 
         if lastBrightness >= 0, abs(brightness - lastBrightness) > 0.01 {

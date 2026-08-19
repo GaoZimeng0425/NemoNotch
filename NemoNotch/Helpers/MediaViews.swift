@@ -9,11 +9,41 @@ struct VinylDiscView: View {
     var size: CGFloat = 20
     var showDisc: Bool = true
 
-    @State private var angle: Double = 0
     @State private var cachedImage: NSImage?
-    @State private var rotationTask: Task<Void, Never>?
+
+    /// 60°/s —— 与最初「每 50ms 转 3°」的转速一致。
+    private static let degreesPerSecond: Double = 60
 
     var body: some View {
+        // 用 TimelineView 驱动，而不是 repeatForever 动画。
+        //
+        // `paused` 为 true 时驱动直接停下，并保持最后一帧的角度 —— 暂停既可靠
+        // 也不跳变。`repeatForever` 两点都做不到：它不会被 `disablesAnimations`
+        // 的赋值取消（暂停后唱片照转），而且动画期间 `angle` 已经等于目标值，
+        // 读不出当前插值到哪，只能清零，于是封面会瞬间跳回正上方。
+        //
+        // 注意 TimelineView 只看 `paused`，不看可见性：视图若「挂载但不可见」
+        // 它仍会每帧更新。折叠态目前是整棵树卸载（见 NotchView.contentMounted），
+        // 所以没问题 —— 但别再引入 opacity 式的隐藏。
+        TimelineView(.animation(paused: !isPlaying)) { context in
+            let _ = PerfProbe.hit("VinylDiscView.frame")
+            disc.rotationEffect(.degrees(Self.angle(at: context.date)))
+        }
+        .onChange(of: artworkData) { _, _ in cacheImage() }
+        .onChange(of: appIcon) { _, _ in cacheImage() }
+        .onAppear { cacheImage() }
+    }
+
+    /// 角度由绝对时间推导，不存任何状态 —— 暂停/恢复无需协调，视图重建也不会
+    /// 丢相位。代价是恢复播放时角度会跳到「当前时间对应的位置」，但那一跳发生
+    /// 在开始旋转的瞬间，随即被转动掩盖，比暂停时跳变自然得多。
+    private static func angle(at date: Date) -> Double {
+        (date.timeIntervalSinceReferenceDate * degreesPerSecond)
+            .truncatingRemainder(dividingBy: 360)
+    }
+
+    @ViewBuilder
+    private var disc: some View {
         ZStack {
             if showDisc {
                 Circle()
@@ -59,16 +89,6 @@ struct VinylDiscView: View {
                     )
             }
         }
-        .rotationEffect(.degrees(angle))
-        .onChange(of: artworkData) { _, _ in cacheImage() }
-        .onChange(of: appIcon) { _, _ in cacheImage() }
-        .onChange(of: isPlaying) { _, playing in
-            playing ? startRotation() : stopRotation()
-        }
-        .onAppear {
-            cacheImage()
-            if isPlaying { startRotation() }
-        }
     }
 
     private func cacheImage() {
@@ -79,26 +99,6 @@ struct VinylDiscView: View {
         } else {
             cachedImage = nil
         }
-    }
-
-    private func startRotation() {
-        rotationTask?.cancel()
-        rotationTask = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(50))
-                guard !Task.isCancelled else { return }
-                var t = Transaction()
-                t.disablesAnimations = true
-                withTransaction(t) {
-                    angle += 3
-                }
-            }
-        }
-    }
-
-    private func stopRotation() {
-        rotationTask?.cancel()
-        rotationTask = nil
     }
 }
 
@@ -115,6 +115,7 @@ struct AudioEqualizerView: View {
     @State private var animateTask: Task<Void, Never>?
 
     var body: some View {
+        let _ = PerfProbe.hit("AudioEqualizerView.body")
         HStack(spacing: 1.5) {
             ForEach(0..<barCount, id: \.self) { i in
                 Capsule()
@@ -134,6 +135,9 @@ struct AudioEqualizerView: View {
         stopAnimation()
         animateTask = Task { @MainActor in
             while !Task.isCancelled {
+                // 每 tick 起一段 0.25–0.5s 的 withAnimation：tick 频率不高，
+                // 但插值期间是满帧重绘，实际成本看 AudioEqualizerView.body 的频率。
+                PerfProbe.hit("AudioEqualizerView.animTick")
                 withAnimation(.easeInOut(duration: Double.random(in: 0.25...0.5))) {
                     bars = (0..<barCount).map { _ in .random(in: 2...maxHeight) }
                 }

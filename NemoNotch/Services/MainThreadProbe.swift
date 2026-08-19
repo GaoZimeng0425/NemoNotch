@@ -90,6 +90,12 @@ final class MainThreadProbe {
         guard lastWake != 0 else { return }
         let elapsedNs = machTimeNs(since: lastWake)
         lastWake = 0
+
+        // 无条件统计每一轮的活跃时长(不只是超阈值那些)。持续高 CPU 的症状是
+        // "每轮都很短、但每秒几百轮",50ms 阈值天生抓不到;PerfProbe 报告里这一行
+        // 直接给出主线程活跃占比 + 每秒 runloop 轮数。
+        PerfProbe.record("MainRunloop.activeTurn", nanos: elapsedNs)
+
         let elapsedMs = Double(elapsedNs) / 1_000_000.0
         guard elapsedMs >= thresholdMs else { return }
 

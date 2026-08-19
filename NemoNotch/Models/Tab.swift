@@ -33,6 +33,20 @@ enum Tab: String, CaseIterable, Identifiable {
         case .system: "models.tab.system"
         }
     }
+
+    /// Which side of the chin bar this tab renders on. Most tabs sit on the
+    /// left; pomodoro joins settings/quit on the right so it reads as a
+    /// personal-tool cluster rather than a content tab.
+    var chinPlacement: ChinPlacement {
+        switch self {
+        case .pomodoro: .right
+        default: .left
+        }
+    }
+}
+
+enum ChinPlacement {
+    case left, right
 }
 
 extension Tab {

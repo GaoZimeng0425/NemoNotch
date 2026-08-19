@@ -336,6 +336,7 @@ final class PomodoroTimerService {
         stopTickTimer()
         tickTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
+                PerfProbe.hit("PomodoroTimerService.tick@1s")
                 self?.handleTick()
             }
         }

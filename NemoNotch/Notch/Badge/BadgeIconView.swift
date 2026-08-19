@@ -15,6 +15,7 @@ struct BadgeIconView: View {
     let pomodoroService: PomodoroTimerService
 
     var body: some View {
+        let _ = PerfProbe.hit("BadgeIconView.body")
         switch item {
         case let .notification(bundleID, count):
             notificationBadge(bundleID: bundleID, count: count)
@@ -232,9 +233,13 @@ struct BadgeIconView: View {
 struct CompactBadgesView: View {
     let cluster: BadgeCluster
     let shownHasActiveBadge: Bool
-    let notchLeftEdge: CGFloat
-    let notchRightEdge: CGFloat
-    let notchCenterY: CGFloat
+    /// Minimum width (the physical notch core) so an empty/low-badge state
+    /// still spans the notch. The actual width is driven by coin content via
+    /// `.fixedSize` — grows past this floor as badges accumulate.
+    let notchMinWidth: CGFloat
+    /// Width of the central notch core the two columns straddle; the middle
+    /// spacer is exactly this wide so the left/right coins sit just outside it.
+    let notchCoreWidth: CGFloat
     let onBadgeTap: (BadgeItem) -> Void
     let notificationService: NotificationService
     let mediaService: MediaService
@@ -245,83 +250,138 @@ struct CompactBadgesView: View {
         cluster.groups.first?.representative
     }
 
+    /// Negative spacing for the per-column coin HStack. Coins are `coinDiameter`
+    /// wide; stepping them `badgeStackStep` apart means each reveals that much
+    /// of the coin beneath → overlap is `coinDiameter - badgeStackStep`.
+    private var coinOverlap: CGFloat {
+        NotchConstants.badgeCoinDiameter - NotchConstants.badgeStackStep
+    }
+
+    // The three columns size to their content: the coin HStacks are intrinsic,
+    // the middle spacer is the physical notch core. `.fixedSize` makes the
+    // HStack report its natural width (coins + notch core) instead of letting
+    // the `maxWidth:.infinity` columns expand to the screen. `.frame(minWidth:)`
+    // then applies the physical-notch floor so an empty state still spans the
+    // notch. The notch shape rides behind as a `.background` and flexes to this
+    // resolved width — no pre-computed width needed.
     var body: some View {
-        let spread: CGFloat = shownHasActiveBadge ? NotchConstants.badgeSpread : 0
-        ZStack {
-            leftFan(spread: spread)
-            rightFan(spread: spread)
+        let pad: CGFloat = shownHasActiveBadge ? NotchConstants.badgeNotchGap : 0
+
+        HStack(spacing: 0) {
+            // index 0 hugs the notch because it's the trailing/leading element
+            // of each column's own HStack. The padding clears both the notch
+            // slot and the shape edge — but only when badges are present. Note
+            // `.padding(.horizontal, nil)` is NOT a no-op in SwiftUI (it applies
+            // a system-default 16pt), so we branch to truly omit it when nil.
+            leftColumn
+                .padding(.horizontal, pad)
+
+            // Middle column: clear spacer exactly as wide as the notch core, so
+            // the left/right coins straddle it like the expanded chin bar does.
+            Color.clear
+                .frame(width: notchCoreWidth, height: NotchConstants.badgeCoinDiameter)
+
+            rightColumn
+                .padding(.horizontal, pad)
         }
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(minWidth: notchMinWidth)
         .opacity(shownHasActiveBadge ? 1 : 0)
-        .animation(
-            .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
-            value: spread
-        )
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shownHasActiveBadge
         )
+        .animation(
+            .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
+            value: cluster
+        )
     }
 
-    // Left: overlapping logos. Highest priority (index 0) hugs the notch and is
-    // frontmost; lower-priority logos fan leftward behind it. A trailing "+K"
-    // chip sits at the far (backmost) end when groups overflowed.
+    // MARK: - Left column (logos)
+
+    // Coins stack with negative spacing (`-coinOverlap`); index 0 is the
+    // highest priority and sits frontmost. A trailing "+K" chip sits at the far
+    // (backmost) end when groups overflowed. Each coin slides in from the notch
+    // side (positive x) and settles leftward.
     @ViewBuilder
-    private func leftFan(spread: CGFloat) -> some View {
-        ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
-            Button { primary.map(onBadgeTap) } label: {
-                BadgeIconView(
-                    item: group.representative, style: .compactLeft,
-                    notificationService: notificationService,
-                    mediaService: mediaService,
-                    pomodoroService: pomodoroService
-                )
-            }
-            .buttonStyle(.plain)
-            .zIndex(Double(cluster.groups.count - index))
-            .position(
-                x: notchLeftEdge - spread - CGFloat(index) * NotchConstants.badgeStackStep,
-                y: notchCenterY
-            )
-            .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeSpread)))
-        }
-        if cluster.overflow > 0 {
-            Button { primary.map(onBadgeTap) } label: {
-                BadgeCountChip(text: "+\(cluster.overflow)")
-            }
-            .buttonStyle(.plain)
-            .position(
-                x: notchLeftEdge - spread - CGFloat(cluster.groups.count) * NotchConstants.badgeStackStep,
-                y: notchCenterY
-            )
-            .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeSpread)))
-        }
-    }
-
-    // Right: statuses in priority order, highest hugging the notch. A group of
-    // more than one (same-app instances) shows just its count, centered in the
-    // slot, in place of the status indicator.
-    private func rightFan(spread: CGFloat) -> some View {
-        ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
-            Button { primary.map(onBadgeTap) } label: {
-                if group.count > 1 {
-                    BadgeCountChip(text: "\(group.count)", fontSize: 10)
-                } else {
+    private var leftColumn: some View {
+        HStack(spacing: -coinOverlap) {
+            ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
+                Button { primary.map(onBadgeTap) } label: {
                     BadgeIconView(
-                        item: group.representative, style: .compactRight,
+                        item: group.representative, style: .compactLeft,
                         notificationService: notificationService,
                         mediaService: mediaService,
                         pomodoroService: pomodoroService
                     )
+                    .coinBackground()
                 }
+                .buttonStyle(.plain)
+                .zIndex(Double(cluster.groups.count - index))
+                .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeStackStep)))
             }
-            .buttonStyle(.plain)
-            .position(
-                x: notchRightEdge + spread + CGFloat(index) * NotchConstants.badgeStatusStep,
-                y: notchCenterY
-            )
-            .transition(.opacity.combined(with: .offset(x: -NotchConstants.badgeSpread)))
+            if cluster.overflow > 0 {
+                Button { primary.map(onBadgeTap) } label: {
+                    BadgeCountChip(text: "+\(cluster.overflow)")
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .offset(x: NotchConstants.badgeStackStep)))
+            }
         }
     }
+
+    // MARK: - Right column (statuses)
+
+    // Mirror of the left column. A group of more than one (same-app instances)
+    // shows just its count in place of the status indicator. Each coin slides
+    // in from the notch side (negative x) and settles rightward.
+    @ViewBuilder
+    private var rightColumn: some View {
+        HStack(spacing: -coinOverlap) {
+            ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
+                Button { primary.map(onBadgeTap) } label: {
+                    if group.count > 1 {
+                        BadgeCountChip(text: "\(group.count)", fontSize: 10)
+                    } else {
+                        BadgeIconView(
+                            item: group.representative, style: .compactRight,
+                            notificationService: notificationService,
+                            mediaService: mediaService,
+                            pomodoroService: pomodoroService
+                        )
+                        .coinBackground()
+                    }
+                }
+                .buttonStyle(.plain)
+                .zIndex(Double(cluster.groups.count - index))
+                .transition(.opacity.combined(with: .offset(x: -NotchConstants.badgeStackStep)))
+            }
+        }
+    }
+}
+
+// MARK: - CoinBackground
+
+/// Frosted disc behind a compact badge so overlapping coins read as distinct
+/// layered chips. `ultraThinMaterial` blurs the content beneath (menu bar,
+/// wallpaper, the coin stacked behind), so a lone coin still sees through while
+/// stacked coins separate cleanly via the `stroke` rim and soft shadow.
+private struct CoinBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(width: NotchConstants.badgeCoinDiameter, height: NotchConstants.badgeCoinDiameter)
+            .background(
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Circle().fill(NotchTheme.panelBase.opacity(0.35)))
+            )
+            .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.75))
+            .shadow(color: .black.opacity(0.35), radius: 1.5, x: 0, y: 0.5)
+    }
+}
+
+private extension View {
+    func coinBackground() -> some View { modifier(CoinBackground()) }
 }
 
 // MARK: - BadgeCountChip

@@ -134,6 +134,16 @@ final class AICLIMonitorService {
                 claudeProvider.handleEvent(event)
             }
         }
+
+        // Record the hosting terminal/IDE for session jumps (FAB "open in
+        // terminal"). After dispatch so the session exists; no-op when the
+        // event carries no pid (plugin-based emitters like opencode) or the
+        // walk finds no GUI ancestor (tmux/ssh).
+        if let cliPID = event.cliPID, let sessionId = event.sessionId {
+            store.mutate(sessionId) { session in
+                AppActivator.recordHost(cliPID: Int32(cliPID), on: &session)
+            }
+        }
     }
 
     private func handleServerReady() {

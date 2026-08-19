@@ -60,11 +60,19 @@ final class NowPlayingCLI: @unchecked Sendable {
     // MARK: - Public API
 
     func fetchNowPlayingInfo(completion: @Sendable @escaping ([String: Any]?) -> Void) {
+        let enqueued = PerfProbe.begin()
         queue.async {
+            PerfProbe.end("NowPlayingCLI.fetch.queueWait", enqueued)
+            let started = PerfProbe.begin()
+            let probed: @Sendable ([String: Any]?) -> Void = { info in
+                PerfProbe.end("NowPlayingCLI.fetch.perlBridgeIPC", started)
+                completion(info)
+            }
             if self.ensureDaemon() {
-                self.fetchViaDaemon(completion: completion)
+                self.fetchViaDaemon(completion: probed)
             } else {
-                self.fetchUsingFallbacks(from: 0, completion: completion)
+                PerfProbe.hit("NowPlayingCLI.fetch.fellBackToSubprocess")
+                self.fetchUsingFallbacks(from: 0, completion: probed)
             }
         }
     }

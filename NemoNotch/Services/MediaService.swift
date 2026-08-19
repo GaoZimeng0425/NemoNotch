@@ -10,6 +10,10 @@ private struct NowPlayingInfoBox: @unchecked Sendable {
 @Observable
 final class MediaService {
     var playbackState = PlaybackState()
+    /// 播放位置(秒),独立于 `playbackState` 元数据。每 0.5s 由 progressTimer 前进,
+    /// 频繁变化但只被进度条/时间标签消费 —— 拆出来避免触发读元数据(isPlaying/title 等)
+    /// 的视图(NotchView/BadgeIconView)随 position 重算。
+    var playbackPosition: TimeInterval = 0
     var appIcon: NSImage?
     /// Dominant color of the current artwork, extracted off the main actor on
     /// every artwork change. `nil` when there is no artwork or it is
@@ -44,6 +48,7 @@ final class MediaService {
         }
         setupNotifications()
         startPolling()
+        startProgressTimer()
         updateNowPlaying()
     }
 
@@ -59,7 +64,6 @@ final class MediaService {
         playbackState.isPlaying = target
         reconcileExpectedIsPlaying = target
         reconcileGuardExpiresAt = Date().addingTimeInterval(Self.guardMaxDuration)
-        updateProgressTimer(isPlaying: target)
         commander.togglePlayPause()
         scheduleReconcile(after: 0.5)
     }
@@ -77,7 +81,7 @@ final class MediaService {
     }
 
     private func applyTrackChangePlaceholder() {
-        playbackState.position = 0
+        playbackPosition = 0
         playbackState.duration = 0
     }
 
@@ -129,12 +133,12 @@ final class MediaService {
 
     private func seek(by interval: Double) {
         guard playbackState.duration > 0 else { return }
-        let target = max(0, min(playbackState.position + interval, playbackState.duration))
+        let target = max(0, min(playbackPosition + interval, playbackState.duration))
         seek(toAbsolute: target)
     }
 
     private func seek(toAbsolute target: Double) {
-        playbackState.position = target
+        playbackPosition = target
         commander.setTime(seconds: target)
         scheduleReconcile(after: 0.5)
     }
@@ -179,35 +183,41 @@ final class MediaService {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 LogService.debug("[Media] poll timer", category: "media")
+                PerfProbe.hit("MediaService.pollTick@2s")
                 self?.updateNowPlaying()
             }
         }
     }
 
     // ── Progress timer ───────────────────────────────────────────────
+    // 常驻 timer:回调里按需前进 playbackPosition,避免反复启停(旧版 updateProgressTimer
+    // 被多处调用导致 timer 反复销毁重建,实测每秒触发数远超 0.5s 间隔)。
 
-    private func updateProgressTimer(isPlaying: Bool) {
-        if isPlaying, progressTimer == nil {
-            progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self, playbackState.isPlaying, playbackState.duration > 0 else { return }
-                    let next = min(playbackState.duration, playbackState.position + 0.5)
-                    if next > playbackState.position {
-                        playbackState.position = next
-                    }
+    private func startProgressTimer() {
+        guard progressTimer == nil else { return }
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                PerfProbe.hit("MediaService.progressTick@0.5s")
+                guard let self,
+                      playbackState.isPlaying,
+                      playbackState.duration > 0 else { return }
+                let next = min(playbackState.duration, playbackPosition + 0.5)
+                if next > playbackPosition {
+                    // 这一次赋值会驱动订阅了播放进度的视图重绘。
+                    PerfProbe.hit("MediaService.progressAdvance")
+                    playbackPosition = next
                 }
             }
-        } else if !isPlaying, progressTimer != nil {
-            progressTimer?.invalidate()
-            progressTimer = nil
         }
     }
 
     // ── Core data fetch ──────────────────────────────────────────────
 
     private func updateNowPlaying() {
+        PerfProbe.hit("MediaService.updateNowPlaying")
         if isUpdatingNowPlaying {
             needsFollowupUpdate = true
+            PerfProbe.hit("MediaService.updateNowPlaying.coalesced")
             return
         }
 
@@ -217,7 +227,9 @@ final class MediaService {
             let box = NowPlayingInfoBox(info: cliInfo)
             DispatchQueue.main.async {
                 guard let self else { return }
+                let applyProbe = PerfProbe.begin()
                 self.applyInfo(box.info)
+                PerfProbe.end("MediaService.applyInfo(含封面解码)", applyProbe)
                 self.isUpdatingNowPlaying = false
                 if self.needsFollowupUpdate {
                     self.needsFollowupUpdate = false
@@ -236,7 +248,7 @@ final class MediaService {
                 appIcon = nil
                 updateArtworkAccent(nil, changed: true)
             }
-            updateProgressTimer(isPlaying: false)
+            playbackPosition = 0
             return
         }
 
@@ -247,6 +259,7 @@ final class MediaService {
         var position = info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? TimeInterval ?? 0
 
         // ── isPlaying resolution ──────────────────────────────────
+        // Guard protects isPlaying from stale CLI data. It drops when
         // Guard protects isPlaying from stale CLI data. It drops when
         // (a) CLI catches up (matches the expected value) or
         // (b) `guardMaxDuration` elapses without agreement (CLI takes over).
@@ -289,6 +302,8 @@ final class MediaService {
                 position = min(position, duration)
             }
         }
+        // position 同步到独立属性(每秒最多 1 次,且只被进度条消费)。
+        playbackPosition = position
 
         let artworkData = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data
 
@@ -298,7 +313,7 @@ final class MediaService {
                 appIcon = nil
                 updateArtworkAccent(nil, changed: true)
             }
-            updateProgressTimer(isPlaying: false)
+            playbackPosition = 0
             return
         }
 
@@ -309,23 +324,25 @@ final class MediaService {
         let resolvedBundleID = bundleID ?? previousBundleID
         let previousArtworkData = playbackState.artworkData
 
-        playbackState = PlaybackState(
+        // Equatable 去重:元数据没变就不写,避免触发读元数据的视图重算。
+        let next = PlaybackState(
             title: title,
             artist: artist,
             album: album,
             duration: duration,
-            position: position,
             isPlaying: resolvedIsPlaying,
             artworkData: artworkData,
             appBundleIdentifier: resolvedBundleID,
             appName: nil
         )
+        if next != playbackState {
+            playbackState = next
+        }
 
         if let resolvedBundleID, !resolvedBundleID.isEmpty {
             applyPlayingApp(bundleID: resolvedBundleID, changed: resolvedBundleID != previousBundleID)
         }
         updateArtworkAccent(artworkData, changed: artworkData != previousArtworkData)
-        updateProgressTimer(isPlaying: resolvedIsPlaying)
     }
 
     /// Recompute `artworkAccent` when the artwork bytes change. The pixel

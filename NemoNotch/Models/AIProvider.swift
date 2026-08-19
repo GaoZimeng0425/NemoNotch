@@ -42,6 +42,13 @@ struct AISessionState: Identifiable {
     var cacheCreationTokens: Int = 0
     var lastContextTokens: Int = 0
     var model: String?
+    /// Host terminal/IDE app of the session, resolved from the hook's
+    /// `cli_pid` by walking the process tree up to the first GUI app
+    /// (`AppActivator.recordHost`). Bundle id is cached alongside to detect
+    /// PID reuse after the host quits. Both nil for plugin-based emitters
+    /// (opencode) and CLI runs with no GUI ancestor (tmux/ssh).
+    var launchingAppPID: Int32?
+    var launchingAppBundleId: String?
     var lastParsedOffset: UInt64 = 0
     var subagentState = SubagentState()
 

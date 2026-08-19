@@ -48,6 +48,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Notch Floating Panel** — Hovers over the notch area, auto-detects notch size
 - **Multi-AI Provider** — Unified interface for Claude Code, Gemini CLI, opencode, and zcode with hook event listening and session tracking; permission interception for Claude Code and Gemini CLI. opencode integrates via a NemoNotch-written plugin (`~/.config/opencode/plugin/nemonotch-notify.ts`) that POSTs lifecycle events to NemoNotch's hook server — badge, completion flash, toast, and AI tab status card all work automatically. zcode (GLM-based, Claude-Code-compatible) reuses Claude's hook pipeline directly (no plugin needed) — notify + live status only, no conversation/token parsing or notch-side approval
 - **AI usage quota** — shows your Claude Code, Codex, and Gemini usage quotas (utilization % + reset countdown) as a card in the AI tab, read from each CLI's OAuth credential. The Codex and Gemini sections appear automatically when those CLIs are signed in.
+- **AI Status Capsule** — a draggable floating capsule (top-right of the main screen by default) appears while any AI session is working; click to expand into a session list + detail panel (model, tokens, context progress, current tool). The detail header's button jumps straight to the terminal/IDE hosting the selected session: the hook script reports the CLI's pid, NemoNotch walks the process tree to the GUI app at event time, and activation falls back to bundle-id when the pid is gone or recycled. Sessions under tmux/ssh or from plugin-based emitters (opencode) have no host and show no button. Auto-hides a few seconds after the last session goes idle.
 - **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.)
 - **Activity Glow** — When AI/agents are busy (working, or waiting for approval), the expanded notch shows a soft blurred glow in the app's theme orange along its lower inner edge, fading out by the middle (content stays clean)
@@ -56,6 +57,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
   <p align="center">
     <img src="docs/images/completion-flash.png" alt="Completion Flash — full-screen accent-orange edge glow with a completion toast near the notch" width="720">
   </p>
+- **Keep Awake (Lid Closed)** — One-click menu bar toggle that keeps the Mac awake with the lid shut (for unattended builds, downloads, long jobs). Lid-close sleep is handled inside the kernel and **ignores the `caffeinate` family of sleep-prevention APIs**; the only lever is the global power setting `pmset -a disablesleep`, so each toggle needs one administrator authorization. While active, closing the lid turns the display off (otherwise the screen stays lit behind the closed lid, draining battery and building up heat — skipped when an external display is attached, which is the clamshell setup you probably want). Because that setting is global and survives a restart, NemoNotch keeps an on-disk marker to remember it was the one that turned it on: it restores normal sleep on quit, honestly reports a leftover state on the next launch after a force-quit, and never touches a `SleepDisabled` you enabled yourself with `sudo pmset`. Tunable under Settings → Awake. Lid open/close and toggle events are recorded to `~/.NemoNotch/keep-awake.log` (separate from the main rolling log, so it stays auditable weeks later)
 - **Menu Bar Entry** — Fixed pixel-art notch icon (state is visible on the notch panel above the menubar); menu shows Now Playing controls (previous / play-pause / next) when media is active
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
@@ -70,7 +72,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **EventKit** — Calendar event access
 - **IOKit** — System monitoring (CPU, memory, battery, disk)
 - **libproc** — Per-process resource tracking via kernel APIs
-- **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7-day rotation)
+- **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7 files capped at 1MB each — under active use that is well under a week, often under two days)
 - **KeyboardShortcuts** — User-customizable global hotkeys (replaces Carbon `RegisterEventHotKey`)
 - **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
 - **HTTP API** — Hermes-agent monitoring via localhost:8787

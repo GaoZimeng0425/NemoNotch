@@ -126,6 +126,25 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(aiStatusFabEnabled, forKey: Self.aiStatusFabEnabledKey) }
     }
 
+    // MARK: - Keep awake (合盖不休眠)
+
+    static let keepAwakeLidDisplayOffKey = "keepAwake.lidDisplayOff"
+    static let keepAwakeRestoreOnQuitKey = "keepAwake.restoreOnQuit"
+
+    /// 合盖时自动熄屏。`disablesleep=1` 会让整条睡眠路径被禁,合盖屏幕不灭会
+    /// 持续耗电发热 —— 所以默认开。接了外接显示器时本就不会熄屏。
+    var keepAwakeLidDisplayOff: Bool {
+        didSet { UserDefaults.standard.set(keepAwakeLidDisplayOff, forKey: Self.keepAwakeLidDisplayOffKey) }
+    }
+
+    /// 退出 App 时自动还原休眠设置。
+    ///
+    /// `SleepDisabled` 是跨重启持久的全局设置,不还原的话用户的 Mac 会一直不睡。
+    /// 默认开。关掉的代价是要自己记得关 —— 换来的是退出时不再弹授权框。
+    var keepAwakeRestoreOnQuit: Bool {
+        didSet { UserDefaults.standard.set(keepAwakeRestoreOnQuit, forKey: Self.keepAwakeRestoreOnQuitKey) }
+    }
+
     var currentLocale: Locale {
         language.locale ?? Locale.current
     }
@@ -194,6 +213,10 @@ final class AppSettings {
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
         aiStatusFabEnabled = UserDefaults.standard
             .object(forKey: Self.aiStatusFabEnabledKey) as? Bool ?? true
+        keepAwakeLidDisplayOff = UserDefaults.standard
+            .object(forKey: Self.keepAwakeLidDisplayOffKey) as? Bool ?? true
+        keepAwakeRestoreOnQuit = UserDefaults.standard
+            .object(forKey: Self.keepAwakeRestoreOnQuitKey) as? Bool ?? true
     }
 
     private static let defaultApps: [AppItem] = [

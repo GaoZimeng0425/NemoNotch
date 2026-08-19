@@ -16,6 +16,20 @@ final class CompletionFlashService {
     /// Whether the toast is currently shown.
     private(set) var toastVisible = false
 
+    /// Whether the full-screen overlay windows need to be on screen.
+    ///
+    /// Deliberately falls **later** than `flashLevel` / `toastVisible`: those are
+    /// assigned instantly while their visual interpolation still has to run
+    /// (`completionFlashFall` for the glow, `hudDismissDuration` for the toast).
+    /// Ordering the window out on the assignment would cut the animation off.
+    private(set) var overlayVisible = false
+
+    /// The two independent reasons the overlay may be needed. Tracked
+    /// separately because a flash (~1.2s) and a toast (~5.2s) end at different
+    /// times, and a merge can restart the toast while the flash is long done.
+    private var flashHolding = false
+    private var toastHolding = false
+
     private let store: AISessionStore
     private let registry: AgentMonitorRegistry
     private let settings: AppSettings
@@ -79,6 +93,7 @@ final class CompletionFlashService {
     // MARK: - Observation
 
     private func observe() {
+        let armProbe = PerfProbe.begin()
         withObservationTracking {
             // Touch the tracked state so onChange fires on any mutation.
             _ = store.sortedSessions.map { ($0.id, $0.status) }
@@ -86,12 +101,18 @@ final class CompletionFlashService {
                 _ = monitor.agents.mapValues { $0.state }
             }
         } onChange: {
+            // 若 evaluate() 又改动了被观察状态，这里会自激成死循环 ——
+            // onChange 频率远高于真实事件频率就是证据。
+            PerfProbe.hit("CompletionFlashService.observe.onChange")
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 observe() // re-arm before evaluating so no change is missed
+                let evalProbe = PerfProbe.begin()
                 evaluate()
+                PerfProbe.end("CompletionFlashService.evaluate", evalProbe)
             }
         }
+        PerfProbe.end("CompletionFlashService.observe.arm(读取全部会话快照)", armProbe)
     }
 
     private func evaluate() {
@@ -133,6 +154,11 @@ final class CompletionFlashService {
         // Show a Claude-sourced item so the screenshot demonstrates the source logo.
         toastItems = names.map { CompletionItem(name: $0, source: .ai(.claude)) }
         toastVisible = true
+        // Screenshot mode never decays, so the overlay has to stay up: no
+        // reset/dismiss task will ever lower these.
+        flashHolding = true
+        toastHolding = true
+        syncOverlayVisibility()
         LogService.debug("Flash held for UI test: \(names)", category: "CompletionFlash")
     }
 
@@ -154,6 +180,8 @@ final class CompletionFlashService {
     private func triggerFlash() {
         LogService.debug("Flash triggered", category: "CompletionFlash")
         flashResetTask?.cancel()
+        flashHolding = true
+        syncOverlayVisibility()
         flashResetTask = Task { @MainActor [weak self] in
             guard let self else { return }
             // Continuous double-pulse: 0 → 1 → dipLevel → 1 → 0.
@@ -176,11 +204,18 @@ final class CompletionFlashService {
             withAnimation(.easeInOut(duration: NotchConstants.completionFlashFall)) {
                 self.flashLevel = 0
             }
+            // Wait out the fade before letting the window leave the screen.
+            try? await Task.sleep(for: .seconds(NotchConstants.completionFlashFall))
+            if Task.isCancelled { return }
+            self.flashHolding = false
+            self.syncOverlayVisibility()
         }
     }
 
     private func showToast() {
         toastVisible = true
+        toastHolding = true
+        syncOverlayVisibility()
         restartToastDismiss()
     }
 
@@ -192,7 +227,17 @@ final class CompletionFlashService {
             withAnimation(.easeOut(duration: NotchConstants.hudDismissDuration)) {
                 self.toastVisible = false
             }
+            try? await Task.sleep(for: .seconds(NotchConstants.hudDismissDuration))
+            if Task.isCancelled { return }
+            self.toastHolding = false
+            self.syncOverlayVisibility()
         }
+    }
+
+    private func syncOverlayVisibility() {
+        let needed = flashHolding || toastHolding
+        guard needed != overlayVisible else { return }
+        overlayVisible = needed
     }
 
     private func startCooldown() {

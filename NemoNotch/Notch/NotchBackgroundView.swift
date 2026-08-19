@@ -7,6 +7,12 @@ struct NotchBackgroundView: View {
     let bottomCornerRadius: CGFloat
     let spacing: CGFloat
     var glow: NotchGlow = .none
+    /// When true the shape fills its parent container's width (used by the
+    /// collapsed state, where the shape sits as a `.background` behind the
+    /// badge content and must match its content-driven width). When false the
+    /// shape uses the fixed `notchSize.width` (opened state, content is pinned
+    /// to a constant width).
+    var flexibleWidth: Bool = false
 
     var body: some View {
         notchedShape
@@ -81,10 +87,8 @@ struct NotchBackgroundView: View {
             }
         }
         .mask(notchBackgroundMaskGroup)
-        .frame(
-            width: notchSize.width + topCornerRadius * 2,
-            height: notchSize.height
-        )
+        .frame(height: notchSize.height)
+        .modifier(NotchShapeWidth(flexible: flexibleWidth, fixed: notchSize.width + topCornerRadius * 2))
         .shadow(
             color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
             radius: NotchConstants.openedShadowRadius
@@ -94,7 +98,8 @@ struct NotchBackgroundView: View {
     private var notchBackgroundMaskGroup: some View {
         Rectangle()
             .foregroundStyle(.black)
-            .frame(width: notchSize.width, height: notchSize.height)
+            .frame(height: notchSize.height)
+            .modifier(NotchShapeWidth(flexible: flexibleWidth, fixed: notchSize.width))
             .clipShape(.rect(
                 bottomLeadingRadius: bottomCornerRadius,
                 bottomTrailingRadius: bottomCornerRadius
@@ -135,6 +140,23 @@ struct NotchBackgroundView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .offset(x: topCornerRadius + spacing - 0.5, y: -0.5)
             }
+    }
+}
+
+/// Applies a width constraint that's either flexible (fill the parent, used by
+/// the collapsed content-driven shape as a `.background`) or fixed (the opened
+/// shape's constant width). SwiftUI's `frame` overloads don't allow `width` and
+/// `maxWidth` in the same call, so this branches between the two.
+private struct NotchShapeWidth: ViewModifier {
+    let flexible: Bool
+    let fixed: CGFloat
+
+    func body(content: Content) -> some View {
+        if flexible {
+            content.frame(maxWidth: .infinity)
+        } else {
+            content.frame(width: fixed)
+        }
     }
 }
 

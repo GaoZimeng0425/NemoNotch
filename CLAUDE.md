@@ -48,6 +48,7 @@ graph TB
         WS["WeatherService<br/>Open-Meteo primary + wttr.in fallback"]
         UQS["UsageQuotaService<br/>Claude + Codex + Gemini usage quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
+        KAS["KeepAwakeService<br/>pmset -a disablesleep via osascript admin auth<br/>owns LidMonitor (clamshell → display off)"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
         TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
         PHS["PomodoroHistoryStore<br/>Append-only history (~/.NemoNotch/pomodoro-history.json)"]
@@ -188,6 +189,16 @@ graph LR
 
 **zcode integration — reused hook pipeline, no plugin:** zcode (ZCode.app's GLM-based, Claude-Code-compatible agent CLI) is the fourth `AIProvider`, implemented by `ZcodeProvider` (`NemoNotch/Services/ZcodeProvider.swift`). Unlike opencode it needs no plugin: its hooks are Claude-shaped and flow through the existing `hook-sender.sh` → `HookServer` → provider pipeline unchanged, with `HookEvent` decoding its payload as-is. Its config lives at `~/.zcode/cli/config.json`, which nests hook entries under `hooks.events.<Event>` with a sibling `hooks.enabled = true` flag rather than Claude/Gemini's flat `hooks.<Event>`; `HookInstaller` handles the shape difference with a `.zcode` `HookTarget` whose `usesNestedEventsContainer` flag routes install/uninstall/detection through pure `readEvents`/`writeEvents`-wrapped `applyInstall`/`applyUninstall`/`detectInstalled` transforms shared with Claude and Gemini. zcode session ids are `sess_`-prefixed (distinct from opencode's `ses_`), so `hook-sender.sh` checks `$ZCODE_SESSION_ID` (and a `zcode`-matching parent-process fallback) before the Claude branch to tag `cli_source: "zcode"`, and `AICLIMonitorService.routeEvent` attributes an untagged event whose session id starts with `sess_` to zcode ahead of the opencode/Claude fallbacks. `ZcodeProvider` maps zcode's **actual** hook set (SessionStart→idle; UserPromptSubmit/PreToolUse/PostToolUse/PostToolUseFailure→processing; Stop→waitingForInput). zcode emits **neither `Notification` nor `SessionEnd`** (it has only `SessionStart`, with `startup`/`resume`/`clear`/`compact` matchers) — so `HookInstaller.zcode.hookEvents` registers only the real events and ended sessions are reaped by the stale-session timeout (mirroring `OpencodeProvider`'s cleanup), not a removal event. zcode *does* emit `PermissionRequest` (and `PreToolUse` can return allow/ask/deny), but notch-side approval is intentionally out of scope, so that event is not registered. **Scope: notify + live status only** — no conversation/token parsing and no notch-side approval (`respondToPermission` is a no-op; zcode's own TUI owns the approval decision), so there is no usage quota either. `AppSettings.zcodeEnabled` (default `true`) gates the provider; hooks auto-install on launch only when `~/.zcode/cli/config.json` already exists, and an "Install zcode hooks" menu button plus a card on the Settings → AI Agents page (alongside Claude / Gemini / opencode / Hermes / OpenClaw) mirror the other providers' install/reinstall/uninstall flow. zcode's brand mark renders via `ZcodeLogoIcon` (`NemoNotch/Helpers/ZcodeLogoIcon.swift`) in the badge and AI-tab source-icon slots.
 
+### AI Status FAB (floating capsule)
+
+`AIStatusWindow` (`NemoNotch/Notch/AIStatusWindow.swift`) is a borderless non-activating `NSPanel` sized ONCE to a fixed canvas (panel footprint + `aiStatusFabShadowPad` on both axes, `.statusBar + 9` so it rides above the notch panel) and **never resized** — the capsule↔panel morph lives entirely inside one always-hosted `AIStatusFABView` (`ZStack(alignment: .topTrailing)`, visible shape hugs the canvas's top-right corner; `PassThroughView` contentView makes the transparent remainder click through). Three layers: the morphing background `RoundedRectangle`, capsule content, and panel content, all crossfaded via value-bound `.animation(value: isExpanded)` — no re-hosting, no `setFrame(animate:)`. `AIStatusWindowController` observes `store.sortedSessions` + `aiStatusFabEnabled`: shows when any session is working, auto-hides `aiStatusFabHideDelay` after the last one goes idle (but never auto-hides while expanded), and persists the dragged position.
+
+**Shared morph geometry is load-bearing.** The background's frame tween and the content layers' opacity/scale crossfade animate *different properties with different ranges*, so they can never align frame-by-frame on their own — unclipped, the panel content visibly sticks out past the still-growing shape mid-morph. `morphWidth` / `morphHeight` / `morphCornerRadius` are therefore the single source of truth, consumed by both the background fill and a `.mask(alignment: .topTrailing)` wrapping the whole content stack, so the clip edge tracks the shape exactly.
+
+**Drag stays on-screen.** `DragHandleView` (an `NSViewRepresentable` running a drag-threshold mouseDown loop) sits in the capsule's `.overlay` *and* the expanded header (via `performDrag`). Two traps fixed here: (1) the overlay must be **innermost** on the capsule — outermost, it kept receiving drags from the panel's top-right corner even while expanded, because `.overlay` content is exempt from the base view's `allowsHitTesting`; (2) borderless windows get **no default drag constraint**, so an unconstrained drag let the top-right-anchored shape slide off-screen where the screen clipped its content away piece by piece ("components vanish right-to-left") — `AIStatusWindow.constrainFrameRect(_:to:)` now clamps the canvas into `visibleFrame` during the drag (the restore-path clamp in `applyPosition` only runs on first placement).
+
+**Terminal jump.** The FAB detail header has a button that activates the terminal/IDE hosting the selected session. Chain: `hook-sender.sh` (script v15) injects `cli_pid` = bash's `$PPID` (the CLI process) alongside `cli_source` — the `isdigit` guard keeps a bad value from raising inside the python step and losing the `cli_source` tagging too; `HookEvent.cliPID` decodes it tolerantly (`(try? …) ?? nil`, one garbage field must not drop the event); after provider dispatch, `AICLIMonitorService.routeEvent` calls `AppActivator.recordHost(cliPID:on:)`, which walks the process tree upward via `sysctl(KERN_PROC_PID)` — note the ppid lives in `kp_eproc.e_ppid`, `extern_proc` itself has no ppid member — until the first `NSRunningApplication`, caching pid + bundle id on `AISessionState.launchingAppPID/launchingAppBundleId`. Resolving at **event time** (a handful of sysctls, no subprocesses) keeps the host valid after the CLI itself exits; a transient miss (tmux/ssh chains top out at launchd) keeps the previously cached host. On click, `AppActivator.activate` prefers the pid (distinguishing two windows of the same terminal), validates it against the cached bundle id to catch PID reuse, and falls back to bundle-id activation. opencode sessions have no host (the TS plugin has no shell parent to report) — the button is hidden rather than dead.
+
 ### Notch Event Flow
 
 ```mermaid
@@ -252,6 +263,39 @@ When an AI session transitions working→idle or an agent transitions active→i
 
 **Tunables** in `NotchConstants`: `completionFlashThrottle`, `completionFlashRise`, `completionFlashDip`, `completionFlashFall`, `completionFlashDipLevel`, `completionToastDuration`, `completionToastBottomFraction`, `completionToastHeight` / `completionToastMaxWidth` / `completionToastHPadding` / `completionToastIconSize` / `completionToastFontSize` / `completionToastCountFontSize`, `completionGlowWidth`, `completionGlowBlur`, `completionGlowEdgeWidth`, `completionGlowOpacity`.
 
+### Keep Awake with the Lid Closed
+
+`KeepAwakeService` (`NemoNotch/Services/KeepAwakeService.swift`) keeps the Mac awake with the lid shut. Two facts drive the whole design:
+
+**1. Lid-close sleep ignores every IOPMAssertion.** It runs through the kernel's clamshell sleep path, so `IOPMAssertionCreateWithName` / `caffeinate` (which is all `kIOPMAssertionTypePreventUserIdleSystemSleep` buys you) does nothing for it. The only lever is `IOPMrootDomain`'s `SleepDisabled` flag — i.e. `pmset -a disablesleep` — and that needs root.
+
+**2. `SleepDisabled` is a global setting that survives a restart.** If the app doesn't restore it, the user's Mac never sleeps again with no visible cause. The safety net is not optional.
+
+**Privilege route: `osascript ... with administrator privileges`, NOT SMAppService.** The textbook approach is a LaunchDaemon registered via `SMAppService.daemon(plistName:)` + XPC (one approval, then permanently silent). It was **measured and rejected** — it requires a stable Apple-issued signature, and NemoNotch's Release DMGs are ad-hoc signed (`build.sh` passes `CODE_SIGNING_ALLOWED=NO` then `codesign --sign -`). Same bundle, same `/Applications` path, same already-approved bundle id, only the signature differs:
+
+| | ad-hoc (`--sign -`) | Apple Development |
+|---|---|---|
+| `register()` | OK | OK |
+| `status` | `.enabled` | `.enabled` |
+| launchd launches the helper | **no** | yes (`uid=0`) |
+| XPC connection | times out | `pong uid=0 euid=0` |
+
+**The trap: under ad-hoc, `register()` returns success and `status` reports `.enabled` — both lie.** Nothing reveals the failure until you send an XPC message and it times out. Any future attempt at this route must gate availability on an actual XPC round-trip, never on `status`. Two related findings from the same probe: the user's approval binds to the **app's bundle id, not its cdhash** (so re-signing / rebuilding does *not* require re-approval — unlike the Keychain grant in `UsageQuotaService`, which is cdhash-keyed), and **changing the helper requires `unregister()` → `register()`**, otherwise launchd keeps the stale record and the helper never starts.
+
+The cost of the chosen route is one authorization dialog per toggle. `PMSet` (`NemoNotch/Services/PMSet.swift`) wraps it; the command string is fully hardcoded (absolute `/usr/bin/pmset`, no interpolated input). User cancellation is detected by **AppleScript error number `-128`, not the message text**, since that text is localized.
+
+**Ownership marker + reconciliation.** `~/.NemoNotch/keep-awake.enabled` records "we turned this on". Written *before* the `pmset` call, so a crash in between still leaves a trace the next launch can recognize. `KeepAwakeReconciliation` is the pure decision function over (system flag, marker) and is where the subtle case lives: **`pmset -g` returning `nil` means "couldn't read", not "off"** — dropping the marker on `nil` would permanently forget that a live `SleepDisabled=1` was ours, so the marker is dropped only on a definite `false`. `isOwned` gates quit-time restore, so a `SleepDisabled` the user set with `sudo pmset` is reported honestly but never touched. Startup deliberately does **not** auto-restore a leftover (that would mean an authorization dialog on every launch) — it shows the real state in the menu bar and Settings instead.
+
+**Quit path.** `AppDelegate.applicationShouldTerminate` returns `.terminateLater`, restores, then replies — and always lets the quit through, since blocking it is worse. If restore fails or the user cancels, an `NSAlert` names the leftover state and offers to copy `sudo pmset -a disablesleep 0`; the marker is kept so the next launch still recognizes it.
+
+**`LidMonitor`** (`NemoNotch/Services/LidMonitor.swift`) subscribes to `kIOPMMessageClamshellStateChange` on `IOPMrootDomain` and calls `pmset displaysleepnow` when the lid closes — with sleep disabled the panel stays lit behind a closed lid, burning battery and heat. That constant is **not exported to Swift** (it's the C macro `iokit_family_msg(sub_iokit_powermanagement, 0x100)`), so it's recomputed by hand: `err_system(0x38) | err_sub(13) | 0x100 == 0xE0034100` (verified against the header's bit layout). Current lid state comes from the `AppleClamshellState` CFBoolean on the same node — note `ioreg -c IOPMrootDomain` does *not* list that property even though `IORegistryEntryCreateCFProperty` reads it fine, so don't use the CLI to conclude it's missing. Skipped when an external display is attached (`CGDisplayIsBuiltin`) — that's the clamshell setup the user wants. `pmset displaysleepnow` needs no root, which is why this policy lives entirely on the unprivileged side. `deinit` is `isolated deinit` (Swift 6.2) because the IOKit handles are `@MainActor`-isolated non-Sendable values a nonisolated `deinit` cannot touch.
+
+**Event log — `~/.NemoNotch/keep-awake.log`.** Lid events are also appended to a dedicated file by `KeepAwakeEventLog` (`NemoNotch/Services/KeepAwakeEventLog.swift`), **in addition to** the normal `LogService.info` lines. The reason is retention: the main log is a `DDFileLogger` with `maximumNumberOfLogFiles = 7` and `DDFileLogger`'s **default 1MB per-file cap**, so rolling is size-driven, not the configured daily frequency — measured on this repo's own machine, active use burns 3–4 files in a single day, giving an effective window under two days. Closing the lid is a low-frequency event you want to audit weeks later, so it would be gone. The dedicated file doesn't roll (a few lines a day, tens of KB a year), carries the same local-time `yyyy/MM/dd HH:mm:ss:SSS` stamp as the main log so the two can be lined up, and self-trims to 512KB if it ever exceeds 1MB (a driver/dock fault could storm clamshell messages) — keeping whole lines, never a half line at the head.
+
+**Log level matters here.** Release builds set `dynamicLogLevel = .info`, so anything at `.debug` never reaches the file. Every lid event, skip reason, marker write/remove, and toggle outcome is therefore `.info`. Crucially the log records **why nothing happened** (`keep-awake is off` / `auto display-off disabled in settings` / `an external display is attached`) — logging only the success path makes "event never arrived" indistinguishable from "event arrived but was filtered", which is exactly the question you'd be asking. `LidMonitor.start()` also logs the computed `clamshellMessage=0x…` constant, so a later "lid close does nothing" can be split into "subscription never came up" vs "message arrived but was skipped". `pmset -g` reads stay `.debug` — that one runs on every `refresh()`, and per this file's own logging rules a high-frequency poll must not log every tick (see the `NotificationService` incident above).
+
+**Settings:** `AppSettings.keepAwakeLidDisplayOff` and `keepAwakeRestoreOnQuit` (both default `true`), on the Settings → Awake page (`KeepAwakeSettingsView`). Menu bar toggle is `KeepAwakeSection`.
+
 ## Debug Pitfalls
 
 ### Info.plist Configuration
@@ -287,6 +331,39 @@ Correct process for adding new permission descriptions (e.g. `NSAppleEventsUsage
 - **All players** (Music, Spotify, browsers, Podcasts, …): `MediaService.seek(toAbsolute:)` computes the absolute target and calls `MediaRemoteCommander.setTime(seconds:)` → `set_time` over the perl bridge (`MRMediaRemoteSetElapsedTime`). This is honored even by Spotify (verified). No AppleScript / Automation needed.
 - `MediaService.supportsSeeking` is now simply `playbackState.duration > 0` (any finite timeline is seekable), not a per-player capability gate.
 - The old in-process `MediaRemote.skip(interval:)` / `setElapsedTime` and the AppleScript `MediaBridge.setPlayerPosition` paths were removed (along with all of `MediaBridge`) — the former is gated since 15.4, the latter is no longer needed now that absolute seek works through the bridge for Spotify too.
+
+### Collapsed-State View Tree
+
+**`opacity(0)` does not unmount a SwiftUI view — the whole subtree stays alive and keeps doing work.**
+
+`NotchView.contentPanel` used to be mounted unconditionally and merely hidden with `.opacity(effectiveStatus == .opened ? 1 : 0)` + `.scaleEffect(...)`. With the notch collapsed the entire tab tree therefore stayed in the view graph, so `OverviewTab`'s media card kept reacting to `mediaService.playbackPosition` — updated every 0.5s by `MediaService.progressTimer`, and each change fires a 0.25s `.animation(.snappy, value:)` (`OverviewTab.swift:311`), so roughly half the wall clock was spent mid-animation. **While any SwiftUI animation is active, ViewGraph re-walks the entire display list every frame**, and there is one `NotchView` per screen, so a two-display setup paid it twice.
+
+Measured (Release, music playing, comparable AI load): ~22% process CPU, 1774µs per main-runloop turn, 215MB RSS, and 4 live `VinylDiscView` instances (2 screens × badge + OverviewTab). `sample` attributed 52% of active main-thread time to `__NSWindowGetDisplayCycleObserverForLayout_block_invoke` → `NSHostingView.layout()` → `DisplayList.ViewUpdater.update` recursion — the same stack as the `cpu_resource` watchdog reports that had been killing the app at "90s cpu over 166s (54% average)". Pausing playback dropped CPU to 0.3%, which is what localized the problem to this path.
+
+This is the **second layer** of the same `cpu_resource` story, and the distinction matters. `fix(media): split playbackPosition out` (87b46bf) pulled `position` out of the `@Observable` `PlaybackState` struct so a progress tick no longer invalidated every view reading *any* field — that fixed the **body re-evaluation** storm in the attribute-graph layer. It does not address this one: even with zero `body` re-eval, an **active animation** makes the *render* layer re-walk the display list every frame for the entire mounted tree. Same trap as `CompletionFlashView`, whose `body` runs at only 0.7–2/s while its full-screen window stays permanently visible — **`body` frequency tells you nothing about render cost**, and reading one for the other is what makes this class of bug take several passes to find.
+
+Fix: `contentMounted` gates the mount; enter/exit is carried by `.transition(.scale(scale: 0.2, anchor: .top).combined(with: .opacity))`, driven by `withAnimation(notchStateAnimation) { contentMounted = ... }`. Same scale/anchor values as the old property animation, so the feel is unchanged, and SwiftUI holds the view until the removal animation completes before releasing the tree. Result: 1242µs per turn (−30%), 175MB RSS, 2 `VinylDiscView` instances; ~10% CPU while music plays.
+
+When adding notch UI, keep in mind:
+
+- Never use `opacity` / `scaleEffect` / `frame(height: 0)` to "hide" an expensive subtree — they hide pixels, not work. Gate the mount instead.
+- **When converting a hidden-by-opacity view into a conditionally-mounted one, its enter/exit animation must move to `.transition`.** State-bound `scaleEffect`/`opacity` + `.animation(value:)` animates nothing on insertion — a freshly inserted view has no previous value to interpolate from, so it snaps straight to the final state (this shipped briefly in d396741 and made the panel pop in with no scale-up). `.transition` is the only modifier that describes insertion/removal, and it holds the view until the removal animation finishes — so no hand-rolled deferred unmount is needed.
+- An always-mounted `.animation(value:)` bound to a frequently-changing service property costs a full per-frame tree walk no matter how small the animated view is. Frequency of the trigger tells you nothing about its cost; only the tree size does.
+- Per-screen views multiply every such cost by the display count.
+- **Bind `.animation(value:)` to what actually changes on screen, not to the upstream datum.** The elapsed-time label bound its `numericText` transition to `playbackPosition` (0.5s cadence) while `formatTime` only resolves to whole seconds — so half the 0.25s animations ran with an identical string on screen. Binding the formatted string instead halves the trigger rate with no visual difference.
+- Animation driving style is a red herring for CPU: rewriting `VinylDiscView` from a 20fps `@State` loop to a `repeatForever` animation, and `AudioEqualizerView` from animating `frame(height:)` (layout) to `scaleEffect` (transform), each measured **zero** CPU improvement — both kept an animation *active*. Only unmounting helped. (The `scaleEffect` rewrite was reverted: `Capsule` corner radii distort under non-uniform scaling. The `repeatForever` rewrite was later replaced too — next bullet.)
+- **`repeatForever` cannot be stopped by assigning a new value, not even inside a `disablesAnimations` transaction.** The animation stays attached to the property and keeps driving it — the vinyl went on spinning after playback paused. It also hides the current interpolated value (the property already equals the target), so stopping can only reset it, which snaps the artwork upright. `TimelineView(.animation(paused:))` fixes both: the driver halts and the last rendered frame holds. Derive the value from `context.date` (`VinylDiscView.angle(at:)`) so there is no state to coordinate and a view rebuild can't lose phase. Caveat: `TimelineView` keys off `paused` alone, **not visibility** — a mounted-but-invisible view keeps ticking every frame, so never pair it with opacity-style hiding.
+
+### Performance Probe
+
+`PerfProbe` (`NemoNotch/Helpers/PerfProbe.swift`) is an opt-in hotspot counter/timer. Disabled by default — the gate is one static `Bool` read — so call sites are safe to leave in hot paths permanently. Enable via `NEMONOTCH_PERF=1` (env) or `defaults write com.nemo.BrightnessApp.NemoNotch perfProbe -bool true`; window length via `NEMONOTCH_PERF_INTERVAL` (default 5s). Each window logs at `.info` (so Release builds are covered too): process CPU from `getrusage`, main-thread vs other-thread split from `thread_info`, hotspots sorted by **total time** (not frequency), raw call frequencies, and a visible-window snapshot with total megapixels participating in compositing.
+
+`MainThreadProbe` feeds every runloop turn into it as `MainRunloop.activeTurn`, which is how "main thread woken ~180×/s at ~1.8ms each" became visible at all — `MainThreadProbe`'s own 50ms single-turn threshold is blind to that pattern (many short turns rather than one long stall), and its `beforeWaiting` stack sampling cannot name the business function because the work has already returned by then.
+
+Two gotchas worth keeping:
+
+- Use `getrusage`, **not** `proc_pid_rusage` — on the current SDK `rusage_info_current`'s struct version disagrees with what the kernel writes back and the call SIGABRTs (verified).
+- `pthread_main_thread_np`, `THREAD_BASIC_INFO_COUNT`, `TH_USAGE_SCALE` and `TH_FLAGS_IDLE` are C macros and invisible to Swift; capture the main thread's mach port with `pthread_mach_thread_np(pthread_self())` from `start()` and hardcode the rest.
 
 ## Development Conventions
 
@@ -329,7 +406,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Logging
 
-Use CocoaLumberjack (`LogService`), outputting to both console and file. Log directory: `~/.NemoNotch/logs/`, rotated daily, retained for 7 days.
+Use CocoaLumberjack (`LogService`), outputting to both console and file. Log directory: `~/.NemoNotch/logs/`. Retention is **not** the 7 days the daily `rollingFrequency` suggests: `DDFileLogger` also enforces a default **1MB per-file cap**, and with `maximumNumberOfLogFiles = 7` that size limit is what actually drives rolling — measured on a normal working day, 3–4 files are consumed, leaving an effective window under two days. Anything that must stay auditable for weeks needs its own file (see `KeepAwakeEventLog`).
 
 Usage: `LogService.debug/info/warn/error("message", category: "xxx")`
 
@@ -338,10 +415,12 @@ Usage: `LogService.debug/info/warn/error("message", category: "xxx")`
 - **Service init/deinit**: `.info` level, marking lifecycle
 - **External interactions**: Network requests, IPC, file I/O, subprocess launch/exit — `.info` (success) or `.error` (failure)
 - **State changes**: Key property assignments (playback state, session phase, connection status) — `.debug` with before/after values
-- **Error paths**: All `catch`, `nil` fallbacks, permission denials, timeouts — `.warn` or `.error` with context
+- **Error paths**: All `catch`, `nil` fallbacks, permission denials, timeouts — `.warn` or `.error` with context. **Inside a polling loop, log the state *transition*, not every failed tick.** Taken literally this rule produced a real bug: `NotificationService` logged "AX not trusted" on every 2s poll, which grew to **96% of all log volume**, filled a 1MB file every 4 hours and pushed everything useful out of the 7-file retention window. Keep the last-logged state and emit only on change (`logAXStateIfChanged`).
 - **Async callback entry**: Timer, NotificationCenter, Delegate callbacks — `.debug` to confirm callback fired
 
 Category naming: use module name, e.g. `"MediaService"`, `"HookServer"`, `"NotchCoordinator"`, for easy filtering.
+
+**Timestamps are local time.** CocoaLumberjack's `DDLogFileFormatterDefault` **hardcodes UTC**, so file logs used to run 8h behind the wall clock and disagree with crash reports, `ps` and Console — trivially misread as "the process stopped hours ago" (it cost real time during the CPU investigation). `LogService` now installs a `DDLogFileFormatterDefault` with `timeZone = .current`. Caveat: the log **file names** are still UTC — they come from `DDLogFileManagerDefault`, which does not go through `logFormatter` — so `…2026-08-10--03-15-30.log` is an 11:15 local-time file.
 
 ### Git Workflow
 

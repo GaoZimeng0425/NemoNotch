@@ -62,6 +62,7 @@ final class HermesService: MultiAgentMonitor {
         refreshSessions()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
+                PerfProbe.hit("HermesService.pollTick@3s")
                 self?.refreshSessions()
                 self?.evictStaleAgents()
             }

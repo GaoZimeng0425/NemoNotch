@@ -1,214 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "settings.about.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "About"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于"
-          }
-        }
-      }
-    },
-    "settings.about.tagline" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A notch companion for media, calendar, AI CLI & agent monitoring, and app launching."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动 notch 工具：媒体、日历、AI CLI 与多 Agent 监控、应用启动器。"
-          }
-        }
-      }
-    },
-    "settings.about.github" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "GitHub"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "GitHub"
-          }
-        }
-      }
-    },
-    "settings.about.check_updates" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check for Updates"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检查更新"
-          }
-        }
-      }
-    },
-    "settings.about.report_issue" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Report an Issue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "反馈问题"
-          }
-        }
-      }
-    },
-    "settings.about.copyright" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "© 2026 GaoZimeng"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "© 2026 GaoZimeng"
-          }
-        }
-      }
-    },
-    "settings.about.acknowledgements" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acknowledgements"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开源致谢"
-          }
-        }
-      }
-    },
-    "ai.empty.run_hint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Run claude, gemini, or opencode in a terminal — sessions appear here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端运行 claude、gemini 或 opencode — 会话会自动出现在这里。"
-          }
-        }
-      }
-    },
-    "ai.empty.subtitle_ready" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for your next session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待下一个会话"
-          }
-        }
-      }
-    },
-    "ai.empty.subtitle_setup" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable a CLI to see live sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用一个 CLI 以查看实时会话"
-          }
-        }
-      }
-    },
-    "ai.empty.title_ready" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI Console"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI 控制台"
-          }
-        }
-      }
-    },
-    "ai.empty.title_setup" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Set up AI monitoring"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置 AI 监控"
-          }
-        }
-      }
-    },
-    "ai.ready" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ready"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "就绪"
-          }
-        }
-      }
-    },
     "" : {
 
     },
@@ -282,6 +74,16 @@
     },
     "%lld°" : {
 
+    },
+    "%lld°/%lld°" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld°/%2$lld°"
+          }
+        }
+      }
     },
     "+%lld more" : {
 
@@ -735,6 +537,7 @@
       }
     },
     "ai.currently_off" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -762,6 +565,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拒绝"
+          }
+        }
+      }
+    },
+    "ai.empty.run_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run claude, gemini, or opencode in a terminal — sessions appear here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在终端运行 claude、gemini 或 opencode — 会话会自动出现在这里。"
+          }
+        }
+      }
+    },
+    "ai.empty.subtitle_ready" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for your next session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待下一个会话"
+          }
+        }
+      }
+    },
+    "ai.empty.subtitle_setup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable a CLI to see live sessions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用一个 CLI 以查看实时会话"
+          }
+        }
+      }
+    },
+    "ai.empty.title_ready" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Console"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 控制台"
+          }
+        }
+      }
+    },
+    "ai.empty.title_setup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up AI monitoring"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置 AI 监控"
           }
         }
       }
@@ -799,6 +682,7 @@
       }
     },
     "ai.hooks_not_installed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -831,6 +715,7 @@
       }
     },
     "ai.no_active_sessions" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -858,6 +743,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暂无消息"
+          }
+        }
+      }
+    },
+    "ai.ready" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "就绪"
           }
         }
       }
@@ -1437,6 +1338,9 @@
           }
         }
       }
+    },
+    "NemoNotch %@" : {
+
     },
     "notch.context.quit" : {
       "localizations" : {
@@ -3119,6 +3023,118 @@
         }
       }
     },
+    "settings.about.acknowledgements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acknowledgements"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开源致谢"
+          }
+        }
+      }
+    },
+    "settings.about.check_updates" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查更新"
+          }
+        }
+      }
+    },
+    "settings.about.copyright" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "© 2026 GaoZimeng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "© 2026 GaoZimeng"
+          }
+        }
+      }
+    },
+    "settings.about.github" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub"
+          }
+        }
+      }
+    },
+    "settings.about.report_issue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report an Issue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "反馈问题"
+          }
+        }
+      }
+    },
+    "settings.about.tagline" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A notch companion for media, calendar, AI CLI & agent monitoring, and app launching."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灵动 notch 工具：媒体、日历、AI CLI 与多 Agent 监控、应用启动器。"
+          }
+        }
+      }
+    },
+    "settings.about.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于"
+          }
+        }
+      }
+    },
     "settings.accessibility_description" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3366,6 +3382,7 @@
       }
     },
     "settings.hooks_installed %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3382,6 +3399,7 @@
       }
     },
     "settings.hooks_not_installed %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3393,38 +3411,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ Hooks: 未安装"
-          }
-        }
-      }
-    },
-    "settings.status.installed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Installed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已安装"
-          }
-        }
-      }
-    },
-    "settings.status.not_installed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not installed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未安装"
           }
         }
       }
@@ -3735,6 +3721,7 @@
       }
     },
     "settings.openclaw.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4036,6 +4023,38 @@
         }
       }
     },
+    "settings.status.installed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装"
+          }
+        }
+      }
+    },
+    "settings.status.not_installed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未安装"
+          }
+        }
+      }
+    },
     "settings.tab.ai_agents" : {
       "localizations" : {
         "en" : {
@@ -4165,6 +4184,198 @@
         }
       }
     },
+    "weather.cond.clear" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "晴"
+          }
+        }
+      }
+    },
+    "weather.cond.cloudy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloudy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "多云"
+          }
+        }
+      }
+    },
+    "weather.cond.drizzle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drizzle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "毛毛雨"
+          }
+        }
+      }
+    },
+    "weather.cond.fog" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fog"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雾"
+          }
+        }
+      }
+    },
+    "weather.cond.freezing_rain" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freezing Rain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "冻雨"
+          }
+        }
+      }
+    },
+    "weather.cond.overcast" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overcast"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阴"
+          }
+        }
+      }
+    },
+    "weather.cond.partly_cloudy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partly Cloudy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "局部多云"
+          }
+        }
+      }
+    },
+    "weather.cond.rain" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雨"
+          }
+        }
+      }
+    },
+    "weather.cond.showers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showers"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阵雨"
+          }
+        }
+      }
+    },
+    "weather.cond.sleet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雨夹雪"
+          }
+        }
+      }
+    },
+    "weather.cond.snow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snow"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雪"
+          }
+        }
+      }
+    },
+    "weather.cond.thunderstorm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thunderstorm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雷暴"
+          }
+        }
+      }
+    },
     "weather.feels_like" : {
       "localizations" : {
         "en" : {
@@ -4214,6 +4425,22 @@
         }
       }
     },
+    "weather.today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天"
+          }
+        }
+      }
+    },
     "weather.wind_speed" : {
       "localizations" : {
         "en" : {
@@ -4230,210 +4457,354 @@
         }
       }
     },
-    "weather.cond.clear" : {
+    "menu.keep_awake" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear"
+            "value" : "Keep Awake (Lid Closed)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "晴"
+            "value" : "合盖不休眠"
           }
         }
       }
     },
-    "weather.cond.partly_cloudy" : {
+    "menu.keep_awake.external" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Partly Cloudy"
+            "value" : "Enabled outside NemoNotch"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "局部多云"
+            "value" : "由其他方式开启"
           }
         }
       }
     },
-    "weather.cond.cloudy" : {
+    "settings.keepawake.tab" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cloudy"
+            "value" : "Awake"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "多云"
+            "value" : "防休眠"
           }
         }
       }
     },
-    "weather.cond.overcast" : {
+    "settings.keepawake.title" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Overcast"
+            "value" : "Keep Awake with Lid Closed"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "阴"
+            "value" : "合盖不休眠"
           }
         }
       }
     },
-    "weather.cond.fog" : {
+    "settings.keepawake.enable" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fog"
+            "value" : "Prevent sleep when the lid closes"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "雾"
+            "value" : "合盖时不休眠"
           }
         }
       }
     },
-    "weather.cond.drizzle" : {
+    "settings.keepawake.status.on" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Drizzle"
+            "value" : "Sleep is disabled — closing the lid will not put this Mac to sleep."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "毛毛雨"
+            "value" : "休眠已禁用 —— 合盖不会让这台 Mac 进入睡眠。"
           }
         }
       }
     },
-    "weather.cond.rain" : {
+    "settings.keepawake.status.external" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rain"
+            "value" : "Sleep is already disabled on this system, but NemoNotch did not turn it on. Switching this off will disable it anyway."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "雨"
+            "value" : "系统已禁用休眠，但不是 NemoNotch 开启的。关闭此开关会一并把它关掉。"
           }
         }
       }
     },
-    "weather.cond.freezing_rain" : {
+    "settings.keepawake.status.authorizing" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Freezing Rain"
+            "value" : "Waiting for administrator authorization…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "冻雨"
+            "value" : "等待管理员授权…"
           }
         }
       }
     },
-    "weather.cond.sleet" : {
+    "settings.keepawake.optionsHeader" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sleet"
+            "value" : "Options"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "雨夹雪"
+            "value" : "选项"
           }
         }
       }
     },
-    "weather.cond.snow" : {
+    "settings.keepawake.lidDisplayOff" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Snow"
+            "value" : "Turn off the display when the lid closes"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "雪"
+            "value" : "合盖时自动熄屏"
           }
         }
       }
     },
-    "weather.cond.showers" : {
+    "settings.keepawake.lidDisplayOff.detail" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Showers"
+            "value" : "With sleep disabled the screen stays lit behind a closed lid, which keeps draining the battery and building up heat. Skipped when an external display is connected — that is the clamshell setup you probably want."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "阵雨"
+            "value" : "禁用休眠后，合盖时屏幕不会自动熄灭，会持续耗电发热。接有外接显示器时不熄屏 —— 那正是常见的合盖外接工作方式。"
           }
         }
       }
     },
-    "weather.cond.thunderstorm" : {
+    "settings.keepawake.restoreOnQuit" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thunderstorm"
+            "value" : "Restore normal sleep when quitting"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "雷暴"
+            "value" : "退出时还原休眠设置"
           }
         }
       }
     },
-    "weather.today" : {
+    "settings.keepawake.restoreOnQuit.detail" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Today"
+            "value" : "Quitting NemoNotch turns sleep prevention back off, which needs one more authorization prompt. Leave this off to keep the setting after quitting — you will have to turn it off yourself."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "今天"
+            "value" : "退出 NemoNotch 时自动关闭防休眠，会再弹一次授权框。关掉此项则退出后设置继续保留 —— 需要你自己记得关。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.aboutHeader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How this works"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工作原理"
+          }
+        }
+      }
+    },
+    "settings.keepawake.about.privilege" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Closing the lid triggers sleep inside the kernel, which ignores the usual sleep-prevention APIs. The only way to stop it is a global system power setting, so each toggle needs one administrator authorization."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖休眠由内核处理，会忽略常规的防休眠接口。唯一能挡住它的是一项全局系统电源设置，因此每次切换都需要一次管理员授权。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.about.persistent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That setting is global and survives a restart. If NemoNotch is force-quit before restoring it, run this in Terminal:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该设置是全局的，重启后依然有效。若 NemoNotch 被强制退出而来不及还原，可在终端执行："
+          }
+        }
+      }
+    },
+    "settings.keepawake.copyCommand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制"
+          }
+        }
+      }
+    },
+    "keepawake.error.cancelled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorization was cancelled."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消授权。"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not restore normal sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能还原休眠设置"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac is still set to stay awake with the lid closed, and that setting survives a restart. Run “sudo pmset -a disablesleep 0” in Terminal to undo it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 仍处于「合盖不休眠」状态，且该设置重启后依然有效。请在终端执行 “sudo pmset -a disablesleep 0” 还原。"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.copyCommand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制命令"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
           }
         }
       }
