@@ -226,8 +226,12 @@ struct NotchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.locale, appSettings.currentLocale)
         .contextMenu {
-            SettingsLink {
-                Text("notch.context.settings")
+            // 走和齿轮按钮同一条路径:先开设置窗,再带 suppressAppRestore 收起刘海。
+            // 直接用 SettingsLink 会让刘海留在 opened 状态,等用户下一次挪鼠标才
+            // 关闭 —— 那一刻 restorePreviousApp() 会把右键前的前台 app 拉回来,
+            // 刚打开的设置窗就被压到它后面(见 openSettings 的注释)。
+            Button("notch.context.settings") {
+                openSettings()
             }
             Divider()
             Button("notch.context.quit") {

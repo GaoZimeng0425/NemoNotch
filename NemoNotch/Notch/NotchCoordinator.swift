@@ -258,11 +258,12 @@ final class NotchCoordinator {
         }
     }
 
+    /// 记下这一轮开合要还给谁。只在 `.closed → .opened` 这一次转换时调用,
+    /// 所以"我们自己已是前台"意味着这一轮**没有**外部 app 需要还回去 —— 必须
+    /// 清空,否则会留着上一轮的旧值,下次关刘海把一个早已无关的 app 拉到前台。
     private func captureFrontmostApp() {
         let frontmost = NSWorkspace.shared.frontmostApplication
-        if frontmost?.bundleIdentifier != Self.ourBundleIdentifier {
-            previousApp = frontmost
-        }
+        previousApp = frontmost?.bundleIdentifier == Self.ourBundleIdentifier ? nil : frontmost
     }
 
     private func restorePreviousApp() {
