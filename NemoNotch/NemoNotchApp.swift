@@ -74,6 +74,8 @@ struct SettingsSceneRoot: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressRestoreUntil: Date = .distantPast
+    /// 设置窗当前是否在场(由 Settings scene 的 onAppear/onDisappear 维护)。
+    private var isSettingsVisible = false
 
     override nonisolated init() {
         super.init()
@@ -106,7 +108,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var uiTestFlashBackdrop: NSWindow?
 
     var shouldSuppressPreviousAppRestore: Bool {
-        Date() < suppressRestoreUntil
+        // 计时窗只覆盖"打开设置的那一瞬间"。真正的判据是设置窗此刻是否握着键盘
+        // 焦点 —— 若是,收起刘海时把上一个 app 拉回前台就等于把设置窗埋掉。
+        // 刘海面板/浮窗都是 borderless,所以"设置窗在场 + key 窗有标题栏"唯一
+        // 指向设置窗;用户切到别的 app 干活时 key 窗是刘海面板,恢复照旧生效。
+        if isSettingsVisible, NSApp.keyWindow?.styleMask.contains(.titled) == true {
+            return true
+        }
+        return Date() < suppressRestoreUntil
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -350,6 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func handleSettingsAppear() {
+        isSettingsVisible = true
         suppressRestoreUntil = Date().addingTimeInterval(1.2)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -358,6 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func handleSettingsDisappear() {
         LogService.info("Settings window closed", category: "AppDelegate")
+        isSettingsVisible = false
         suppressRestoreUntil = .distantPast
         NSApp.setActivationPolicy(.accessory)
     }
