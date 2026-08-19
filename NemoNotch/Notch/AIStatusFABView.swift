@@ -281,6 +281,28 @@ struct AIStatusFABView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(NotchTheme.textPrimary)
                     .lineLimit(2)
+                Spacer(minLength: 8)
+                // Jump to the terminal/IDE hosting this session. Hidden when
+                // no host was resolved (opencode plugin events, tmux/ssh) —
+                // a dead button would be worse than none.
+                if session.launchingAppPID != nil {
+                    Button {
+                        AppActivator.activate(
+                            pid: session.launchingAppPID,
+                            expectedBundleId: session.launchingAppBundleId
+                        )
+                    } label: {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(NotchTheme.textSecondary)
+                            .frame(width: 20, height: 20)
+                            .background(Circle().fill(NotchTheme.surface))
+                            .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open in Terminal")
+                }
             }
             if let tool = session.currentTool, !tool.isEmpty {
                 toolBadge(tool, tint: sourceTint(session.source))

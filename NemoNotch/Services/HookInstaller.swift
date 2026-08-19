@@ -70,7 +70,7 @@ enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
 
-    private static let scriptVersion = "# version: 14"
+    private static let scriptVersion = "# version: 15"
 
     /// The command string for `target`. Claude/Gemini run hooks through a shell
     /// so `~` expands; zcode's `type:"process"` runs `spawn(command, args)` with
@@ -294,13 +294,19 @@ enum HookInstaller {
 
         INPUT=$(cat 2>/dev/null || echo '{}')
 
-        # Inject cli_source into the JSON payload
+        # Inject cli_source into the JSON payload. cli_pid (bash's $PPID, i.e.
+        # the CLI process itself) lets the notch walk up to the hosting
+        # terminal/IDE app for session jumps; the isdigit guard keeps a bad
+        # value from raising inside python and losing the cli_source tagging
+        # too (the except-path re-emits the ORIGINAL payload untagged).
         if command -v python3 &>/dev/null; then
             INPUT=$(echo "$INPUT" | python3 -c "
         import sys, json
         try:
             d = json.load(sys.stdin)
             d['cli_source'] = '$CLI_SOURCE'
+            if '$PPID'.isdigit():
+                d['cli_pid'] = int('$PPID')
             json.dump(d, sys.stdout)
         except Exception:
             sys.exit(1)
