@@ -40,11 +40,19 @@ struct SettingsView: View {
                 .tabItem { Label("settings.pomodoro.title", systemImage: "timer") }
                 .tag(5)
 
+            KeepAwakeSettingsView()
+                .tabItem { Label("settings.keepawake.tab", systemImage: "moon.zzz") }
+                .tag(6)
+
             aboutView
                 .tabItem { Label("settings.about.title", systemImage: "info.circle") }
-                .tag(6)
+                .tag(7)
         }
-        .frame(width: 430, height: 460)
+        // 宽度必须容得下全部 8 个 tab。430pt 时 macOS 只渲染得下 5 个,
+        // 其余(AI 智能体 / 防休眠 / 关于)会被 SwiftUI 静默折叠进工具栏的
+        // 「更多工具栏项」溢出菜单里 —— 表现为"这个 tab 点不到"。英文的
+        // "Notifications" 是最宽的一项,按它取值。
+        .frame(width: 700, height: 460)
         .environment(\.locale, appSettings.currentLocale)
     }
 

@@ -48,6 +48,7 @@ graph TB
         WS["WeatherService<br/>Open-Meteo primary + wttr.in fallback"]
         UQS["UsageQuotaService<br/>Claude + Codex + Gemini usage quota"]
         HUD["HUDService<br/>Volume/Brightness/Battery"]
+        KAS["KeepAwakeService<br/>pmset -a disablesleep via osascript admin auth<br/>owns LidMonitor (clamshell → display off)"]
         SYS["SystemService<br/>CPU/memory/disk sampling (SystemTab)"]
         TS["TaskStore<br/>Persistent TODO list (~/.NemoNotch/tasks.json)"]
         PHS["PomodoroHistoryStore<br/>Append-only history (~/.NemoNotch/pomodoro-history.json)"]
@@ -252,6 +253,39 @@ When an AI session transitions working→idle or an agent transitions active→i
 
 **Tunables** in `NotchConstants`: `completionFlashThrottle`, `completionFlashRise`, `completionFlashDip`, `completionFlashFall`, `completionFlashDipLevel`, `completionToastDuration`, `completionToastBottomFraction`, `completionToastHeight` / `completionToastMaxWidth` / `completionToastHPadding` / `completionToastIconSize` / `completionToastFontSize` / `completionToastCountFontSize`, `completionGlowWidth`, `completionGlowBlur`, `completionGlowEdgeWidth`, `completionGlowOpacity`.
 
+### Keep Awake with the Lid Closed
+
+`KeepAwakeService` (`NemoNotch/Services/KeepAwakeService.swift`) keeps the Mac awake with the lid shut. Two facts drive the whole design:
+
+**1. Lid-close sleep ignores every IOPMAssertion.** It runs through the kernel's clamshell sleep path, so `IOPMAssertionCreateWithName` / `caffeinate` (which is all `kIOPMAssertionTypePreventUserIdleSystemSleep` buys you) does nothing for it. The only lever is `IOPMrootDomain`'s `SleepDisabled` flag — i.e. `pmset -a disablesleep` — and that needs root.
+
+**2. `SleepDisabled` is a global setting that survives a restart.** If the app doesn't restore it, the user's Mac never sleeps again with no visible cause. The safety net is not optional.
+
+**Privilege route: `osascript ... with administrator privileges`, NOT SMAppService.** The textbook approach is a LaunchDaemon registered via `SMAppService.daemon(plistName:)` + XPC (one approval, then permanently silent). It was **measured and rejected** — it requires a stable Apple-issued signature, and NemoNotch's Release DMGs are ad-hoc signed (`build.sh` passes `CODE_SIGNING_ALLOWED=NO` then `codesign --sign -`). Same bundle, same `/Applications` path, same already-approved bundle id, only the signature differs:
+
+| | ad-hoc (`--sign -`) | Apple Development |
+|---|---|---|
+| `register()` | OK | OK |
+| `status` | `.enabled` | `.enabled` |
+| launchd launches the helper | **no** | yes (`uid=0`) |
+| XPC connection | times out | `pong uid=0 euid=0` |
+
+**The trap: under ad-hoc, `register()` returns success and `status` reports `.enabled` — both lie.** Nothing reveals the failure until you send an XPC message and it times out. Any future attempt at this route must gate availability on an actual XPC round-trip, never on `status`. Two related findings from the same probe: the user's approval binds to the **app's bundle id, not its cdhash** (so re-signing / rebuilding does *not* require re-approval — unlike the Keychain grant in `UsageQuotaService`, which is cdhash-keyed), and **changing the helper requires `unregister()` → `register()`**, otherwise launchd keeps the stale record and the helper never starts.
+
+The cost of the chosen route is one authorization dialog per toggle. `PMSet` (`NemoNotch/Services/PMSet.swift`) wraps it; the command string is fully hardcoded (absolute `/usr/bin/pmset`, no interpolated input). User cancellation is detected by **AppleScript error number `-128`, not the message text**, since that text is localized.
+
+**Ownership marker + reconciliation.** `~/.NemoNotch/keep-awake.enabled` records "we turned this on". Written *before* the `pmset` call, so a crash in between still leaves a trace the next launch can recognize. `KeepAwakeReconciliation` is the pure decision function over (system flag, marker) and is where the subtle case lives: **`pmset -g` returning `nil` means "couldn't read", not "off"** — dropping the marker on `nil` would permanently forget that a live `SleepDisabled=1` was ours, so the marker is dropped only on a definite `false`. `isOwned` gates quit-time restore, so a `SleepDisabled` the user set with `sudo pmset` is reported honestly but never touched. Startup deliberately does **not** auto-restore a leftover (that would mean an authorization dialog on every launch) — it shows the real state in the menu bar and Settings instead.
+
+**Quit path.** `AppDelegate.applicationShouldTerminate` returns `.terminateLater`, restores, then replies — and always lets the quit through, since blocking it is worse. If restore fails or the user cancels, an `NSAlert` names the leftover state and offers to copy `sudo pmset -a disablesleep 0`; the marker is kept so the next launch still recognizes it.
+
+**`LidMonitor`** (`NemoNotch/Services/LidMonitor.swift`) subscribes to `kIOPMMessageClamshellStateChange` on `IOPMrootDomain` and calls `pmset displaysleepnow` when the lid closes — with sleep disabled the panel stays lit behind a closed lid, burning battery and heat. That constant is **not exported to Swift** (it's the C macro `iokit_family_msg(sub_iokit_powermanagement, 0x100)`), so it's recomputed by hand: `err_system(0x38) | err_sub(13) | 0x100 == 0xE0034100` (verified against the header's bit layout). Current lid state comes from the `AppleClamshellState` CFBoolean on the same node — note `ioreg -c IOPMrootDomain` does *not* list that property even though `IORegistryEntryCreateCFProperty` reads it fine, so don't use the CLI to conclude it's missing. Skipped when an external display is attached (`CGDisplayIsBuiltin`) — that's the clamshell setup the user wants. `pmset displaysleepnow` needs no root, which is why this policy lives entirely on the unprivileged side. `deinit` is `isolated deinit` (Swift 6.2) because the IOKit handles are `@MainActor`-isolated non-Sendable values a nonisolated `deinit` cannot touch.
+
+**Event log — `~/.NemoNotch/keep-awake.log`.** Lid events are also appended to a dedicated file by `KeepAwakeEventLog` (`NemoNotch/Services/KeepAwakeEventLog.swift`), **in addition to** the normal `LogService.info` lines. The reason is retention: the main log is a `DDFileLogger` with `maximumNumberOfLogFiles = 7` and `DDFileLogger`'s **default 1MB per-file cap**, so rolling is size-driven, not the configured daily frequency — measured on this repo's own machine, active use burns 3–4 files in a single day, giving an effective window under two days. Closing the lid is a low-frequency event you want to audit weeks later, so it would be gone. The dedicated file doesn't roll (a few lines a day, tens of KB a year), carries the same local-time `yyyy/MM/dd HH:mm:ss:SSS` stamp as the main log so the two can be lined up, and self-trims to 512KB if it ever exceeds 1MB (a driver/dock fault could storm clamshell messages) — keeping whole lines, never a half line at the head.
+
+**Log level matters here.** Release builds set `dynamicLogLevel = .info`, so anything at `.debug` never reaches the file. Every lid event, skip reason, marker write/remove, and toggle outcome is therefore `.info`. Crucially the log records **why nothing happened** (`keep-awake is off` / `auto display-off disabled in settings` / `an external display is attached`) — logging only the success path makes "event never arrived" indistinguishable from "event arrived but was filtered", which is exactly the question you'd be asking. `LidMonitor.start()` also logs the computed `clamshellMessage=0x…` constant, so a later "lid close does nothing" can be split into "subscription never came up" vs "message arrived but was skipped". `pmset -g` reads stay `.debug` — that one runs on every `refresh()`, and per this file's own logging rules a high-frequency poll must not log every tick (see the `NotificationService` incident above).
+
+**Settings:** `AppSettings.keepAwakeLidDisplayOff` and `keepAwakeRestoreOnQuit` (both default `true`), on the Settings → Awake page (`KeepAwakeSettingsView`). Menu bar toggle is `KeepAwakeSection`.
+
 ## Debug Pitfalls
 
 ### Info.plist Configuration
@@ -362,7 +396,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Logging
 
-Use CocoaLumberjack (`LogService`), outputting to both console and file. Log directory: `~/.NemoNotch/logs/`, rotated daily, retained for 7 days.
+Use CocoaLumberjack (`LogService`), outputting to both console and file. Log directory: `~/.NemoNotch/logs/`. Retention is **not** the 7 days the daily `rollingFrequency` suggests: `DDFileLogger` also enforces a default **1MB per-file cap**, and with `maximumNumberOfLogFiles = 7` that size limit is what actually drives rolling — measured on a normal working day, 3–4 files are consumed, leaving an effective window under two days. Anything that must stay auditable for weeks needs its own file (see `KeepAwakeEventLog`).
 
 Usage: `LogService.debug/info/warn/error("message", category: "xxx")`
 

@@ -56,6 +56,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
   <p align="center">
     <img src="docs/images/completion-flash.png" alt="完成闪光 — 全屏橘色边缘光晕 + 刘海旁完成提示 Toast" width="720">
   </p>
+- **合盖不休眠** — 菜单栏一键开关，合上盖子也不休眠（挂机跑构建、下载、长任务时用）。合盖休眠由内核处理、**无视 `caffeinate` 那一套防休眠接口**，唯一的口子是全局系统电源设置 `pmset -a disablesleep`，因此每次切换会弹一次管理员授权框。开启后合盖会自动熄屏（否则屏幕在盖子后面一直亮着持续耗电发热；接了外接显示器则不熄，那正是常见的合盖外接工作方式）。因为这是**跨重启持久的全局设置**，NemoNotch 用落盘标记记住"这是自己开的"，退出时自动还原、异常退出后下次启动如实显示残留状态，且绝不动用户自己 `sudo pmset` 开启的那份。设置 → 防休眠可调整。合盖/开盖/开关切换会记录到 `~/.NemoNotch/keep-awake.log`（独立于主日志，不轮转，可长期回溯）
 - **菜单栏入口** — 固定刘海图标（状态从刘海面板查看）；媒体播放时菜单显示正在播放控制区（上一曲 / 播放暂停 / 下一曲）
 - **HUD 叠加层** — 音量、亮度、电池电量的分段条指示器
 - **国际化** — 支持中文和英文，可在设置中切换
@@ -70,7 +71,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 - **EventKit** — 日历事件读取
 - **IOKit** — 系统状态监控（CPU、内存、电池、磁盘）
 - **libproc** — 通过内核 API 实现进程级资源追踪
-- **CocoaLumberjack** — 日志系统（`~/.NemoNotch/logs/`，7 天轮转）
+- **CocoaLumberjack** — 日志系统（`~/.NemoNotch/logs/`，保留 7 个文件、单文件上限 1MB —— 活跃使用时实际远不到一周，常常不足两天）
 - **KeyboardShortcuts** — 用户可自定义全局快捷键（替代 Carbon `RegisterEventHotKey`）
 - **WebSocket / Unix Socket** — AI CLI Hooks 和 OpenClaw 通信
 - **HTTP API** — 通过 localhost:8787 监控 Hermes-agent
