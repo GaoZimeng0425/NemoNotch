@@ -4456,6 +4456,358 @@
           }
         }
       }
+    },
+    "menu.keep_awake" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Awake (Lid Closed)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖不休眠"
+          }
+        }
+      }
+    },
+    "menu.keep_awake.external" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled outside NemoNotch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由其他方式开启"
+          }
+        }
+      }
+    },
+    "settings.keepawake.tab" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Awake"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "防休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Awake with Lid Closed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖不休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.enable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prevent sleep when the lid closes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖时不休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.status.on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep is disabled — closing the lid will not put this Mac to sleep."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "休眠已禁用 —— 合盖不会让这台 Mac 进入睡眠。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.status.external" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep is already disabled on this system, but NemoNotch did not turn it on. Switching this off will disable it anyway."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统已禁用休眠，但不是 NemoNotch 开启的。关闭此开关会一并把它关掉。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.status.authorizing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for administrator authorization…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待管理员授权…"
+          }
+        }
+      }
+    },
+    "settings.keepawake.optionsHeader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Options"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选项"
+          }
+        }
+      }
+    },
+    "settings.keepawake.lidDisplayOff" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn off the display when the lid closes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖时自动熄屏"
+          }
+        }
+      }
+    },
+    "settings.keepawake.lidDisplayOff.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With sleep disabled the screen stays lit behind a closed lid, which keeps draining the battery and building up heat. Skipped when an external display is connected — that is the clamshell setup you probably want."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "禁用休眠后，合盖时屏幕不会自动熄灭，会持续耗电发热。接有外接显示器时不熄屏 —— 那正是常见的合盖外接工作方式。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.restoreOnQuit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore normal sleep when quitting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出时还原休眠设置"
+          }
+        }
+      }
+    },
+    "settings.keepawake.restoreOnQuit.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitting NemoNotch turns sleep prevention back off, which needs one more authorization prompt. Leave this off to keep the setting after quitting — you will have to turn it off yourself."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出 NemoNotch 时自动关闭防休眠，会再弹一次授权框。关掉此项则退出后设置继续保留 —— 需要你自己记得关。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.aboutHeader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How this works"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工作原理"
+          }
+        }
+      }
+    },
+    "settings.keepawake.about.privilege" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Closing the lid triggers sleep inside the kernel, which ignores the usual sleep-prevention APIs. The only way to stop it is a global system power setting, so each toggle needs one administrator authorization."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖休眠由内核处理，会忽略常规的防休眠接口。唯一能挡住它的是一项全局系统电源设置，因此每次切换都需要一次管理员授权。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.about.persistent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That setting is global and survives a restart. If NemoNotch is force-quit before restoring it, run this in Terminal:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该设置是全局的，重启后依然有效。若 NemoNotch 被强制退出而来不及还原，可在终端执行："
+          }
+        }
+      }
+    },
+    "settings.keepawake.copyCommand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制"
+          }
+        }
+      }
+    },
+    "keepawake.error.cancelled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorization was cancelled."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消授权。"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not restore normal sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能还原休眠设置"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac is still set to stay awake with the lid closed, and that setting survives a restart. Run “sudo pmset -a disablesleep 0” in Terminal to undo it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 仍处于「合盖不休眠」状态，且该设置重启后依然有效。请在终端执行 “sudo pmset -a disablesleep 0” 还原。"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.copyCommand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制命令"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

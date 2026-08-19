@@ -85,15 +85,27 @@ struct PomodoroTimerServiceTests {
 
     @Test func pausePreservesPartialElapsed() async throws {
         let (service, _, _, _) = makeService()
-        service.start(taskID: nil, duration: 60, autoFlow: true)
+        let plannedDuration: TimeInterval = 60
+
+        let before = Date()
+        service.start(taskID: nil, duration: plannedDuration, autoFlow: true)
         try await Task.sleep(for: .milliseconds(30))
         service.pause()
+        let wallElapsed = Date().timeIntervalSince(before)
+
         guard case let .paused(ctx) = service.state else {
             Issue.record("not paused")
             return
         }
         #expect(ctx.accumulatedElapsed > 0)
-        #expect(ctx.accumulatedElapsed < 1.0)
+        // 上界跟随**实际经过的挂钟时间**,而不是"sleep 30ms 就约等于 30ms"的
+        // 假设。并行跑整个测试套件时那句 sleep 可能真的睡上好几秒(实测 2.6s),
+        // 原先写死的 `< 1.0` 于是随机误报 —— 属于测试自身的缺陷,不是被测代码
+        // 的问题。`wallElapsed` 从 start 之前量到 pause 之后,所以累计时间不可
+        // 能超过它。
+        #expect(ctx.accumulatedElapsed <= wallElapsed)
+        // 真正要守的性质:pause 只累计了"部分",远没走完计划时长。
+        #expect(ctx.accumulatedElapsed < plannedDuration)
     }
 
     @Test func resumeFromPausedEntersRunning() {

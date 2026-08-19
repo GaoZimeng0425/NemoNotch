@@ -11,6 +11,7 @@ struct NemoNotchApp: App {
             MenuContent(appSettings: appDelegate.appSettings)
                 .environment(appDelegate.mediaService ?? MediaService())
                 .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
+                .environment(appDelegate.keepAwakeService ?? KeepAwakeService())
         } label: {
             MenuBarLabel()
         }
@@ -33,6 +34,7 @@ struct MenuContent: View {
         Group {
             NowPlayingSection()
             HooksSection()
+            KeepAwakeSection()
             AppSection()
         }
         .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
@@ -51,6 +53,7 @@ struct SettingsSceneRoot: View {
                let weather = appDelegate.weatherService,
                let hermes = appDelegate.hermesService,
                let openClaw = appDelegate.openClawService,
+               let keepAwake = appDelegate.keepAwakeService,
                let notificationPermission = appDelegate.notificationPermissionMonitor {
                 SettingsView()
                     .environment(settings)
@@ -60,10 +63,11 @@ struct SettingsSceneRoot: View {
                     .environment(weather)
                     .environment(hermes)
                     .environment(openClaw)
+                    .environment(keepAwake)
                     .environment(notificationPermission)
             } else {
                 ProgressView()
-                    .frame(width: 430, height: 460)
+                    .frame(width: 700, height: 460)
             }
         }
         .onAppear { appDelegate.handleSettingsAppear() }
@@ -76,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressRestoreUntil: Date = .distantPast
     /// 设置窗当前是否在场(由 Settings scene 的 onAppear/onDisappear 维护)。
     private var isSettingsVisible = false
+    private var isRestoringSleepForQuit = false
 
     override nonisolated init() {
         super.init()
@@ -103,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var aiStatusController: AIStatusWindowController?
     private(set) var completionFlashService: CompletionFlashService?
     private(set) var completionFlashWindowController: CompletionFlashWindowController?
+    private(set) var keepAwakeService: KeepAwakeService?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
     private var uiTestFlashBackdrop: NSWindow?
@@ -177,6 +183,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let hud = HUDService()
         hudService = hud
+
+        let keepAwake = KeepAwakeService(settings: settings)
+        // UI 测试跑在无人值守的截图脚本里,绝不能让它去碰全局电源设置。
+        if !UITestMode.isActive { keepAwake.start() }
+        keepAwakeService = keepAwake
 
         let completionFlash = CompletionFlashService(
             store: aiMonitor.store,
@@ -339,6 +350,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrame(screen.frame, display: true)
         window.orderFrontRegardless()
         return window
+    }
+
+    /// `SleepDisabled` 是**跨重启持久的全局系统设置** —— 退出不还原,用户的
+    /// Mac 就会永远不睡,而且没有任何线索指向 NemoNotch。所以这里拦住退出,
+    /// 先把它关掉(需要一次授权框),再真正退出。
+    ///
+    /// 只还原我们自己开的那份(`needsRestoreOnQuit` 检查落盘标记);用户自己
+    /// `sudo pmset` 开的不动。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let keepAwake = keepAwakeService, keepAwake.needsRestoreOnQuit else {
+            return .terminateNow
+        }
+        // 还原已在进行中(用户又按了一次 ⌘Q):继续等,别叠第二个授权框。
+        guard !isRestoringSleepForQuit else { return .terminateLater }
+        isRestoringSleepForQuit = true
+
+        LogService.info("delaying termination to restore sleep settings", category: "AppDelegate")
+        Task {
+            let restored = await keepAwake.restoreForQuit()
+            if !restored { Self.presentRestoreFailureAlert() }
+            // 无论还原成功与否都放行退出 —— 卡住不让用户退出更糟。失败时
+            // 落盘标记会保留,下次启动仍能认出这份残留。
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    /// 还原失败(含用户点掉授权框)时必须明确告知,否则这台 Mac 会一直不睡
+    /// 而用户无从得知原因。顺手给出手动补救命令。
+    private static func presentRestoreFailureAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = String(localized: "keepawake.restoreFailed.title")
+        alert.informativeText = String(localized: "keepawake.restoreFailed.detail")
+        alert.addButton(withTitle: String(localized: "keepawake.restoreFailed.copyCommand"))
+        alert.addButton(withTitle: String(localized: "keepawake.restoreFailed.dismiss"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("sudo pmset -a disablesleep 0", forType: .string)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

@@ -56,6 +56,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
   <p align="center">
     <img src="docs/images/completion-flash.png" alt="Completion Flash — full-screen accent-orange edge glow with a completion toast near the notch" width="720">
   </p>
+- **Keep Awake (Lid Closed)** — One-click menu bar toggle that keeps the Mac awake with the lid shut (for unattended builds, downloads, long jobs). Lid-close sleep is handled inside the kernel and **ignores the `caffeinate` family of sleep-prevention APIs**; the only lever is the global power setting `pmset -a disablesleep`, so each toggle needs one administrator authorization. While active, closing the lid turns the display off (otherwise the screen stays lit behind the closed lid, draining battery and building up heat — skipped when an external display is attached, which is the clamshell setup you probably want). Because that setting is global and survives a restart, NemoNotch keeps an on-disk marker to remember it was the one that turned it on: it restores normal sleep on quit, honestly reports a leftover state on the next launch after a force-quit, and never touches a `SleepDisabled` you enabled yourself with `sudo pmset`. Tunable under Settings → Awake. Lid open/close and toggle events are recorded to `~/.NemoNotch/keep-awake.log` (separate from the main rolling log, so it stays auditable weeks later)
 - **Menu Bar Entry** — Fixed pixel-art notch icon (state is visible on the notch panel above the menubar); menu shows Now Playing controls (previous / play-pause / next) when media is active
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
@@ -70,7 +71,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **EventKit** — Calendar event access
 - **IOKit** — System monitoring (CPU, memory, battery, disk)
 - **libproc** — Per-process resource tracking via kernel APIs
-- **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7-day rotation)
+- **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7 files capped at 1MB each — under active use that is well under a week, often under two days)
 - **KeyboardShortcuts** — User-customizable global hotkeys (replaces Carbon `RegisterEventHotKey`)
 - **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
 - **HTTP API** — Hermes-agent monitoring via localhost:8787
