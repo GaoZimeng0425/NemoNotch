@@ -23,37 +23,48 @@ struct AIStatusFABView: View {
                 .animation(fabStateAnimation, value: isExpanded)
                 .zIndex(0)
 
-            // Layer 1 — capsule content (shown when collapsed). Always present;
-            // faded/scaled out when expanding so it reads as "growing into" the
-            // panel, like `NotchView`'s CompactBadgesView.
-            capsuleContent
-                .opacity(isExpanded ? 0 : 1)
-                .scaleEffect(isExpanded ? 0.8 : 1, anchor: .topTrailing)
-                .allowsHitTesting(!isExpanded)
-                .animation(fabStateAnimation, value: isExpanded)
-                // The drag/click handle sits in `.overlay` (above the capsule
-                // content), NOT `.background`. SwiftUI's hosting view dispatches
-                // AppKit mouseDown to the topmost hit view first; an overlay
-                // NSView is above the content, so it reliably receives mouseDown.
-                // With `.background`, the SwiftUI content above would swallow the
-                // event (it has no gesture after we removed .onTapGesture, so
-                // SwiftUI would drop it instead of forwarding to the background).
-                .overlay(
-                    DragHandleView(
-                        onDrag: { controller?.beginWindowDrag(with: $0) },
-                        onTap: { controller?.toggleExpanded() }
+            // Layers 1+2 — content, clipped by the SAME morphing geometry as
+            // the background. Each layer's own opacity/scale crossfade animates
+            // different properties (and ranges) than the background's frame
+            // tween, so without a shared clip they can never align
+            // frame-by-frame — mid-morph the panel content visibly stuck out
+            // past the still-growing shape.
+            ZStack(alignment: .topTrailing) {
+                // Layer 1 — capsule content (shown when collapsed). Always
+                // present; faded/scaled out when expanding so it reads as
+                // "growing into" the panel, like `NotchView`'s CompactBadgesView.
+                capsuleContent
+                    // The drag/click handle sits in `.overlay` (above the capsule
+                    // content), NOT `.background`. SwiftUI's hosting view dispatches
+                    // AppKit mouseDown to the topmost hit view first; an overlay
+                    // NSView is above the content, so it reliably receives mouseDown.
+                    // With `.background`, the SwiftUI content above would swallow the
+                    // event (it has no gesture after we removed .onTapGesture, so
+                    // SwiftUI would drop it instead of forwarding to the background).
+                    // Kept INNERMOST so it follows the `allowsHitTesting` state below —
+                    // outermost, it kept receiving drags from the panel's top-right
+                    // corner even while expanded.
+                    .overlay(
+                        DragHandleView(
+                            onDrag: { controller?.beginWindowDrag(with: $0) },
+                            onTap: { controller?.toggleExpanded() }
+                        )
                     )
-                )
-                .zIndex(1)
+                    .opacity(isExpanded ? 0 : 1)
+                    .scaleEffect(isExpanded ? 0.8 : 1, anchor: .topTrailing)
+                    .allowsHitTesting(!isExpanded)
+                    .animation(fabStateAnimation, value: isExpanded)
 
-            // Layer 2 — panel content (shown when expanded). Always present;
-            // faded/scaled in on expand, like `NotchView`'s contentPanel.
-            panelContent
-                .opacity(isExpanded ? 1 : 0)
-                .scaleEffect(isExpanded ? 1 : 0.85, anchor: .topTrailing)
-                .allowsHitTesting(isExpanded)
-                .animation(fabStateAnimation, value: isExpanded)
-                .zIndex(2)
+                // Layer 2 — panel content (shown when expanded). Always present;
+                // faded/scaled in on expand, like `NotchView`'s contentPanel.
+                panelContent
+                    .opacity(isExpanded ? 1 : 0)
+                    .scaleEffect(isExpanded ? 1 : 0.85, anchor: .topTrailing)
+                    .allowsHitTesting(isExpanded)
+                    .animation(fabStateAnimation, value: isExpanded)
+            }
+            .mask(alignment: .topTrailing) { morphShape }
+            .zIndex(1)
         }
         // Anchor the visible shape to the top-right of the fixed canvas; the
         // transparent remainder (bottom-left) click-throughs via PassThroughView.
@@ -73,29 +84,43 @@ struct AIStatusFABView: View {
         return .spring(duration: NotchConstants.aiStatusFabCloseSpringDuration)
     }
 
+    // MARK: - Shared morph geometry (background shape + content mask)
+
+    /// One source of truth for the pill↔panel footprint so the background fill
+    /// and the content clip can never disagree — the clip edge tracks the
+    /// animated shape exactly, every frame of the morph.
+    private var morphWidth: CGFloat {
+        isExpanded ? NotchConstants.aiStatusFabPanelWidth : capsuleWidth
+    }
+
+    private var morphHeight: CGFloat {
+        isExpanded ? NotchConstants.aiStatusFabPanelHeight : NotchConstants.aiStatusFabCapsuleHeight
+    }
+
+    private var morphCornerRadius: CGFloat {
+        // Collapsed → height/2 yields a pill; expanded → 14pt.
+        isExpanded ? NotchConstants.aiStatusFabCornerRadius : NotchConstants.aiStatusFabCapsuleHeight / 2
+    }
+
+    private var morphShape: some View {
+        RoundedRectangle(cornerRadius: morphCornerRadius, style: .continuous)
+            .frame(width: morphWidth, height: morphHeight)
+            .animation(fabStateAnimation, value: isExpanded)
+    }
+
     // MARK: - Layer 0: background shape
 
     private var backgroundShape: some View {
-        let shapeW = isExpanded
-            ? NotchConstants.aiStatusFabPanelWidth
-            : capsuleWidth
-        let shapeH = isExpanded
-            ? NotchConstants.aiStatusFabPanelHeight
-            : NotchConstants.aiStatusFabCapsuleHeight
-        // Collapsed → radius = height/2 yields a pill; expanded → 14pt.
-        let radius: CGFloat = isExpanded
-            ? NotchConstants.aiStatusFabCornerRadius
-            : NotchConstants.aiStatusFabCapsuleHeight / 2
-        return RoundedRectangle(cornerRadius: radius, style: .continuous)
+        RoundedRectangle(cornerRadius: morphCornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [NotchTheme.panelRaised, NotchTheme.panelBase],
                     startPoint: .top, endPoint: .bottom
                 )
             )
-            .frame(width: shapeW, height: shapeH)
+            .frame(width: morphWidth, height: morphHeight)
             .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                RoundedRectangle(cornerRadius: morphCornerRadius, style: .continuous)
                     .stroke(NotchTheme.stroke, lineWidth: 0.6)
             )
             .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
@@ -256,6 +281,28 @@ struct AIStatusFABView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(NotchTheme.textPrimary)
                     .lineLimit(2)
+                Spacer(minLength: 8)
+                // Jump to the terminal/IDE hosting this session. Hidden when
+                // no host was resolved (opencode plugin events, tmux/ssh) —
+                // a dead button would be worse than none.
+                if session.launchingAppPID != nil {
+                    Button {
+                        AppActivator.activate(
+                            pid: session.launchingAppPID,
+                            expectedBundleId: session.launchingAppBundleId
+                        )
+                    } label: {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(NotchTheme.textSecondary)
+                            .frame(width: 20, height: 20)
+                            .background(Circle().fill(NotchTheme.surface))
+                            .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open in Terminal")
+                }
             }
             if let tool = session.currentTool, !tool.isEmpty {
                 toolBadge(tool, tint: sourceTint(session.source))

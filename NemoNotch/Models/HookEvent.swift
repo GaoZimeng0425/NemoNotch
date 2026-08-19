@@ -10,6 +10,11 @@ struct HookEvent: Codable, Sendable {
     let source: String?
     let cliSource: String?
     let model: String?
+    /// PID of the CLI process that emitted the hook (bash's `$PPID` in
+    /// hook-sender.sh). Used to walk up to the hosting terminal/IDE app so a
+    /// session can jump back to it. Absent for plugin-based emitters
+    /// (opencode's TS plugin has no shell parent to report).
+    let cliPID: Int?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -22,6 +27,33 @@ struct HookEvent: Codable, Sendable {
         source = try container.decodeIfPresent(String.self, forKey: .source)
         cliSource = try container.decodeIfPresent(String.self, forKey: .cliSource)
         model = try container.decodeIfPresent(String.self, forKey: .model)
+        // Tolerant on purpose: a foreign emitter may send a non-numeric value
+        // here, and one bad field must not drop the whole event.
+        cliPID = (try? container.decodeIfPresent(Int.self, forKey: .cliPID)) ?? nil
+    }
+
+    init(
+        hookEventName: String,
+        sessionId: String? = nil,
+        toolName: String? = nil,
+        toolUseId: String? = nil,
+        message: String? = nil,
+        cwd: String? = nil,
+        source: String? = nil,
+        cliSource: String? = nil,
+        model: String? = nil,
+        cliPID: Int? = nil
+    ) {
+        self.hookEventName = hookEventName
+        self.sessionId = sessionId
+        self.toolName = toolName
+        self.toolUseId = toolUseId
+        self.message = message
+        self.cwd = cwd
+        self.source = source
+        self.cliSource = cliSource
+        self.model = model
+        self.cliPID = cliPID
     }
 
     enum CodingKeys: String, CodingKey {
@@ -34,5 +66,6 @@ struct HookEvent: Codable, Sendable {
         case source
         case cliSource = "cli_source"
         case model
+        case cliPID = "cli_pid"
     }
 }

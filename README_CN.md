@@ -48,6 +48,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 - **Notch 浮动面板** — 窗口悬浮在刘海区域，自动检测屏幕 Notch 尺寸
 - **多 AI 提供商** — 统一界面支持 Claude Code、Gemini CLI、opencode 与 zcode，集成 Hook 事件监听和会话追踪；权限拦截仅限 Claude Code 与 Gemini CLI。opencode 通过 NemoNotch 编写的插件（`~/.config/opencode/plugin/nemonotch-notify.ts`）集成，将生命周期事件 POST 到 NemoNotch 的 Hook 服务器 —— 刘海 badge、完成闪光、Toast 与 AI 标签页状态卡片均自动生效。zcode（基于 GLM、与 Claude Code 兼容）直接复用 Claude 的 Hook 管线（无需插件）—— 仅提供通知与实时状态，不解析对话/Token，也不支持刘海内审批
 - **AI 用量配额** —— 在 AI 标签页以卡片展示 Claude Code、Codex 与 Gemini 的用量配额（使用率 % + 重置倒计时），数据来自各 CLI 的 OAuth 凭证。检测到 Codex / Gemini CLI 已登录时自动显示对应段。
+- **AI 状态悬浮胶囊** — 任意 AI 会话运行时，屏幕右上角（默认）出现一个可拖动的悬浮胶囊；点击展开为会话列表 + 详情面板（模型、Token、上下文进度、当前工具）。详情页标题栏的按钮可一键跳回该会话所在的终端/IDE：hook 脚本上报 CLI 进程 pid，NemoNotch 在事件到达时沿进程树上溯到宿主 GUI 应用并缓存，pid 失效或被复用时回退为按 bundle id 激活。tmux/ssh 下或来自插件型 emitter（opencode）的会话没有宿主，不显示按钮。所有会话空闲数秒后自动隐藏。
 - **全局快捷键** — 切换面板开关：在设置 → 快捷键里自行配置（默认无）。切换标签页默认 `⌥⌘1-5`。所有快捷键均可自定义，基于 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **自动切换** — 智能检测活跃服务（AI 工作中、音乐播放中）自动切到对应标签
 - **活动光晕** — AI/Agent 忙碌时（运行中或等待审批），展开的刘海下半内边缘会泛起一层应用主题橘色的柔和模糊光晕，到中部渐隐消失（不遮挡正文）
