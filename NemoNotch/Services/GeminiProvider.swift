@@ -280,10 +280,18 @@ final class GeminiProvider: AIProvider {
         }
     }
 
-    private func handleClear(sessionId: String) {
+    func handleClear(sessionId: String) {
         guard store.contains(sessionId) else { return }
         store.mutate(sessionId) { session in
             session.messages = []
+            // 与 ClaudeProvider 相同:offset 归零重放全文件前先清零计数器,
+            // 否则 /clear、/compact 后 token 显示翻倍。
+            session.inputTokens = 0
+            session.outputTokens = 0
+            session.thoughtTokens = 0
+            session.cacheReadTokens = 0
+            session.cacheCreationTokens = 0
+            session.lastContextTokens = 0
             session.lastParsedOffset = 0
             session.phase = session.phase.transition(to: .idle)
         }
@@ -304,8 +312,10 @@ final class GeminiProvider: AIProvider {
               let cwd = session.cwd,
               let filePath = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
-        let offset = session.lastParsedOffset
         Task {
+            // offset 在 Task 内捕获(与 ClaudeProvider 同理,消除背靠背事件的
+            // 重复解析竞态);应用时取 max,旧结果晚到不会把 offset 拨回去。
+            let offset = self.store.get(sessionId)?.lastParsedOffset ?? 0
             if filePath.hasSuffix(".jsonl") {
                 let result = GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: offset)
                 guard self.store.contains(sessionId) else { return }
@@ -314,7 +324,7 @@ final class GeminiProvider: AIProvider {
                     for msg in result.common.messages {
                         session.upsertMessage(msg)
                     }
-                    session.lastParsedOffset = result.newOffset
+                    session.lastParsedOffset = max(session.lastParsedOffset, result.newOffset)
                     session.inputTokens += result.common.inputTokens
                     session.outputTokens += result.common.outputTokens
                     session.thoughtTokens += result.thoughtTokens

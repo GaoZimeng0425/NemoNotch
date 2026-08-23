@@ -280,10 +280,18 @@ final class ClaudeProvider: AIProvider {
         LogService.info("Interrupt detected for session \(sessionId.prefix(8))", category: "ClaudeProvider")
     }
 
-    private func handleClear(sessionId: String) {
+    func handleClear(sessionId: String) {
         guard store.contains(sessionId) else { return }
         store.mutate(sessionId) { session in
             session.messages = []
+            // clear = 从头重建:offset 归零会重放整个文件,token 计数必须同步
+            // 归零,否则历史 usage 会被再次累加(显示翻倍)。
+            session.inputTokens = 0
+            session.outputTokens = 0
+            session.thoughtTokens = 0
+            session.cacheReadTokens = 0
+            session.cacheCreationTokens = 0
+            session.lastContextTokens = 0
             session.lastParsedOffset = 0
             session.phase = session.phase.transition(to: .idle)
         }
@@ -297,15 +305,20 @@ final class ClaudeProvider: AIProvider {
               let cwd = session.cwd,
               let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
-        let offset = session.lastParsedOffset
         Task {
+            // offset 必须在 Task 内捕获:事件背靠背到达时,在事件处理时捕获会让
+            // 两个 Task 解析同一区段(消息重复、token 双计)。Task 继承 MainActor
+            // 串行执行,后到的 Task 捕获到的已是前一个应用后的 offset。
+            let offset = self.store.get(sessionId)?.lastParsedOffset ?? 0
             let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
 
             guard self.store.contains(sessionId) else { return }
             self.store.mutate(sessionId) { session in
                 if result.cleared { session.messages = [] }
-                session.messages.append(contentsOf: result.messages)
-                session.lastParsedOffset = result.newOffset
+                for message in result.messages {
+                    session.upsertMessage(message)
+                }
+                session.lastParsedOffset = max(session.lastParsedOffset, result.newOffset)
                 session.inputTokens += result.inputTokens
                 session.outputTokens += result.outputTokens
                 session.cacheReadTokens += result.cacheReadTokens
