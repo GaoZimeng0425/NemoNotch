@@ -76,23 +76,26 @@ enum ConversationParser: ConversationParserProtocol {
             )
         }
 
-        var messageIndex = 0
         for lineData in framing.lines {
             guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
                 LogService.warn("Skipped malformed JSONL line in \(filePath)", category: "ConversationParser")
                 continue
             }
-            processLine(json, index: &messageIndex, into: &result)
+            processLine(json, lineData: lineData, into: &result)
         }
         if case let .line(tailData) = framing.tail,
            let json = try? JSONSerialization.jsonObject(with: tailData) as? [String: Any] {
-            processLine(json, index: &messageIndex, into: &result)
+            processLine(json, lineData: tailData, into: &result)
         }
 
         return result
     }
 
-    private static func processLine(_ json: [String: Any], index: inout Int, into result: inout ParseResult) {
+    private static func processLine(_ json: [String: Any], lineData: Data, into result: inout ParseResult) {
+        // 行级稳定 id:消息行的 uuid 优先;meta/summary 行没有 uuid,退到内容
+        // 哈希。同一行重复解析得到同一 id,跨增量块的 id 也不会再撞。
+        let lineID = (json["uuid"] as? String) ?? JSONLFramer.stableLineID(lineData)
+
         if isInterruptLine(json) {
             result.interrupted = true
             return
@@ -122,9 +125,8 @@ enum ConversationParser: ConversationParserProtocol {
             }
         }
 
-        if let message = parseMessage(json, index: index) {
+        if let message = parseMessage(json, lineID: lineID) {
             result.messages.append(message)
-            index += 1
         }
     }
 
@@ -138,24 +140,24 @@ enum ConversationParser: ConversationParserProtocol {
         return NSString(string: "~/.claude/projects/\(encoded)").expandingTildeInPath
     }
 
-    private static func parseMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let type = json["type"] as? String else { return nil }
         switch type {
-        case "user": return parseUserMessage(json, index: index)
-        case "assistant": return parseAssistantMessage(json, index: index)
-        case "tool_result": return parseToolResult(json, index: index)
+        case "user": return parseUserMessage(json, lineID: lineID)
+        case "assistant": return parseAssistantMessage(json, lineID: lineID)
+        case "tool_result": return parseToolResult(json, lineID: lineID)
         default: return nil
         }
     }
 
-    private static func parseUserMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseUserMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
         guard !text.isEmpty else { return nil }
-        return ChatMessage(id: "user-\(index)", role: .user, content: text, timestamp: parseTimestamp(json) ?? Date())
+        return ChatMessage(id: "user-\(lineID)", role: .user, content: text, timestamp: parseTimestamp(json) ?? Date())
     }
 
-    private static func parseAssistantMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseAssistantMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
 
@@ -169,7 +171,7 @@ enum ConversationParser: ConversationParserProtocol {
                         encoding: .utf8
                     ) }
                     return ChatMessage(
-                        id: "tool-\(index)",
+                        id: "tool-\(lineID)",
                         role: .tool,
                         content: text.isEmpty ? "Using \(toolName)" : text,
                         toolName: toolName,
@@ -182,14 +184,14 @@ enum ConversationParser: ConversationParserProtocol {
 
         guard !text.isEmpty else { return nil }
         return ChatMessage(
-            id: "assistant-\(index)",
+            id: "assistant-\(lineID)",
             role: .assistant,
             content: text,
             timestamp: parseTimestamp(json) ?? Date()
         )
     }
 
-    private static func parseToolResult(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseToolResult(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let content = message["content"]
         var text = ""
@@ -203,7 +205,7 @@ enum ConversationParser: ConversationParserProtocol {
         }
         guard !text.isEmpty else { return nil }
         return ChatMessage(
-            id: "result-\(index)",
+            id: "result-\(lineID)",
             role: .toolResult,
             content: String(text.prefix(500)),
             toolName: message["tool_use_id"] as? String,

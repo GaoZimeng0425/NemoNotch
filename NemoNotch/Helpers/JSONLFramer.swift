@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// JSONL 增量读取的分帧器。
@@ -33,6 +34,14 @@ enum JSONLFramer {
 
     /// 单条 JSONL 的防御上限:超过它仍解析不出的尾巴按永久垃圾放弃。
     static let defaultMaxTailBytes = 8 << 20
+
+    /// 内容寻址的稳定行 id:同一行字节重复解析得到同一 id。与行内自带的
+    /// uuid/id 二选一,作为 ChatMessage.id 的来源——取代按"本块内序号"编 id
+    /// (跨增量块会重复,ForEach 遇重复 id 是未定义行为,也无法靠 id 去重)。
+    static func stableLineID(_ lineData: Data) -> String {
+        let digest = SHA256.hash(data: lineData)
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
 
     static func frame(_ data: Data, maxTailBytes: Int = defaultMaxTailBytes) -> Framing {
         let newline = UInt8(ascii: "\n")
