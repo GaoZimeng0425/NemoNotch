@@ -43,27 +43,45 @@ final class InterruptWatcher: @unchecked Sendable {
         guard currentSize > lastOffset else { return }
 
         try? handle.seek(toOffset: lastOffset)
-        guard let data = try? handle.readToEnd(), let text = String(data: data, encoding: .utf8) else {
-            lastOffset = currentSize
+        guard let data = try? handle.readToEnd(), !data.isEmpty else { return }
+
+        let framing = JSONLFramer.frame(data)
+        // 只推进已消费的字节:半行留在原地,写方补完后下次从头完整解析。原先
+        // 无条件推进到 currentSize,恰逢半写的行(中断/清除标记所在行)会被
+        // 永久漏检;读取失败时推进还会直接丢掉这段数据。
+        lastOffset += UInt64(framing.consumedByteCount)
+
+        if case let .surrendered(tail) = framing.tail {
+            LogService.error(
+                "Surrendered unparseable \(tail.count)-byte tail in \(filePath)",
+                category: "InterruptWatcher"
+            )
+        }
+
+        for lineData in framing.lines {
+            processLine(lineData)
+        }
+        if case let .line(tailData) = framing.tail {
+            processLine(tailData)
+        }
+    }
+
+    private func processLine(_ lineData: Data) {
+        guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+            LogService.warn("Skipped malformed JSONL line in \(filePath)", category: "InterruptWatcher")
             return
         }
-        lastOffset = currentSize
 
-        for line in text.components(separatedBy: "\n") {
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
-
-            if isInterruptLine(json) {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.onInterrupt?(self.sessionId)
-                }
+        if isInterruptLine(json) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.onInterrupt?(self.sessionId)
             }
-            if isClearLine(json) {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.onClear?(self.sessionId)
-                }
+        }
+        if isClearLine(json) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.onClear?(self.sessionId)
             }
         }
     }

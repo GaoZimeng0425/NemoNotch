@@ -65,51 +65,67 @@ enum ConversationParser: ConversationParserProtocol {
         }
 
         guard let data = try? fileHandle.readToEnd() else { return result }
-        guard let text = String(data: data, encoding: .utf8) else { return result }
 
-        result.newOffset = fromOffset + UInt64(data.count)
+        let framing = JSONLFramer.frame(data)
+        result.newOffset = fromOffset + UInt64(framing.consumedByteCount)
+
+        if case let .surrendered(tail) = framing.tail {
+            LogService.error(
+                "Surrendered unparseable \(tail.count)-byte tail in \(filePath)",
+                category: "ConversationParser"
+            )
+        }
 
         var messageIndex = 0
-        for line in text.components(separatedBy: "\n") {
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
-
-            if isInterruptLine(json) {
-                result.interrupted = true
+        for lineData in framing.lines {
+            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                LogService.warn("Skipped malformed JSONL line in \(filePath)", category: "ConversationParser")
                 continue
             }
-
-            if isClearLine(json) {
-                result.cleared = true
-                result.messages = []
-                continue
-            }
-
-            if json["type"] as? String == "assistant",
-               let message = json["message"] as? [String: Any] {
-                if let usage = message["usage"] as? [String: Any] {
-                    let input = usage["input_tokens"] as? Int ?? 0
-                    let output = usage["output_tokens"] as? Int ?? 0
-                    let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
-                    let cacheCreation = usage["cache_creation_input_tokens"] as? Int ?? 0
-                    result.inputTokens += input
-                    result.outputTokens += output
-                    result.cacheReadTokens += cacheRead
-                    result.cacheCreationTokens += cacheCreation
-                    result.lastContextTokens = input + cacheRead + cacheCreation
-                }
-                if let model = message["model"] as? String {
-                    result.lastModel = model
-                }
-            }
-
-            if let message = parseMessage(json, index: messageIndex) {
-                result.messages.append(message)
-                messageIndex += 1
-            }
+            processLine(json, index: &messageIndex, into: &result)
+        }
+        if case let .line(tailData) = framing.tail,
+           let json = try? JSONSerialization.jsonObject(with: tailData) as? [String: Any] {
+            processLine(json, index: &messageIndex, into: &result)
         }
 
         return result
+    }
+
+    private static func processLine(_ json: [String: Any], index: inout Int, into result: inout ParseResult) {
+        if isInterruptLine(json) {
+            result.interrupted = true
+            return
+        }
+
+        if isClearLine(json) {
+            result.cleared = true
+            result.messages = []
+            return
+        }
+
+        if json["type"] as? String == "assistant",
+           let message = json["message"] as? [String: Any] {
+            if let usage = message["usage"] as? [String: Any] {
+                let input = usage["input_tokens"] as? Int ?? 0
+                let output = usage["output_tokens"] as? Int ?? 0
+                let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
+                let cacheCreation = usage["cache_creation_input_tokens"] as? Int ?? 0
+                result.inputTokens += input
+                result.outputTokens += output
+                result.cacheReadTokens += cacheRead
+                result.cacheCreationTokens += cacheCreation
+                result.lastContextTokens = input + cacheRead + cacheCreation
+            }
+            if let model = message["model"] as? String {
+                result.lastModel = model
+            }
+        }
+
+        if let message = parseMessage(json, index: index) {
+            result.messages.append(message)
+            index += 1
+        }
     }
 
     // MARK: - Private
