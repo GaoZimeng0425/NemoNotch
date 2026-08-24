@@ -12,6 +12,8 @@ final class GeminiProvider: AIProvider {
     private var timeoutTimer: Timer?
     private var sessionFiles: [String: String] = [:]
     private weak var hookServer: HookServer?
+    /// 每会话串行解析链(见 parseConversation);随会话回收清理。
+    private var parseChains: [String: Task<Void, Never>] = [:]
 
     init(store: AISessionStore) {
         self.store = store
@@ -130,6 +132,7 @@ final class GeminiProvider: AIProvider {
             watcherManager.stopWatching(sessionId: sessionId)
             agentWatcherManager.stopAll(sessionId: sessionId)
             sessionFiles.removeValue(forKey: sessionId)
+            parseChains.removeValue(forKey: sessionId)
             store.remove(sessionId)
 
         default:
@@ -177,16 +180,36 @@ final class GeminiProvider: AIProvider {
     // MARK: - Startup Scan
 
     func scanExistingSessions() {
+        // 与 ClaudeProvider 相同:扫描 + 解析在后台线程,store/watcher 写入回
+        // 主线程;应用前重查 contains,迟到的扫描不覆盖 hook 事件创建的会话。
+        Task { [weak self] in
+            let discovered = await Task.detached(priority: .userInitiated) {
+                Self.scanDiskSessions()
+            }.value
+
+            guard let self, !discovered.isEmpty else { return }
+            for item in discovered where !store.contains(item.session.id) {
+                sessionFiles[item.session.id] = item.filePath
+                store.upsert(item.session)
+                watcherManager.startWatching(sessionId: item.session.id, cwd: item.cwd)
+            }
+            LogService.info("Gemini: discovered \(discovered.count) existing session(s)", category: "GeminiProvider")
+            scheduleTimeoutCleanup()
+        }
+    }
+
+    /// 纯磁盘扫描 + 解析,不触碰任何 actor 隔离状态,可运行在任意线程。
+    private nonisolated static func scanDiskSessions() -> [(session: AISessionState, cwd: String, filePath: String)] {
         let projectsPath = NSHomeDirectory() + "/.gemini/projects.json"
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: projectsPath)),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let projects = json["projects"] as? [String: String] else {
-            return
+            return []
         }
 
         let fm = FileManager.default
         let threshold = Date().addingTimeInterval(-3600)
-        var discovered = 0
+        var found: [(session: AISessionState, cwd: String, filePath: String)] = []
 
         for (cwd, projectName) in projects {
             let chatsDir = NSHomeDirectory() + "/.gemini/tmp/\(projectName)/chats"
@@ -204,9 +227,9 @@ final class GeminiProvider: AIProvider {
                     if let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)),
                        let firstLineData = try? handle.read(upToCount: 1024),
                        let firstLine = String(data: firstLineData, encoding: .utf8)?.components(separatedBy: "\n")
-                       .first,
+                           .first,
                        let firstJson = try? JSONSerialization
-                       .jsonObject(with: firstLine.data(using: .utf8) ?? Data()) as? [String: Any] {
+                           .jsonObject(with: firstLine.data(using: .utf8) ?? Data()) as? [String: Any] {
                         sessionId = firstJson["sessionId"] as? String
                         try? handle.close()
                     }
@@ -217,28 +240,23 @@ final class GeminiProvider: AIProvider {
                     sessionId = sessionJson["sessionId"] as? String
                 }
 
-                guard let sid = sessionId, !store.contains(sid) else { continue }
+                guard let sid = sessionId else { continue }
 
                 var state = AISessionState(sessionId: sid, source: .gemini)
                 state.cwd = cwd
                 state.lastEventTime = modDate
-                sessionFiles[sid] = filePath
 
                 applyParsedContent(to: &state, filePath: filePath)
-                state.phase = .idle // Resurrected sessions start idle — phase will be promoted by future hook events.
-                store.upsert(state)
-                watcherManager.startWatching(sessionId: sid, cwd: cwd)
-                discovered += 1
+                // Resurrected sessions start idle — phase will be promoted by future hook events.
+                state.phase = .idle
+                found.append((state, cwd, filePath))
             }
         }
 
-        if discovered > 0 {
-            LogService.info("Gemini: discovered \(discovered) existing session(s)", category: "GeminiProvider")
-            scheduleTimeoutCleanup()
-        }
+        return found
     }
 
-    private func applyParsedContent(to session: inout AISessionState, filePath: String) {
+    private nonisolated static func applyParsedContent(to session: inout AISessionState, filePath: String) {
         if filePath.hasSuffix(".jsonl") {
             let res = GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: 0)
             for msg in res.common.messages {
@@ -312,12 +330,18 @@ final class GeminiProvider: AIProvider {
               let cwd = session.cwd,
               let filePath = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
-        Task {
-            // offset 在 Task 内捕获(与 ClaudeProvider 同理,消除背靠背事件的
-            // 重复解析竞态);应用时取 max,旧结果晚到不会把 offset 拨回去。
-            let offset = self.store.get(sessionId)?.lastParsedOffset ?? 0
+        // 与 ClaudeProvider 相同的每会话串行链:解析在后台线程 await 期间
+        // MainActor 任务会交错,链式等待保持"同一区段不被重复解析"的不变量。
+        let previous = parseChains[sessionId]
+        let task = Task { [weak self] in
+            await previous?.value
+            guard let self, self.store.contains(sessionId),
+                  let current = self.store.get(sessionId) else { return }
+            let offset = current.lastParsedOffset
             if filePath.hasSuffix(".jsonl") {
-                let result = GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: offset)
+                let result = await Task.detached(priority: .userInitiated) {
+                    GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: offset)
+                }.value
                 guard self.store.contains(sessionId) else { return }
                 self.store.mutate(sessionId) { session in
                     if result.cleared { session.messages = [] }
@@ -342,8 +366,10 @@ final class GeminiProvider: AIProvider {
                 }
             } else {
                 // Legacy .json - always parse full
-                guard let result = GeminiConversationParser.parseDetailed(filePath: filePath) else { return }
-                guard self.store.contains(sessionId) else { return }
+                let parsed = await Task.detached(priority: .userInitiated) {
+                    GeminiConversationParser.parseDetailed(filePath: filePath)
+                }.value
+                guard let result = parsed, self.store.contains(sessionId) else { return }
                 self.store.mutate(sessionId) { session in
                     session.messages = result.common.messages
                     session.inputTokens = result.common.inputTokens
@@ -355,6 +381,7 @@ final class GeminiProvider: AIProvider {
                 }
             }
         }
+        parseChains[sessionId] = task
     }
 
     // MARK: - Timeout
@@ -396,6 +423,7 @@ final class GeminiProvider: AIProvider {
             watcherManager.stopWatching(sessionId: session.id)
             agentWatcherManager.stopAll(sessionId: session.id)
             sessionFiles.removeValue(forKey: session.id)
+            parseChains.removeValue(forKey: session.id)
             store.remove(session.id)
             LogService.info("Removed stale session \(session.id.prefix(8))", category: "GeminiProvider")
         }
