@@ -244,7 +244,10 @@ final class NotchCoordinator {
     /// finishes. Bails if the notch reopened on the same screen meanwhile.
     private func scheduleBlockingTeardown(slot: NotchWindowSlot, displayID: UInt32) {
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(NotchConstants.openSpringDuration))
+            // 等待的是"关闭"动画的淡出:时长必须对应 closeSpringDuration(此处
+            // 之前误用 openSpringDuration,今天不漏点击纯属 0.314 > 0.236 的巧合,
+            // 调大关闭时长后点击就会穿透到刘海后面的 app)。
+            try? await Task.sleep(for: .seconds(NotchConstants.closeSpringDuration))
             guard let self else { return }
             guard !(status == .opened && activeScreen?.displayID == displayID) else { return }
             slot.passThrough.isBlocking = false

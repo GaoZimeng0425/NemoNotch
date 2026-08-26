@@ -27,8 +27,10 @@ DMG_NAME="$DMG_NAME-$ARCH"
 
 # Version from the latest release tag globally (v0.5.4 -> 0.5.4) so local DMGs
 # carry a real version instead of pbxproj's dev placeholder; build number =
-# commit count. Falls back to 0.0.0 when the repo has no tag yet.
-VERSION="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 | sed 's/^v//')"
+# commit count. Falls back to 0.0.0 when the repo has no tag yet. The `|| true`
+# is load-bearing: with pipefail an empty grep exits 1 and would kill the
+# script before the fallback on the next line could run.
+VERSION="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 | sed 's/^v//' || true)"
 VERSION="${VERSION:-0.0.0}"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 echo "==> Version: $VERSION (build $BUILD_NUMBER)"
