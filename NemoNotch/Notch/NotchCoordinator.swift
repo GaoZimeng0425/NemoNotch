@@ -287,9 +287,13 @@ final class NotchCoordinator {
         notchSize = Self.resolveUnifiedNotchSize()
         rebuildSlots()
         // If the active screen disappeared mid-session, gracefully collapse.
+        // 必须走完整的 notchClose 清理(卸载 ESC 监听、取消热键定时器、reset
+        // dismissState、hover 状态)——原先直接置 .closed 会把 ESC 本地监听留在
+        // 系统里,而它吞键发生在 status 检查之前,此后整个 app 的 ESC 失效直到
+        // 下一次完整开合;残留的热键定时器还会意外激活打开前的 app。屏幕已消失
+        // 无从交还焦点,suppressAppRestore 直接丢弃 previousApp。
         if let active = activeScreen, slots[active.displayID] == nil {
-            activeScreen = nil
-            status = .closed
+            notchClose(suppressAppRestore: true)
         }
     }
 

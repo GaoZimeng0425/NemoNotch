@@ -412,15 +412,29 @@ final class OpenClawService {
         }
     }
 
+    /// 网关下发的标识最终会被拼进登录 shell 命令串(approveSelf/removeDeviceSelf
+    /// 需要用户 rc 文件里的 PATH,无法改成 argv 直传),只放行保守 ASCII 字符集:
+    /// 恶意/被攻破的网关无法借 requestId/deviceId 夹带 shell 元字符,携带注入
+    /// 载荷的审批卡在解析入口就被丢弃(整卡不渲染)。
+    nonisolated static func isSafeGatewayID(_ value: String) -> Bool {
+        !value.isEmpty
+            && value.count <= 128
+            && value.allSatisfy { c in
+                (c.isASCII && (c.isLetter || c.isNumber)) || c == "-" || c == "_"
+            }
+    }
+
     /// Parse the gateway's structured auth-failure payload. We only surface a
     /// pending-approval card when the gateway explicitly says `NOT_PAIRED` so
     /// the user has actionable next steps; other auth failures stay generic.
-    private static func parsePendingApproval(from raw: Any?) -> PendingApprovalInfo? {
+    nonisolated static func parsePendingApproval(from raw: Any?) -> PendingApprovalInfo? {
         guard let error = raw as? [String: Any],
               (error["code"] as? String) == "NOT_PAIRED",
               let details = error["details"] as? [String: Any],
               let requestId = details["requestId"] as? String,
-              let deviceId = details["deviceId"] as? String
+              let deviceId = details["deviceId"] as? String,
+              isSafeGatewayID(requestId),
+              isSafeGatewayID(deviceId)
         else { return nil }
         return PendingApprovalInfo(
             deviceId: deviceId,
@@ -678,6 +692,12 @@ final class OpenClawService {
     func removeDeviceSelf() {
         guard !deviceId.isEmpty else {
             LogService.warn("No deviceId, skipping remove", category: "OpenClaw")
+            return
+        }
+        // deviceId 平时来自本地身份文件,但它在配置被换掉时同样会进入 shell
+        // 命令串——与 requestId 同一道字符集闸门。
+        guard Self.isSafeGatewayID(deviceId) else {
+            LogService.warn("Refusing devices remove: device id failed charset check", category: "OpenClaw")
             return
         }
         guard !isRemovingDevice else { return }
