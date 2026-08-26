@@ -66,7 +66,8 @@ final class WeatherService: NSObject, CLLocationManagerDelegate, LifecycleAware 
 
     func requestLocationAccess() {
         LogService.info("Location permission requested by user", category: "Permission")
-        locationManager.requestAlwaysAuthorization()
+        // 天气只需要"使用期间"的定位;Always 授权对用户更吓人且此处用不上。
+        locationManager.requestWhenInUseAuthorization()
     }
 
     func openLocationSettings() {
