@@ -89,6 +89,9 @@ enum HermesHookInstaller {
         URL_BASE="http://127.0.0.1:\(port)"
         curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || { printf '{}\\n'; exit 0; }
 
+        # Shared auth token: the server rejects /hook POSTs without it.
+        TOKEN=$(cat "$HOME/.NemoNotch/hook-token" 2>/dev/null || echo "")
+
         INPUT=$(cat 2>/dev/null || echo '{}')
 
         if command -v python3 &>/dev/null; then
@@ -103,7 +106,7 @@ enum HermesHookInstaller {
         " 2>/dev/null || echo "$INPUT")
         fi
 
-        curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+        curl -s -X POST -H "Content-Type: application/json" -H "X-NemoNotch-Token: $TOKEN" -d "$INPUT" \\
             "$URL_BASE/hook" --connect-timeout 1 --max-time 2 >/dev/null 2>&1 || true
         printf '{}\\n'
         exit 0
@@ -172,11 +175,18 @@ enum HermesHookInstaller {
             lines.append(contentsOf: ourLines)
         }
 
-        // Update or add hooks_auto_accept
+        // Update or add hooks_auto_accept, anchored with a marker comment so
+        // uninstall only removes OUR line — never a value the user set
+        // themselves.
+        let autoAcceptMarker = "# hooks_auto_accept: managed by NemoNotch"
         if let idx = lines
             .firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("hooks_auto_accept:") }) {
             lines[idx] = "hooks_auto_accept: true"
+            if idx == 0 || lines[idx - 1].trimmingCharacters(in: .whitespaces) != autoAcceptMarker {
+                lines.insert(autoAcceptMarker, at: idx)
+            }
         } else {
+            lines.append(autoAcceptMarker)
             lines.append("hooks_auto_accept: true")
         }
 
@@ -217,8 +227,16 @@ enum HermesHookInstaller {
             cleaned.append(line)
         }
 
-        // Remove hooks_auto_accept if it was set by us
-        cleaned.removeAll { $0.trimmingCharacters(in: .whitespaces) == "hooks_auto_accept: true" }
+        // Remove hooks_auto_accept only when OUR marker sits above it — a
+        // user-set value must survive our uninstall.
+        let autoAcceptMarker = "# hooks_auto_accept: managed by NemoNotch"
+        if let m = cleaned.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == autoAcceptMarker }) {
+            if cleaned[safe: m + 1]?.trimmingCharacters(in: .whitespaces) == "hooks_auto_accept: true" {
+                cleaned.removeSubrange(m...m + 1)
+            } else {
+                cleaned.remove(at: m)
+            }
+        }
 
         // Remove "hooks:" if it's now empty
         if let hooksIdx = cleaned.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "hooks:" }) {
