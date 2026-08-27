@@ -82,7 +82,7 @@ enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
 
-    private static let scriptVersion = "# version: 15"
+    private static let scriptVersion = "# version: 16"
 
     /// The command string for `target`. Claude/Gemini run hooks through a shell
     /// so `~` expands; zcode's `type:"process"` runs `spawn(command, args)` with
@@ -283,6 +283,9 @@ enum HookInstaller {
         URL_BASE="http://127.0.0.1:\(port)"
         curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || exit 0
 
+        # Shared auth token: the server rejects /hook POSTs without it (v16).
+        TOKEN=$(cat "$HOME/.NemoNotch/hook-token" 2>/dev/null || echo "")
+
         # Detect which CLI invoked this hook
         if [ -n "$GEMINI_SESSION_ID" ]; then
             CLI_SOURCE="gemini"
@@ -337,7 +340,7 @@ enum HookInstaller {
             # Blocking: hold the connection until NemoNotch returns a decision (up to 120s).
             # Run curl in background so the script can clean it up if Claude Code kills us.
             TMPFILE=$(mktemp /tmp/nemonotch-hook.XXXXXX)
-            curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+            curl -s -X POST -H "Content-Type: application/json" -H "X-NemoNotch-Token: $TOKEN" -d "$INPUT" \\
                 "$URL_BASE/hook" --connect-timeout 2 --max-time 120 >"$TMPFILE" 2>/dev/null &
             CURL_PID=$!
             trap 'kill $CURL_PID 2>/dev/null; rm -f "$TMPFILE"; exit 0' TERM HUP INT
@@ -347,7 +350,7 @@ enum HookInstaller {
             [ -n "$BODY" ] && echo "$BODY"
             exit 0
         else
-            curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+            curl -s -X POST -H "Content-Type: application/json" -H "X-NemoNotch-Token: $TOKEN" -d "$INPUT" \\
                 "$URL_BASE/hook" --connect-timeout 1 --max-time 2 >/dev/null 2>&1 || true
             exit 0
         fi

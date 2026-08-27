@@ -39,6 +39,12 @@ final class AICLIMonitorService {
         if claude.isHookInstalled || gemini.isHookInstalled || opencode.isHookInstalled || zcode.isHookInstalled {
             do {
                 try HookInstaller.ensureScriptExists()
+                // 令牌头是脚本模板的一部分:发送方必须与服务器同步刷新,否则
+                // 升级后的服务器会 401 拒掉旧脚本的事件。
+                if HermesHookInstaller.isInstalled {
+                    try? HermesHookInstaller.refreshScript()
+                }
+                try? OpencodePluginInstaller.refreshScript()
             } catch {
                 LogService.warn("Failed to refresh hook script: \(error)", category: "AICLIMonitorService")
             }
