@@ -106,6 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var usageQuotaService: UsageQuotaService?
     private(set) var quickStartController: QuickStartWindowController?
     private(set) var aiStatusController: AIStatusWindowController?
+    private(set) var lockScreenMonitor: LockScreenMonitor?
+    private(set) var lockScreenAIPanelController: LockScreenAIPanelController?
     private(set) var completionFlashService: CompletionFlashService?
     private(set) var completionFlashWindowController: CompletionFlashWindowController?
     private(set) var keepAwakeService: KeepAwakeService?
@@ -224,6 +226,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store: aiMonitor.store,
             appSettings: settings
         )
+        // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
+        // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
+        let lockMonitor = LockScreenMonitor()
+        lockScreenMonitor = lockMonitor
+        if !UITestMode.isActive {
+            lockScreenAIPanelController = LockScreenAIPanelController(
+                store: aiMonitor.store,
+                appSettings: settings,
+                monitor: lockMonitor
+            )
+        }
 
         let qsController = quickStartController
         let aiController = aiStatusController

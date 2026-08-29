@@ -131,6 +131,13 @@ struct SettingsView: View {
                     set: { appSettings.aiStatusFabEnabled = $0 }
                 ))
             }
+
+            Section("settings.lockscreen_ai.header") {
+                Toggle("settings.lockscreen_ai.enabled", isOn: Binding(
+                    get: { appSettings.lockScreenAIPanelEnabled },
+                    set: { appSettings.lockScreenAIPanelEnabled = $0 }
+                ))
+            }
         }
         .formStyle(.grouped)
         .padding()
