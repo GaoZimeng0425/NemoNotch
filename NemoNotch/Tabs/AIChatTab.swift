@@ -11,7 +11,6 @@ struct AIChatTab: View {
     @Environment(AppSettings.self) var appSettings
     @State private var selectedSessionId: String?
     @State private var showContextDetail = false
-    @State private var heroBreathe = false
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
 
@@ -117,6 +116,10 @@ struct AIChatTab: View {
     }
 
     private var consoleSummary: String {
+        if allSessions.isEmpty {
+            return String(localized: hasAnyReadyProvider ? "ai.empty.subtitle_ready" : "ai.empty.subtitle_setup")
+        }
+
         let sourceParts = hasMixedSources ? [
             claudeCount > 0 ? "Claude \(claudeCount)" : nil,
             geminiCount > 0 ? "Gemini \(geminiCount)" : nil,
@@ -146,9 +149,9 @@ struct AIChatTab: View {
     }
 
     var body: some View {
-        if allSessions.isEmpty {
-            emptyConsole
-        } else if let sessionId = selectedSessionId, let session = sessionById(sessionId) {
+        if let sessionId = selectedSessionId,
+           let session = sessionById(sessionId),
+           allSessions.contains(where: { $0.id == sessionId }) {
             chatDetail(session: session)
         } else {
             sessionList
@@ -157,47 +160,21 @@ struct AIChatTab: View {
 
     // MARK: - Empty state
 
-    private var emptyConsole: some View {
-        VStack(spacing: 16) {
-            emptyHero
+    /// No-session content rendered inside the list's scroll area (the console
+    /// header above stays mounted either way): the provider install/enable
+    /// cards plus a run hint. The server status is not repeated here — the
+    /// header's context card already shows it while there are no sessions.
+    private var setupList: some View {
+        VStack(spacing: 12) {
             providerStatusList
-            emptyFooter
+            if hasAnyReadyProvider {
+                Text("ai.empty.run_hint")
+                    .font(.system(size: 10))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .multilineTextAlignment(.center)
+            }
         }
-        .frame(maxWidth: 360)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 12)
-    }
-
-    private var emptyHero: some View {
-        VStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [NotchTheme.accent, NotchTheme.accentHot],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 48, height: 48)
-                .overlay {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .opacity(heroBreathe ? 0.55 : 1.0)
-                }
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                        heroBreathe = true
-                    }
-                }
-            Text(hasAnyReadyProvider ? "ai.empty.title_ready" : "ai.empty.title_setup")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(NotchTheme.textPrimary)
-            Text(hasAnyReadyProvider ? "ai.empty.subtitle_ready" : "ai.empty.subtitle_setup")
-                .font(.system(size: 12))
-                .foregroundStyle(NotchTheme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
+        .padding(.bottom, 10)
     }
 
     private var providerStatusList: some View {
@@ -286,18 +263,6 @@ struct AIChatTab: View {
         .padding(.vertical, 9)
     }
 
-    private var emptyFooter: some View {
-        VStack(spacing: 6) {
-            if hasAnyReadyProvider {
-                Text("ai.empty.run_hint")
-                    .font(.system(size: 10))
-                    .foregroundStyle(NotchTheme.textTertiary)
-                    .multilineTextAlignment(.center)
-            }
-            serverStatus
-        }
-    }
-
     private var serverStatus: some View {
         HStack(spacing: 6) {
             Circle()
@@ -314,13 +279,17 @@ struct AIChatTab: View {
         VStack(spacing: 12) {
             aiConsoleHeader
 
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(allSessions) { session in
-                        sessionRow(session)
+            ScrollView(.vertical, showsIndicators: false) {
+                if allSessions.isEmpty {
+                    setupList
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(allSessions) { session in
+                            sessionRow(session)
+                        }
                     }
+                    .padding(.bottom, 10)
                 }
-                .padding(.bottom, 10)
             }
             .notchScrollEdgeShadow(.vertical, thickness: 16, intensity: 0.30)
         }
