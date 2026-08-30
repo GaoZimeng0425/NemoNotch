@@ -32,26 +32,44 @@ struct CalendarEvent: Identifiable {
     var isPast: Bool { endDate < Date() }
 
     var meetingURL: URL? {
-        if let url { return url }
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
-        let fields = [location, notes].compactMap { $0 }
-        for field in fields {
-            let range = NSRange(field.startIndex..., in: field)
-            if let match = detector.firstMatch(in: field, range: range),
-               let url = match.url
-            {
-                return url
-            }
+        // Collect every link we can see — the event's URL field, then every
+        // link in location and notes in text order — and let the best-known
+        // meeting platform win. A Meet link buried mid-notes should beat a
+        // doc link that merely appears first; ties keep the earlier source.
+        var candidates: [URL] = []
+        if let url { candidates.append(url) }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return candidates.first
         }
-        return nil
+        for field in [location, notes].compactMap({ $0 }) {
+            let range = NSRange(field.startIndex..., in: field)
+            candidates.append(contentsOf: detector.matches(in: field, range: range).compactMap(\.url))
+        }
+        return candidates.min { Self.platformRank($0) < Self.platformRank($1) }
     }
 
-    var meetingPlatform: MeetingPlatform {
-        guard let host = meetingURL?.host?.lowercased() else { return .generic }
+    /// Lower wins. macOS EventKit can't see Google's conferenceData (the
+    /// "Join Meet" button data), so text links are all we ever get — rank
+    /// the platforms we recognize and let real meeting links beat generic URLs.
+    static func platformRank(_ url: URL) -> Int {
+        switch platform(for: url) {
+        case .googleMeet: 0
+        case .zoom: 1
+        case .teams: 2
+        case .generic: 3
+        }
+    }
+
+    static func platform(for url: URL) -> MeetingPlatform {
+        guard let host = url.host?.lowercased() else { return .generic }
         if host.contains("meet.google.com") { return .googleMeet }
         if host.contains("zoom.us") { return .zoom }
         if host.contains("teams.microsoft.com") { return .teams }
         return .generic
+    }
+
+    var meetingPlatform: MeetingPlatform {
+        meetingURL.map(Self.platform(for:)) ?? .generic
     }
 }
 
