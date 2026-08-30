@@ -99,6 +99,14 @@ struct LockScreenAIPanelView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let items = LockScreenAIPanelModel.makeItems(from: store.sortedSessions, now: context.date)
             card(items: items, now: context.date)
+                // Bottom-align inside the fixed canvas: the card's bottom edge
+                // stays pinned just above the password field and new rows
+                // push the card upward, never downward into the input box.
+                .frame(
+                    width: LockScreenAIPanelWindow.canvasSize.width,
+                    height: LockScreenAIPanelWindow.canvasSize.height,
+                    alignment: .bottom
+                )
         }
     }
 
@@ -124,7 +132,7 @@ struct LockScreenAIPanelView: View {
         .frame(width: 312, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(NotchTheme.panelBase)
+                .fill(Color.black.opacity(0.9))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)

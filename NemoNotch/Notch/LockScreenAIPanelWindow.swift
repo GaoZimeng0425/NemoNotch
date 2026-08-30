@@ -42,13 +42,18 @@ final class LockScreenAIPanelWindow: NSWindow {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Card hangs downward from the screen's vertical midpoint — the region
-    /// macOS leaves empty between the big clock (top) and the widget column
-    /// (bottom) on the lock screen.
+    /// Card bottom sits this far above the screen's bottom edge — just clear
+    /// of the lock-screen password field. The card is bottom-aligned in the
+    /// canvas, so the bottom edge stays pinned here and the card grows upward
+    /// as session rows appear.
+    static let bottomInset: CGFloat = 230
+
+    /// The card bottom floats just above the lock-screen password input box;
+    /// rows grow upward from there. One adjustment knob for placement.
     static func frame(for screen: NSScreen) -> NSRect {
         let screenFrame = screen.frame
         let originX = screenFrame.midX - canvasSize.width / 2
-        let originY = screenFrame.midY - canvasSize.height
+        let originY = screenFrame.minY + bottomInset
         return NSRect(origin: CGPoint(x: originX, y: originY), size: canvasSize)
     }
 }
