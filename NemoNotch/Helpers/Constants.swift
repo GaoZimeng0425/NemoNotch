@@ -42,11 +42,18 @@ enum NotchConstants {
     static let badgeSpringBounce: Double = 0.08
     static let tabSwitchSpringDuration: Double = 0.28
     static let tabSwitchSpringBounce: Double = 0.06
-    /// Horizontal offset the entering tab page slides in from. Deliberately
-    /// small: `.move(edge:)` enters from the container's edge, i.e. a ~800pt
-    /// dash in 0.28s, which reads as the page flying in. A short nudge carries
-    /// the same directional cue without the lurch.
-    static let tabSlideOffset: CGFloat = 26
+    /// NotchNook-style tab switch, enter-only: the outgoing page is replaced
+    /// outright with no animation (`removal: .identity`); the incoming page
+    /// materializes out of the notch — scaled down toward its top edge,
+    /// lifted, transparent — and grows into place over
+    /// `tabSwitchEnterDuration`, while its blur clears on the deliberately
+    /// slower `tabSwitchBlurClearDuration` (the page arrives first, then
+    /// sharpens).
+    static let tabSwitchEnterDuration: Double = 0.16
+    static let tabSwitchBlurClearDuration: Double = 0.35
+    static let tabSwitchEnterScale: CGFloat = 0.93
+    static let tabSwitchEnterOffset: CGFloat = 22
+    static let tabSwitchBlurRadius: CGFloat = 10
     static let fadeFastDuration: Double = 0.16
     static let fadeNormalDuration: Double = 0.24
     static let pulseDuration: Double = 1.05
@@ -55,10 +62,9 @@ enum NotchConstants {
     /// before auto-collapsing. Cancelled the moment the mouse enters content.
     static let hotkeyAutoCloseDelay: TimeInterval = 3.0
 
-    /// Hover guards (anti-flicker, Atoll-style)
-    /// Dwell time the cursor must stay in the closed-notch hitbox before a
-    /// hover-open fires; a swipe-through never opens. Clicks open immediately.
-    static let hoverOpenDelay: TimeInterval = 0.30
+    /// Hover guards
+    /// Hover opens the notch the instant the cursor enters the closed-notch
+    /// hitbox — no dwell (a swipe-through opens too; that is accepted).
     /// Grace after the cursor leaves the opened content before closing, so a
     /// clipped corner or jittery exit doesn't collapse the panel.
     static let hoverCloseGrace: TimeInterval = 0.10
@@ -66,27 +72,6 @@ enum NotchConstants {
     /// click still can). Prevents an instant reopen when the cursor is still
     /// parked on the notch after an ESC / click-outside close.
     static let hoverReopenSuppression: TimeInterval = 0.35
-    /// Closed-shape "peek" growth while the cursor dwells on the notch — the
-    /// pre-open affordance shown during `hoverOpenDelay`. Grows 4pt on each of
-    /// three sides (left, right, down) so the notch swells evenly outward
-    /// rather than dropping a tongue.
-    ///
-    /// Note the two are expressed differently: the shape is top-anchored, so
-    /// the width is a TOTAL split half per side (8 → 4pt each) while the height
-    /// is all downward (4 → 4pt). Atoll uses 8/8 (`ContentView.swift:924-925`),
-    /// which yields 4pt sideways but 8pt down; matching all three sides reads
-    /// more evenly here.
-    ///
-    /// These only read correctly because the collapsed shape now spans the
-    /// physical cutout exactly (the old `closedWidthInset` is gone — see
-    /// `NotchView.collapsedBadges`). While the shape was inset 4pt *narrower*
-    /// than the cutout, the first 4pt of any widening was swallowed by the
-    /// hardware hole and the remainder emerged as a 2-3pt antialiased sliver —
-    /// a translucent hairline, and out of step with the height, which had no
-    /// such dead zone.
-    static let closedHoverExtraWidth: CGFloat = 8
-    static let closedHoverExtraHeight: CGFloat = 4
-    static let hoverPeekSpringDuration: Double = 0.16
 
     /// Close animation
     static let closeContentFadeDuration: Double = 0.1
