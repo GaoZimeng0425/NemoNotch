@@ -72,8 +72,8 @@ struct NotchChinBar: View {
             EmptyView()
         } else {
             let sideWidth = (openedWidth - notchWidth) / 2
-            let spacing: CGFloat = 2
-            let capsuleHeight: CGFloat = 24
+            let spacing: CGFloat = 6
+            let capsuleHeight: CGFloat = 26
             let capsuleWidth = idealCapsuleWidth(
                 sideWidth: sideWidth,
                 count: tabs.count,
@@ -112,17 +112,19 @@ struct NotchChinBar: View {
             }
         } label: {
             Image(systemName: tab.icon)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .rounded))
+                .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium, design: .rounded))
                 .symbolEffect(.bounce.down, value: bounceTriggers[tab, default: 0])
-                .foregroundStyle(isSelected ? NotchTheme.accent : NotchTheme.textSecondary)
+                .foregroundStyle(isSelected ? NotchTheme.textPrimary : NotchTheme.textSecondary)
                 .frame(width: width, height: height)
                 .background(alignment: .center) {
                     // Sliding selection capsule: only the selected tab's capsule
                     // is visible and acts as the matched-geometry source, so
-                    // it glides between tabs on selection change.
+                    // it glides between tabs on selection change. The accent
+                    // tint + matching glow make the selection read as "lit".
                     if isSelected {
                         Capsule(style: .continuous)
-                            .fill(NotchTheme.surfaceEmphasis)
+                            .fill(NotchTheme.accent.opacity(0.22))
+                            .shadow(color: NotchTheme.accent.opacity(0.35), radius: 8)
                             .matchedGeometryEffect(id: "tabSelection", in: capsuleAnimation)
                     } else if isHovered {
                         Capsule(style: .continuous)
@@ -141,7 +143,7 @@ struct NotchChinBar: View {
 
     @ViewBuilder
     private var rightColumn: some View {
-        let capsuleHeight: CGFloat = 24
+        let capsuleHeight: CGFloat = 26
         let capsuleWidth: CGFloat = 30
 
         HStack(spacing: 2) {
