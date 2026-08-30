@@ -124,7 +124,7 @@ struct LockScreenAIPanelView: View {
         .frame(width: 312, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.62))
+                .fill(NotchTheme.panelBase)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
