@@ -35,6 +35,10 @@ struct NotchChinBar: View {
 
     private enum ActionKey: String { case settings, quit }
 
+    /// Selection/hover background corner radius — deliberately squarer than a
+    /// capsule so the tabs don't read as pills.
+    private static let capsuleCornerRadius: CGFloat = 7
+
     /// Breathing room between the shell's outer edge and the first/last button.
     private static let chinEdgePadding: CGFloat = 10
 
@@ -117,21 +121,21 @@ struct NotchChinBar: View {
                 .foregroundStyle(isSelected ? NotchTheme.textPrimary : NotchTheme.textSecondary)
                 .frame(width: width, height: height)
                 .background(alignment: .center) {
-                    // Sliding selection capsule: only the selected tab's capsule
+                    // Sliding selection capsule: only the selected tab's shape
                     // is visible and acts as the matched-geometry source, so
                     // it glides between tabs on selection change. The accent
                     // tint + matching glow make the selection read as "lit".
                     if isSelected {
-                        Capsule(style: .continuous)
+                        RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous)
                             .fill(NotchTheme.accent.opacity(0.22))
                             .shadow(color: NotchTheme.accent.opacity(0.35), radius: 8)
                             .matchedGeometryEffect(id: "tabSelection", in: capsuleAnimation)
                     } else if isHovered {
-                        Capsule(style: .continuous)
+                        RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous)
                             .fill(NotchTheme.surface)
                     }
                 }
-                .contentShape(Capsule(style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous))
         }
         .buttonStyle(NotchChinButtonStyle())
         .onHover { hovering in
@@ -178,11 +182,11 @@ struct NotchChinBar: View {
             .frame(width: width, height: height)
             .background(alignment: .center) {
                 if isHovered {
-                    Capsule(style: .continuous)
+                    RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous)
                         .fill(NotchTheme.surface)
                 }
             }
-            .contentShape(Capsule(style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous))
     }
 }
 

@@ -3,7 +3,6 @@ import SwiftUI
 enum Tab: String, CaseIterable, Identifiable {
     case overview
     case claude
-    case agents
     case launcher
     case pomodoro
     case system
@@ -16,7 +15,6 @@ enum Tab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "rectangle.3.group"
         case .claude: "sparkles"
-        case .agents: "brain"
         case .launcher: "square.grid.2x2"
         case .pomodoro: "timer"
         case .system: "gearshape.2"
@@ -27,7 +25,6 @@ enum Tab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "models.tab.overview"
         case .claude: "models.tab.ai"
-        case .agents: "models.tab.agents"
         case .launcher: "models.tab.launcher"
         case .pomodoro: "models.tab.pomodoro"
         case .system: "models.tab.system"
@@ -35,11 +32,11 @@ enum Tab: String, CaseIterable, Identifiable {
     }
 
     /// Which side of the chin bar this tab renders on. Most tabs sit on the
-    /// left; pomodoro joins settings/quit on the right so it reads as a
-    /// personal-tool cluster rather than a content tab.
+    /// left; pomodoro and system join settings/quit on the right so they read
+    /// as a personal-tool cluster rather than content tabs.
     var chinPlacement: ChinPlacement {
         switch self {
-        case .pomodoro: .right
+        case .pomodoro, .system: .right
         default: .left
         }
     }

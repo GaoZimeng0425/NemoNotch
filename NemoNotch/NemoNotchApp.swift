@@ -271,7 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let session = aiMonitorService?.activeSession, session.status == .working {
                 return .claude
             }
-            if agentRegistry?.hasAnyActiveAgent == true { return .agents }
+            if agentRegistry?.hasAnyActiveAgent == true { return .claude }
             if mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }

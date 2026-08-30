@@ -171,7 +171,7 @@ final class AppSettings {
 
         // Migrate old "openclaw" → "agents" tab rename
         let rawTabs = UserDefaults.standard.stringArray(forKey: "enabledTabs")?
-            .map { $0 == "openclaw" ? Tab.agents.rawValue : $0 }
+            .map { $0 == "openclaw" || $0 == "agents" ? Tab.claude.rawValue : $0 }
         let storedTabs = rawTabs?.compactMap { Tab(rawValue: $0) }
         var tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
         if storedTabs != nil { tabs.insert(.overview) }

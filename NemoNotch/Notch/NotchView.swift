@@ -370,9 +370,7 @@ struct NotchView: View {
         case .overview:
             OverviewTab()
         case .claude:
-            AIChatTab()
-        case .agents:
-            AgentMonitorTab()
+            AIAgentTabRoot()
         case .launcher:
             LauncherTab {
                 coordinator.notchClose()
