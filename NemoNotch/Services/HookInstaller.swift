@@ -66,11 +66,23 @@ enum HookTarget {
     }
 }
 
+enum HookInstallerError: LocalizedError {
+    /// 已存在的 CLI 配置文件解析失败:拒绝在其上继续安装写入。
+    case existingSettingsUnreadable(path: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .existingSettingsUnreadable(path):
+            return "Existing \(path) could not be parsed as JSON; refusing to overwrite it"
+        }
+    }
+}
+
 enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
 
-    private static let scriptVersion = "# version: 15"
+    private static let scriptVersion = "# version: 16"
 
     /// The command string for `target`. Claude/Gemini run hooks through a shell
     /// so `~` expands; zcode's `type:"process"` runs `spawn(command, args)` with
@@ -219,8 +231,14 @@ enum HookInstaller {
     static func install(_ target: HookTarget) throws {
         try ensureScriptExists()
         var settings: [String: Any] = [:]
-        if let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        if FileManager.default.fileExists(atPath: target.settingsPath) {
+            // 既有配置必须先成功解析才能继续:解析失败(半写损坏、手写语法错)
+            // 时继续安装会以"仅含我们 hooks 的空配置"整体覆盖,用户其余全部
+            // 设置被静默清空。拒绝写入并抛错,先让用户修好该文件。
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.settingsPath)),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw HookInstallerError.existingSettingsUnreadable(path: target.settingsPath)
+            }
             settings = json
         }
         settings = applyInstall(settings, target: target, command: hookCommand(for: target))
@@ -264,6 +282,9 @@ enum HookInstaller {
         # Bails instantly when the desktop server isn't running, so the CLI never blocks waiting for nc.
         URL_BASE="http://127.0.0.1:\(port)"
         curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || exit 0
+
+        # Shared auth token: the server rejects /hook POSTs without it (v16).
+        TOKEN=$(cat "$HOME/.NemoNotch/hook-token" 2>/dev/null || echo "")
 
         # Detect which CLI invoked this hook
         if [ -n "$GEMINI_SESSION_ID" ]; then
@@ -319,7 +340,7 @@ enum HookInstaller {
             # Blocking: hold the connection until NemoNotch returns a decision (up to 120s).
             # Run curl in background so the script can clean it up if Claude Code kills us.
             TMPFILE=$(mktemp /tmp/nemonotch-hook.XXXXXX)
-            curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+            curl -s -X POST -H "Content-Type: application/json" -H "X-NemoNotch-Token: $TOKEN" -d "$INPUT" \\
                 "$URL_BASE/hook" --connect-timeout 2 --max-time 120 >"$TMPFILE" 2>/dev/null &
             CURL_PID=$!
             trap 'kill $CURL_PID 2>/dev/null; rm -f "$TMPFILE"; exit 0' TERM HUP INT
@@ -329,7 +350,7 @@ enum HookInstaller {
             [ -n "$BODY" ] && echo "$BODY"
             exit 0
         else
-            curl -s -X POST -H "Content-Type: application/json" -d "$INPUT" \\
+            curl -s -X POST -H "Content-Type: application/json" -H "X-NemoNotch-Token: $TOKEN" -d "$INPUT" \\
                 "$URL_BASE/hook" --connect-timeout 1 --max-time 2 >/dev/null 2>&1 || true
             exit 0
         fi
@@ -352,6 +373,13 @@ enum HookInstaller {
             withJSONObject: settings,
             options: [.prettyPrinted, .sortedKeys]
         )
-        try data.write(to: URL(fileURLWithPath: target.settingsPath))
+        // 覆盖前留备份 + 原子写:进程在写入中途崩溃/断电不会留下截断的半个
+        // JSON;即使写出的内容有误,用户也能从 .bak 找回其余配置。
+        if FileManager.default.fileExists(atPath: target.settingsPath) {
+            let backupPath = target.settingsPath + ".nemonotch.bak"
+            try? FileManager.default.removeItem(atPath: backupPath)
+            try? FileManager.default.copyItem(atPath: target.settingsPath, toPath: backupPath)
+        }
+        try data.write(to: URL(fileURLWithPath: target.settingsPath), options: .atomic)
     }
 }

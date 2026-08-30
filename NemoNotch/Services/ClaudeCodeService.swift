@@ -11,6 +11,9 @@ final class ClaudeProvider: AIProvider {
     private let agentWatcherManager = AgentFileWatcherManager()
     private var timeoutTimer: Timer?
     private weak var hookServer: HookServer?
+    /// 每会话串行解析链:见 parseConversation 的说明。随会话回收(SessionEnd /
+    /// stale 超时)清理,防止按会话 id 无界增长。
+    private var parseChains: [String: Task<Void, Never>] = [:]
 
     init(store: AISessionStore) {
         self.store = store
@@ -31,12 +34,32 @@ final class ClaudeProvider: AIProvider {
     // MARK: - Startup Scan
 
     func scanExistingSessions() {
+        let store = self.store
+        // 启动扫描的全部文件 I/O 与解析(1 小时内的会话动辄数 MB)挪到后台,
+        // store 写入回到主线程;应用前重查 contains,迟到的扫描不会覆盖期间
+        // 由 hook 事件创建的活跃会话。
+        Task { [weak self] in
+            let discovered = await Task.detached(priority: .userInitiated) {
+                Self.scanDiskSessions()
+            }.value
+
+            guard let self, !discovered.isEmpty else { return }
+            for session in discovered where !store.contains(session.id) {
+                store.upsert(session)
+            }
+            LogService.info("Claude: discovered \(discovered.count) existing session(s)", category: "ClaudeProvider")
+            scheduleTimeoutCleanup()
+        }
+    }
+
+    /// 纯磁盘扫描 + 解析,不触碰任何 actor 隔离状态,可运行在任意线程。
+    private nonisolated static func scanDiskSessions() -> [AISessionState] {
         let fm = FileManager.default
         let projectsDir = NSString(string: "~/.claude/projects").expandingTildeInPath
-        guard let projectDirs = try? fm.contentsOfDirectory(atPath: projectsDir) else { return }
+        guard let projectDirs = try? fm.contentsOfDirectory(atPath: projectsDir) else { return [] }
 
         let threshold = Date().addingTimeInterval(-3600)
-        var discovered = 0
+        var found: [AISessionState] = []
 
         for dir in projectDirs {
             let fullDir = "\(projectsDir)/\(dir)"
@@ -51,7 +74,6 @@ final class ClaudeProvider: AIProvider {
                       modDate > threshold else { continue }
 
                 let sessionId = String(file.dropLast(5)) // remove ".jsonl"
-                if store.contains(sessionId) { continue }
 
                 var session = AISessionState(sessionId: sessionId, source: .claude)
                 session.lastEventTime = modDate
@@ -63,8 +85,8 @@ final class ClaudeProvider: AIProvider {
                 let result = ConversationParser.parseFullResult(filePath: filePath)
                 session.messages = result.messages
                 // Record how far we've already read. Without this the first hook
-                // event re-parses the whole JSONL from offset 0 on the MainActor
-                // (up to several MB) and duplicate-appends every message. See the
+                // event re-parses the whole JSONL from offset 0 (up to several
+                // MB) and duplicate-appends every message. See the
                 // freeze-investigation: the post-"Allow" stall walked this path.
                 session.lastParsedOffset = result.newOffset
                 session.inputTokens = result.inputTokens
@@ -79,15 +101,11 @@ final class ClaudeProvider: AIProvider {
                 if let last = userMessages.last { session.lastUserMessage = String(last.content.prefix(80)) }
 
                 session.phase = .idle
-                store.upsert(session)
-                discovered += 1
+                found.append(session)
             }
         }
 
-        if discovered > 0 {
-            LogService.info("Claude: discovered \(discovered) existing session(s)", category: "ClaudeProvider")
-            scheduleTimeoutCleanup()
-        }
+        return found
     }
 
     func installHooks() {
@@ -217,6 +235,7 @@ final class ClaudeProvider: AIProvider {
             hookServer?.cancelPendingPermissions(sessionId: sessionId)
             watcherManager.stopWatching(sessionId: sessionId)
             agentWatcherManager.stopAll(sessionId: sessionId)
+            parseChains.removeValue(forKey: sessionId)
             store.remove(sessionId)
 
         default:
@@ -280,10 +299,18 @@ final class ClaudeProvider: AIProvider {
         LogService.info("Interrupt detected for session \(sessionId.prefix(8))", category: "ClaudeProvider")
     }
 
-    private func handleClear(sessionId: String) {
+    func handleClear(sessionId: String) {
         guard store.contains(sessionId) else { return }
         store.mutate(sessionId) { session in
             session.messages = []
+            // clear = 从头重建:offset 归零会重放整个文件,token 计数必须同步
+            // 归零,否则历史 usage 会被再次累加(显示翻倍)。
+            session.inputTokens = 0
+            session.outputTokens = 0
+            session.thoughtTokens = 0
+            session.cacheReadTokens = 0
+            session.cacheCreationTokens = 0
+            session.lastContextTokens = 0
             session.lastParsedOffset = 0
             session.phase = session.phase.transition(to: .idle)
         }
@@ -297,15 +324,26 @@ final class ClaudeProvider: AIProvider {
               let cwd = session.cwd,
               let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
 
-        let offset = session.lastParsedOffset
-        Task {
-            let result = ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
+        // 解析挪到后台线程后,await 挂起期间 MainActor 上的任务会相互交错,
+        // 单纯"Task 内捕获 offset"不再能防止两个在飞任务捕获相同 offset
+        // (H06 竞态复活)。按会话串行链:等前一个任务应用完毕后再捕获。
+        let previous = parseChains[sessionId]
+        let task = Task { [weak self] in
+            await previous?.value
+            guard let self, self.store.contains(sessionId),
+                  let current = self.store.get(sessionId) else { return }
+            let offset = current.lastParsedOffset
+            let result = await Task.detached(priority: .userInitiated) {
+                ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
+            }.value
 
             guard self.store.contains(sessionId) else { return }
             self.store.mutate(sessionId) { session in
                 if result.cleared { session.messages = [] }
-                session.messages.append(contentsOf: result.messages)
-                session.lastParsedOffset = result.newOffset
+                for message in result.messages {
+                    session.upsertMessage(message)
+                }
+                session.lastParsedOffset = max(session.lastParsedOffset, result.newOffset)
                 session.inputTokens += result.inputTokens
                 session.outputTokens += result.outputTokens
                 session.cacheReadTokens += result.cacheReadTokens
@@ -326,6 +364,7 @@ final class ClaudeProvider: AIProvider {
                 self.handleInterrupt(sessionId: sessionId)
             }
         }
+        parseChains[sessionId] = task
     }
 
     // MARK: - Subagent File Updates
@@ -378,6 +417,7 @@ final class ClaudeProvider: AIProvider {
 
         for session in store.sessions(for: .claude) where session.lastEventTime < removeCutoff {
             watcherManager.stopWatching(sessionId: session.id)
+            parseChains.removeValue(forKey: session.id)
             store.remove(session.id)
             LogService.info("Removed stale session \(session.id.prefix(8))", category: "ClaudeProvider")
         }

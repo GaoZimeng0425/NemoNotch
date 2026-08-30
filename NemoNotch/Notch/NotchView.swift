@@ -52,9 +52,14 @@ struct NotchView: View {
 
     @State private var badgeViewModel: BadgeViewModel?
     @State private var dragOffset: CGFloat = 0
-    /// Direction of the last tab change (set in `selectTab` before the switch)
-    /// so the slide transition enters from the side you're heading toward.
-    @State private var tabSlideForward = true
+    /// The page currently rendered — set from `coordinator.selectedTab`
+    /// through `syncTabDisplay`, which wraps the change in the enter
+    /// animation while the panel is open.
+    @State private var displayedTab: Tab = .overview
+    /// Blur flag, decoupled from the enter transition so the incoming page's
+    /// blur can clear on its own (longer) schedule: snaps on with the swap,
+    /// clears over `tabSwitchBlurClearDuration`.
+    @State private var tabBlurOn = false
 
     /// 折叠时是否仍挂载 `contentPanel`。
     ///
@@ -67,23 +72,6 @@ struct NotchView: View {
     /// 进出动画交给 `.transition`（见 body），SwiftUI 会等移除动画播完才真正
     /// 卸载，所以折叠观感与原先一致，也不需要手动延迟卸载。
     @State private var contentMounted = false
-
-    /// Cursor is dwelling on this screen's collapsed notch (the coordinator is
-    /// counting down to a hover-open). Grows the shape slightly as a "peek"
-    /// affordance during the dwell.
-    private var isClosedHovering: Bool {
-        effectiveStatus == .closed && coordinator.hoverScreenID == screen.displayID
-    }
-
-    /// Extra width/height (points) added to the closed shape during the
-    /// hover-peek dwell, so it swells left, right and down together.
-    private var closedPeekExtraWidth: CGFloat {
-        isClosedHovering ? NotchConstants.closedHoverExtraWidth : 0
-    }
-
-    private var closedPeekExtraHeight: CGFloat {
-        isClosedHovering ? NotchConstants.closedHoverExtraHeight : 0
-    }
 
     /// Live size of the collapsed badge row, measured every layout pass while
     /// closed. This is what makes a single always-mounted shape possible: the
@@ -99,11 +87,9 @@ struct NotchView: View {
     /// (before any measurement lands) and the empty-badge state still span the
     /// notch slot.
     private var closedNotchSize: CGSize {
-        let floorWidth = hardwareNotchSize.width + closedPeekExtraWidth
-        let floorHeight = hardwareNotchSize.height + closedPeekExtraHeight
-        return CGSize(
-            width: max(closedContentSize.width, floorWidth),
-            height: max(closedContentSize.height, floorHeight)
+        CGSize(
+            width: max(closedContentSize.width, hardwareNotchSize.width),
+            height: max(closedContentSize.height, hardwareNotchSize.height)
         )
     }
 
@@ -212,9 +198,13 @@ struct NotchView: View {
             initializeBadgeViewModel()
             // 首帧按当前状态直接就位，不要动画。
             contentMounted = effectiveStatus != .closed
+            displayedTab = coordinator.selectedTab
         }
         .onChange(of: effectiveStatus) { _, status in
             updateContentMount(for: status)
+        }
+        .onChange(of: coordinator.selectedTab) { _, newTab in
+            syncTabDisplay(to: newTab)
         }
         .onChange(of: badgeViewModel?.activeBadgeItems ?? []) { _, newTypes in
             badgeViewModel?.applyBadgeUpdate(newTypes: newTypes)
@@ -323,36 +313,31 @@ struct NotchView: View {
 
     private var swipeableContent: some View {
         let tabs = enabledTabs
-        let currentIndex = tabs.firstIndex(of: coordinator.selectedTab) ?? 0
+        let currentIndex = tabs.firstIndex(of: displayedTab) ?? 0
 
         return ZStack {
             Color.clear
                 .contentShape(Rectangle())
 
-            tabContent
+            // NotchNook-style enter-only tab switch: the outgoing page gets
+            // NO animation — the branch swap inside `withAnimation` replaces
+            // it outright (`removal: .identity`) — while the incoming page
+            // materializes out of the notch via `TabEnterTransition` (scaled
+            // down toward its top edge, lifted, transparent, growing into
+            // place). The blur is decoupled (`tabBlurOn`): it snaps on with
+            // the swap and clears over the longer
+            // `tabSwitchBlurClearDuration`, so the page arrives first and
+            // sharpens afterwards.
+            tabContent(for: displayedTab)
+                .transition(.asymmetric(
+                    insertion: .modifier(
+                        active: TabEnterTransition(active: true),
+                        identity: TabEnterTransition(active: false)
+                    ),
+                    removal: .identity
+                ))
+                .blur(radius: tabBlurOn ? NotchConstants.tabSwitchBlurRadius : 0)
         }
-        .id(coordinator.selectedTab)
-        // Direction-aware slide-in, plain fade-out. Only the entering page
-        // moves: a removal transition is captured at insertion time, so a
-        // direction-dependent removal always exits with the PREVIOUS switch's
-        // direction (visibly wrong on rapid back-and-forth switching). The
-        // insertion reads fresh state, so its motion alone carries the
-        // directional cue.
-        //
-        // The nudge is a short `.offset`, not `.move(edge:)`: the latter enters
-        // from the container's edge, so the page dashed ~800pt in 0.28s. The
-        // trade-off is that a small offset no longer separates the outgoing and
-        // incoming pages spatially, so they cross-fade in place — tune
-        // tabSlideOffset up if that reads as ghosting.
-        .transition(.asymmetric(
-            insertion: .offset(x: tabSlideForward ? NotchConstants.tabSlideOffset : -NotchConstants.tabSlideOffset)
-                .combined(with: .opacity),
-            removal: .opacity
-        ))
-        .animation(
-            .spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce),
-            value: coordinator.selectedTab
-        )
         .offset(x: dragOffset)
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -380,8 +365,8 @@ struct NotchView: View {
     }
 
     @ViewBuilder
-    private var tabContent: some View {
-        switch coordinator.selectedTab {
+    private func tabContent(for tab: Tab) -> some View {
+        switch tab {
         case .overview:
             OverviewTab()
         case .claude:
@@ -417,36 +402,23 @@ struct NotchView: View {
     private func collapsedBadges(shown: Bool) -> some View {
         // The middle-column spacer spans the physical cutout exactly. It used
         // to be inset 4pt narrower, which left the shape smaller than the hole
-        // it sits in — invisible at rest and for the first 4pt of any hover
-        // growth, so the peek only surfaced as an antialiased sliver. Coins sit
-        // outside this core; the shape widens to cover them when present.
+        // it sits in — invisible at rest. Coins sit outside this core; the
+        // shape widens to cover them when present.
         let notchCore = hardwareNotchSize.width
-        // Peek swells the row on three sides. Width is a total, so the row
-        // grows half of it per side and the coins ride outward with it; height
-        // is all downward (the row is top-anchored). Applied as real frame
-        // sizes, not `scaleEffect`: `NotchBackgroundView` ends in
-        // `.drawingGroup()`, and an ancestor `scaleEffect` would transform that
-        // already-rasterized layer instead of redrawing it at its true size.
-        let peekWidth = notchCore + closedPeekExtraWidth
-        let peekHeight = hardwareNotchSize.height + closedPeekExtraHeight
         return CompactBadgesView(
             cluster: badgeViewModel?.badgeCluster ?? BadgeCluster(groups: [], overflow: 0),
             shownHasActiveBadge: shown,
-            notchMinWidth: peekWidth,
-            notchCoreWidth: peekWidth,
+            notchMinWidth: notchCore,
+            notchCoreWidth: notchCore,
             onBadgeTap: handleBadgeTap,
             notificationService: notificationService,
             mediaService: mediaService,
             pomodoroService: pomodoroService
         )
-        .frame(height: peekHeight)
+        .frame(height: hardwareNotchSize.height)
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
             value: shown
-        )
-        .animation(
-            .spring(duration: NotchConstants.hoverPeekSpringDuration, bounce: 0.25),
-            value: isClosedHovering
         )
         // Feed the measured size to the shape. Assigned WITHOUT `withAnimation`
         // on purpose: this fires every layout pass, so during the badge/peek
@@ -491,12 +463,35 @@ struct NotchView: View {
 
     private func selectTab(_ tab: Tab) {
         guard tab != coordinator.selectedTab else { return }
-        let tabs = enabledTabs
-        if let from = tabs.firstIndex(of: coordinator.selectedTab),
-           let to = tabs.firstIndex(of: tab) {
-            tabSlideForward = to > from
-        }
         coordinator.selectedTab = tab
+    }
+
+    /// Every tab change funnels through `coordinator.selectedTab`, so this
+    /// observer covers chin-bar clicks, the swipe gesture, per-tab hotkeys
+    /// and `notchOpen(tab:)` alike. While the panel is open, the swap lands
+    /// immediately inside the enter animation — the old page is replaced
+    /// outright, nothing of it is kept. The blur snaps on with the swap and
+    /// the one-frame task commits that on-state before clearing it over the
+    /// slower `tabSwitchBlurClearDuration`. Otherwise (collapsed / not yet
+    /// mounted) the rendered page snaps invisibly.
+    private func syncTabDisplay(to tab: Tab) {
+        guard tab != displayedTab else { return }
+        guard contentMounted, effectiveStatus == .opened else {
+            displayedTab = tab
+            return
+        }
+        withAnimation(.spring(duration: NotchConstants.tabSwitchEnterDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+            displayedTab = tab
+        }
+        tabBlurOn = true
+        Task { @MainActor in
+            // One frame so the blurred first frame is committed before the
+            // clear starts animating from it.
+            try? await Task.sleep(for: .seconds(1.0 / 60.0))
+            withAnimation(.easeOut(duration: NotchConstants.tabSwitchBlurClearDuration)) {
+                tabBlurOn = false
+            }
+        }
     }
 
     /// Opens the Settings window and closes the notch without the 0.1s delay
@@ -509,5 +504,20 @@ struct NotchView: View {
     private func openSettings() {
         openSettingsAction()
         coordinator.notchClose(suppressAppRestore: true)
+    }
+}
+
+/// NotchNook-style entering tab page: materializes out of the notch — scaled
+/// down toward its top edge, lifted, transparent — and grows into place. The
+/// outgoing page is not animated at all; the branch swap replaces it
+/// outright (`removal: .identity`). The enter blur is owned by `tabBlurOn`.
+private struct TabEnterTransition: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active ? NotchConstants.tabSwitchEnterScale : 1, anchor: .top)
+            .offset(y: active ? -NotchConstants.tabSwitchEnterOffset : 0)
+            .opacity(active ? 0 : 1)
     }
 }

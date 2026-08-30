@@ -93,6 +93,7 @@ final class AppSettings {
     static let completionFlashEnabledKey = "completionFlashEnabled"
     static let aiStatusFabEnabledKey = "aiStatusFabEnabled"
     static let aiStatusFabPositionKey = "aiStatusFabPosition"
+    static let lockScreenAIPanelEnabledKey = "lockScreenAIPanelEnabled"
 
     var claudeEnabled: Bool {
         didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
@@ -124,6 +125,12 @@ final class AppSettings {
 
     var aiStatusFabEnabled: Bool {
         didSet { UserDefaults.standard.set(aiStatusFabEnabled, forKey: Self.aiStatusFabEnabledKey) }
+    }
+
+    // MARK: - Lock screen AI panel
+
+    var lockScreenAIPanelEnabled: Bool {
+        didSet { UserDefaults.standard.set(lockScreenAIPanelEnabled, forKey: Self.lockScreenAIPanelEnabledKey) }
     }
 
     // MARK: - Keep awake (合盖不休眠)
@@ -213,6 +220,8 @@ final class AppSettings {
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
         aiStatusFabEnabled = UserDefaults.standard
             .object(forKey: Self.aiStatusFabEnabledKey) as? Bool ?? true
+        lockScreenAIPanelEnabled = UserDefaults.standard
+            .object(forKey: Self.lockScreenAIPanelEnabledKey) as? Bool ?? true
         keepAwakeLidDisplayOff = UserDefaults.standard
             .object(forKey: Self.keepAwakeLidDisplayOffKey) as? Bool ?? true
         keepAwakeRestoreOnQuit = UserDefaults.standard

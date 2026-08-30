@@ -22,6 +22,7 @@ final class NowPlayingCLI: @unchecked Sendable {
     private var daemonProcess: Process?
     private var daemonStdin: FileHandle?
     private var daemonStdout: FileHandle?
+    private var daemonStderr: FileHandle?
     private var responseBuffer = Data()
     private var pendingCompletion: (([String: Any]?) -> Void)?
     private var timeoutItem: DispatchWorkItem?
@@ -112,6 +113,18 @@ final class NowPlayingCLI: @unchecked Sendable {
         daemonProcess = process
         daemonStdin = stdinPipe.fileHandleForWriting
         daemonStdout = stdoutPipe.fileHandleForReading
+        daemonStderr = stderrPipe.fileHandleForReading
+
+        // stderr 必须有人读:管道缓冲(约 64KB)写满后 daemon 会阻塞在 write,
+        // stdin/stdout 协议随之停摆,表现为周期性 4s 超时 + 重启循环。
+        daemonStderr?.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            LogService.debug(
+                "daemon stderr: \(String(data: data, encoding: .utf8) ?? "<\(data.count) bytes>")",
+                category: "NowPlayingCLI"
+            )
+        }
 
         daemonStdout?.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -127,12 +140,14 @@ final class NowPlayingCLI: @unchecked Sendable {
 
     private func stopDaemon() {
         daemonStdout?.readabilityHandler = nil
+        daemonStderr?.readabilityHandler = nil
         if let p = daemonProcess, p.isRunning {
             p.terminate()
         }
         daemonProcess = nil
         daemonStdin = nil
         daemonStdout = nil
+        daemonStderr = nil
         responseBuffer = Data()
         pendingCompletion = nil
         timeoutItem?.cancel()
@@ -199,8 +214,12 @@ final class NowPlayingCLI: @unchecked Sendable {
     private func handleDaemonTimeout() {
         LogService.error("daemon timed out after \(processTimeoutSeconds)s", category: "NowPlayingCLI")
         daemonStdout?.readabilityHandler = nil
-        restartDaemon()
+        // 必须在 restartDaemon() 之前放行 pending 的 completion:stopDaemon() 会
+        // 把 pendingCompletion 置 nil,之后再 finishPending 读到的就是 nil,该次
+        // 请求的回调被永久丢弃 —— MediaService 的 isUpdatingNowPlaying 只在回调
+        // 里复位,一次超时就会把整个媒体管道锁死到重启 app。
         finishPending(nil)
+        restartDaemon()
     }
 
     private func finishPending(_ result: [String: Any]?) {

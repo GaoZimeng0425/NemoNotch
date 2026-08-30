@@ -147,53 +147,73 @@ enum GeminiConversationParser: ConversationParserProtocol {
         }
 
         guard let data = try? fileHandle.readToEnd() else { return result }
-        guard let text = String(data: data, encoding: .utf8) else { return result }
 
-        result.newOffset = fromOffset + UInt64(data.count)
+        let framing = JSONLFramer.frame(data)
+        result.newOffset = fromOffset + UInt64(framing.consumedByteCount)
 
-        for line in text.components(separatedBy: "\n") {
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
+        if case let .surrendered(tail) = framing.tail {
+            LogService.error(
+                "Surrendered unparseable \(tail.count)-byte tail in \(filePath)",
+                category: "GeminiConversationParser"
+            )
+        }
 
-            // Detect clear/compact
-            if isClearLine(json) {
-                result.cleared = true
-                result.common.messages = []
+        for lineData in framing.lines {
+            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                LogService.warn("Skipped malformed JSONL line in \(filePath)", category: "GeminiConversationParser")
                 continue
             }
-
-            if let type = json["type"] as? String {
-                switch type {
-                case "user":
-                    if let msg = parseUserMessageLine(json) {
-                        mergeOrAppend(msg, into: &result.common.messages)
-                    }
-                case "gemini":
-                    // Parse thoughts first
-                    if let thoughts = json["thoughts"] as? [[String: Any]] {
-                        for (idx, thought) in thoughts.enumerated() {
-                            let content = thought["description"] as? String ?? thought["subject"] as? String ?? ""
-                            if !content.isEmpty {
-                                let tId = (json["id"] as? String ?? UUID().uuidString) + "-thought-\(idx)"
-                                let tMsg = ChatMessage(id: tId, role: .thought, content: content)
-                                mergeOrAppend(tMsg, into: &result.common.messages)
-                            }
-                        }
-                    }
-
-                    if let msg = parseGeminiMessageLine(json, result: &result) {
-                        mergeOrAppend(msg, into: &result.common.messages)
-                    }
-                case "info":
-                    if let msg = parseInfoMessageLine(json) {
-                        mergeOrAppend(msg, into: &result.common.messages)
-                    }
-                default: break
-                }
-            }
+            processLine(json, lineData: lineData, into: &result)
+        }
+        if case let .line(tailData) = framing.tail,
+           let json = try? JSONSerialization.jsonObject(with: tailData) as? [String: Any] {
+            processLine(json, lineData: tailData, into: &result)
         }
 
         return result
+    }
+
+    private static func processLine(_ json: [String: Any], lineData: Data, into result: inout IncrementalResult) {
+        // 行缺 id 时的兜底用内容哈希而不是随机 UUID:随机 id 让重复解析的同一行
+        // 被 mergeOrAppend 当成新消息追加,内容哈希保证重解析幂等。
+        let fallbackID = "h-" + JSONLFramer.stableLineID(lineData)
+
+        // Detect clear/compact
+        if isClearLine(json) {
+            result.cleared = true
+            result.common.messages = []
+            return
+        }
+
+        if let type = json["type"] as? String {
+            switch type {
+            case "user":
+                if let msg = parseUserMessageLine(json, fallbackID: fallbackID) {
+                    mergeOrAppend(msg, into: &result.common.messages)
+                }
+            case "gemini":
+                // Parse thoughts first
+                if let thoughts = json["thoughts"] as? [[String: Any]] {
+                    for (idx, thought) in thoughts.enumerated() {
+                        let content = thought["description"] as? String ?? thought["subject"] as? String ?? ""
+                        if !content.isEmpty {
+                            let tId = (json["id"] as? String ?? fallbackID) + "-thought-\(idx)"
+                            let tMsg = ChatMessage(id: tId, role: .thought, content: content)
+                            mergeOrAppend(tMsg, into: &result.common.messages)
+                        }
+                    }
+                }
+
+                if let msg = parseGeminiMessageLine(json, result: &result, fallbackID: fallbackID) {
+                    mergeOrAppend(msg, into: &result.common.messages)
+                }
+            case "info":
+                if let msg = parseInfoMessageLine(json, fallbackID: fallbackID) {
+                    mergeOrAppend(msg, into: &result.common.messages)
+                }
+            default: break
+            }
+        }
     }
 
     private static func mergeOrAppend(_ message: ChatMessage, into messages: inout [ChatMessage]) {
@@ -205,18 +225,18 @@ enum GeminiConversationParser: ConversationParserProtocol {
         }
     }
 
-    private static func parseUserMessageLine(_ json: [String: Any]) -> ChatMessage? {
+    private static func parseUserMessageLine(_ json: [String: Any], fallbackID: String) -> ChatMessage? {
         let content = extractTextFromLine(json)
         guard !content.isEmpty else { return nil }
         return ChatMessage(
-            id: json["id"] as? String ?? UUID().uuidString,
+            id: json["id"] as? String ?? fallbackID,
             role: .user,
             content: content,
             timestamp: parseTimestampFromLine(json) ?? Date()
         )
     }
 
-    private static func parseGeminiMessageLine(_ json: [String: Any], result: inout IncrementalResult) -> ChatMessage? {
+    private static func parseGeminiMessageLine(_ json: [String: Any], result: inout IncrementalResult, fallbackID: String) -> ChatMessage? {
         let content = extractTextFromLine(json)
 
         if let tokens = json["tokens"] as? [String: Any] {
@@ -239,9 +259,9 @@ enum GeminiConversationParser: ConversationParserProtocol {
 
         // Handle tool calls in JSONL
         if let toolCalls = json["toolCalls"] as? [[String: Any]] {
-            for tc in toolCalls {
+            for (toolIdx, tc) in toolCalls.enumerated() {
                 let toolName = tc["name"] as? String
-                let toolId = tc["id"] as? String ?? UUID().uuidString
+                let toolId = tc["id"] as? String ?? fallbackID + "-tool-\(toolIdx)"
 
                 // Extract tool input
                 let input = tc["input"].flatMap {
@@ -282,18 +302,18 @@ enum GeminiConversationParser: ConversationParserProtocol {
 
         guard !content.isEmpty else { return nil }
         return ChatMessage(
-            id: json["id"] as? String ?? UUID().uuidString,
+            id: json["id"] as? String ?? fallbackID,
             role: .assistant,
             content: content,
             timestamp: parseTimestampFromLine(json) ?? Date()
         )
     }
 
-    private static func parseInfoMessageLine(_ json: [String: Any]) -> ChatMessage? {
+    private static func parseInfoMessageLine(_ json: [String: Any], fallbackID: String) -> ChatMessage? {
         let content = extractTextFromLine(json)
         guard !content.isEmpty else { return nil }
         return ChatMessage(
-            id: json["id"] as? String ?? UUID().uuidString,
+            id: json["id"] as? String ?? fallbackID,
             role: .system,
             content: content,
             timestamp: parseTimestampFromLine(json) ?? Date()

@@ -65,51 +65,69 @@ enum ConversationParser: ConversationParserProtocol {
         }
 
         guard let data = try? fileHandle.readToEnd() else { return result }
-        guard let text = String(data: data, encoding: .utf8) else { return result }
 
-        result.newOffset = fromOffset + UInt64(data.count)
+        let framing = JSONLFramer.frame(data)
+        result.newOffset = fromOffset + UInt64(framing.consumedByteCount)
 
-        var messageIndex = 0
-        for line in text.components(separatedBy: "\n") {
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
+        if case let .surrendered(tail) = framing.tail {
+            LogService.error(
+                "Surrendered unparseable \(tail.count)-byte tail in \(filePath)",
+                category: "ConversationParser"
+            )
+        }
 
-            if isInterruptLine(json) {
-                result.interrupted = true
+        for lineData in framing.lines {
+            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                LogService.warn("Skipped malformed JSONL line in \(filePath)", category: "ConversationParser")
                 continue
             }
-
-            if isClearLine(json) {
-                result.cleared = true
-                result.messages = []
-                continue
-            }
-
-            if json["type"] as? String == "assistant",
-               let message = json["message"] as? [String: Any] {
-                if let usage = message["usage"] as? [String: Any] {
-                    let input = usage["input_tokens"] as? Int ?? 0
-                    let output = usage["output_tokens"] as? Int ?? 0
-                    let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
-                    let cacheCreation = usage["cache_creation_input_tokens"] as? Int ?? 0
-                    result.inputTokens += input
-                    result.outputTokens += output
-                    result.cacheReadTokens += cacheRead
-                    result.cacheCreationTokens += cacheCreation
-                    result.lastContextTokens = input + cacheRead + cacheCreation
-                }
-                if let model = message["model"] as? String {
-                    result.lastModel = model
-                }
-            }
-
-            if let message = parseMessage(json, index: messageIndex) {
-                result.messages.append(message)
-                messageIndex += 1
-            }
+            processLine(json, lineData: lineData, into: &result)
+        }
+        if case let .line(tailData) = framing.tail,
+           let json = try? JSONSerialization.jsonObject(with: tailData) as? [String: Any] {
+            processLine(json, lineData: tailData, into: &result)
         }
 
         return result
+    }
+
+    private static func processLine(_ json: [String: Any], lineData: Data, into result: inout ParseResult) {
+        // 行级稳定 id:消息行的 uuid 优先;meta/summary 行没有 uuid,退到内容
+        // 哈希。同一行重复解析得到同一 id,跨增量块的 id 也不会再撞。
+        let lineID = (json["uuid"] as? String) ?? JSONLFramer.stableLineID(lineData)
+
+        if isInterruptLine(json) {
+            result.interrupted = true
+            return
+        }
+
+        if isClearLine(json) {
+            result.cleared = true
+            result.messages = []
+            return
+        }
+
+        if json["type"] as? String == "assistant",
+           let message = json["message"] as? [String: Any] {
+            if let usage = message["usage"] as? [String: Any] {
+                let input = usage["input_tokens"] as? Int ?? 0
+                let output = usage["output_tokens"] as? Int ?? 0
+                let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
+                let cacheCreation = usage["cache_creation_input_tokens"] as? Int ?? 0
+                result.inputTokens += input
+                result.outputTokens += output
+                result.cacheReadTokens += cacheRead
+                result.cacheCreationTokens += cacheCreation
+                result.lastContextTokens = input + cacheRead + cacheCreation
+            }
+            if let model = message["model"] as? String {
+                result.lastModel = model
+            }
+        }
+
+        if let message = parseMessage(json, lineID: lineID) {
+            result.messages.append(message)
+        }
     }
 
     // MARK: - Private
@@ -122,24 +140,24 @@ enum ConversationParser: ConversationParserProtocol {
         return NSString(string: "~/.claude/projects/\(encoded)").expandingTildeInPath
     }
 
-    private static func parseMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let type = json["type"] as? String else { return nil }
         switch type {
-        case "user": return parseUserMessage(json, index: index)
-        case "assistant": return parseAssistantMessage(json, index: index)
-        case "tool_result": return parseToolResult(json, index: index)
+        case "user": return parseUserMessage(json, lineID: lineID)
+        case "assistant": return parseAssistantMessage(json, lineID: lineID)
+        case "tool_result": return parseToolResult(json, lineID: lineID)
         default: return nil
         }
     }
 
-    private static func parseUserMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseUserMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
         guard !text.isEmpty else { return nil }
-        return ChatMessage(id: "user-\(index)", role: .user, content: text, timestamp: parseTimestamp(json) ?? Date())
+        return ChatMessage(id: "user-\(lineID)", role: .user, content: text, timestamp: parseTimestamp(json) ?? Date())
     }
 
-    private static func parseAssistantMessage(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseAssistantMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
 
@@ -153,7 +171,7 @@ enum ConversationParser: ConversationParserProtocol {
                         encoding: .utf8
                     ) }
                     return ChatMessage(
-                        id: "tool-\(index)",
+                        id: "tool-\(lineID)",
                         role: .tool,
                         content: text.isEmpty ? "Using \(toolName)" : text,
                         toolName: toolName,
@@ -166,14 +184,14 @@ enum ConversationParser: ConversationParserProtocol {
 
         guard !text.isEmpty else { return nil }
         return ChatMessage(
-            id: "assistant-\(index)",
+            id: "assistant-\(lineID)",
             role: .assistant,
             content: text,
             timestamp: parseTimestamp(json) ?? Date()
         )
     }
 
-    private static func parseToolResult(_ json: [String: Any], index: Int) -> ChatMessage? {
+    private static func parseToolResult(_ json: [String: Any], lineID: String) -> ChatMessage? {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let content = message["content"]
         var text = ""
@@ -187,7 +205,7 @@ enum ConversationParser: ConversationParserProtocol {
         }
         guard !text.isEmpty else { return nil }
         return ChatMessage(
-            id: "result-\(index)",
+            id: "result-\(lineID)",
             role: .toolResult,
             content: String(text.prefix(500)),
             toolName: message["tool_use_id"] as? String,

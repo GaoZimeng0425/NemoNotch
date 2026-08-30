@@ -11,6 +11,7 @@
 		AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000042F9363C40037E18E /* KeyboardShortcuts */; };
 		AA0000082F9363C40037E18E /* MediaRemoteAdapter in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000072F9363C40037E18E /* MediaRemoteAdapter */; };
 		AA0000092F9363C40037E18E /* MediaRemoteAdapter in Embed Frameworks */ = {isa = PBXBuildFile; productRef = AA0000072F9363C40037E18E /* MediaRemoteAdapter */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		AA00000B2F9363C40037E18E /* SkyLightWindow in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D2F9363C40037E18E /* SkyLightWindow */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +71,7 @@
 				45192C792F95E3EC00C7BB09 /* CocoaLumberjackSwift in Frameworks */,
 				AA0000052F9363C40037E18E /* KeyboardShortcuts in Frameworks */,
 				AA0000082F9363C40037E18E /* MediaRemoteAdapter in Frameworks */,
+				AA00000B2F9363C40037E18E /* SkyLightWindow in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -180,6 +182,7 @@
 				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
 				AA0000032F9363C40037E18E /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				AA0000062F9363C40037E18E /* XCRemoteSwiftPackageReference "mediaremote-adapter" */,
+				AA00000C2F9363C40037E18E /* XCRemoteSwiftPackageReference "SkyLightWindow" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45DDDF812F9363C40037E18E /* Products */;
@@ -450,6 +453,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "NemoNotch 需要获取您的位置，用于在灵动岛中显示当地天气。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -504,6 +508,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "NemoNotch 需要获取您的位置，用于在灵动岛中显示当地天气。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -588,9 +593,22 @@
 				revision = cf30c4f1af29b5829d859f088f8dbdf12611a046;
 			};
 		};
+		AA00000C2F9363C40037E18E /* XCRemoteSwiftPackageReference "SkyLightWindow" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Lakr233/SkyLightWindow";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		AA00000D2F9363C40037E18E /* SkyLightWindow */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000C2F9363C40037E18E /* XCRemoteSwiftPackageReference "SkyLightWindow" */;
+			productName = SkyLightWindow;
+		};
 		AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;

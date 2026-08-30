@@ -41,7 +41,9 @@ fi
 
 # --- current version ---------------------------------------------------------
 
-latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+# The `|| true` is load-bearing: with pipefail an empty grep exits 1 and
+# would kill the script before the no-tag fallback below could run.
+latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
 if [ -z "$latest" ]; then
   latest="v0.0.0"
   echo "ℹ️  未找到现有版本 tag,从 $latest 起算。"
