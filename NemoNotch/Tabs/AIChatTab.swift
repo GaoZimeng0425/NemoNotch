@@ -9,8 +9,12 @@ enum ProviderCardKind: Equatable {
 struct AIChatTab: View {
     @Environment(AICLIMonitorService.self) var aiService
     @Environment(AppSettings.self) var appSettings
+    @Environment(AgentMonitorRegistry.self) var agentRegistry
+    @Environment(OpenClawService.self) var openClaw
+    @Environment(HermesService.self) var hermesService
     @State private var selectedSessionId: String?
     @State private var showContextDetail = false
+    @State private var expandedAgentId: String?
 
     private static let scrollAnchorID = "ai-chat-bottom-anchor"
 
@@ -23,6 +27,80 @@ struct AIChatTab: View {
             case .zcode: return appSettings.zcodeEnabled
             }
         }
+    }
+
+    // MARK: - Merged agent entries
+
+    /// One agent from an online monitor, bundled with everything its row
+    /// needs (source style + optional message log for expansion).
+    private struct AgentEntry {
+        let agent: MonitoredAgent
+        let style: AgentMonitorSourceStyle
+        let messages: [ChatMessage]?
+    }
+
+    /// Agents from online installed monitors — active and idle alike, exactly
+    /// like sessions — that merge into the unified console list.
+    private var agentEntries: [AgentEntry] {
+        agentRegistry.installedMonitors
+            .filter(\.isOnline)
+            .flatMap { monitor -> [AgentEntry] in
+                let style = AgentMonitorSourceStyle(
+                    displayName: monitor.displayName,
+                    iconEmoji: monitor.iconEmoji,
+                    iconAssetName: monitor.iconAssetName
+                )
+                return monitor.agents.values
+                    .sorted { $0.lastEventTime > $1.lastEventTime }
+                    .map { AgentEntry(agent: $0, style: style, messages: monitor.sessionMessages[$0.id]) }
+            }
+            .sorted { $0.agent.lastEventTime > $1.agent.lastEventTime }
+    }
+
+    /// Sessions and agents in one recency-sorted list — the merged console.
+    private enum ConsoleItem: Identifiable {
+        case session(AISessionState)
+        case agent(AgentEntry)
+
+        var id: String {
+            switch self {
+            case .session(let session): "s-\(session.id)"
+            case .agent(let entry): "a-\(entry.agent.id)"
+            }
+        }
+
+        var sortTime: Date {
+            switch self {
+            case .session(let session): session.lastEventTime
+            case .agent(let entry): entry.agent.lastEventTime
+            }
+        }
+    }
+
+    private var consoleItems: [ConsoleItem] {
+        (allSessions.map(ConsoleItem.session) + agentEntries.map(ConsoleItem.agent))
+            .sorted { $0.sortTime > $1.sortTime }
+    }
+
+    /// "OpenClaw 2" style summary parts for online monitors with non-idle agents.
+    private var agentSourceParts: [String] {
+        agentRegistry.installedMonitors
+            .filter { $0.isOnline && $0.agents.values.contains { $0.state != .idle } }
+            .map { monitor in
+                let label = AgentMonitorSourceStyle(
+                    displayName: monitor.displayName,
+                    iconEmoji: monitor.iconEmoji,
+                    iconAssetName: monitor.iconAssetName
+                ).label
+                let count = monitor.agents.values.count { $0.state != .idle }
+                return "\(label) \(count)"
+            }
+    }
+
+    private var agentWorkingCount: Int {
+        agentRegistry.installedMonitors
+            .flatMap(\.agents.values)
+            .count { $0.state == .working || $0.state == .toolCalling }
     }
 
     private var claudeKind: ProviderCardKind {
@@ -116,7 +194,8 @@ struct AIChatTab: View {
     }
 
     private var consoleSummary: String {
-        if allSessions.isEmpty {
+        let agentParts = agentSourceParts
+        if allSessions.isEmpty, agentParts.isEmpty {
             return String(localized: hasAnyReadyProvider ? "ai.empty.subtitle_ready" : "ai.empty.subtitle_setup")
         }
 
@@ -127,13 +206,14 @@ struct AIChatTab: View {
             zcodeCount > 0 ? "zcode \(zcodeCount)" : nil,
         ].compactMap(\.self) : []
 
+        let agentWorking = agentWorkingCount
         let activeParts = [
             waitingCount > 0 ? "\(waitingCount) waiting" : nil,
-            workingCount > 0 ? "\(workingCount) working" : nil,
-            idleCount > 0 && workingCount + waitingCount == 0 ? "\(idleCount) idle" : nil,
+            workingCount + agentWorking > 0 ? "\(workingCount + agentWorking) working" : nil,
+            idleCount > 0 && workingCount + waitingCount + agentWorking == 0 ? "\(idleCount) idle" : nil,
         ].compactMap(\.self)
 
-        let parts = sourceParts + activeParts
+        let parts = sourceParts + agentParts + activeParts
         if parts.isEmpty {
             return "\(allSessions.count) sessions"
         }
@@ -167,6 +247,7 @@ struct AIChatTab: View {
     private var setupList: some View {
         VStack(spacing: 12) {
             providerStatusList
+            agentSetupCards
             if hasAnyReadyProvider {
                 Text("ai.empty.run_hint")
                     .font(.system(size: 10))
@@ -175,6 +256,35 @@ struct AIChatTab: View {
             }
         }
         .padding(.bottom, 10)
+    }
+
+    /// Agent-monitor setup cards (Hermes / OpenClaw) shown only when neither
+    /// agent service is ready — the same "no nag" rule the standalone agents
+    /// tab used (`AgentMonitorRenderDecision`): enabled+installed services
+    /// show nothing here; their agents appear in the list once they run.
+    @ViewBuilder
+    private var agentSetupCards: some View {
+        let mode = AgentMonitorRenderDecision.decide(
+            hasOnlineMonitor: agentRegistry.installedMonitors.contains(where: \.isOnline),
+            openClawPendingApproval: openClaw.pendingApproval != nil,
+            openClawIsInstalled: openClaw.isInstalled,
+            openClawUserEnabled: appSettings.openClawEnabled,
+            hermesIsInstalled: hermesService.isHookInstalled,
+            hermesUserEnabled: appSettings.hermesEnabled
+        )
+        if case let .setupCards(hermes, openClawKind) = mode {
+            VStack(spacing: 10) {
+                HermesSetupCard(passive: hermes == .reenableCard)
+                switch openClawKind {
+                case .approvalCard:
+                    OpenClawApprovalCard()
+                case .installHintCard:
+                    OpenClawInstallHintCard()
+                case .reenableCard:
+                    OpenClawReenableCard()
+                }
+            }
+        }
     }
 
     private var providerStatusList: some View {
@@ -280,12 +390,20 @@ struct AIChatTab: View {
             aiConsoleHeader
 
             ScrollView(.vertical, showsIndicators: false) {
-                if allSessions.isEmpty {
+                if consoleItems.isEmpty && openClaw.pendingApproval == nil {
                     setupList
                 } else {
                     LazyVStack(spacing: 8) {
-                        ForEach(allSessions) { session in
-                            sessionRow(session)
+                        if openClaw.pendingApproval != nil {
+                            OpenClawApprovalBanner()
+                        }
+                        ForEach(consoleItems) { item in
+                            switch item {
+                            case .session(let session):
+                                sessionRow(session)
+                            case .agent(let entry):
+                                agentRow(entry)
+                            }
                         }
                     }
                     .padding(.bottom, 10)
@@ -294,6 +412,21 @@ struct AIChatTab: View {
             .notchScrollEdgeShadow(.vertical, thickness: 16, intensity: 0.30)
         }
         .padding(.horizontal, 2)
+    }
+
+    private func agentRow(_ entry: AgentEntry) -> some View {
+        AgentRowView(
+            agent: entry.agent,
+            sourceStyle: entry.style,
+            isExpanded: expandedAgentId == entry.agent.id,
+            messages: entry.messages
+        )
+        .onTapGesture {
+            guard entry.messages != nil else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                expandedAgentId = expandedAgentId == entry.agent.id ? nil : entry.agent.id
+            }
+        }
     }
 
     private var aiConsoleHeader: some View {
