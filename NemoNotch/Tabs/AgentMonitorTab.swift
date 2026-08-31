@@ -1,99 +1,8 @@
 import SwiftUI
 
-struct AgentMonitorTab: View {
-    @Environment(AgentMonitorRegistry.self) var registry
-    @Environment(OpenClawService.self) var openClaw
-    @Environment(HermesService.self) var hermesService
-    @Environment(AppSettings.self) var appSettings
-    @State private var expandedAgentId: String?
-
-    private var monitors: [any MultiAgentMonitor] {
-        registry.installedMonitors
-    }
-
-    var body: some View {
-        switch renderMode {
-        case .agentSections:
-            agentSections
-        case .offlineState:
-            offlineState
-        case .approvalCardOnly:
-            OpenClawApprovalCard()
-        case let .setupCards(hermes, openClaw):
-            setupState(hermes: hermes, openClaw: openClaw)
-        }
-    }
-
-    private var renderMode: AgentMonitorRenderDecision.Mode {
-        AgentMonitorRenderDecision.decide(
-            hasOnlineMonitor: monitors.contains(where: \.isOnline),
-            openClawPendingApproval: openClaw.pendingApproval != nil,
-            openClawIsInstalled: openClaw.isInstalled,
-            openClawUserEnabled: appSettings.openClawEnabled,
-            hermesIsInstalled: hermesService.isHookInstalled,
-            hermesUserEnabled: appSettings.hermesEnabled
-        )
-    }
-
-    private func setupState(
-        hermes: AgentMonitorRenderDecision.HermesCardKind,
-        openClaw: AgentMonitorRenderDecision.OpenClawCardKind
-    ) -> some View {
-        VStack(spacing: 10) {
-            HermesSetupCard(passive: hermes == .reenableCard)
-            switch openClaw {
-            case .approvalCard:
-                OpenClawApprovalCard()
-            case .installHintCard:
-                OpenClawInstallHintCard()
-            case .reenableCard:
-                OpenClawReenableCard()
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private var offlineState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "brain")
-                .font(.system(size: 28))
-                .foregroundStyle(NotchTheme.textTertiary)
-            Text("agents.all_offline")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 6, height: 6)
-                Text("agents.waiting_for_connection")
-                    .font(.system(size: 9))
-                    .foregroundStyle(NotchTheme.textTertiary)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var agentSections: some View {
-        ScrollView {
-            LazyVStack(spacing: 14) {
-                if openClaw.pendingApproval != nil {
-                    OpenClawApprovalBanner()
-                }
-                ForEach(monitors.filter(\.isOnline), id: \.displayName) { monitor in
-                    AgentMonitorSection(
-                        monitor: monitor,
-                        expandedAgentId: $expandedAgentId,
-                        sessionMessages: monitor.sessionMessages
-                    )
-                }
-            }
-        }
-        .notchScrollEdgeShadow(.vertical, thickness: 16, intensity: 0.30)
-        .padding(.horizontal, 2)
-        .padding(.bottom, 14)
-    }
-}
+/// Agent-row components rendered inside the AI tab's merged console list
+/// (`AIChatTab`): source styles, `AgentRowView`, message preview, and the
+/// Hermes/OpenClaw setup + approval cards for the empty state.
 
 // MARK: - Agent Monitor Source Style
 
@@ -183,145 +92,6 @@ struct AgentMonitorSourceBadge: View {
         .padding(.vertical, 3)
         .background(style.tint.opacity(0.14))
         .clipShape(Capsule(style: .continuous))
-    }
-}
-
-// MARK: - Agent Monitor Section
-
-struct AgentMonitorSection: View {
-    let monitor: any MultiAgentMonitor
-    @Binding var expandedAgentId: String?
-    let sessionMessages: [String: [ChatMessage]]
-
-    private var sourceStyle: AgentMonitorSourceStyle {
-        AgentMonitorSourceStyle(
-            displayName: monitor.displayName,
-            iconEmoji: monitor.iconEmoji,
-            iconAssetName: monitor.iconAssetName
-        )
-    }
-
-    private var partitionedAgents: (active: [MonitoredAgent], idle: [MonitoredAgent]) {
-        let sorted = monitor.agents.values.sorted { $0.lastEventTime > $1.lastEventTime }
-        let active = sorted.filter { $0.state != .idle }
-        let idle = sorted.filter { $0.state == .idle }
-        return (active, idle)
-    }
-
-    private var summaryText: String {
-        let working = monitor.agents.values.count(where: { $0.state == .working || $0.state == .toolCalling })
-        let speaking = monitor.agents.values.count(where: { $0.state == .speaking })
-        let idle = monitor.agents.values.count(where: { $0.state == .idle })
-        let parts = [
-            working > 0 ? "\(working) working" : nil,
-            speaking > 0 ? "\(speaking) speaking" : nil,
-            idle > 0 && working + speaking == 0 ? "\(idle) idle" : nil,
-        ].compactMap(\.self)
-
-        if parts.isEmpty {
-            return "\(monitor.agents.count) agents"
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            let (active, idle) = partitionedAgents
-            monitorHeader(activeCount: active.count, sourceStyle: sourceStyle)
-
-            ForEach(active) { agent in
-                AgentRowView(
-                    agent: agent,
-                    sourceStyle: sourceStyle,
-                    isExpanded: expandedAgentId == agent.id,
-                    messages: sessionMessages[agent.id]
-                )
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if expandedAgentId == agent.id {
-                            expandedAgentId = nil
-                        } else if sessionMessages[agent.id] != nil {
-                            expandedAgentId = agent.id
-                        }
-                    }
-                }
-            }
-
-            if !idle.isEmpty {
-                HStack {
-                    Text("agents.idle")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(NotchTheme.textMuted)
-                    Divider()
-                        .background(NotchTheme.stroke)
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
-            }
-
-            ForEach(idle) { agent in
-                AgentRowView(
-                    agent: agent,
-                    sourceStyle: sourceStyle,
-                    isExpanded: false,
-                    messages: nil
-                )
-                .opacity(0.5)
-            }
-        }
-    }
-
-    private func monitorHeader(activeCount: Int, sourceStyle: AgentMonitorSourceStyle) -> some View {
-        HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: sourceStyle.gradientColors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 44, height: 44)
-                .overlay {
-                    AgentMonitorSourceIcon(style: sourceStyle, size: 26)
-                }
-                .shadow(color: sourceStyle.tint.opacity(0.30), radius: 16, y: 8)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(monitor.displayName)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(NotchTheme.textPrimary)
-                        .lineLimit(1)
-                    AgentMonitorSourceBadge(style: sourceStyle, compact: true)
-                }
-                Text(summaryText)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 12)
-
-            if activeCount > 0 {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(sourceStyle.tint)
-                        .frame(width: 7, height: 7)
-                        .shadow(color: sourceStyle.tint.opacity(0.76), radius: 8)
-                    Text("\(activeCount)")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(sourceStyle.tint)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(sourceStyle.surface)
-                .clipShape(Capsule(style: .continuous))
-            }
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 4)
     }
 }
 
@@ -628,7 +398,7 @@ private struct OpenClawCopyButton: View {
 
 // MARK: - OpenClaw Approval Banner (compact, inline above agent sections)
 
-private struct OpenClawApprovalBanner: View {
+struct OpenClawApprovalBanner: View {
     @Environment(OpenClawService.self) var openClaw
 
     var body: some View {
@@ -658,7 +428,7 @@ private struct OpenClawApprovalBanner: View {
 
 // MARK: - OpenClaw Approval Card (full-tab, when nothing else is online)
 
-private struct OpenClawApprovalCard: View {
+struct OpenClawApprovalCard: View {
     @Environment(OpenClawService.self) var openClaw
 
     var body: some View {
@@ -695,7 +465,7 @@ private struct OpenClawApprovalCard: View {
 
 // MARK: - Hermes Setup Card (active install or passive reenable)
 
-private struct HermesSetupCard: View {
+struct HermesSetupCard: View {
     @Environment(HermesService.self) var hermesService
     @Environment(AppSettings.self) var appSettings
     let passive: Bool
@@ -762,7 +532,7 @@ private struct HermesSetupCard: View {
 
 // MARK: - OpenClaw Install Hint Card (shown when OpenClaw is not installed and no pending approval)
 
-private struct OpenClawInstallHintCard: View {
+struct OpenClawInstallHintCard: View {
     var body: some View {
         VStack(spacing: 8) {
             Text("🦞")
@@ -789,7 +559,7 @@ private struct OpenClawInstallHintCard: View {
 
 // MARK: - OpenClaw Reenable Card (passive — user disabled, click to enable)
 
-private struct OpenClawReenableCard: View {
+struct OpenClawReenableCard: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(OpenClawService.self) var openClawService
 
