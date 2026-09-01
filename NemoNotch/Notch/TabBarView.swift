@@ -39,8 +39,9 @@ struct NotchChinBar: View {
     /// capsule so the tabs don't read as pills.
     private static let capsuleCornerRadius: CGFloat = 7
 
-    /// Breathing room between the shell's outer edge and the first/last button.
-    private static let chinEdgePadding: CGFloat = 10
+    /// Gap between each tab group and the notch it hugs (both flex columns
+    /// align toward the center, so this is the notch-side padding on each).
+    private static let chinEdgePadding: CGFloat = 16
 
     private var leftTabs: [Tab] {
         tabs.filter { $0.chinPlacement == .left }
@@ -63,7 +64,7 @@ struct NotchChinBar: View {
 
             rightColumn
                 .padding(.leading, Self.chinEdgePadding)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: openedWidth, height: chinHeight)
     }
