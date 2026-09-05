@@ -13,6 +13,24 @@ struct ZcodeUsageStats: Equatable {
     var weekRequests: Int
 }
 
+/// Per-session token aggregates backfilled into `AISessionState` so zcode
+/// sessions show real context % and token counts despite being notify-only.
+struct ZcodeSessionUsage: Equatable {
+    /// Model id of the most recent request (e.g. "GLM-5.3").
+    var model: String?
+    /// Context size of the most recent request. GLM's `input_tokens` already
+    /// includes cache reads (computed_total = input + output), so this is
+    /// `input + cache_creation`, plus `cache_read` when it exceeds input
+    /// (i.e. when the provider reports cache separately from input).
+    var contextTokens: Int
+    /// Session totals across all requests.
+    var inputTokens: Int
+    var outputTokens: Int
+    var cacheReadTokens: Int
+    var cacheCreationTokens: Int
+    var requestCount: Int
+}
+
 enum ZcodeUsageReader {
 
     static var defaultDatabaseURL: URL {
@@ -25,6 +43,82 @@ enum ZcodeUsageReader {
     /// installed — or the read fails, e.g. the DB is locked; callers keep the
     /// previous stats in that case.
     static func read(databaseURL: URL = defaultDatabaseURL, now: Date = Date()) -> ZcodeUsageStats? {
+        open(databaseURL) { db in
+            let calendar = Calendar.current
+            let dayStart = calendar.startOfDay(for: now).timeIntervalSince1970 * 1000
+            let weekStart = now.timeIntervalSince1970 * 1000 - 7 * 86400 * 1000
+
+            guard
+                let today = aggregate(db, since: dayStart),
+                let week = aggregate(db, since: weekStart)
+            else { return nil }
+            return ZcodeUsageStats(
+                todayTokens: today.tokens,
+                todayRequests: today.requests,
+                weekTokens: week.tokens,
+                weekRequests: week.requests
+            )
+        }
+    }
+
+    /// Token aggregates for one session (hook session ids match the CLI's
+    /// `sess_…` primary keys). Returns nil when the session has no completed
+    /// model requests yet.
+    static func readSessionUsage(
+        sessionId: String,
+        databaseURL: URL = defaultDatabaseURL
+    ) -> ZcodeSessionUsage? {
+        open(databaseURL) { db in
+            let sql = """
+            SELECT model_id, input_tokens, output_tokens,
+                   cache_read_input_tokens, cache_creation_input_tokens,
+                   computed_total_tokens
+            FROM model_usage
+            WHERE session_id = ? AND status = 'completed'
+            ORDER BY started_at
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+                sqlite3_finalize(stmt)
+                return nil
+            }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_text(stmt, 1, sessionId, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+
+            var model: String?
+            var lastInput = 0, lastCacheCreation = 0, lastCacheRead = 0
+            var input = 0, output = 0, cacheRead = 0, cacheCreation = 0, count = 0
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                model = string(stmt, 0) ?? model
+                lastCacheRead = Int(sqlite3_column_int64(stmt, 3))
+                lastCacheCreation = Int(sqlite3_column_int64(stmt, 4))
+                lastInput = Int(sqlite3_column_int64(stmt, 1))
+                input += lastInput
+                output += Int(sqlite3_column_int64(stmt, 2))
+                cacheRead += lastCacheRead
+                cacheCreation += lastCacheCreation
+                count += 1
+            }
+            guard count > 0 else { return nil }
+            let context = lastInput >= lastCacheRead
+                ? lastInput + lastCacheCreation
+                : lastInput + lastCacheRead + lastCacheCreation
+            return ZcodeSessionUsage(
+                model: model,
+                contextTokens: context,
+                inputTokens: input,
+                outputTokens: output,
+                cacheReadTokens: cacheRead,
+                cacheCreationTokens: cacheCreation,
+                requestCount: count
+            )
+        }
+    }
+
+    private static func open<T>(
+        _ databaseURL: URL,
+        _ body: (OpaquePointer) -> T?
+    ) -> T? {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
         var db: OpaquePointer?
         guard sqlite3_open_v2(databaseURL.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
@@ -33,21 +127,12 @@ enum ZcodeUsageReader {
         }
         defer { sqlite3_close(db) }
         sqlite3_busy_timeout(db, 2000)
+        return body(db)
+    }
 
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: now).timeIntervalSince1970 * 1000
-        let weekStart = now.timeIntervalSince1970 * 1000 - 7 * 86400 * 1000
-
-        guard
-            let today = aggregate(db, since: dayStart),
-            let week = aggregate(db, since: weekStart)
-        else { return nil }
-        return ZcodeUsageStats(
-            todayTokens: today.tokens,
-            todayRequests: today.requests,
-            weekTokens: week.tokens,
-            weekRequests: week.requests
-        )
+    private static func string(_ stmt: OpaquePointer, _ index: Int32) -> String? {
+        guard let cString = sqlite3_column_text(stmt, index) else { return nil }
+        return String(cString: cString)
     }
 
     private static func aggregate(_ db: OpaquePointer, since millis: Double) -> (tokens: Int, requests: Int)? {
