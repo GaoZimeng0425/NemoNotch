@@ -32,7 +32,7 @@ enum ModelContextWindow {
         "glm-5.3": 1_310_720,
         "glm-5.3-flash": 1_310_720,
     ]
-    static let defaultValue = 200_000
+    static let defaultValue = 1_048_576
 
     /// OpenRouter-fetched overlay, keyed by normalized bare model id. Empty
     /// until `warm()`/`refresh()` populates it. `Mutex` keeps the sync
