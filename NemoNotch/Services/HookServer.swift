@@ -266,7 +266,8 @@ final class HookServer {
                 }
                 sendJSON(connection, payload: .ack)
             } else {
-                LogService.error("Failed to decode HookEvent", category: "HookServer")
+                let snippet = String(bodyString.prefix(2000))
+                LogService.error("Failed to decode HookEvent: \(snippet)", category: "HookServer")
                 sendJSON(connection, payload: .ack)
             }
             return

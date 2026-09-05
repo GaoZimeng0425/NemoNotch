@@ -36,4 +36,27 @@ struct HookEventModelTests {
         #expect(event.cliSource == "claude")
         #expect(event.sessionId == "s1")
     }
+
+    // MARK: - message shape tolerance
+
+    @Test func messageAsObjectIsStringifiedNotDropped() throws {
+        // zcode's Stop delivers the assistant message as a JSON object; the
+        // event must survive with a stringified message.
+        let json = #"{"hook_event_name":"Stop","session_id":"sess_1","message":{"role":"assistant","content":"done"}}"#
+        let event = try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
+        #expect(event.sessionId == "sess_1")
+        #expect(event.message?.contains("assistant") == true)
+    }
+
+    @Test func messageAsArrayIsJoined() throws {
+        let json = #"{"hook_event_name":"Stop","session_id":"sess_1","message":["a","b"]}"#
+        let event = try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
+        #expect(event.message == "a\nb")
+    }
+
+    @Test func messageAsStringStillWorks() throws {
+        let json = #"{"hook_event_name":"Stop","session_id":"sess_1","message":"plain"}"#
+        let event = try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
+        #expect(event.message == "plain")
+    }
 }

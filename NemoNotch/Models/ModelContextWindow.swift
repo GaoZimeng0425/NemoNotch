@@ -29,6 +29,8 @@ enum ModelContextWindow {
         "mimo-v2-pro": 1_000_000,
         "glm-5.1": 200_000,
         "glm-5.2": 1_048_576,
+        "glm-5.3": 1_310_720,
+        "glm-5.3-flash": 1_310_720,
     ]
     static let defaultValue = 200_000
 
