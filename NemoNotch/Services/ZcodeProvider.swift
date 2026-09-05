@@ -14,6 +14,11 @@ final class ZcodeProvider: AIProvider {
     private var timeoutTimer: Timer?
     private weak var hookServer: HookServer?
 
+    /// Per-session throttle for sqlite usage backfills (hook events arrive per
+    /// tool call; the sqlite read is only worth this often).
+    private var lastUsageFetch: [String: Date] = [:]
+    private let usageFetchInterval: TimeInterval = 3
+
     init(store: AISessionStore) {
         self.store = store
         isHookInstalled = HookInstaller.isInstalled(.zcode)
@@ -40,6 +45,7 @@ final class ZcodeProvider: AIProvider {
             store.removeAll(source: .zcode)
             timeoutTimer?.invalidate()
             timeoutTimer = nil
+            lastUsageFetch.removeAll()
         } catch {
             LogService.error("Failed to uninstall zcode hooks: \(error)", category: "ZcodeProvider")
         }
@@ -117,6 +123,33 @@ final class ZcodeProvider: AIProvider {
         }
 
         scheduleTimeoutCleanup()
+        scheduleUsageBackfill(sessionId: sessionId)
+    }
+
+    /// zcode's hook payloads carry no token data, but the CLI's own sqlite
+    /// records every model request. Backfill `AISessionState` from it (model,
+    /// context size, token totals) so context % and token counts are real.
+    /// Throttled per session and read off the main actor.
+    private func scheduleUsageBackfill(sessionId: String) {
+        let now = Date()
+        if let last = lastUsageFetch[sessionId], now.timeIntervalSince(last) < usageFetchInterval {
+            return
+        }
+        lastUsageFetch[sessionId] = now
+        Task.detached(priority: .utility) { [weak self] in
+            guard let usage = ZcodeUsageReader.readSessionUsage(sessionId: sessionId) else { return }
+            await MainActor.run { [weak self] in
+                guard let self, self.store.sessions.contains(where: { $0.key == sessionId }) else { return }
+                self.store.mutate(sessionId) { s in
+                    if let model = usage.model { s.model = model }
+                    s.lastContextTokens = usage.contextTokens
+                    s.inputTokens = usage.inputTokens
+                    s.outputTokens = usage.outputTokens
+                    s.cacheReadTokens = usage.cacheReadTokens
+                    s.cacheCreationTokens = usage.cacheCreationTokens
+                }
+            }
+        }
     }
 
     private func applyContext(to session: inout AISessionState, event: HookEvent) {

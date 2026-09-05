@@ -78,6 +78,72 @@ struct ZcodeUsageReaderTests {
         #expect(ZcodeUsageReader.read(databaseURL: url) == nil)
     }
 
+    // MARK: - per-session usage
+
+    /// Builds a fixture with zcode's real `model_usage` column subset and
+    /// inserts completed requests for two sessions.
+    private func makeSessionFixture(
+        _ rows: [(session: String, model: String, input: Int, output: Int, cacheRead: Int, cacheCreation: Int)]
+    ) -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zcode-sess-\(UUID().uuidString).sqlite")
+        var db: OpaquePointer?
+        guard sqlite3_open(url.path, &db) == SQLITE_OK, let db else {
+            Issue.record("failed to open fixture db")
+            return url
+        }
+        defer { sqlite3_close(db) }
+        sqlite3_exec(db, """
+        CREATE TABLE model_usage (
+            id text primary key, session_id text not null, status text not null,
+            started_at integer not null, model_id text not null,
+            input_tokens integer not null default 0, output_tokens integer not null default 0,
+            cache_read_input_tokens integer not null default 0,
+            cache_creation_input_tokens integer not null default 0,
+            computed_total_tokens integer not null default 0
+        )
+        """, nil, nil, nil)
+        for (index, row) in rows.enumerated() {
+            sqlite3_exec(db, """
+            INSERT INTO model_usage (id, session_id, status, started_at, model_id, input_tokens,
+                output_tokens, cache_read_input_tokens, cache_creation_input_tokens, computed_total_tokens)
+            VALUES ('\(index)', '\(row.session)', 'completed', \(1_700_000_000_000 + index * 1000),
+                '\(row.model)', \(row.input), \(row.output), \(row.cacheRead), \(row.cacheCreation),
+                \(row.input + row.output))
+            """, nil, nil, nil)
+        }
+        return url
+    }
+
+    @Test func sessionUsageAggregatesAndContextUsesLatestRequest() {
+        // GLM semantics: input_tokens already includes cache reads.
+        let url = makeSessionFixture([
+            ("sess_a", "GLM-5.3", 100_000, 500, 90_000, 0),
+            ("sess_a", "GLM-5.3", 150_000, 1_000, 140_000, 0),
+            ("sess_b", "GLM-5.3-Flash", 10_000, 100, 0, 2_000),
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let a = ZcodeUsageReader.readSessionUsage(sessionId: "sess_a", databaseURL: url)
+        #expect(a?.model == "GLM-5.3")
+        // Context = latest request only: input 150_000 + creation 0.
+        #expect(a?.contextTokens == 150_000)
+        // Totals span every request.
+        #expect(a?.inputTokens == 250_000)
+        #expect(a?.outputTokens == 1_500)
+        #expect(a?.cacheReadTokens == 230_000)
+        #expect(a?.requestCount == 2)
+
+        let b = ZcodeUsageReader.readSessionUsage(sessionId: "sess_b", databaseURL: url)
+        #expect(b?.contextTokens == 12_000)
+    }
+
+    @Test func sessionUsageNilForUnknownSession() {
+        let url = makeSessionFixture([])
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ZcodeUsageReader.readSessionUsage(sessionId: "sess_none", databaseURL: url) == nil)
+    }
+
     @Test func tokenFormatter() {
         #expect(ZcodeUsageFormatter.tokens(486) == "486")
         #expect(ZcodeUsageFormatter.tokens(486_000) == "486K")
