@@ -84,4 +84,47 @@ struct ZcodeUsageReaderTests {
         #expect(ZcodeUsageFormatter.tokens(23_072_037) == "23.1M")
         #expect(ZcodeUsageFormatter.tokens(1_200_000_000) == "1.2B")
     }
+
+    // MARK: - credential decrypt
+
+    /// Fixture produced with the same scheme zcode uses: AES-256-GCM,
+    /// key = SHA256("zcode-credential-fallback:darwin:{home}:{user}").
+    @Test func decryptCredential() {
+        let secret = "zcode-credential-fallback:darwin:/Users/test:/tester"
+        let blob = "enc:v1:AQEBAQEBAQEBAQEB.GdpfjOXBzYjSmXjYv2cVKw.odEYcS1-Q_8-eH0Z0nLkUg"
+        #expect(ZcodeCredentials.decrypt(blob, secret: secret) == "test-token-value")
+        // Wrong secret → GCM auth failure → nil, never garbage.
+        #expect(ZcodeCredentials.decrypt(blob, secret: "wrong") == nil)
+        // Plaintext passes through unchanged (zcode leaves raw values alone).
+        #expect(ZcodeCredentials.decrypt("plain-token", secret: secret) == "plain-token")
+    }
+
+    // MARK: - quota parse
+
+    @Test func parseQuota() throws {
+        let json = """
+        {"code":200,"data":{"limits":[
+          {"type":"TIME_LIMIT","unit":5,"number":1,"usage":1000,"currentValue":61,"remaining":939,"percentage":6,"nextResetTime":1790560313998},
+          {"type":"TOKENS_LIMIT","unit":3,"number":5,"percentage":6,"nextResetTime":1788634799640},
+          {"type":"TOKENS_LIMIT","unit":6,"percentage":42}
+        ]}}
+        """
+        let quota = try #require(ZcodeQuotaParser.parse(data: Data(json.utf8), fetchedAt: Date()))
+        #expect(quota.provider == .zcode)
+        #expect(quota.status == .valid)
+        #expect(quota.tiers.count == 2)
+        #expect(quota.tiers[0].window == .fiveHour)
+        #expect(quota.tiers[0].utilization == 6)
+        #expect(quota.tiers[0].resetsAt == Date(timeIntervalSince1970: 1_788_634_799.640))
+        #expect(quota.tiers[1].window == .sevenDay)
+        #expect(quota.tiers[1].utilization == 42)
+        #expect(quota.tiers[1].resetsAt == nil)
+    }
+
+    @Test func parseQuotaRejectsBadResponses() {
+        #expect(ZcodeQuotaParser.parse(data: Data("{\"code\":401}".utf8), fetchedAt: Date()) == nil)
+        // No token-limit windows at all → nothing renderable.
+        let json = "{\"code\":200,\"data\":{\"limits\":[{\"type\":\"TIME_LIMIT\",\"unit\":5,\"number\":1,\"percentage\":6}]}}"
+        #expect(ZcodeQuotaParser.parse(data: Data(json.utf8), fetchedAt: Date()) == nil)
+    }
 }

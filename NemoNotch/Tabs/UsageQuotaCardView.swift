@@ -14,6 +14,7 @@ struct UsageQuotaCardView: View {
         if appSettings.claudeEnabled { result.append(.claude) }
         if service.hasCodexCredential { result.append(.codex) }
         if appSettings.geminiEnabled, service.hasGeminiCredential { result.append(.gemini) }
+        if appSettings.zcodeEnabled, service.hasZcodeCredential { result.append(.zcode) }
         return result
     }
 
@@ -23,7 +24,7 @@ struct UsageQuotaCardView: View {
             ForEach(visibleProviders, id: \.self) { provider in
                 providerSection(provider)
             }
-            if appSettings.zcodeEnabled, let stats = service.zcodeUsage {
+            if appSettings.zcodeEnabled, service.quotas[.zcode] == nil, let stats = service.zcodeUsage {
                 zcodeSection(stats)
             }
         }
@@ -223,6 +224,7 @@ struct UsageQuotaCompactView: View {
         if appSettings.claudeEnabled { result.append(.claude) }
         if service.hasCodexCredential { result.append(.codex) }
         if appSettings.geminiEnabled, service.hasGeminiCredential { result.append(.gemini) }
+        if appSettings.zcodeEnabled, service.hasZcodeCredential { result.append(.zcode) }
         return result
     }
 
@@ -331,7 +333,7 @@ struct UsageQuotaCompactView: View {
                 out.append(.meter(provider: row.provider, slot: row.slot))
             }
         }
-        if zcodeStats != nil {
+        if zcodeStats != nil, service.quotas[.zcode] == nil {
             out.append(.zcode)
         }
         return out
@@ -416,6 +418,7 @@ struct UsageQuotaCompactView: View {
         case .claude: "C"
         case .codex: "Cx"
         case .gemini: "G"
+        case .zcode: "Z"
         }
         return "\(prefix) \(win)"
     }
