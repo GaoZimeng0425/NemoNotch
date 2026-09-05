@@ -48,6 +48,13 @@ final class UsageQuotaService: LifecycleAware {
 
     /// Whether a usable Gemini OAuth credential exists (drives section visibility).
     private(set) var hasGeminiCredential = false
+
+    /// zcode local usage stats (today / 7 days). nil until the first
+    /// successful read; a failed read keeps the previous value. zcode has no
+    /// remote quota API, so this is actual consumption from the CLI's sqlite
+    /// database, not a percentage quota.
+    private(set) var zcodeUsage: ZcodeUsageStats?
+    private let zcodeDatabaseURL = ZcodeUsageReader.defaultDatabaseURL
     /// Cloud Code project id, resolved once per process run.
     private var geminiProjectID: String?
 
@@ -94,7 +101,9 @@ final class UsageQuotaService: LifecycleAware {
         async let claudeTask = fetchClaude()
         async let codexTask = fetchCodexIfPresent()
         async let geminiTask = fetchGeminiIfPresent()
-        let (claudeResult, codexResult, geminiResult) = await (claudeTask, codexTask, geminiTask)
+        async let zcodeTask = fetchZcodeUsageIfPresent()
+        let (claudeResult, codexResult, geminiResult, zcodeResult) = await (claudeTask, codexTask, geminiTask, zcodeTask)
+        if let zcodeResult { zcodeUsage = zcodeResult }
 
         var next: [QuotaProvider: ProviderUsageQuota] = [:]
         next[.claude] = backfilled(claudeResult, from: quotas[.claude])
@@ -122,6 +131,27 @@ final class UsageQuotaService: LifecycleAware {
             fetchedAt: quota.fetchedAt,
             errorMessage: quota.errorMessage
         )
+    }
+
+    // MARK: - zcode (local usage stats)
+
+    /// Reads the CLI's local sqlite off the main actor. A failed/locked read
+    /// returns nil so the previous stats survive.
+    private func fetchZcodeUsageIfPresent() async -> ZcodeUsageStats? {
+        guard FileManager.default.fileExists(atPath: zcodeDatabaseURL.path) else { return nil }
+        let url = zcodeDatabaseURL
+        let stats = await Task.detached(priority: .utility) {
+            ZcodeUsageReader.read(databaseURL: url)
+        }.value
+        if stats == nil {
+            LogService.warn("zcode usage read failed", category: "UsageQuotaService")
+        } else {
+            LogService.debug(
+                "zcode usage read ok: today \(stats?.todayRequests ?? 0) req / \(stats?.todayTokens ?? 0) tok",
+                category: "UsageQuotaService"
+            )
+        }
+        return stats
     }
 
     // MARK: - Claude

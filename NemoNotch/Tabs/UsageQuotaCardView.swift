@@ -23,9 +23,37 @@ struct UsageQuotaCardView: View {
             ForEach(visibleProviders, id: \.self) { provider in
                 providerSection(provider)
             }
+            if appSettings.zcodeEnabled, let stats = service.zcodeUsage {
+                zcodeSection(stats)
+            }
         }
         .padding(10)
         .notchCard(radius: 10, fill: NotchTheme.surface)
+    }
+
+    /// zcode has no remote quota API — show actual local usage (tokens +
+    /// requests) instead of meter rows.
+    private func zcodeSection(_ stats: ZcodeUsageStats) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(verbatim: "ZCode")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(NotchTheme.textSecondary)
+            zcodeRow(labelKey: "quota.zcode.today", tokens: stats.todayTokens, requests: stats.todayRequests)
+            zcodeRow(labelKey: "quota.zcode.week", tokens: stats.weekTokens, requests: stats.weekRequests)
+        }
+    }
+
+    private func zcodeRow(labelKey: LocalizedStringKey, tokens: Int, requests: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(labelKey)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .frame(width: 64, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(verbatim: "\(ZcodeUsageFormatter.tokens(tokens)) · \(requests)")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(NotchTheme.textPrimary)
+        }
     }
 
     private var header: some View {
@@ -211,11 +239,15 @@ struct UsageQuotaCompactView: View {
     }
 
     var body: some View {
-        if visibleProviders.isEmpty {
+        if visibleProviders.isEmpty && zcodeStats == nil {
             EmptyView()
         } else {
             content.activates(service)
         }
+    }
+
+    private var zcodeStats: ZcodeUsageStats? {
+        appSettings.zcodeEnabled ? service.zcodeUsage : nil
     }
 
     private var content: some View {
@@ -235,6 +267,8 @@ struct UsageQuotaCompactView: View {
                             meterRow(provider: provider, slot: slot)
                         case let .authorize(provider):
                             compactAuthorizeButton(provider)
+                        case .zcode:
+                            zcodeCompactRow()
                         }
                     }
                 }
@@ -277,6 +311,7 @@ struct UsageQuotaCompactView: View {
     private enum CompactRow: Hashable {
         case meter(provider: QuotaProvider, slot: Slot)
         case authorize(provider: QuotaProvider)
+        case zcode
     }
 
     private var displayRows: [CompactRow] {
@@ -296,7 +331,25 @@ struct UsageQuotaCompactView: View {
                 out.append(.meter(provider: row.provider, slot: row.slot))
             }
         }
+        if zcodeStats != nil {
+            out.append(.zcode)
+        }
         return out
+    }
+
+    /// Usage counts, not a percentage meter — zcode has no remote quota API.
+    private func zcodeCompactRow() -> some View {
+        HStack(spacing: 5) {
+            Text(verbatim: "Z")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .frame(width: 40, alignment: .trailing)
+                .lineLimit(1)
+            Text("quota.zcode.compact \(ZcodeUsageFormatter.tokens(zcodeStats?.todayTokens ?? 0))")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .frame(width: 70, alignment: .trailing)
+        }
     }
 
     private func compactAuthorizeButton(_ provider: QuotaProvider) -> some View {
