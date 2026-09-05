@@ -5,6 +5,7 @@ enum QuotaProvider: String, CaseIterable, Sendable {
     case claude
     case codex
     case gemini
+    case zcode
 
     /// Brand name shown as the section header (verbatim, not localized).
     var displayName: String {
@@ -12,6 +13,7 @@ enum QuotaProvider: String, CaseIterable, Sendable {
         case .claude: "Claude Code"
         case .codex: "Codex"
         case .gemini: "Gemini"
+        case .zcode: "ZCode"
         }
     }
 }

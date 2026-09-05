@@ -50,11 +50,14 @@ final class UsageQuotaService: LifecycleAware {
     private(set) var hasGeminiCredential = false
 
     /// zcode local usage stats (today / 7 days). nil until the first
-    /// successful read; a failed read keeps the previous value. zcode has no
-    /// remote quota API, so this is actual consumption from the CLI's sqlite
-    /// database, not a percentage quota.
+    /// successful read; a failed read keeps the previous value. Fallback
+    /// display when the quota API is unavailable (not logged in / fetch failed).
     private(set) var zcodeUsage: ZcodeUsageStats?
     private let zcodeDatabaseURL = ZcodeUsageReader.defaultDatabaseURL
+    /// Whether zcode's credential file decrypts (drives the ZCode quota
+    /// section's visibility, like `hasCodexCredential`).
+    private(set) var hasZcodeCredential = false
+    private let zcodeQuotaURL = URL(string: "https://open.bigmodel.cn/api/monitor/usage/quota/limit")!
     /// Cloud Code project id, resolved once per process run.
     private var geminiProjectID: String?
 
@@ -68,6 +71,7 @@ final class UsageQuotaService: LifecycleAware {
         LogService.info("UsageQuotaService init", category: "UsageQuotaService")
         hasCodexCredential = codexCredentialPresent()
         hasGeminiCredential = geminiCredentialPresent()
+        hasZcodeCredential = FileManager.default.fileExists(atPath: ZcodeCredentials.credentialsURL.path)
     }
 
     deinit { MainActor.assumeIsolated { timer?.invalidate() } }
@@ -102,13 +106,16 @@ final class UsageQuotaService: LifecycleAware {
         async let codexTask = fetchCodexIfPresent()
         async let geminiTask = fetchGeminiIfPresent()
         async let zcodeTask = fetchZcodeUsageIfPresent()
-        let (claudeResult, codexResult, geminiResult, zcodeResult) = await (claudeTask, codexTask, geminiTask, zcodeTask)
+        async let zcodeQuotaTask = fetchZcodeQuotaIfPresent()
+        let (claudeResult, codexResult, geminiResult, zcodeResult, zcodeQuotaResult) =
+            await (claudeTask, codexTask, geminiTask, zcodeTask, zcodeQuotaTask)
         if let zcodeResult { zcodeUsage = zcodeResult }
 
         var next: [QuotaProvider: ProviderUsageQuota] = [:]
         next[.claude] = backfilled(claudeResult, from: quotas[.claude])
         if let codexResult { next[.codex] = backfilled(codexResult, from: quotas[.codex]) }
         if let geminiResult { next[.gemini] = backfilled(geminiResult, from: quotas[.gemini]) }
+        if let zcodeQuotaResult { next[.zcode] = backfilled(zcodeQuotaResult, from: quotas[.zcode]) }
         quotas = next
         lastFetched = Date()
     }
@@ -133,7 +140,42 @@ final class UsageQuotaService: LifecycleAware {
         )
     }
 
-    // MARK: - zcode (local usage stats)
+    // MARK: - zcode (BigModel coding-plan quota + local usage stats)
+
+    private func fetchZcodeQuotaIfPresent() async -> ProviderUsageQuota? {
+        guard FileManager.default.fileExists(atPath: ZcodeCredentials.credentialsURL.path) else { return nil }
+        hasZcodeCredential = true
+        guard let token = ZcodeCredentials.accessToken() else {
+            LogService.warn("zcode quota: credential undecryptable", category: "UsageQuotaService")
+            return nil
+        }
+        var request = URLRequest(url: zcodeQuotaURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                LogService.warn("zcode quota: HTTP \(http.statusCode)", category: "UsageQuotaService")
+                return nil
+            }
+            guard let parsed = ZcodeQuotaParser.parse(data: data, fetchedAt: Date()) else {
+                LogService.warn("zcode quota: parse failed", category: "UsageQuotaService")
+                return nil
+            }
+            LogService.info(
+                "zcode quota fetched: \(parsed.tiers.map { "\($0.utilization)%" })",
+                category: "UsageQuotaService"
+            )
+            return parsed
+        } catch {
+            LogService.warn(
+                "zcode quota fetch failed: \(error.localizedDescription)",
+                category: "UsageQuotaService"
+            )
+            return nil
+        }
+    }
 
     /// Reads the CLI's local sqlite off the main actor. A failed/locked read
     /// returns nil so the previous stats survive.
@@ -853,6 +895,7 @@ final class UsageQuotaService: LifecycleAware {
         case .claude: claudeKeychainService
         case .codex: codexKeychainService
         case .gemini: "" // Gemini uses file-based OAuth, not Keychain
+        case .zcode: "" // zcode credentials are locally encrypted, never Keychain
         }
     }
 
