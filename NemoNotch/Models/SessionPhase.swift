@@ -27,6 +27,17 @@ enum SessionPhase: Equatable {
         return false
     }
 
+    /// Phases the AI-status capsule tracks: any state where the CLI is still
+    /// mid-conversation — running, or parked at a prompt / permission choice.
+    /// Wider than `isActive` (which excludes `waitingForInput`) because a
+    /// session waiting for the next prompt still deserves the status light.
+    var isEngaged: Bool {
+        switch self {
+        case .processing, .compacting, .waitingForApproval, .waitingForInput: true
+        case .idle, .ended: false
+        }
+    }
+
     var approvalToolName: String? {
         if case .waitingForApproval(let ctx) = self { return ctx.toolName }
         return nil

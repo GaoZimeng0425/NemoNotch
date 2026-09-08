@@ -56,8 +56,8 @@ final class AIStatusWindowController: NSObject {
 
     // MARK: - Observation + show/hide
 
-    private var workingCount: Int {
-        store.sortedSessions.filter { $0.status == .working }.count
+    private var capsuleState: FABCapsuleState {
+        FABCapsuleState.of(store.sortedSessions)
     }
 
     private func observe() {
@@ -78,7 +78,11 @@ final class AIStatusWindowController: NSObject {
             hide(immediate: true)
             return
         }
-        if workingCount > 0 {
+        // Persistent status light: stays up while any session is running,
+        // awaiting approval, or awaiting input. Once everything goes quiet the
+        // capsule renders the hollow-green "done" state during the hide delay,
+        // then fades.
+        if capsuleState.isVisible {
             show()
         } else if !isExpanded {
             // Preserve the user's expand intent — never auto-hide the panel.
