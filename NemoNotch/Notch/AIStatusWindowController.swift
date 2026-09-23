@@ -11,10 +11,12 @@ final class AIStatusWindowController: NSObject {
     @ObservationIgnored private var hideTask: Task<Void, Never>?
     @ObservationIgnored private let store: AISessionStore
     @ObservationIgnored private let appSettings: AppSettings
+    @ObservationIgnored private let usageQuota: UsageQuotaService
 
-    init(store: AISessionStore, appSettings: AppSettings) {
+    init(store: AISessionStore, appSettings: AppSettings, usageQuota: UsageQuotaService) {
         self.store = store
         self.appSettings = appSettings
+        self.usageQuota = usageQuota
         super.init()
         LogService.info("AIStatusWindowController init", category: "AIStatusFAB")
         observe()
@@ -102,6 +104,7 @@ final class AIStatusWindowController: NSObject {
                     AIStatusFABView()
                         .environment(store)
                         .environment(appSettings)
+                        .environment(usageQuota)
                         .environment(\.aiStatusController, self)
                 )
             )

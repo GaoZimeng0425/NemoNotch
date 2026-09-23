@@ -70,6 +70,52 @@ struct FABCapsuleStateTests {
         #expect(FABCapsuleState.of(sessions) == .waitingApproval(count: 1))
     }
 
+    // MARK: - grouped counts (the capsule shows every non-empty status)
+
+    @Test("counts every status independently")
+    func groupedCounts() {
+        let counts = FABStatusCounts.of([
+            session("a", phase: .processing),
+            session("b", phase: .compacting),
+            session("c", phase: .processing),
+            session("d", phase: .waitingForApproval(.placeholder)),
+            session("e", phase: .waitingForInput),
+            session("f", phase: .waitingForInput),
+            session("g", phase: .idle),
+            session("h", phase: .ended),
+        ])
+        #expect(counts.running == 3)
+        #expect(counts.approvals == 1)
+        #expect(counts.inputs == 2)
+        #expect(counts.total == 6)
+        #expect(!counts.isEmpty)
+    }
+
+    @Test("groups skip empty statuses and keep attention order")
+    func groupOrder() {
+        let groups = FABStatusCounts.of([
+            session("a", phase: .waitingForInput),
+            session("b", phase: .processing),
+            session("c", phase: .waitingForApproval(.placeholder)),
+        ]).groups
+        #expect(groups.map(\.state) == [
+            .waitingApproval(count: 1),
+            .running(count: 1),
+            .waitingInput(count: 1),
+        ])
+
+        let running = FABStatusCounts.of([session("a", phase: .processing)]).groups
+        #expect(running.count == 1)
+        #expect(running.first?.count == 1)
+    }
+
+    @Test("no engaged session yields no groups")
+    func emptyGroups() {
+        let counts = FABStatusCounts.of([session("a", phase: .idle)])
+        #expect(counts.isEmpty)
+        #expect(counts.groups.isEmpty)
+    }
+
     // MARK: - visibility
 
     @Test("only done is invisible")

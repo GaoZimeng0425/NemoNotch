@@ -145,8 +145,11 @@ enum NotchConstants {
     static let aiStatusFabFadeDuration: Double = 0.24
     // Fixed-canvas sizing (the window never resizes on expand/collapse, mirroring
     // NotchWindow). Canvas = panel size + shadow blur room on both axes.
-    static let aiStatusFabPanelHeight: CGFloat = 280
+    static let aiStatusFabPanelHeight: CGFloat = 340
     static let aiStatusFabShadowPad: CGFloat = 20
+    /// Height reserved at the panel's bottom for the usage/quota strip. Always
+    /// reserved (even while collapsed) so expanding never reflows the list.
+    static let aiStatusFabQuotaStripHeight: CGFloat = 52
     // Collapsed capsule geometry — corner radius = height/2 yields a pill.
     static let aiStatusFabCapsuleHeight: CGFloat = 32
     // Open/close spring durations match NotchCoordinator's notch transitions.
