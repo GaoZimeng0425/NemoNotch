@@ -21,6 +21,7 @@ struct AIStatusFABView: View {
             // "stretch" carrier, analogous to `NotchBackgroundView`.
             backgroundShape
                 .animation(fabStateAnimation, value: isExpanded)
+                .animation(capsuleWidthAnimation, value: capsuleWidth)
                 .zIndex(0)
 
             // Layers 1+2 — content, clipped by the SAME morphing geometry as
@@ -84,6 +85,11 @@ struct AIStatusFABView: View {
         return .spring(duration: NotchConstants.aiStatusFabCloseSpringDuration)
     }
 
+    /// Width tween for the collapsed pill when the set of status groups changes.
+    private var capsuleWidthAnimation: Animation {
+        .spring(duration: NotchConstants.aiStatusFabCloseSpringDuration)
+    }
+
     // MARK: - Shared morph geometry (background shape + content mask)
 
     /// One source of truth for the pill↔panel footprint so the background fill
@@ -106,6 +112,9 @@ struct AIStatusFABView: View {
         RoundedRectangle(cornerRadius: morphCornerRadius, style: .continuous)
             .frame(width: morphWidth, height: morphHeight)
             .animation(fabStateAnimation, value: isExpanded)
+            // The collapsed pill grows/shrinks as status groups appear and
+            // disappear; without this the width would snap between frames.
+            .animation(capsuleWidthAnimation, value: capsuleWidth)
     }
 
     // MARK: - Layer 0: background shape
@@ -126,47 +135,124 @@ struct AIStatusFABView: View {
             .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
     }
 
-    /// Capsule width hugs its content; approximate for the collapsed shape.
+    /// Capsule width hugs its content. Grouped mode draws one dot+count chip per
+    /// non-empty status, so the shape has to grow with the group count; `done`
+    /// keeps the single dot + "done" label.
     private var capsuleWidth: CGFloat {
-        // "N running" + dot + padding. Wide enough for 2-digit counts.
-        130
+        let groups = statusCounts.groups
+        guard !groups.isEmpty else { return 92 } // dot + "done"
+        let chips = groups.reduce(CGFloat(0)) { width, group in
+            width + capsuleDotSize + 4 + CGFloat(String(group.count).count) * 8
+        }
+        return capsuleHPadding * 2 + chips + CGFloat(groups.count - 1) * capsuleChipSpacing
     }
+
+    private var capsuleHPadding: CGFloat { 12 }
+    private var capsuleChipSpacing: CGFloat { 11 }
+    private var capsuleDotSize: CGFloat { 10 }
 
     // MARK: - Layer 1: capsule content
 
-    private var workingSessions: [AISessionState] {
-        store.sortedSessions.filter { $0.status == .working }
+    /// Aggregate capsule state — the most attention-needing phase across all
+    /// sessions (approval > running > waiting-input).
+    private var capsuleState: FABCapsuleState {
+        FABCapsuleState.of(store.sortedSessions)
     }
 
-    private var workingCount: Int { workingSessions.count }
+    /// Per-status counts — the capsule shows every non-empty group at once.
+    private var statusCounts: FABStatusCounts {
+        FABStatusCounts.of(store.sortedSessions)
+    }
+
+    /// Sessions the expanded panel lists: everything still mid-conversation
+    /// (running or parked at a prompt / permission choice).
+    private var engagedSessions: [AISessionState] {
+        store.sortedSessions.filter { $0.phase.isEngaged }
+    }
 
     private var capsuleContent: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [NotchTheme.accent, NotchTheme.accentHot],
-                        center: .center, startRadius: 0, endRadius: 8
-                    )
-                )
-                .frame(width: 10, height: 10)
-                .shadow(color: NotchTheme.accent.opacity(0.7), radius: 6)
-                .modifier(PulseModifier(isActive: true))
-            Text("\(workingCount)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(NotchTheme.textPrimary)
-            Text("running")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(NotchTheme.textSecondary)
+        HStack(spacing: capsuleChipSpacing) {
+            capsuleGroups
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, capsuleHPadding)
         // Fill the capsule width so content sits at the start (leading) edge,
         // matching the morphing background shape's footprint.
         .frame(width: capsuleWidth, alignment: .leading)
         .frame(height: NotchConstants.aiStatusFabCapsuleHeight)
         .contentShape(Capsule())
+    }
+
+    /// One chip per non-empty status group (red approvals · yellow running ·
+    /// green awaiting input), in the same attention order the header uses. When
+    /// everything went quiet, the single hollow-green "done" chip takes over
+    /// during the fade-out window.
+    @ViewBuilder
+    private var capsuleGroups: some View {
+        let groups = statusCounts.groups
+        if groups.isEmpty {
+            HStack(spacing: 6) {
+                statusCircle(statusColor(.done), size: capsuleDotSize, hollow: true)
+                capsuleLabel("done")
+            }
+        } else {
+            ForEach(groups) { group in
+                HStack(spacing: 4) {
+                    statusCircle(
+                        statusColor(group.state),
+                        size: capsuleDotSize,
+                        hollow: false,
+                        pulsing: group.state.isRunning
+                    )
+                    capsuleCount(group.count)
+                }
+                .help(groupTooltip(group.state, group.count))
+            }
+        }
+    }
+
+    /// Shared dot renderer for the capsule and the expanded header: solid +
+    /// glowing normally, stroke-only for the `done` state.
+    @ViewBuilder
+    private func statusCircle(
+        _ color: Color,
+        size: CGFloat,
+        hollow: Bool,
+        pulsing: Bool = false
+    ) -> some View {
+        if hollow {
+            Circle()
+                .stroke(color, lineWidth: size * 0.15)
+                .frame(width: size, height: size)
+        } else {
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .shadow(color: color.opacity(0.7), radius: size / 2)
+                .modifier(PulseModifier(isActive: pulsing))
+        }
+    }
+
+    private func groupTooltip(_ state: FABCapsuleState, _ count: Int) -> String {
+        switch state {
+        case .running: "\(count) running"
+        case .waitingApproval: count == 1 ? "1 approval" : "\(count) approvals"
+        case .waitingInput: "\(count) awaiting input"
+        case .done: "done"
+        }
+    }
+
+    private func capsuleCount(_ count: Int) -> some View {
+        Text("\(count)")
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(NotchTheme.textPrimary)
+    }
+
+    private func capsuleLabel(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(NotchTheme.textSecondary)
     }
 
     // MARK: - Layer 2: panel content (layout B: list + detail)
@@ -175,7 +261,7 @@ struct AIStatusFABView: View {
 
     private var selectedSession: AISessionState? {
         if let id = selectedSessionId, let s = store.get(id) { return s }
-        return workingSessions.first
+        return engagedSessions.first
     }
 
     private var panelContent: some View {
@@ -188,6 +274,8 @@ struct AIStatusFABView: View {
                 Divider().background(NotchTheme.stroke)
                 detailPane
             }
+            Divider().background(NotchTheme.stroke)
+            quotaStrip
         }
         .frame(
             width: NotchConstants.aiStatusFabPanelWidth,
@@ -198,13 +286,24 @@ struct AIStatusFABView: View {
         )
     }
 
+    /// Usage/quota footer. Its height is reserved unconditionally so expanding
+    /// never reflows the list above it, but the strip itself is mounted only
+    /// while expanded: the panel layer stays in the view tree at `opacity(0)`
+    /// when collapsed, and an always-mounted strip would keep `UsageQuotaService`
+    /// active (and polling) for as long as the capsule is on screen.
+    @ViewBuilder
+    private var quotaStrip: some View {
+        Group {
+            if isExpanded { AIStatusQuotaStrip() }
+        }
+        .frame(height: NotchConstants.aiStatusFabQuotaStripHeight)
+        .frame(maxWidth: .infinity)
+    }
+
     private var header: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(NotchTheme.accent)
-                .frame(width: 8, height: 8)
-                .shadow(color: NotchTheme.accent.opacity(0.6), radius: 4)
-            Text("\(workingCount) running")
+            headerDot
+            Text(headerStatusLabel)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(NotchTheme.textPrimary)
             Text("· AI sessions")
@@ -234,13 +333,37 @@ struct AIStatusFABView: View {
         .background(DragHandleView { controller?.beginWindowDrag(with: $0) })
     }
 
+    /// Miniature of the capsule dot in the expanded header — same state color,
+    /// hollow for `done`.
+    @ViewBuilder
+    private var headerDot: some View {
+        let color = statusColor(capsuleState)
+        if capsuleState == .done {
+            Circle().stroke(color, lineWidth: 1.2).frame(width: 8, height: 8)
+        } else {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .shadow(color: color.opacity(0.6), radius: 4)
+        }
+    }
+
+    private var headerStatusLabel: String {
+        switch capsuleState {
+        case .running(let count): "\(count) running"
+        case .waitingApproval(let count): count == 1 ? "1 approval" : "\(count) approvals"
+        case .waitingInput(let count): "\(count) awaiting input"
+        case .done: "done"
+        }
+    }
+
     private var sessionList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(workingSessions) { session in
+                ForEach(engagedSessions) { session in
                     let isSelected = session.id == selectedSession?.id
                     HStack(spacing: 7) {
-                        statusDot(session.status)
+                        statusDot(session.phase)
                         sourceBadge(session.source)
                         Text(session.displayTitle)
                             .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
@@ -358,24 +481,38 @@ struct AIStatusFABView: View {
         .clipShape(Capsule(style: .continuous))
     }
 
-    // MARK: - Status dot (traffic-light semantics)
+    // MARK: - Status colors (herdr traffic-light semantics)
 
-    /// Green = working, yellow = waiting (input/approval), gray = idle.
+    /// Yellow = running, red = needs a choice, green = awaiting input /
+    /// finished. `done` shares the awaiting-input green but renders hollow.
+    private func statusColor(_ state: FABCapsuleState) -> Color {
+        switch state {
+        case .running: Color(red: 0.98, green: 0.75, blue: 0.20) // yellow
+        case .waitingApproval: Color(red: 1.0, green: 0.34, blue: 0.28) // red
+        case .waitingInput, .done: Color(red: 0.30, green: 0.85, blue: 0.45) // green
+        }
+    }
+
+    /// Per-session list dot — the same mapping, keyed by the finer-grained
+    /// phase (distinguishes approval-red from input-green, which the derived
+    /// `ClaudeStatus` collapses into one `.waiting`).
+    private func statusColor(_ phase: SessionPhase) -> Color {
+        switch phase {
+        case .processing, .compacting: Color(red: 0.98, green: 0.75, blue: 0.20) // yellow — running
+        case .waitingForApproval: Color(red: 1.0, green: 0.34, blue: 0.28) // red — needs a choice
+        case .waitingForInput: Color(red: 0.30, green: 0.85, blue: 0.45) // green — awaiting input
+        case .idle, .ended: NotchTheme.textTertiary // gray
+        }
+    }
+
+    /// 7pt solid list-row dot (the hollow form is capsule-only).
     @ViewBuilder
-    private func statusDot(_ status: ClaudeStatus) -> some View {
-        let color = statusColor(status)
+    private func statusDot(_ phase: SessionPhase) -> some View {
+        let color = statusColor(phase)
         Circle()
             .fill(color)
             .frame(width: 7, height: 7)
             .shadow(color: color.opacity(0.7), radius: 3)
-    }
-
-    private func statusColor(_ status: ClaudeStatus) -> Color {
-        switch status {
-        case .working: Color(red: 0.30, green: 0.85, blue: 0.45) // green
-        case .waiting: Color(red: 0.98, green: 0.75, blue: 0.20) // yellow
-        case .idle: NotchTheme.textTertiary // gray
-        }
     }
 
     // MARK: - Source badge / icon (reuses the public icon components)

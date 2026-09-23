@@ -11,10 +11,12 @@ final class AIStatusWindowController: NSObject {
     @ObservationIgnored private var hideTask: Task<Void, Never>?
     @ObservationIgnored private let store: AISessionStore
     @ObservationIgnored private let appSettings: AppSettings
+    @ObservationIgnored private let usageQuota: UsageQuotaService
 
-    init(store: AISessionStore, appSettings: AppSettings) {
+    init(store: AISessionStore, appSettings: AppSettings, usageQuota: UsageQuotaService) {
         self.store = store
         self.appSettings = appSettings
+        self.usageQuota = usageQuota
         super.init()
         LogService.info("AIStatusWindowController init", category: "AIStatusFAB")
         observe()
@@ -56,8 +58,8 @@ final class AIStatusWindowController: NSObject {
 
     // MARK: - Observation + show/hide
 
-    private var workingCount: Int {
-        store.sortedSessions.filter { $0.status == .working }.count
+    private var capsuleState: FABCapsuleState {
+        FABCapsuleState.of(store.sortedSessions)
     }
 
     private func observe() {
@@ -78,7 +80,11 @@ final class AIStatusWindowController: NSObject {
             hide(immediate: true)
             return
         }
-        if workingCount > 0 {
+        // Persistent status light: stays up while any session is running,
+        // awaiting approval, or awaiting input. Once everything goes quiet the
+        // capsule renders the hollow-green "done" state during the hide delay,
+        // then fades.
+        if capsuleState.isVisible {
             show()
         } else if !isExpanded {
             // Preserve the user's expand intent — never auto-hide the panel.
@@ -98,6 +104,7 @@ final class AIStatusWindowController: NSObject {
                     AIStatusFABView()
                         .environment(store)
                         .environment(appSettings)
+                        .environment(usageQuota)
                         .environment(\.aiStatusController, self)
                 )
             )

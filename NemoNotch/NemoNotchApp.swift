@@ -224,7 +224,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         aiStatusController = AIStatusWindowController(
             store: aiMonitor.store,
-            appSettings: settings
+            appSettings: settings,
+            usageQuota: usageQuota
         )
         // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
         // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
