@@ -125,6 +125,26 @@ struct SettingsView: View {
                 ))
             }
 
+            Section("settings.event_alerts.header") {
+                Toggle("settings.bluetooth_alerts.enabled", isOn: Binding(
+                    get: { appSettings.bluetoothToastEnabled },
+                    set: { appSettings.bluetoothToastEnabled = $0 }
+                ))
+                Toggle("settings.calendar_alerts.enabled", isOn: Binding(
+                    get: { appSettings.calendarDueFlashEnabled },
+                    set: { appSettings.calendarDueFlashEnabled = $0 }
+                ))
+                Picker("settings.calendar_alerts.lead", selection: Binding(
+                    get: { appSettings.calendarDueLeadMinutes },
+                    set: { appSettings.calendarDueLeadMinutes = $0 }
+                )) {
+                    Text("settings.calendar_alerts.lead.at_start").tag(0)
+                    Text("settings.calendar_alerts.lead.5min").tag(5)
+                    Text("settings.calendar_alerts.lead.10min").tag(10)
+                    Text("settings.calendar_alerts.lead.15min").tag(15)
+                }
+            }
+
             Section("settings.ai_status_fab.header") {
                 Toggle("settings.ai_status_fab.enabled", isOn: Binding(
                     get: { appSettings.aiStatusFabEnabled },

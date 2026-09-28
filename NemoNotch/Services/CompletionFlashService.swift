@@ -126,6 +126,23 @@ final class CompletionFlashService {
         handle(items: completed)
     }
 
+    // MARK: - External flash
+
+    /// Fire the full-screen edge glow + toast from an external trigger
+    /// (calendar event due, Bluetooth audio device connect/disconnect).
+    /// Goes through the same throttle/merge pipeline as AI/agent completions:
+    /// inside the cooldown window the items merge into the visible toast
+    /// instead of replaying the flash.
+    func showCompletionFlash(items: [CompletionItem]) {
+        guard settings.completionFlashEnabled else {
+            LogService.debug("External flash ignored — completion flash disabled", category: "CompletionFlash")
+            return
+        }
+        guard !items.isEmpty else { return }
+        LogService.debug("External flash triggered: \(items.map(\.name))", category: "CompletionFlash")
+        handle(items: items)
+    }
+
     // MARK: - External toast (no flash)
 
     /// Show the unified completion toast without firing the full-screen edge

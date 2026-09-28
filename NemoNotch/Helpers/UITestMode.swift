@@ -33,4 +33,14 @@ enum UITestMode {
     static var flash: Bool {
         flash(in: ProcessInfo.processInfo.arguments)
     }
+
+    /// App 正作为单元测试宿主运行(xcodebuild test 启动的就是普通 App,
+    /// 不带 --uitest)。用于跳过会弹系统授权框的启动路径 —— 进程模态的
+    /// TCC 弹窗(如蓝牙)会挂起测试连接的建立。
+    static var isTestHost: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["XCTestBundlePath"] != nil
+            || env["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
 }

@@ -90,6 +90,13 @@ final class CalendarService {
         fetchEvents()
     }
 
+    /// Re-fetches from EventKit. Called by `CalendarDueMonitor` at day
+    /// rollover — fetchEvents otherwise only runs on `EKEventStoreChanged`,
+    /// so `todayEvents` would go stale past midnight.
+    func refresh() {
+        fetchEvents()
+    }
+
     /// UI 测试种子:直接写入授权态与多日事件,绕过 EventKit。
     func seedForUITest(events: [Date: [CalendarEvent]]) {
         authorizationStatus = .fullAccess
