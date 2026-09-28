@@ -109,6 +109,13 @@ enum NotchConstants {
     /// How long the completion toast stays before dismissing (own value — the
     /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
     static let completionToastDuration: Double = 5.0
+    /// Calendar due monitor tick cadence — how late an "on start" reminder can
+    /// be in the worst case.
+    static let calendarDueTickInterval: TimeInterval = 10
+    /// How long after an event's start it still counts as "due". Beyond this,
+    /// the monitor stays silent: reminding about a meeting that started long
+    /// ago (e.g. before the app launched) is noise, not a reminder.
+    static let calendarDueLateGrace: TimeInterval = 120
     /// Thickness (points) of the accent halo band wrapping the screen edge.
     /// Kept narrower than the blur so the halo reads as an edge-anchored glow
     /// that fades smoothly inward rather than a flat-topped band.

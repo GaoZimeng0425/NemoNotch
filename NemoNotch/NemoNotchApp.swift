@@ -110,6 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var lockScreenAIPanelController: LockScreenAIPanelController?
     private(set) var completionFlashService: CompletionFlashService?
     private(set) var completionFlashWindowController: CompletionFlashWindowController?
+    private(set) var bluetoothService: BluetoothService?
+    private(set) var calendarDueMonitor: CalendarDueMonitor?
     private(set) var keepAwakeService: KeepAwakeService?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
@@ -197,6 +199,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings
         )
         completionFlashService = completionFlash
+
+        // 事件提醒:蓝牙音频设备连接/断开 + 日历到期,都走 CompletionFlashService
+        // 的全屏闪烁 + Toast。UI 测试与单测宿主不启动:前者无人值守,后者的
+        // 蓝牙 TCC 授权弹窗(进程模态)会挂起测试连接。
+        let bluetooth = BluetoothService(completionFlash: completionFlash, settings: settings)
+        bluetoothService = bluetooth
+        if !UITestMode.isActive, !UITestMode.isTestHost { bluetooth.start() }
+        let calendarDue = CalendarDueMonitor(
+            calendar: calendar,
+            completionFlash: completionFlash,
+            settings: settings
+        )
+        calendarDueMonitor = calendarDue
+        if !UITestMode.isActive { calendarDue.start() }
 
         let system = SystemService()
         systemService = system
