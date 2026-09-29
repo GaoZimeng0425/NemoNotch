@@ -67,7 +67,7 @@ struct SettingsSceneRoot: View {
                     .environment(notificationPermission)
             } else {
                 ProgressView()
-                    .frame(width: 700, height: 460)
+                    .frame(width: 680, height: 480)
             }
         }
         .onAppear { appDelegate.handleSettingsAppear() }

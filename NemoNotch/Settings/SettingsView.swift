@@ -1,6 +1,43 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Settings sidebar pages (System-Settings-style navigation). Raw values
+/// persist via `@AppStorage` so reopening the window returns to the last
+/// visited page.
+enum SettingsPage: String, CaseIterable, Identifiable {
+    case general, alerts, aiAgents, appList, notifications, hotkeys, pomodoro, keepAwake, about
+
+    var id: String { rawValue }
+
+    var labelKey: String {
+        switch self {
+        case .general: "settings.nav.general"
+        case .alerts: "settings.nav.alerts"
+        case .aiAgents: "settings.nav.ai"
+        case .appList: "settings.nav.apps"
+        case .notifications: "settings.nav.notifications"
+        case .hotkeys: "settings.nav.hotkeys"
+        case .pomodoro: "settings.nav.pomodoro"
+        case .keepAwake: "settings.nav.awake"
+        case .about: "settings.nav.about"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .alerts: "bell.badge"
+        case .aiAgents: "sparkles"
+        case .appList: "square.grid.2x2"
+        case .notifications: "bell"
+        case .hotkeys: "keyboard"
+        case .pomodoro: "timer"
+        case .keepAwake: "moon.zzz"
+        case .about: "info.circle"
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(AICLIMonitorService.self) var aiService
@@ -10,55 +47,47 @@ struct SettingsView: View {
     @Environment(HermesService.self) var hermesService
     @Environment(OpenClawService.self) var openClawService
 
-    @State private var selectedTab = 0
+    @AppStorage("settings.selectedPage") private var selectedPageRaw = SettingsPage.general.rawValue
     @State private var showAppPicker = false
     @State private var cityDebounceTask: Task<Void, Never>? = nil
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            tabManagementView
-                .tabItem { Label("settings.tabs", systemImage: "sidebar.left") }
-                .tag(0)
-
-            appListView
-                .tabItem { Label("settings.app_list", systemImage: "square.grid.2x2") }
-                .tag(1)
-
-            claudeView
-                .tabItem { Label("settings.tab.ai_agents", systemImage: "sparkles") }
-                .tag(2)
-
-            notificationListView
-                .tabItem { Label("settings.notifications", systemImage: "bell.badge") }
-                .tag(3)
-
-            HotkeysSettingsView()
-                .tabItem { Label("settings.hotkeys", systemImage: "keyboard") }
-                .tag(4)
-
-            PomodoroSettingsView()
-                .tabItem { Label("settings.pomodoro.title", systemImage: "timer") }
-                .tag(5)
-
-            KeepAwakeSettingsView()
-                .tabItem { Label("settings.keepawake.tab", systemImage: "moon.zzz") }
-                .tag(6)
-
-            aboutView
-                .tabItem { Label("settings.about.title", systemImage: "info.circle") }
-                .tag(7)
+        NavigationSplitView {
+            List(selection: Binding(
+                get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
+                set: { if let page = $0 { selectedPageRaw = page.rawValue } }
+            )) {
+                ForEach(SettingsPage.allCases) { page in
+                    Label(page.labelKey, systemImage: page.symbol)
+                        .tag(page)
+                }
+            }
+            .navigationSplitViewColumnWidth(200)
+        } detail: {
+            detailView
         }
-        // 宽度必须容得下全部 8 个 tab。430pt 时 macOS 只渲染得下 5 个,
-        // 其余(AI 智能体 / 防休眠 / 关于)会被 SwiftUI 静默折叠进工具栏的
-        // 「更多工具栏项」溢出菜单里 —— 表现为"这个 tab 点不到"。英文的
-        // "Notifications" 是最宽的一项,按它取值。
-        .frame(width: 700, height: 460)
+        .frame(width: 680, height: 480)
         .environment(\.locale, appSettings.currentLocale)
     }
 
-    // MARK: - Tab Management
+    @ViewBuilder
+    private var detailView: some View {
+        switch SettingsPage(rawValue: selectedPageRaw) ?? .general {
+        case .general: generalView
+        case .alerts: alertsView
+        case .aiAgents: aiAgentsView
+        case .appList: appListView
+        case .notifications: notificationListView
+        case .hotkeys: HotkeysSettingsView()
+        case .pomodoro: PomodoroSettingsView()
+        case .keepAwake: KeepAwakeSettingsView()
+        case .about: aboutView
+        }
+    }
 
-    private var tabManagementView: some View {
+    // MARK: - General
+
+    private var generalView: some View {
         Form {
             Section("settings.visible_tabs") {
                 ForEach(Tab.allCases) { tab in
@@ -117,7 +146,15 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
 
+    // MARK: - Alerts & effects
+
+    private var alertsView: some View {
+        Form {
             Section("settings.completion_flash.header") {
                 Toggle("settings.completion_flash.enabled", isOn: Binding(
                     get: { appSettings.completionFlashEnabled },
@@ -146,20 +183,6 @@ struct SettingsView: View {
                 Toggle("settings.charging_alerts.enabled", isOn: Binding(
                     get: { appSettings.chargingCapsuleEnabled },
                     set: { appSettings.chargingCapsuleEnabled = $0 }
-                ))
-            }
-
-            Section("settings.ai_status_fab.header") {
-                Toggle("settings.ai_status_fab.enabled", isOn: Binding(
-                    get: { appSettings.aiStatusFabEnabled },
-                    set: { appSettings.aiStatusFabEnabled = $0 }
-                ))
-            }
-
-            Section("settings.lockscreen_ai.header") {
-                Toggle("settings.lockscreen_ai.enabled", isOn: Binding(
-                    get: { appSettings.lockScreenAIPanelEnabled },
-                    set: { appSettings.lockScreenAIPanelEnabled = $0 }
                 ))
             }
         }
@@ -377,11 +400,40 @@ struct SettingsView: View {
         .frame(width: 400, height: 500)
     }
 
-    // MARK: - AI CLI Hooks
+    // MARK: - AI & Agents
 
-    private var claudeView: some View {
+    /// AI 悬浮胶囊 + 锁屏 AI 面板开关,卡片外观与 provider 卡片一致。
+    private var aiSurfacesCard: some View {
+        VStack(spacing: 0) {
+            Toggle("settings.ai_status_fab.enabled", isOn: Binding(
+                get: { appSettings.aiStatusFabEnabled },
+                set: { appSettings.aiStatusFabEnabled = $0 }
+            ))
+            Divider().padding(.horizontal, 12)
+            Toggle("settings.lockscreen_ai.enabled", isOn: Binding(
+                get: { appSettings.lockScreenAIPanelEnabled },
+                set: { appSettings.lockScreenAIPanelEnabled = $0 }
+            ))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var aiAgentsView: some View {
         ScrollView {
             VStack(spacing: 10) {
+                // 快速开关:AI 悬浮胶囊 + 锁屏 AI 面板(从旧"Tab 管理"并入,
+                // AI 相关设置集中在一页)。视觉与下方 provider 卡片同语言。
+                aiSurfacesCard
+
                 // Claude Code
                 hookCard(
                     name: "Claude Code",
