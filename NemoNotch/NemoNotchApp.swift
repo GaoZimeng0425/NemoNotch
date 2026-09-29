@@ -200,10 +200,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         completionFlashService = completionFlash
 
-        // 事件提醒:蓝牙音频设备连接/断开 + 日历到期,都走 CompletionFlashService
-        // 的全屏闪烁 + Toast。UI 测试与单测宿主不启动:前者无人值守,后者的
-        // 蓝牙 TCC 授权弹窗(进程模态)会挂起测试连接。
-        let bluetooth = BluetoothService(completionFlash: completionFlash, settings: settings)
+        // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
+        // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
+        // 全屏闪烁 + Toast。UI 测试与单测宿主不启动蓝牙:后者的 TCC 授权弹窗
+        // (进程模态)会挂起测试连接。
+        let bluetooth = BluetoothService(settings: settings)
         bluetoothService = bluetooth
         if !UITestMode.isActive, !UITestMode.isTestHost { bluetooth.start() }
         let calendarDue = CalendarDueMonitor(
@@ -274,6 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(weather)
                     .environment(hud)
                     .environment(completionFlash)
+                    .environment(bluetooth)
                     .environment(system)
                     .environment(tasks)
                     .environment(history)

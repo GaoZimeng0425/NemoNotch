@@ -6,7 +6,7 @@ import IOBluetooth
 /// bits 7–2 minor. Headphones/headsets/speakers are always major = 0x04
 /// (kBluetoothDeviceClassMajorAudio). The audio service-class bit (0x100) is
 /// deliberately NOT consulted: laptops and phones also advertise it (they
-/// have speakers/mics), which would misclassify a paired Mac or iPhone.
+/// have speakers/mics), which would misclassify a paired Mac/iPhone.
 /// Keyboards/mice are major 0x05 (peripheral) and must not match — they
 /// reconnect on every sleep/wake. Pure UInt32 math, unit-tested.
 enum BluetoothAudioClassifier {
@@ -15,19 +15,32 @@ enum BluetoothAudioClassifier {
     }
 }
 
-/// Monitors Bluetooth audio device (headphone/speaker) connections and fires
-/// the shared full-screen flash + toast on connect and disconnect.
+/// One transient audio-device event for the notch capsule. `id` is fresh per
+/// event so a rapid connect→disconnect reads as a new capsule, not an edit of
+/// the showing one.
+struct BluetoothDeviceEvent: Equatable {
+    let id = UUID()
+    let name: String
+    let isConnected: Bool
+}
+
+/// Monitors Bluetooth audio device (headphone/speaker) connections and shows
+/// a Dynamic-Island-style capsule at the notch: the collapsed notch's black
+/// shape springs open to reveal a headphone glyph + device name, dwells a
+/// couple of seconds, and springs closed (`BluetoothCapsuleView`, mounted by
+/// `NotchView` while collapsed).
 ///
 /// Classic Bluetooth via the public IOBluetooth framework — AirPods and BT
 /// headphones qualify; BLE-only peripherals are not covered (that would need
-/// CoreBluetooth, with a different permission story). No TCC prompt, no
-/// Info.plist key. IOBluetooth user notifications are delivered on the runloop
-/// that registered them; we register from the main actor, so the @objc
-/// callbacks arrive on the main thread and hop back via `assumeIsolated`.
+/// CoreBluetooth, with a different permission story). macOS 26 requires
+/// `NSBluetoothAlwaysUsageDescription` (set in pbxproj) and raises the
+/// Bluetooth TCC prompt on first use — the reason `start()` is skipped under
+/// `UITestMode.isTestHost`. IOBluetooth user notifications are delivered on
+/// the runloop that registered them; we register from the main actor, so the
+/// @objc callbacks arrive on the main thread.
 @MainActor
 @Observable
 final class BluetoothService: NSObject {
-    private let completionFlash: CompletionFlashService
     private let settings: AppSettings
 
     private var started = false
@@ -37,8 +50,12 @@ final class BluetoothService: NSObject {
     /// dropped when the device disconnects.
     private var disconnectTokens: [String: IOBluetoothUserNotification] = [:]
 
-    init(completionFlash: CompletionFlashService, settings: AppSettings) {
-        self.completionFlash = completionFlash
+    /// Latest audio-device event to show as the notch capsule; nil = hidden.
+    /// A new event overwrites the showing one and restarts the dwell.
+    private(set) var capsuleEvent: BluetoothDeviceEvent?
+    private var capsuleDismissTask: Task<Void, Never>?
+
+    init(settings: AppSettings) {
         self.settings = settings
         super.init()
         LogService.info("BluetoothService init", category: "BluetoothService")
@@ -50,6 +67,7 @@ final class BluetoothService: NSObject {
             for token in disconnectTokens.values {
                 token.unregister()
             }
+            capsuleDismissTask?.cancel()
             LogService.info("BluetoothService deinit", category: "BluetoothService")
         }
     }
@@ -62,7 +80,7 @@ final class BluetoothService: NSObject {
             selector: #selector(deviceDidConnect(_:device:))
         )
         // Devices already connected at launch get disconnect watchers but no
-        // toast — that connection isn't news.
+        // capsule — that connection isn't news.
         for case let device as IOBluetoothDevice in IOBluetoothDevice.pairedDevices() ?? [] {
             guard device.isConnected(), isAudio(device) else { continue }
             watchDisconnect(device)
@@ -74,6 +92,27 @@ final class BluetoothService: NSObject {
                 "Bluetooth monitoring started (\(disconnectTokens.count) audio device(s) already connected)",
                 category: "BluetoothService"
             )
+        }
+    }
+
+    // MARK: - Capsule lifecycle
+
+    /// Hides the capsule immediately (no dwell remainder). Called by NotchView
+    /// when the notch opens, so the expanding panel never fights the capsule.
+    func hideCapsule() {
+        capsuleDismissTask?.cancel()
+        guard capsuleEvent != nil else { return }
+        capsuleEvent = nil
+    }
+
+    private func showCapsule(name: String, isConnected: Bool) {
+        guard settings.bluetoothToastEnabled else { return }
+        capsuleEvent = BluetoothDeviceEvent(name: name, isConnected: isConnected)
+        capsuleDismissTask?.cancel()
+        capsuleDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(NotchConstants.bluetoothCapsuleDwell))
+            guard let self, !Task.isCancelled else { return }
+            self.capsuleEvent = nil
         }
     }
 
@@ -100,13 +139,7 @@ final class BluetoothService: NSObject {
         let name = device.nameOrAddress ?? "?"
         LogService.info("Bluetooth audio connected: \(name)", category: "BluetoothService")
         watchDisconnect(device)
-        guard settings.bluetoothToastEnabled else { return }
-        completionFlash.showCompletionFlash(items: [
-            CompletionItem(
-                name: String(format: String(localized: "bluetooth.connected %@"), name),
-                source: .bluetooth
-            )
-        ])
+        showCapsule(name: name, isConnected: true)
     }
 
     @objc private func deviceDidDisconnect(
@@ -116,13 +149,7 @@ final class BluetoothService: NSObject {
         disconnectTokens.removeValue(forKey: device.addressString ?? "")
         let name = device.nameOrAddress ?? "?"
         LogService.info("Bluetooth audio disconnected: \(name)", category: "BluetoothService")
-        guard settings.bluetoothToastEnabled else { return }
-        completionFlash.showCompletionFlash(items: [
-            CompletionItem(
-                name: String(format: String(localized: "bluetooth.disconnected %@"), name),
-                source: .bluetooth
-            )
-        ])
+        showCapsule(name: name, isConnected: false)
     }
 
     // MARK: - Helpers

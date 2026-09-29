@@ -14,6 +14,7 @@ struct NotchView: View {
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
     @Environment(PomodoroTimerService.self) var pomodoroService
+    @Environment(BluetoothService.self) var bluetoothService
     @Environment(\.openSettings) private var openSettingsAction
 
     private var hardwareNotchSize: NSSize {
@@ -193,6 +194,16 @@ struct NotchView: View {
                     )
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            // 蓝牙胶囊:仅在收起态渲染——展开的面板盖着刘海区,叠上去会打架。
+            // 宽出的黑色区域不参与 hover/click 命中(EventMonitor 只认物理
+            // 刘海矩形),鼠标停上去不会误开刘海。
+            if effectiveStatus == .closed, let event = bluetoothService.capsuleEvent {
+                BluetoothCapsuleView(event: event, notchSize: hardwareNotchSize)
+                    .zIndex(3)
+                    .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
+                    .transition(.opacity)
+            }
         }
         .onAppear {
             initializeBadgeViewModel()
@@ -202,6 +213,11 @@ struct NotchView: View {
         }
         .onChange(of: effectiveStatus) { _, status in
             updateContentMount(for: status)
+            if status == .opened { bluetoothService.hideCapsule() }
+        }
+        .onChange(of: bluetoothService.capsuleEvent?.id) { _, _ in
+            // 事件在刘海展开期间到达:同样立即隐藏,收起后不回放陈旧胶囊。
+            if effectiveStatus == .opened { bluetoothService.hideCapsule() }
         }
         .onChange(of: coordinator.selectedTab) { _, newTab in
             syncTabDisplay(to: newTab)
@@ -213,6 +229,7 @@ struct NotchView: View {
             badgeViewModel?.checkApprovalSound(isOpen: effectiveStatus == .opened)
         }
         .animation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08), value: hudService.activeHUD)
+        .animation(.easeOut(duration: NotchConstants.fadeNormalDuration), value: bluetoothService.capsuleEvent)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.locale, appSettings.currentLocale)
         .contextMenu {

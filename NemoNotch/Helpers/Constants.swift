@@ -218,4 +218,10 @@ enum NotchConstants {
     static let hudSegmentHeight: CGFloat = 14
     static let hudSegmentSpacing: CGFloat = 2.5
     static let hudSegmentCornerRadius: CGFloat = 2
+    // Bluetooth notch capsule (Dynamic-Island-style connect animation)
+    /// How long the capsule stays grown before collapsing back to the notch.
+    static let bluetoothCapsuleDwell: Double = 2.8
+    static let bluetoothCapsuleHPadding: CGFloat = 14
+    static let bluetoothCapsuleFontSize: CGFloat = 13
+    static let bluetoothCapsuleIconSize: CGFloat = 14
 }
