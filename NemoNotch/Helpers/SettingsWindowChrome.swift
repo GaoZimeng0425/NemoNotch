@@ -37,8 +37,14 @@ enum SettingsWindowChrome {
         // .unifiedCompact:条尽量矮——右侧没有更多工具项,标准 unified 的
         // 高度全是空白;compact 档按钮仍在红绿灯旁。
         window.toolbarStyle = .unifiedCompact
-        // 隐藏窗口标题(侧栏选中项已表明当前页),标题占位消失后,唯一的
-        // 工具栏项 + flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
+        // 其他 App(系统设置/Finder)的样子:侧栏材质直通窗口顶,红绿灯浮
+        // 在上面,没有一条横贯全宽的"带子"。这需要 fullSizeContentView +
+        // 透明标题条;此前 SwiftUI ignoresSafeArea 不生效就是因为窗口没开
+        // fullSizeContentView,SwiftUI 内容被挡在标题条下。
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
+        // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
         window.titleVisibility = .hidden
         LogService.info("Settings window toolbar installed", category: "Settings")
     }

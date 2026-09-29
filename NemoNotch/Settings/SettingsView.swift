@@ -74,6 +74,11 @@ struct SettingsView: View {
                 }
                 .listStyle(.sidebar)
                 .frame(width: 200)
+                // 材质直通窗口顶(红绿灯浮在上面,系统设置同款);行内容用
+                // contentMargins 避开灯区。窗口需 fullSizeContentView(见
+                // SettingsWindowChrome.install),否则 ignoresSafeArea 是空操作。
+                .ignoresSafeArea(.container, edges: .top)
+                .contentMargins(.top, 40, for: .scrollContent)
                 .transition(.move(edge: .leading))
             }
             if showSidebar {
