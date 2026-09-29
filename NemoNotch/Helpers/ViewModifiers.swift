@@ -5,6 +5,9 @@ enum NotchTheme {
     static let accentHot = Color(red: 1.0, green: 0.38, blue: 0.18)
     static let accentText = Color(red: 1.0, green: 0.58, blue: 0.28)
     static let accentSoft = accent.opacity(0.18)
+    /// Charging green — matches the system battery/charging color language,
+    /// distinct from the app's orange accent which means "AI activity".
+    static let chargingGreen = Color(red: 0.32, green: 0.83, blue: 0.40)
     static let textPrimary = Color.white.opacity(0.94)
     static let textSecondary = Color.white.opacity(0.62)
     static let textTertiary = Color.white.opacity(0.42)

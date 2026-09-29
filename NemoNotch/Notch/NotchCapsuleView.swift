@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Dynamic-Island-style transient capsule at the collapsed notch: when a
-/// Bluetooth audio device connects or disconnects, the notch's black shape
-/// appears to grow sideways — a same-material rounded rect springs open from
-/// the physical notch width to fit "headphones glyph + device name", dwells
-/// (`bluetoothCapsuleDwell`, owned by `BluetoothService`), then unmounts.
+/// Dynamic-Island-style transient capsule at the collapsed notch: a
+/// same-material rounded rect springs open from the physical notch width to
+/// a measured content width ("icon + text"), dwells (owned by the driving
+/// service), then unmounts. Shared by the Bluetooth connect/disconnect
+/// capsule (`BluetoothService.capsuleEvent`) and the charging capsule
+/// (`HUDService.chargingCapsule`).
 ///
 /// Mount/width mechanics: the content is width-measured
 /// (`.fixedSize` + `.onGeometryChange`, same pattern as `AIStatusFABView` and
@@ -14,8 +15,10 @@ import SwiftUI
 /// width while the shape is still narrow. Non-interactive — hover-open
 /// hit-testing lives in `NotchCoordinator` and only reads the physical notch
 /// rect, so the widened black area stays click/hover-inert.
-struct BluetoothCapsuleView: View {
-    let event: BluetoothDeviceEvent
+struct NotchCapsuleView: View {
+    let icon: String
+    let iconColor: Color
+    let text: String
     /// Physical notch footprint — the capsule starts at this size and grows
     /// horizontally around the same top edge.
     let notchSize: CGSize
@@ -23,13 +26,6 @@ struct BluetoothCapsuleView: View {
     @State private var opened = false
     @State private var contentShown = false
     @State private var measuredContentWidth: CGFloat?
-
-    private var text: String {
-        String(
-            format: String(localized: event.isConnected ? "bluetooth.connected %@" : "bluetooth.disconnected %@"),
-            event.name
-        )
-    }
 
     private var capsuleWidth: CGFloat {
         max(notchSize.width, measuredContentWidth ?? 0)
@@ -68,16 +64,16 @@ struct BluetoothCapsuleView: View {
 
     private var content: some View {
         HStack(spacing: 8) {
-            Image(systemName: "headphones")
-                .font(.system(size: NotchConstants.bluetoothCapsuleIconSize, weight: .semibold))
-                .foregroundStyle(NotchTheme.accent)
+            Image(systemName: icon)
+                .font(.system(size: NotchConstants.notchCapsuleIconSize, weight: .semibold))
+                .foregroundStyle(iconColor)
             Text(text)
-                .font(.system(size: NotchConstants.bluetoothCapsuleFontSize, weight: .semibold))
+                .font(.system(size: NotchConstants.notchCapsuleFontSize, weight: .semibold))
                 .foregroundStyle(NotchTheme.textPrimary)
                 .lineLimit(1)
         }
         .fixedSize(horizontal: true, vertical: false)
-        .padding(.horizontal, NotchConstants.bluetoothCapsuleHPadding)
+        .padding(.horizontal, NotchConstants.notchCapsuleHPadding)
         .frame(maxHeight: .infinity)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width

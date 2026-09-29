@@ -22,12 +22,19 @@ struct BluetoothDeviceEvent: Equatable {
     let id = UUID()
     let name: String
     let isConnected: Bool
+
+    /// Capsule label, e.g. "AirPods Pro 已连接". Keys are format strings in
+    /// the String Catalog (managed via scripts/xcstrings.py, not extracted).
+    var text: String {
+        let key = isConnected ? "bluetooth.connected %@" : "bluetooth.disconnected %@"
+        return String(format: String(localized: String.LocalizationValue(key)), name)
+    }
 }
 
 /// Monitors Bluetooth audio device (headphone/speaker) connections and shows
 /// a Dynamic-Island-style capsule at the notch: the collapsed notch's black
 /// shape springs open to reveal a headphone glyph + device name, dwells a
-/// couple of seconds, and springs closed (`BluetoothCapsuleView`, mounted by
+/// couple of seconds, and springs closed (`NotchCapsuleView`, mounted by
 /// `NotchView` while collapsed).
 ///
 /// Classic Bluetooth via the public IOBluetooth framework — AirPods and BT
@@ -110,7 +117,7 @@ final class BluetoothService: NSObject {
         capsuleEvent = BluetoothDeviceEvent(name: name, isConnected: isConnected)
         capsuleDismissTask?.cancel()
         capsuleDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(NotchConstants.bluetoothCapsuleDwell))
+            try? await Task.sleep(for: .seconds(NotchConstants.notchCapsuleDwell))
             guard let self, !Task.isCancelled else { return }
             self.capsuleEvent = nil
         }

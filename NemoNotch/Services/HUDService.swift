@@ -5,6 +5,30 @@ import CoreGraphics
 import IOKit.ps
 import SwiftUI
 
+/// One transient power-source event for the notch capsule. `id` is fresh per
+/// event so a rapid plug→unplug reads as a new capsule, not an edit of the
+/// showing one.
+struct ChargingCapsuleEvent: Equatable {
+    let id = UUID()
+    let percent: Int
+    let isCharging: Bool
+    /// Adapter present — distinct from `isCharging`, which macOS drops when
+    /// the battery is full while still plugged in; edges key on this.
+    let externalConnected: Bool
+
+    /// Capsule label, e.g. "正在充电 · 87%". Keys are format strings in the
+    /// String Catalog (managed via scripts/xcstrings.py, not extracted).
+    var text: String {
+        let key: String
+        if externalConnected {
+            key = isCharging ? "charging.connected %d%%" : "charging.plugged %d%%"
+        } else {
+            key = "charging.disconnected %d%%"
+        }
+        return String(format: String(localized: String.LocalizationValue(key)), percent)
+    }
+}
+
 @MainActor
 @Observable
 final class HUDService {
@@ -17,6 +41,13 @@ final class HUDService {
     var activeHUD: HUDType?
     var hudValue: Float = 0
 
+    /// Dynamic-Island-style charging capsule at the notch; nil = hidden.
+    /// Owned here because the IOPS runloop subscription (below) already
+    /// delivers the power-source edges that drive it.
+    private(set) var chargingCapsule: ChargingCapsuleEvent?
+
+    private let settings: AppSettings
+    private var chargingCapsuleDismissTask: Task<Void, Never>?
     private var dismissTask: Task<Void, Never>?
     private var volumeListener: AudioObjectPropertyListenerBlock?
     private var volumeAddress: AudioObjectPropertyAddress?
@@ -31,8 +62,10 @@ final class HUDService {
     private var batteryRunLoopSource: CFRunLoopSource?
     private var lastBatteryLevel: Int = -1
     private var lastChargingState: Bool?
+    private var lastExternalConnected: Bool?
 
-    init() {
+    init(settings: AppSettings) {
+        self.settings = settings
         LogService.info("HUDService init start", category: "HUD")
         setupVolumeListener()
         setupBrightnessMonitoring()
@@ -44,6 +77,7 @@ final class HUDService {
         MainActor.assumeIsolated {
             brightnessTimer?.invalidate()
             if let handle = displayServicesHandle { dlclose(handle) }
+            chargingCapsuleDismissTask?.cancel()
 
             if let source = batteryRunLoopSource {
                 CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
@@ -254,25 +288,76 @@ final class HUDService {
               let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
+            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeRetainedValue() as? [String: Any]
             else { continue }
             let capacity = (info[kIOPSCurrentCapacityKey] as? Int) ?? 0
             let charging = info[kIOPSIsChargingKey] as? Bool ?? false
+            // "AC Power" state == adapter present. There is no public
+            // "external connected" bool key — Power Source State is the
+            // public signal for it (kIOPSExternalConnectedKey is private).
+            let powerState = info[kIOPSPowerSourceStateKey] as? String
+            let externalConnected = powerState.map { $0 == kIOPSACPowerValue } ?? charging
+
+            // First reading only seeds the baseline: power being already
+            // connected at launch is not a "change" (the old code seeded
+            // `lastChargingState` as nil, so every cold launch popped the
+            // battery HUD once for nothing).
+            if lastExternalConnected == nil {
+                lastBatteryLevel = capacity
+                lastChargingState = charging
+                lastExternalConnected = externalConnected
+                return
+            }
 
             let levelChanged = capacity != lastBatteryLevel
             let chargingChanged = charging != lastChargingState
-            guard levelChanged || chargingChanged else { return }
+            let powerEdge = externalConnected != lastExternalConnected
+            guard levelChanged || chargingChanged || powerEdge else { return }
 
             lastBatteryLevel = capacity
             lastChargingState = charging
-            LogService.info("Battery changed: \(capacity)% charging=\(charging)", category: "HUD")
+            lastExternalConnected = externalConnected
+            LogService.info(
+                "Battery changed: \(capacity)% charging=\(charging) external=\(externalConnected)",
+                category: "HUD"
+            )
 
-            // Only show HUD at 10% intervals or when charging changes
-            if capacity % 10 == 0 || chargingChanged {
+            if powerEdge {
+                showChargingCapsule(percent: capacity, isCharging: charging, externalConnected: externalConnected)
+            }
+            // 10%-milestone pills stay; power/charging edges pop the pill only
+            // when the notch capsule is disabled (otherwise double prompts).
+            if capacity % 10 == 0 || ((powerEdge || chargingChanged) && !settings.chargingCapsuleEnabled) {
                 // Round to nearest 10 for consistent look
                 let displayLevel = Int((Double(capacity) / 10.0).rounded()) * 10
                 showHUD(.battery(charging: charging), value: Float(min(max(displayLevel, 0), 100)) / 100.0)
             }
+        }
+    }
+
+    // MARK: - Charging capsule
+
+    /// Hides the charging capsule immediately (no dwell remainder). Called by
+    /// NotchView when the notch opens, so the expanding panel never fights
+    /// the capsule.
+    func hideChargingCapsule() {
+        chargingCapsuleDismissTask?.cancel()
+        guard chargingCapsule != nil else { return }
+        chargingCapsule = nil
+    }
+
+    private func showChargingCapsule(percent: Int, isCharging: Bool, externalConnected: Bool) {
+        guard settings.chargingCapsuleEnabled else { return }
+        chargingCapsule = ChargingCapsuleEvent(
+            percent: percent,
+            isCharging: isCharging,
+            externalConnected: externalConnected
+        )
+        chargingCapsuleDismissTask?.cancel()
+        chargingCapsuleDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(NotchConstants.notchCapsuleDwell))
+            guard let self, !Task.isCancelled else { return }
+            self.chargingCapsule = nil
         }
     }
 

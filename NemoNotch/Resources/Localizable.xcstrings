@@ -5144,6 +5144,70 @@
           }
         }
       }
+    },
+    "settings.charging_alerts.enabled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flash the notch when the power adapter connects or disconnects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接入/断开电源时刘海动效提醒"
+          }
+        }
+      }
+    },
+    "charging.connected %d%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charging · %d%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在充电 · %d%%"
+          }
+        }
+      }
+    },
+    "charging.plugged %d%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Power connected · %d%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已接通电源 · %d%%"
+          }
+        }
+      }
+    },
+    "charging.disconnected %d%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On battery · %d%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已断开电源 · %d%%"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

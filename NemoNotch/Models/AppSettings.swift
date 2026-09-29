@@ -121,11 +121,12 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(completionFlashEnabled, forKey: Self.completionFlashEnabledKey) }
     }
 
-    // MARK: - Event alerts (calendar due / bluetooth audio)
+    // MARK: - Event alerts (calendar due / bluetooth audio / charging)
 
     static let calendarDueFlashEnabledKey = "calendarDueFlashEnabled"
     static let calendarDueLeadMinutesKey = "calendarDueLeadMinutes"
     static let bluetoothToastEnabledKey = "bluetoothToastEnabled"
+    static let chargingCapsuleEnabledKey = "chargingCapsuleEnabled"
 
     var calendarDueFlashEnabled: Bool {
         didSet { UserDefaults.standard.set(calendarDueFlashEnabled, forKey: Self.calendarDueFlashEnabledKey) }
@@ -138,6 +139,10 @@ final class AppSettings {
 
     var bluetoothToastEnabled: Bool {
         didSet { UserDefaults.standard.set(bluetoothToastEnabled, forKey: Self.bluetoothToastEnabledKey) }
+    }
+
+    var chargingCapsuleEnabled: Bool {
+        didSet { UserDefaults.standard.set(chargingCapsuleEnabled, forKey: Self.chargingCapsuleEnabledKey) }
     }
 
     // MARK: - AI status FAB
@@ -243,6 +248,8 @@ final class AppSettings {
             .object(forKey: Self.calendarDueLeadMinutesKey) as? Int ?? 0
         bluetoothToastEnabled = UserDefaults.standard
             .object(forKey: Self.bluetoothToastEnabledKey) as? Bool ?? true
+        chargingCapsuleEnabled = UserDefaults.standard
+            .object(forKey: Self.chargingCapsuleEnabledKey) as? Bool ?? true
         aiStatusFabEnabled = UserDefaults.standard
             .object(forKey: Self.aiStatusFabEnabledKey) as? Bool ?? true
         lockScreenAIPanelEnabled = UserDefaults.standard

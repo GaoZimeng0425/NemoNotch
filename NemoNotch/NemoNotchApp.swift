@@ -185,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let usageQuota = UsageQuotaService()
         usageQuotaService = usageQuota
 
-        let hud = HUDService()
+        let hud = HUDService(settings: settings)
         hudService = hud
 
         let keepAwake = KeepAwakeService(settings: settings)
