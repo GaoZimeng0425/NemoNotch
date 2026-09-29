@@ -51,48 +51,48 @@ struct SettingsView: View {
     @State private var showAppPicker = false
     @State private var cityDebounceTask: Task<Void, Never>? = nil
 
+    @State private var showSidebar = true
+
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(selection: Binding(
-                get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
-                set: { if let page = $0 { selectedPageRaw = page.rawValue } }
-            )) {
-                ForEach(SettingsPage.allCases) { page in
-                    // LocalizedStringKey 包装是必须的:`labelKey` 是 String 变量,
-                    // 直接传会被 SwiftUI 当字面文本渲染成 "settings.nav.general"。
-                    Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
-                        .tag(page)
-                }
-            }
-            .navigationSplitViewColumnWidth(200)
-            // 自动的 sidebar toggle 掉在侧栏自己的工具条里(第二排居中,布局
-            // 错乱)。移除修饰符要贴在拥有该工具条的视图(List)上才生效。
-            .toolbar(removing: .sidebarToggle)
-            .toolbar {
-                // .topBarLeading/.navigationBar 在 macOS 上不可用;红绿灯那排
-                // 不对 SwiftUI 暴露槽位(Finder 是 AppKit 工具栏)。.navigation
-                // 是可达的最高位置:详情区标题正下方居中。
-                ToolbarItem(placement: .navigation) {
-                    Button {
-                        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
-                    } label: {
-                        Image(systemName: "sidebar.leading")
+        // 手动两栏布局,不用 NavigationSplitView(它给每列强加 header 横带,
+        // 自动 toggle 掉进去第二排居中、内容被顶下 ~100pt)。收起按钮经由
+        // SettingsWindowChrome 的真 NSToolbar 放进红绿灯同排——SwiftUI 的
+        // .toolbar 在 macOS 没有通往标题条的通道(试遍 placement 无一可达),
+        // AppKit 工具栏是唯一确定性方案。
+        HStack(spacing: 0) {
+            if showSidebar {
+                List(selection: Binding(
+                    get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
+                    set: { if let page = $0 { selectedPageRaw = page.rawValue } }
+                )) {
+                    ForEach(SettingsPage.allCases) { page in
+                        // LocalizedStringKey 包装是必须的:`labelKey` 是 String
+                        // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
+                        Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
+                            .tag(page)
                     }
                 }
+                .listStyle(.sidebar)
+                .frame(width: 200)
+                .transition(.move(edge: .leading))
             }
-        } detail: {
-            // 工具栏横带不藏(macOS 把红绿灯都放在 windowToolbar 里,藏了
-            // chrome 全丢)。inline 标题 + .navigation 按钮都收进红绿灯那一
-            // 排(大标题模式会产生"标题排 + 按钮排"两排结构,按钮居中悬空)。
+            if showSidebar {
+                Divider()
+            }
             detailView
-                .navigationTitle(Text(LocalizedStringKey(currentPage.labelKey)))
-                .toolbarTitleDisplayMode(.inline)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 680, height: 480)
+        // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
+        // 裁切(侧栏首项消失、按钮错位全是它造成的)。
+        .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 480)
+        .onAppear { SettingsWindowChrome.install() }
+        .onReceive(NotificationCenter.default.publisher(for: SettingsWindowChrome.toggleSidebar)) { _ in
+            withAnimation(.spring(duration: 0.25, bounce: 0.1)) {
+                showSidebar.toggle()
+            }
+        }
         .environment(\.locale, appSettings.currentLocale)
     }
-
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     private var currentPage: SettingsPage {
         SettingsPage(rawValue: selectedPageRaw) ?? .general

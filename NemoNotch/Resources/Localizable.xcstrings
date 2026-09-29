@@ -5352,6 +5352,22 @@
           }
         }
       }
+    },
+    "settings.nav.toggle_sidebar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle Sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起/展开侧栏"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
