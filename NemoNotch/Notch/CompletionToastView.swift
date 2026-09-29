@@ -142,10 +142,6 @@ struct CompletionToastView: View {
             Image(systemName: "calendar")
                 .font(.system(size: s * 0.9, weight: .semibold))
                 .foregroundStyle(NotchTheme.accent)
-        case .bluetooth:
-            Image(systemName: "headphones")
-                .font(.system(size: s * 0.9, weight: .semibold))
-                .foregroundStyle(NotchTheme.accent)
         }
     }
 }
