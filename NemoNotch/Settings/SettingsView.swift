@@ -429,14 +429,15 @@ struct SettingsView: View {
     // MARK: - AI & Agents
 
     /// AI 悬浮胶囊 + 锁屏 AI 面板开关,卡片外观与 provider 卡片一致。
+    /// 标签在左、开关(.switch 样式,macOS 默认是复选框)在右的标准行。
     private var aiSurfacesCard: some View {
         VStack(spacing: 0) {
-            Toggle("settings.ai_status_fab.enabled", isOn: Binding(
+            aiSurfaceRow("settings.ai_status_fab.enabled", isOn: Binding(
                 get: { appSettings.aiStatusFabEnabled },
                 set: { appSettings.aiStatusFabEnabled = $0 }
             ))
             Divider().padding(.horizontal, 12)
-            Toggle("settings.lockscreen_ai.enabled", isOn: Binding(
+            aiSurfaceRow("settings.lockscreen_ai.enabled", isOn: Binding(
                 get: { appSettings.lockScreenAIPanelEnabled },
                 set: { appSettings.lockScreenAIPanelEnabled = $0 }
             ))
@@ -451,6 +452,19 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
+    }
+
+    private func aiSurfaceRow(_ labelKey: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(LocalizedStringKey(labelKey))
+                .font(.system(size: 13, weight: .medium))
+            Spacer()
+            Toggle("", isOn: isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
     }
 
     private var aiAgentsView: some View {
@@ -604,7 +618,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding()
+            // 顶部收紧:卡片页只需留出与标题条的血缘间距,不要 Form 式大 padding。
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
         }
     }
 
