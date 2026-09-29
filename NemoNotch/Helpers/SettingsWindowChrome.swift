@@ -33,6 +33,11 @@ enum SettingsWindowChrome {
         toolbar.displayMode = .iconOnly
         toolbar.showsBaselineSeparator = false
         window.toolbar = toolbar
+        // .unified:项与红绿灯同排(默认 .expanded 会渲染成标题下方的悬浮大圆钮)。
+        window.toolbarStyle = .unified
+        // 隐藏窗口标题(侧栏选中项已表明当前页),标题占位消失后,唯一的
+        // 工具栏项 + flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
+        window.titleVisibility = .hidden
         LogService.info("Settings window toolbar installed", category: "Settings")
     }
 
@@ -54,11 +59,11 @@ enum SettingsWindowChrome {
         }
 
         func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-            [toggleItemIdentifier]
+            [toggleItemIdentifier, .flexibleSpace]
         }
 
         func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-            [toggleItemIdentifier]
+            [toggleItemIdentifier, .flexibleSpace]
         }
     }
 
