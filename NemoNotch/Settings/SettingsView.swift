@@ -143,6 +143,10 @@ struct SettingsView: View {
                     Text("settings.calendar_alerts.lead.10min").tag(10)
                     Text("settings.calendar_alerts.lead.15min").tag(15)
                 }
+                Toggle("settings.charging_alerts.enabled", isOn: Binding(
+                    get: { appSettings.chargingCapsuleEnabled },
+                    set: { appSettings.chargingCapsuleEnabled = $0 }
+                ))
             }
 
             Section("settings.ai_status_fab.header") {
