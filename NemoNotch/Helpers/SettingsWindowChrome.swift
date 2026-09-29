@@ -34,7 +34,9 @@ enum SettingsWindowChrome {
         toolbar.showsBaselineSeparator = false
         window.toolbar = toolbar
         // .unified:项与红绿灯同排(默认 .expanded 会渲染成标题下方的悬浮大圆钮)。
-        window.toolbarStyle = .unified
+        // .unifiedCompact:条尽量矮——右侧没有更多工具项,标准 unified 的
+        // 高度全是空白;compact 档按钮仍在红绿灯旁。
+        window.toolbarStyle = .unifiedCompact
         // 隐藏窗口标题(侧栏选中项已表明当前页),标题占位消失后,唯一的
         // 工具栏项 + flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
         window.titleVisibility = .hidden
