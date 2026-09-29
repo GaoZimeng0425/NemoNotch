@@ -52,7 +52,7 @@ struct SettingsView: View {
     @State private var cityDebounceTask: Task<Void, Never>? = nil
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: Binding(
                 get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
                 set: { if let page = $0 { selectedPageRaw = page.rawValue } }
@@ -65,16 +65,34 @@ struct SettingsView: View {
                 }
             }
             .navigationSplitViewColumnWidth(200)
+            // 自动的 sidebar toggle 掉在侧栏自己的工具条里(第二排居中,布局
+            // 错乱)。移除修饰符要贴在拥有该工具条的视图(List)上才生效。
+            .toolbar(removing: .sidebarToggle)
+            .toolbar {
+                // .topBarLeading/.navigationBar 在 macOS 上不可用;红绿灯那排
+                // 不对 SwiftUI 暴露槽位(Finder 是 AppKit 工具栏)。.navigation
+                // 是可达的最高位置:详情区标题正下方居中。
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                    }
+                }
+            }
         } detail: {
+            // 工具栏横带不藏(macOS 把红绿灯都放在 windowToolbar 里,藏了
+            // chrome 全丢)。inline 标题 + .navigation 按钮都收进红绿灯那一
+            // 排(大标题模式会产生"标题排 + 按钮排"两排结构,按钮居中悬空)。
             detailView
-                // 工具栏横带不藏(macOS 把红绿灯/侧栏收起按钮都放在里面,藏了
-                // chrome 全丢)——改为让它"有内容":随选中页显示标题,视觉上
-                // 就是系统设置那种带页面名的标题区,而不是空白 padding。
                 .navigationTitle(Text(LocalizedStringKey(currentPage.labelKey)))
+                .toolbarTitleDisplayMode(.inline)
         }
         .frame(width: 680, height: 480)
         .environment(\.locale, appSettings.currentLocale)
     }
+
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     private var currentPage: SettingsPage {
         SettingsPage(rawValue: selectedPageRaw) ?? .general
