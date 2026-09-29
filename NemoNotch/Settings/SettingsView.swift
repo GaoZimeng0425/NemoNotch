@@ -58,7 +58,9 @@ struct SettingsView: View {
                 set: { if let page = $0 { selectedPageRaw = page.rawValue } }
             )) {
                 ForEach(SettingsPage.allCases) { page in
-                    Label(page.labelKey, systemImage: page.symbol)
+                    // LocalizedStringKey 包装是必须的:`labelKey` 是 String 变量,
+                    // 直接传会被 SwiftUI 当字面文本渲染成 "settings.nav.general"。
+                    Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
                         .tag(page)
                 }
             }
@@ -148,7 +150,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     // MARK: - Alerts & effects
@@ -187,7 +188,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     // MARK: - About
@@ -763,7 +763,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     private func appName(for bundleID: String) -> String {

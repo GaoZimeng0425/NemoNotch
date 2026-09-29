@@ -15,6 +15,5 @@ struct HotkeysSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 }
