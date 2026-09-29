@@ -67,13 +67,17 @@ struct SettingsView: View {
             .navigationSplitViewColumnWidth(200)
         } detail: {
             detailView
+                // 工具栏横带不藏(macOS 把红绿灯/侧栏收起按钮都放在里面,藏了
+                // chrome 全丢)——改为让它"有内容":随选中页显示标题,视觉上
+                // 就是系统设置那种带页面名的标题区,而不是空白 padding。
+                .navigationTitle(Text(LocalizedStringKey(currentPage.labelKey)))
         }
-        // NavigationSplitView 在 macOS 上为窗口工具栏预留一条 ~50pt 的横带,
-        // 没有标题/工具项时就是纯空白 —— 每个 tab 顶部"凭空"多出一大截。
-        // 隐藏 windowToolbar 后内容从窗口顶开始,视觉密度对齐系统设置。
-        .toolbar(.hidden, for: .windowToolbar)
         .frame(width: 680, height: 480)
         .environment(\.locale, appSettings.currentLocale)
+    }
+
+    private var currentPage: SettingsPage {
+        SettingsPage(rawValue: selectedPageRaw) ?? .general
     }
 
     @ViewBuilder
