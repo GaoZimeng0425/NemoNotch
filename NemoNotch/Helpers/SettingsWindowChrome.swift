@@ -24,10 +24,20 @@ enum SettingsWindowChrome {
     /// ideal 值它根本不看,所以默认值得在这里由 NSWindow 层强制。
     private static let defaultContentWidth: CGFloat = 680
     private static let defaultContentHeight: CGFloat = 540
+    /// 一次性 frame 迁移标记。修复前存下的 frame 全是 scene 自定尺寸的 900 宽
+    /// 遗留(那时窗口不可拖,不存在用户意图),清一次让默认尺寸生效;之后的
+    /// frame 都是用户拖出来的,必须尊重。必须在本进程内删——从外部
+    /// `defaults delete` 对运行中的 app 不可靠(进程内 UserDefaults 缓存 +
+    /// 旧实例退出时回写),实测删了也会复活。
+    private static let frameMigrationKey = "settings.windowFrameMigratedToDefault"
 
     /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口的 autosave 名可能尚未
     /// 就位(场景的窗口元数据晚于内容出现),找不到就短暂重试。
     @MainActor static func install(retries: Int = 8) {
+        if !UserDefaults.standard.bool(forKey: frameMigrationKey) {
+            UserDefaults.standard.set(true, forKey: frameMigrationKey)
+            UserDefaults.standard.removeObject(forKey: "NSWindow Frame \(settingsAutosaveName)")
+        }
         guard let window = NSApp.windows.first(where: {
             $0.frameAutosaveName == settingsAutosaveName
         }) else {
