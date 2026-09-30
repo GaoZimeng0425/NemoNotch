@@ -205,6 +205,13 @@ enum NotchConstants {
     static let cornerRadiusBottomClosed: CGFloat = 8
     static let cornerRadiusBottomOpened: CGFloat = 24
 
+    /// matchedGeometryEffect id shared by the collapsed media coin
+    /// (`BadgeIconView.mediaBadge`) and the opened panel's vinyl disc
+    /// (`OverviewMediaSection.artwork`) — the boring.notch-style cross-state
+    /// morph. Both ends mount/unmount inside the same open/close transaction,
+    /// so the disc visibly flies between the two positions.
+    static let mediaVinylMorphID = "mediaVinylMorph"
+
     // HUD overlay
     static let hudHeight: CGFloat = 32
     static let hudCornerRadius: CGFloat = 16
