@@ -1,8 +1,8 @@
 import Foundation
 
-/// Pure decision logic for what AgentMonitorTab should render.
+/// Pure decision logic for what the AI tab's agent empty state should render.
 ///
-/// Extracted from AgentMonitorTab so the visibility rules in
+/// Extracted from the agent list components so the visibility rules in
 /// `docs/superpowers/specs/2026-05-25-service-recovery-cards-design.md`
 /// can be tested without mocking SwiftUI environments or MultiAgentMonitor
 /// existentials.
