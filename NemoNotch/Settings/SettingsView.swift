@@ -7,7 +7,9 @@ import UniformTypeIdentifiers
 enum SettingsPage: String, CaseIterable, Identifiable {
     case general, alerts, aiAgents, appList, notifications, hotkeys, pomodoro, keepAwake, about
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var labelKey: String {
         switch self {
@@ -82,7 +84,7 @@ struct SettingsView: View {
         .background(SettingsSidebarMaterial().ignoresSafeArea())
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
-        .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 480)
+        .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 540)
         .onAppear { SettingsWindowChrome.install() }
         .onReceive(NotificationCenter.default.publisher(for: SettingsWindowChrome.toggleSidebar)) { _ in
             withAnimation(.spring(duration: 0.3, bounce: 0.1)) {
@@ -105,7 +107,11 @@ struct SettingsView: View {
     private var sidebar: some View {
         List(selection: Binding(
             get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
-            set: { if let page = $0 { selectedPageRaw = page.rawValue } }
+            set: {
+                if let page = $0 {
+                    selectedPageRaw = page.rawValue
+                }
+            }
         )) {
             ForEach(SettingsPage.allCases) { page in
                 // LocalizedStringKey 包装是必须的:`labelKey` 是 String
