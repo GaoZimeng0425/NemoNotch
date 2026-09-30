@@ -82,13 +82,29 @@ enum SettingsWindowChrome {
         // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
         // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
         window.titleVisibility = .hidden
-        // 仅在没有持久化 frame 时套默认尺寸(首开,或 frame 缓存被清后);
+        // 仅在没有持久化 frame 时套默认尺寸(首开,或迁移清掉旧 frame 后);
         // 已有 frame——包括用户拖出来的尺寸——NSWindow 已恢复,不能踩。
+        // onAppear 早于 SwiftUI 给 Settings 窗口定尺寸的 pass,当场设会被它
+        // 回写成 900 宽;布局尘埃落定后必须再补设一次(探针实测:布局后
+        // 设置可粘住,onAppear 时设置被覆盖)。
         if UserDefaults.standard.object(forKey: "NSWindow Frame \(settingsAutosaveName)") == nil {
-            window.setContentSize(NSSize(width: defaultContentWidth, height: defaultContentHeight))
-            window.center()
+            applyDefaultSize(to: window)
+            Task { @MainActor [weak window] in
+                try? await Task.sleep(for: .milliseconds(350))
+                guard let window, window.toolbar != nil else { return }
+                applyDefaultSize(to: window)
+                LogService.info(
+                    "Settings window default size \(Int(window.frame.width))x\(Int(window.frame.height)) applied",
+                    category: "Settings"
+                )
+            }
         }
         LogService.info("Settings window toolbar installed", category: "Settings")
+    }
+
+    @MainActor private static func applyDefaultSize(to window: NSWindow) {
+        window.setContentSize(NSSize(width: defaultContentWidth, height: defaultContentHeight))
+        window.center()
     }
 
     private final class Delegate: NSObject, NSToolbarDelegate {
