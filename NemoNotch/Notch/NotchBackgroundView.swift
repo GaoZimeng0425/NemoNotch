@@ -5,14 +5,7 @@ struct NotchBackgroundView: View {
     let notchSize: CGSize
     let topCornerRadius: CGFloat
     let bottomCornerRadius: CGFloat
-    let spacing: CGFloat
     var glow: NotchGlow = .none
-    /// When true the shape fills its parent container's width (used by the
-    /// collapsed state, where the shape sits as a `.background` behind the
-    /// badge content and must match its content-driven width). When false the
-    /// shape uses the fixed `notchSize.width` (opened state, content is pinned
-    /// to a constant width).
-    var flexibleWidth: Bool = false
 
     var body: some View {
         notchedShape
@@ -32,6 +25,11 @@ struct NotchBackgroundView: View {
         }
     }
 
+    /// The shell is one `NotchShape`: the body is `notchSize.width` wide
+    /// (opened: the fixed panel width, closed: the measured badge-row width)
+    /// and the flares extend the top edge by `topCornerRadius` per side. The
+    /// same shape clips the fills and sizes the glow ring, so the silhouette
+    /// has exactly one definition.
     private var notchedShape: some View {
         ZStack {
             Rectangle()
@@ -79,127 +77,63 @@ struct NotchBackgroundView: View {
                 if let glowColor {
                     NotchGlowRing(
                         color: glowColor,
-                        cornerRadius: bottomCornerRadius,
+                        topCornerRadius: topCornerRadius,
+                        bottomCornerRadius: bottomCornerRadius,
                         notchSize: notchSize
                     )
                     .blendMode(.screen)
                 }
             }
         }
-        .mask(notchBackgroundMaskGroup)
-        .frame(height: notchSize.height)
-        .modifier(NotchShapeWidth(flexible: flexibleWidth, fixed: notchSize.width + topCornerRadius * 2))
+        .frame(width: notchSize.width + topCornerRadius * 2, height: notchSize.height)
+        .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
         .shadow(
             color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
             radius: NotchConstants.openedShadowRadius
         )
     }
-
-    private var notchBackgroundMaskGroup: some View {
-        Rectangle()
-            .foregroundStyle(.black)
-            .frame(height: notchSize.height)
-            .modifier(NotchShapeWidth(flexible: flexibleWidth, fixed: notchSize.width))
-            .clipShape(.rect(
-                bottomLeadingRadius: bottomCornerRadius,
-                bottomTrailingRadius: bottomCornerRadius
-            ))
-            .overlay {
-                ZStack(alignment: .topTrailing) {
-                    Rectangle()
-                        .frame(width: topCornerRadius, height: topCornerRadius)
-                        .foregroundStyle(.black)
-                    Rectangle()
-                        .clipShape(.rect(topTrailingRadius: topCornerRadius))
-                        .foregroundStyle(.white)
-                        .frame(
-                            width: topCornerRadius + spacing,
-                            height: topCornerRadius + spacing
-                        )
-                        .blendMode(.destinationOut)
-                }
-                .compositingGroup()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .offset(x: -topCornerRadius - spacing + 0.5, y: -0.5)
-            }
-            .overlay {
-                ZStack(alignment: .topLeading) {
-                    Rectangle()
-                        .frame(width: topCornerRadius, height: topCornerRadius)
-                        .foregroundStyle(.black)
-                    Rectangle()
-                        .clipShape(.rect(topLeadingRadius: topCornerRadius))
-                        .foregroundStyle(.white)
-                        .frame(
-                            width: topCornerRadius + spacing,
-                            height: topCornerRadius + spacing
-                        )
-                        .blendMode(.destinationOut)
-                }
-                .compositingGroup()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .offset(x: topCornerRadius + spacing - 0.5, y: -0.5)
-            }
-    }
-}
-
-/// Applies a width constraint that's either flexible (fill the parent, used by
-/// the collapsed content-driven shape as a `.background`) or fixed (the opened
-/// shape's constant width). SwiftUI's `frame` overloads don't allow `width` and
-/// `maxWidth` in the same call, so this branches between the two.
-private struct NotchShapeWidth: ViewModifier {
-    let flexible: Bool
-    let fixed: CGFloat
-
-    func body(content: Content) -> some View {
-        if flexible {
-            content.frame(maxWidth: .infinity)
-        } else {
-            content.frame(width: fixed)
-        }
-    }
 }
 
 /// Blurred inner edge ring with a gentle ambient breathing.
 ///
-/// Strokes the notch's rounded shape and blurs it; the parent's `.mask` clips
-/// the outward spread so only an inner-edge glow remains. A vertical fade keeps
-/// it on the lower half (vanishing by the middle), and the opacity oscillates
-/// slowly to read like a mood light. Owns its own `@State` so the breathing
-/// (re)starts whenever the glow appears.
+/// Strokes the same `NotchShape` the shell is clipped by, so the glow hugs
+/// the exact silhouette (flares included) instead of an approximation; the
+/// parent's clip shape removes the outward blur spread so only an inner-edge
+/// glow remains. A vertical fade keeps it on the lower half (vanishing by the
+/// middle), and the opacity oscillates slowly to read like a mood light.
+/// Owns its own `@State` so the breathing (re)starts whenever the glow
+/// appears.
 private struct NotchGlowRing: View {
     let color: Color
-    let cornerRadius: CGFloat
+    let topCornerRadius: CGFloat
+    let bottomCornerRadius: CGFloat
     let notchSize: CGSize
 
     @State private var breathe = false
 
     var body: some View {
-        UnevenRoundedRectangle(
-            bottomLeadingRadius: cornerRadius,
-            bottomTrailingRadius: cornerRadius
-        )
-        .stroke(
-            color.opacity(NotchConstants.glowRingOpacity),
-            lineWidth: NotchConstants.glowRingWidth
-        )
-        .frame(width: notchSize.width, height: notchSize.height)
-        .blur(radius: NotchConstants.glowRingBlur)
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 1.0 - NotchConstants.glowRingCoverage),
-                    .init(color: .black, location: 1.0),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
+        NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius)
+            .stroke(
+                color.opacity(NotchConstants.glowRingOpacity),
+                lineWidth: NotchConstants.glowRingWidth
             )
-        )
-        .opacity(breathe ? NotchConstants.glowPulseMax : NotchConstants.glowPulseMin)
-        .animation(
-            .easeInOut(duration: NotchConstants.glowPulseDuration).repeatForever(autoreverses: true),
-            value: breathe
-        )
-        .onAppear { breathe = true }
+            .frame(width: notchSize.width + topCornerRadius * 2, height: notchSize.height)
+            .blur(radius: NotchConstants.glowRingBlur)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 1.0 - NotchConstants.glowRingCoverage),
+                        .init(color: .black, location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .opacity(breathe ? NotchConstants.glowPulseMax : NotchConstants.glowPulseMin)
+            .animation(
+                .easeInOut(duration: NotchConstants.glowPulseDuration).repeatForever(autoreverses: true),
+                value: breathe
+            )
+            .onAppear { breathe = true }
     }
 }
