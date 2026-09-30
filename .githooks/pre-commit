@@ -5,8 +5,11 @@
 #
 # Rules:
 #   main/master : no direct commits (PR-only; locally use `git pull --ff-only`)
-#   develop     : direct commits allowed; but a merge resolved through conflicts
-#                 must come from feature/* or hotfix/*
+#   primary wt  : no direct commits at all — every commit happens in a feature
+#                 worktree (git feat). The only exception is concluding a
+#                 conflict-resolved merge (`git commit` with MERGE_HEAD present).
+#   swift lint  : staged *.swift pass SwiftFormat (auto-fix + re-stage) and
+#                 SwiftLint (error-level violations block). See scripts/lint.sh.
 
 branch=$(git symbolic-ref --short HEAD 2>/dev/null)
 
@@ -19,6 +22,19 @@ case "$branch" in
     echo "" >&2
     exit 1 ;;
 esac
+
+# ── Worktree 强制:主检出只接收合并,不产生直提 ──
+primary=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+here=$(git rev-parse --show-toplevel)
+if [ "$here" = "$primary" ] && [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  echo "" >&2
+  echo "✋ 禁止在主检出直接 commit — 所有提交都在 feature worktree 里进行。" >&2
+  echo "   开工:  git feat <name>  然后 cd ../NemoNotch-worktrees/<name>" >&2
+  echo "   收尾:  git feat-done <name>  (合并进 develop 并自动构建部署)" >&2
+  echo "   (应急绕过: git commit --no-verify)" >&2
+  echo "" >&2
+  exit 1
+fi
 
 # Conflict-resolved merges finish via `git commit`, which runs pre-commit
 # (pre-merge-commit is skipped when a merge has conflicts). Re-check the source.
@@ -35,6 +51,17 @@ if [ "$branch" = "develop" ] && [ -f "$(git rev-parse --git-path MERGE_HEAD)" ];
       echo "" >&2
       exit 1 ;;
   esac
+fi
+
+# ── Swift lint 门禁:SwiftFormat 自动修 + 重新暂存;SwiftLint error 级拦截 ──
+staged_swift=$(git diff --cached --name-only --diff-filter=ACM -- '*.swift')
+if [ -n "$staged_swift" ]; then
+  root=$(git rev-parse --show-toplevel)
+  if [ -f "$root/scripts/lint.sh" ]; then
+    sh "$root/scripts/lint.sh" --staged --fix || exit 1
+  else
+    echo "⚠️  scripts/lint.sh 不存在(基于旧 develop 的 worktree?)— 跳过 Swift lint" >&2
+  fi
 fi
 
 # Normalize any staged String Catalog to the canonical Xcode format, so hand-,

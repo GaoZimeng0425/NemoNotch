@@ -5,6 +5,8 @@ import Testing
 @MainActor
 struct AISourceRoutingTests {
     private func event(_ json: String) -> HookEvent {
+        // decode-or-die 测试夹具:坏 JSON 就该当场炸
+        // swiftlint:disable:next force_try
         try! JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
     }
 

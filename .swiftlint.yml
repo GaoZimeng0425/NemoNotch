@@ -1,0 +1,27 @@
+# NemoNotch SwiftLint 配置 — 「检测代码问题」;「美化」归 SwiftFormat(.swiftformat)。
+# 门禁(见 scripts/lint.sh 与 .githooks/pre-commit):error 级违规拦截提交,warning 只提示。
+# 分工原则:风格/排版类规则一律交给 swiftformat,这里不重复设卡。
+disabled_rules:
+  - line_length                            # swiftformat maxwidth 120 已管
+  - identifier_name                        # 既有缩写命名(HUD/FAB/AX 等)噪音大
+  - type_body_length
+  - function_body_length
+  - file_length
+  - nesting                                # SwiftUI 嵌套 View/Helper 是常态
+  - multiple_closures_with_trailing_closure # SwiftUI 处处 trailing closure
+  - trailing_comma                         # swiftformat 管
+  - trailing_whitespace                    # swiftformat 管
+  - vertical_whitespace                    # swiftformat 管
+  - opening_brace                          # swiftformat 管
+  - todo                                   # 存量 TODO 是有意留的
+  - cyclomatic_complexity                  # 先观察存量,不设卡
+  - function_parameter_count
+  - large_tuple
+  - for_where                              # 风格偏好,不强推
+excluded:
+  - build
+  - DerivedData
+  - docs
+  - .githooks
+  - scripts
+  - .scratch
