@@ -54,43 +54,32 @@ struct SettingsView: View {
     @State private var showSidebar = true
 
     var body: some View {
-        // 手动两栏布局,不用 NavigationSplitView(它给每列强加 header 横带,
-        // 自动 toggle 掉进去第二排居中、内容被顶下 ~100pt)。收起按钮经由
-        // SettingsWindowChrome 的真 NSToolbar 放进红绿灯同排——SwiftUI 的
-        // .toolbar 在 macOS 没有通往标题条的通道(试遍 placement 无一可达),
-        // AppKit 工具栏是唯一确定性方案。
-        HStack(spacing: 0) {
-            if showSidebar {
-                List(selection: Binding(
-                    get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
-                    set: { if let page = $0 { selectedPageRaw = page.rawValue } }
-                )) {
-                    ForEach(SettingsPage.allCases) { page in
-                        // LocalizedStringKey 包装是必须的:`labelKey` 是 String
-                        // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
-                        Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
-                            .tag(page)
-                    }
+        // NavigationSplitView 原生布局:侧栏材质直通窗口顶、行避让灯区、
+        // 详情间距都是它原生的——之前显丑的根源是窗口没开
+        // fullSizeContentView,内容被挡在标题条外形成"横带";现在
+        // SettingsWindowChrome 已开该标志 + 透明标题条,原生布局即正确。
+        // 收起按钮仍走 AppKit 工具栏桥(.toolbar 通道缺失 + 自动 toggle
+        // 移除需贴在 List 上)。
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            List(selection: Binding(
+                get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
+                set: { if let page = $0 { selectedPageRaw = page.rawValue } }
+            )) {
+                ForEach(SettingsPage.allCases) { page in
+                    // LocalizedStringKey 包装是必须的:`labelKey` 是 String
+                    // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
+                    Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
+                        .tag(page)
                 }
-                .listStyle(.sidebar)
-                .frame(width: 200)
-                // 材质直通窗口顶,行内容用 safeAreaInset 避开浮在左上的
-                // 红绿灯+收起按钮(contentMargins 在 Release 下不可靠)。
-                .ignoresSafeArea(.container, edges: .top)
-                .safeAreaInset(edge: .top) {
-                    Color.clear.frame(height: 44)
-                }
-                .transition(.move(edge: .leading))
             }
-            if showSidebar {
-                Divider()
-            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(200)
+            // 自动的 sidebar toggle 掉在侧栏自己的工具条里(第二排居中);
+            // 移除修饰符要贴在拥有该工具条的视图(List)上才生效。
+            // 替代品是 SettingsWindowChrome 的 AppKit 工具栏按钮(红绿灯旁)。
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
             detailView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // 内容侧头顶没有灯/按钮,不该跟着标题条高度走——直接顶格,
-                // 只留呼吸间距(透明标题条下滚动无遮挡问题:条内左侧才是控件)。
-                .ignoresSafeArea(.container, edges: .top)
-                .padding(.top, 12)
         }
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
@@ -98,11 +87,23 @@ struct SettingsView: View {
         .onAppear { SettingsWindowChrome.install() }
         .onReceive(NotificationCenter.default.publisher(for: SettingsWindowChrome.toggleSidebar)) { _ in
             withAnimation(.spring(duration: 0.25, bounce: 0.1)) {
-                showSidebar.toggle()
+                columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
             }
         }
         .environment(\.locale, appSettings.currentLocale)
+        .task {
+            // The AX grant happens in System Settings, outside this process.
+            // Poll while Settings is open so the permission card clears itself
+            // the moment the user finishes the drag-and-toggle. Scoped to the
+            // window's lifetime — no timer lingers once Settings closes.
+            while !Task.isCancelled {
+                notificationService.refreshAXTrust()
+                try? await Task.sleep(for: .seconds(1.5))
+            }
+        }
     }
+
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     private var currentPage: SettingsPage {
         SettingsPage(rawValue: selectedPageRaw) ?? .general
