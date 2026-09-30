@@ -84,6 +84,13 @@ struct NotchView: View {
     /// `.background` did.
     @State private var closedContentSize: CGSize = .zero
 
+    /// Morph namespace shared by the collapsed media coin and the opened
+    /// panel's vinyl — the two ends of the vinyl morph
+    /// (`NotchConstants.mediaVinylMorphID`). Owned here so both state's views
+    /// resolve against one identity; per-screen, so multi-display instances
+    /// never cross-match.
+    @Namespace private var notchMorph
+
     /// Collapsed shape size, floored at the physical notch so the first frame
     /// (before any measurement lands) and the empty-badge state still span the
     /// notch slot.
@@ -383,7 +390,7 @@ struct NotchView: View {
     private func tabContent(for tab: Tab) -> some View {
         switch tab {
         case .overview:
-            OverviewTab()
+            OverviewTab(morphNamespace: notchMorph)
         case .claude:
             AIChatTab()
         case .launcher:
@@ -426,7 +433,8 @@ struct NotchView: View {
             onBadgeTap: handleBadgeTap,
             notificationService: notificationService,
             mediaService: mediaService,
-            pomodoroService: pomodoroService
+            pomodoroService: pomodoroService,
+            morphNamespace: notchMorph
         )
         .frame(height: hardwareNotchSize.height)
         .animation(
