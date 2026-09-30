@@ -39,7 +39,7 @@ fi
 
 # Normalize any staged String Catalog to the canonical Xcode format, so hand-,
 # script-, or Xcode-GUI-edited *.xcstrings all commit as byte-identical to what
-# Xcode writes → minimal diffs. See scripts/xcstrings.py + CLAUDE.md → Localization.
+# Xcode writes → minimal diffs. See scripts/xcstrings.py + AGENTS.md → Localization.
 staged_xcstrings=$(git diff --cached --name-only --diff-filter=ACM -- '*.xcstrings')
 if [ -n "$staged_xcstrings" ]; then
   if command -v python3 >/dev/null 2>&1; then
