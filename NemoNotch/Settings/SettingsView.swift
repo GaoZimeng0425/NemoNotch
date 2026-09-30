@@ -74,11 +74,12 @@ struct SettingsView: View {
                 }
                 .listStyle(.sidebar)
                 .frame(width: 200)
-                // 材质直通窗口顶(红绿灯浮在上面,系统设置同款);行内容用
-                // contentMargins 避开灯区。窗口需 fullSizeContentView(见
-                // SettingsWindowChrome.install),否则 ignoresSafeArea 是空操作。
+                // 材质直通窗口顶,行内容用 safeAreaInset 避开浮在左上的
+                // 红绿灯+收起按钮(contentMargins 在 Release 下不可靠)。
                 .ignoresSafeArea(.container, edges: .top)
-                .contentMargins(.top, 40, for: .scrollContent)
+                .safeAreaInset(edge: .top) {
+                    Color.clear.frame(height: 44)
+                }
                 .transition(.move(edge: .leading))
             }
             if showSidebar {
@@ -86,6 +87,10 @@ struct SettingsView: View {
             }
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 内容侧头顶没有灯/按钮,不该跟着标题条高度走——直接顶格,
+                // 只留呼吸间距(透明标题条下滚动无遮挡问题:条内左侧才是控件)。
+                .ignoresSafeArea(.container, edges: .top)
+                .padding(.top, 12)
         }
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
