@@ -22,3 +22,15 @@ build.log
 # macOS playbook lives in its own repo (git@github.com:GaoZimeng0425/macos-playbook.git);
 # docs/macos is a local symlink to a sibling checkout, not tracked here.
 /docs/macos
+
+# Personal learning material / scratch (not part of the app)
+/MISSION.md
+/NOTES.md
+/RESOURCES.md
+/CONTEXT.md
+/learning-records/
+/lessons/
+/assets/
+/reference/
+/.scratch/
+/.zcode/
