@@ -288,7 +288,10 @@ final class HUDService {
               let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeRetainedValue() as? [String: Any]
+            // Get rule: the description dictionary is owned by `blob`, not the
+            // caller — takeRetainedValue over-releases it and SIGSEGVs later
+            // (bit us 2026-04 and again 2026-09, keep this takeUnretained).
+            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
             else { continue }
             let capacity = (info[kIOPSCurrentCapacityKey] as? Int) ?? 0
             let charging = info[kIOPSIsChargingKey] as? Bool ?? false
