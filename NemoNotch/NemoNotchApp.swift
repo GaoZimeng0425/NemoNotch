@@ -133,6 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         _ = LogService.shared
 
+        // 设置窗默认尺寸的启动期决策:必须在设置窗创建之前完成(窗口一创建就会把
+        // scene 强加的 frame 写进 autosave key,之后无法区分临时值与用户尺寸)。
+        SettingsWindowChrome.prepare()
+
         // 主线程卡顿探针:抓 watchdog 杀进程前那一轮主 runloop 卡在哪个业务函数。
         // 诊断 cpu_resource 崩溃(主线程卡在 NSView 递归 layout,由 CA::Transaction 每帧驱动)。
         MainThreadProbe.shared.install()
@@ -143,7 +147,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Warm the OpenRouter-backed model-context overlay (offline-safe; the
         // curated hardcoded table still resolves every lookup if this lags).
-        if !UITestMode.isActive { ModelContextWindow.warm() }
+        if !UITestMode.isActive {
+            ModelContextWindow.warm()
+        }
 
         let settings = AppSettings()
         let media = MediaService(disableLiveUpdates: UITestMode.isActive)
@@ -151,14 +157,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let aiMonitor = AICLIMonitorService()
         let launcher = LauncherService(settings: settings)
 
-        if !UITestMode.isActive { aiMonitor.startServer() }
+        if !UITestMode.isActive {
+            aiMonitor.startServer()
+        }
 
         let openClaw = OpenClawService()
-        if !UITestMode.isActive { openClaw.connect() }
+        if !UITestMode.isActive {
+            openClaw.connect()
+        }
         openClawService = openClaw
 
         let hermes = HermesService()
-        if !UITestMode.isActive { hermes.connect() }
+        if !UITestMode.isActive {
+            hermes.connect()
+        }
         aiMonitor.hermesService = hermes
         hermesService = hermes
 
@@ -190,7 +202,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let keepAwake = KeepAwakeService(settings: settings)
         // UI 测试跑在无人值守的截图脚本里,绝不能让它去碰全局电源设置。
-        if !UITestMode.isActive { keepAwake.start() }
+        if !UITestMode.isActive {
+            keepAwake.start()
+        }
         keepAwakeService = keepAwake
 
         let completionFlash = CompletionFlashService(
@@ -206,14 +220,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (进程模态)会挂起测试连接。
         let bluetooth = BluetoothService(settings: settings)
         bluetoothService = bluetooth
-        if !UITestMode.isActive, !UITestMode.isTestHost { bluetooth.start() }
+        if !UITestMode.isActive, !UITestMode.isTestHost {
+            bluetooth.start()
+        }
         let calendarDue = CalendarDueMonitor(
             calendar: calendar,
             completionFlash: completionFlash,
             settings: settings
         )
         calendarDueMonitor = calendarDue
-        if !UITestMode.isActive { calendarDue.start() }
+        if !UITestMode.isActive {
+            calendarDue.start()
+        }
 
         let system = SystemService()
         systemService = system
@@ -290,8 +308,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let session = aiMonitorService?.activeSession, session.status == .working {
                 return .claude
             }
-            if agentRegistry?.hasAnyActiveAgent == true { return .claude }
-            if mediaService?.playbackState.isPlaying == true { return .overview }
+            if agentRegistry?.hasAnyActiveAgent == true {
+                return .claude
+            }
+            if mediaService?.playbackState.isPlaying == true {
+                return .overview
+            }
             return nil
         }
         notchCoordinator.appSettings = settings
@@ -401,7 +423,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LogService.info("delaying termination to restore sleep settings", category: "AppDelegate")
         Task {
             let restored = await keepAwake.restoreForQuit()
-            if !restored { Self.presentRestoreFailureAlert() }
+            if !restored {
+                Self.presentRestoreFailureAlert()
+            }
             // 无论还原成功与否都放行退出 —— 卡住不让用户退出更糟。失败时
             // 落盘标记会保留,下次启动仍能认出这份残留。
             NSApp.reply(toApplicationShouldTerminate: true)
