@@ -54,6 +54,17 @@ final class NotificationService {
         NSWorkspace.shared.open(url)
     }
 
+    /// Re-read the AX trust flag on demand.
+    ///
+    /// `pollDock()` also refreshes it, but that timer only runs while there is
+    /// at least one monitored app — with an empty list the flag would stay
+    /// frozen at its launch value and the Settings permission card would never
+    /// clear, even after the user grants access in System Settings.
+    func refreshAXTrust() {
+        isAXTrusted = AXIsProcessTrusted()
+        logAXStateIfChanged(isAXTrusted)
+    }
+
     deinit {
         MainActor.assumeIsolated {
             pollTimer?.invalidate()

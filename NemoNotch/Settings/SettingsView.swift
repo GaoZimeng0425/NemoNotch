@@ -774,7 +774,10 @@ struct SettingsView: View {
                         detailKey: "permission.accessibility.detail",
                         status: .notDetermined,
                         primary: .settingsOnly,
-                        openSettings: { notificationService.openAccessibilitySettings() }
+                        // Opens the pane *and* parks the drag guide beside it —
+                        // Accessibility has no programmatic request API, so the
+                        // user has to drop the app into the list themselves.
+                        openSettings: { PermissionFlowController.shared.start(pane: .accessibility) }
                     )
                     .padding(.vertical, 4)
                 }
