@@ -447,26 +447,31 @@ Category naming: use module name, e.g. `"MediaService"`, `"HookServer"`, `"Notch
 
 ### Git Workflow
 
-**Never commit directly on main.** All development must follow Git Flow.
+**Never commit directly on main — and never commit in the primary checkout at all.** All development goes through feature worktrees (`git feat`).
 
 - **main**: Stable release branch, only accepts merges from develop, never direct commits
-- **develop**: Daily development branch, all feature branches are based on this
-- **feature/xxx**: Feature branches, branched from develop, merged back to develop when complete
+- **develop**: Integration branch — receives `--no-ff` merges via `git feat-done`; **no direct commits** (pre-commit blocks them in the primary worktree)
+- **feature/xxx**: Feature branches, created by `git feat xxx` in their own worktree, merged back to develop via `git feat-done xxx`
 - **hotfix/xxx**: Hotfix branches, branched from main, merged back to both main and develop
 
 Workflow:
 
-1. New feature: `git checkout develop && git checkout -b feature/xxx`
-2. After development, merge back to develop. After testing, merge develop to main
-3. Release: tag from main (`vX.Y.Z`)
+1. New feature: `git feat xxx` → `cd ../NemoNotch-worktrees/xxx` → work and commit inside the worktree
+2. Finish: `git feat-done xxx` — auto-stashes the primary checkout's dirty state, merges into develop (`--no-ff`), restores the stash, tears the worktree down
+3. The `post-merge` hook then runs `./build.sh` automatically, so the installed app always matches develop
+4. Release: tag from main (`vX.Y.Z`)
 
 **Enforced guards (per-clone, run once: `sh .githooks/install.sh`):** Source lives in `.githooks/` and is copied into the shared `.git` dir so it stays active across every branch and worktree. The guards make the rules above mechanical:
 
-- `pre-commit` / `pre-merge-commit` hooks: **block any commit or merge on `main`** (PR-only; locally use `git pull --ff-only`), and only allow `feature/*` / `hotfix/*` (or `origin/develop` self-sync) to merge into `develop`. Direct commits to `develop` stay allowed. Bypass with `--no-verify` in emergencies.
-- `pre-commit` also **normalizes any staged `*.xcstrings`** via `scripts/xcstrings.py format` (re-adds it), so String Catalog edits from Xcode's GUI, the script, or by hand all commit in Xcode's canonical format with a minimal diff — see [Localization](#localization-string-catalog).
+- `pre-commit` hook: blocks any commit on `main`/`master`; **blocks direct commits in the primary worktree** (every commit happens in a `git feat` worktree — the only exception is concluding a conflict-resolved merge via `git commit` with `MERGE_HEAD` present); runs the **Swift lint gate** on staged `*.swift`; normalizes any staged `*.xcstrings` via `scripts/xcstrings.py format`.
+- `pre-merge-commit` hook: blocks merge commits on `main`/`master` (PR-only); on `develop`, only `feature/*` / `hotfix/*` (or `origin/develop` self-sync) may merge.
+- `post-merge` hook: when develop receives a merge from `feature/*` / `hotfix/*` in the primary worktree, it runs `./build.sh` (full chain incl. install to `/Applications` + relaunch). Merging develop *into* a feature worktree (sync) does not trigger it. `NEMONOTCH_HOOK_DEBUG=1` dry-runs the command instead of building. Build failure is loud but never rolls the merge back.
 - Config: `pull.ff=only` (main never silently diverges), `branch.develop.rebase=true`, `branch.develop.mergeoptions=--no-ff` (feature merges keep a merge commit).
+- Bypass any guard in emergencies with `--no-verify`.
 
-**Worktree workflow (parallel features):** `git feat <name>` creates `feature/<name>` off `origin/develop` in a sibling worktree at `../NemoNotch-worktrees/<name>`; `git feat-done <name>` merges it back to `develop` (`--no-ff`) and tears the worktree down; `git feat-list` shows all worktrees. See `docs/git-worktree-workflow.md`.
+**Swift lint gate (eslint-style):** `scripts/lint.sh` = SwiftFormat (formatting, `.swiftformat`) + SwiftLint (analysis, `.swiftlint.yml`). Pre-commit runs it as `--staged --fix`: SwiftFormat auto-fixes staged files and re-stages them (files that also have unstaged changes are checked only, so partial staging never leaks unstaged hunks into the commit); SwiftLint **error**-level violations block the commit while warnings pass. Requires `brew install swiftlint swiftformat` — a missing tool **blocks** instead of silently skipping (no false green). Manual use: `sh scripts/lint.sh [--staged] [--fix]`.
+
+**Worktree workflow (parallel features):** `git feat <name>` creates `feature/<name>` off local develop (warns if behind origin/develop) in a sibling worktree at `../NemoNotch-worktrees/<name>`; `git feat-done <name>` merges it back to `develop` (`--no-ff`), auto-stashing/restoring the primary checkout's dirty state around the merge, then tears the worktree down; `git feat-list` shows all worktrees. See `docs/git-worktree-workflow.md`.
 
 ### Testing
 
