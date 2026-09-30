@@ -1,15 +1,37 @@
 import SwiftUI
 
-struct NotchBackgroundView: View {
+/// The notch shell: one clip, everything inside. The material (gradients,
+/// highlights, glow) fills the frame, the caller's content (panel + chin)
+/// layers on top, and a single `NotchShape` clips the whole subtree — content
+/// exceeding the silhouette is structurally impossible (boring.notch-style
+/// `content.background(.black).mask { NotchShape() }`).
+///
+/// Layers that must render OUTSIDE the silhouette stay siblings of this view
+/// in `NotchView`: the HUD (hangs below the notch), the transient capsules
+/// (grow wider than the closed shell), and the collapsed badge row (the badge
+/// row is the *source* of the closed body width — the shell is sized from its
+/// measurement, so it cannot overflow by construction, and keeping it a
+/// sibling avoids a parent-size-depends-on-child layout loop).
+struct NotchBackgroundView<Content: View>: View {
     let status: NotchCoordinator.Status
     let notchSize: CGSize
     let topCornerRadius: CGFloat
     let bottomCornerRadius: CGFloat
     var glow: NotchGlow = .none
+    @ViewBuilder let content: () -> Content
 
     var body: some View {
-        notchedShape
-            .drawingGroup()
+        ZStack(alignment: .top) {
+            material
+
+            content()
+        }
+        .frame(width: notchSize.width + topCornerRadius * 2, height: notchSize.height)
+        .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
+        .shadow(
+            color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
+            radius: NotchConstants.openedShadowRadius
+        )
     }
 
     private var showShadow: Bool {
@@ -25,12 +47,14 @@ struct NotchBackgroundView: View {
         }
     }
 
-    /// The shell is one `NotchShape`: the body is `notchSize.width` wide
-    /// (opened: the fixed panel width, closed: the measured badge-row width)
-    /// and the flares extend the top edge by `topCornerRadius` per side. The
-    /// same shape clips the fills and sizes the glow ring, so the silhouette
-    /// has exactly one definition.
-    private var notchedShape: some View {
+    /// Shell material — gradient base plus the opened-state highlights and
+    /// the activity glow, all plain rectangles. The silhouette comes solely
+    /// from the outer `.clipShape`; nothing here paints inside a path.
+    ///
+    /// `drawingGroup` flattens the `.screen` blend modes and wraps ONLY the
+    /// material — the caller's content tree must never be rasterized into the
+    /// group (it carries live SwiftUI animations).
+    private var material: some View {
         ZStack {
             Rectangle()
                 .foregroundStyle(
@@ -85,12 +109,7 @@ struct NotchBackgroundView: View {
                 }
             }
         }
-        .frame(width: notchSize.width + topCornerRadius * 2, height: notchSize.height)
-        .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
-        .shadow(
-            color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
-            radius: NotchConstants.openedShadowRadius
-        )
+        .drawingGroup()
     }
 }
 
