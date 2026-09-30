@@ -24,25 +24,32 @@ enum SettingsWindowChrome {
     /// ideal 值它根本不看,所以默认值得在这里由 NSWindow 层强制。
     private static let defaultContentWidth: CGFloat = 680
     private static let defaultContentHeight: CGFloat = 540
-    /// 一次性 frame 迁移标记。修复前存下的 frame 全是 scene 自定尺寸的 900 宽
-    /// 遗留(那时窗口不可拖,不存在用户意图),清一次让默认尺寸生效;之后的
-    /// frame 都是用户拖出来的,必须尊重。必须在本进程内删——从外部
-    /// `defaults delete` 对运行中的 app 不可靠(进程内 UserDefaults 缓存 +
-    /// 旧实例退出时回写),实测删了也会复活。
-    private static let frameMigrationKey = "settings.windowFrameMigratedToDefault"
+    /// 一次性 frame 迁移标记(v2:实现换了两代,重武装一次)。修复前存下的
+    /// frame 全是 scene 自定尺寸的 900 宽遗留(那时窗口不可拖,不存在用户意
+    /// 图),清一次让默认尺寸生效;之后的 frame 都是用户拖出来的,必须尊重。
+    /// 必须在本进程内删——从外部 `defaults delete` 对运行中的 app 不可靠
+    /// (进程内 UserDefaults 缓存 + 旧实例退出时回写),实测删了也会复活。
+    private static let frameMigrationKey = "settings.windowFrameMigratedToDefault.v2"
+    /// 本会话是否要在首次打开设置窗时套默认尺寸。必须在 app 启动、设置窗
+    /// 尚未创建时判定:窗口一创建就会把 scene 强加的 900 宽 frame 写进
+    /// autosave key,之后(onAppear/install 时)再读 key 无法区分"刚写入的
+    /// 临时值"和"用户存下的尺寸"。install() 的重试循环里读 key 更是必错
+    /// ——首次尝试消费掉迁移标记,重试时读到的已是窗口刚写回的 900。
+    @MainActor private static var pendingDefaultSize = true
 
-    /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口的 autosave 名可能尚未
-    /// 就位(场景的窗口元数据晚于内容出现),找不到就短暂重试。
-    @MainActor static func install(retries: Int = 8) {
+    /// AppDelegate 启动时调用:一次性迁移 + 捕获本会话的默认尺寸决策。
+    @MainActor static func prepare() {
         if !UserDefaults.standard.bool(forKey: frameMigrationKey) {
             UserDefaults.standard.set(true, forKey: frameMigrationKey)
             UserDefaults.standard.removeObject(forKey: "NSWindow Frame \(settingsAutosaveName)")
         }
-        // 必须在动窗口之前读:NSWindow 在窗口创建/装 toolbar 触发布局变化时会
-        // 随手把当前 frame 写进 autosave key——放在 chrome 安装之后读,会读到
-        // 刚被写入的 900 宽 frame 而误判"已有持久化 frame",跳过默认尺寸。
-        let needsDefaultSize = UserDefaults.standard
+        pendingDefaultSize = UserDefaults.standard
             .object(forKey: "NSWindow Frame \(settingsAutosaveName)") == nil
+    }
+
+    /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口的 autosave 名可能尚未
+    /// 就位(场景的窗口元数据晚于内容出现),找不到就短暂重试。
+    @MainActor static func install(retries: Int = 8) {
         guard let window = NSApp.windows.first(where: {
             $0.frameAutosaveName == settingsAutosaveName
         }) else {
@@ -87,12 +94,13 @@ enum SettingsWindowChrome {
         // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
         // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
         window.titleVisibility = .hidden
-        // 仅在没有持久化 frame 时套默认尺寸(首开,或迁移清掉旧 frame 后);
-        // 已有 frame——包括用户拖出来的尺寸——NSWindow 已恢复,不能踩。
+        // 只在本会话首次打开且启动时没有用户 frame 时套默认尺寸(pendingDefaultSize,
+        // 启动时捕获);已有 frame——包括用户拖出来的尺寸——NSWindow 已恢复,不能踩。
         // onAppear 早于 SwiftUI 给 Settings 窗口定尺寸的 pass,当场设会被它
         // 回写成 900 宽;布局尘埃落定后必须再补设一次(探针实测:布局后
         // 设置可粘住,onAppear 时设置被覆盖)。
-        if needsDefaultSize {
+        if pendingDefaultSize {
+            pendingDefaultSize = false
             applyDefaultSize(to: window)
             Task { @MainActor [weak window] in
                 try? await Task.sleep(for: .milliseconds(350))
