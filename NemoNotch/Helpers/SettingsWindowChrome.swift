@@ -38,6 +38,11 @@ enum SettingsWindowChrome {
             UserDefaults.standard.set(true, forKey: frameMigrationKey)
             UserDefaults.standard.removeObject(forKey: "NSWindow Frame \(settingsAutosaveName)")
         }
+        // 必须在动窗口之前读:NSWindow 在窗口创建/装 toolbar 触发布局变化时会
+        // 随手把当前 frame 写进 autosave key——放在 chrome 安装之后读,会读到
+        // 刚被写入的 900 宽 frame 而误判"已有持久化 frame",跳过默认尺寸。
+        let needsDefaultSize = UserDefaults.standard
+            .object(forKey: "NSWindow Frame \(settingsAutosaveName)") == nil
         guard let window = NSApp.windows.first(where: {
             $0.frameAutosaveName == settingsAutosaveName
         }) else {
@@ -87,7 +92,7 @@ enum SettingsWindowChrome {
         // onAppear 早于 SwiftUI 给 Settings 窗口定尺寸的 pass,当场设会被它
         // 回写成 900 宽;布局尘埃落定后必须再补设一次(探针实测:布局后
         // 设置可粘住,onAppear 时设置被覆盖)。
-        if UserDefaults.standard.object(forKey: "NSWindow Frame \(settingsAutosaveName)") == nil {
+        if needsDefaultSize {
             applyDefaultSize(to: window)
             Task { @MainActor [weak window] in
                 try? await Task.sleep(for: .milliseconds(350))
