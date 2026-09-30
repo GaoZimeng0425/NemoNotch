@@ -484,13 +484,7 @@ struct NotchView: View {
             notchSize: notchSize,
             topCornerRadius: notchTopCornerRadius,
             bottomCornerRadius: notchBottomCornerRadius,
-            spacing: NotchConstants.notchBackgroundSpacing,
-            glow: notchGlow,
-            // Always fixed now: the collapsed width used to come from flexing
-            // to a parent badge row, but the shape has no such parent anymore —
-            // it takes the measured width through `notchSize` instead, which is
-            // what lets one view animate across both states.
-            flexibleWidth: false
+            glow: notchGlow
         )
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
