@@ -425,6 +425,8 @@ Two gotchas worth keeping:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+**Evidence Discipline — state the tier; verify against the artifact.** A verification claim must declare where it sits on the five-rung evidence ladder: (1) self-asserted — worthless on its own; (2) points at concrete `file:line`; (3) walks the failure path step by step and shows it can't be reached; (4) **actually ran it** — a script or test touching the real code that fails loudly when wrong; (5) reproduced in the running app. Stopping at rung 2–3 is allowed; **writing up a safety claim as settled when it hasn't reached rung 4 is not** — and a write-up that "sounds right" reads as convincing whether or not it is true, so soundness is not evidence. Verify against the real artifact (run the feature, read the actual value, inspect the diff) — not proxies, mtimes, cached screenshots, or self-report; **when verification fails, suspect the observation method before suspecting the system**; for delegated work (subagent, script, other session), inspect the output artifact, not the delegate's summary. A deterministic script that re-runs the same comparison beats a one-time eyeball — that is what `scripts/lint.sh` / `scripts/test.sh` are for.
+
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 
 ### Logging
@@ -457,11 +459,13 @@ Category naming: use module name, e.g. `"MediaService"`, `"HookServer"`, `"Notch
 Workflow:
 
 1. New feature: `git feat xxx` → `cd ../NemoNotch-worktrees/xxx` → work and commit inside the worktree
-2. Finish: `git feat-done xxx` — auto-stashes the primary checkout's dirty state, merges into develop (`--no-ff`), restores the stash, tears the worktree down
+2. Finish: `git feat-done xxx` — runs the unit tests in the worktree first (Swift changes only; `NEMONOTCH_SKIP_TESTS=1` escapes), then auto-stashes the primary checkout's dirty state, merges into develop (`--no-ff`), restores the stash, tears the worktree down
 3. The `post-merge` hook then runs `./build.sh` automatically, so the installed app always matches develop
 4. Release: tag from main (`vX.Y.Z`)
 
-**Enforced guards (per-clone, run once: `sh .githooks/install.sh`):** Source lives in `.githooks/` and is copied into the shared `.git` dir so it stays active across every branch and worktree. The guards make the rules above mechanical:
+**Judge ≠ author:** before `git feat-done`, the feature diff gets an independent review — a code-review subagent or another session, never the agent/session that wrote the change. CI green, lint green, and a successful build are **signals, not verdicts**; "safe" is a verdict from someone who didn't write the code.
+
+**Enforced guards (per-clone, run once: `sh .githooks/install.sh`; re-run after pulling any change that touches `.githooks/` — the installed copies live in `.git` and don't self-update):** Source lives in `.githooks/` and is copied into the shared `.git` dir so it stays active across every branch and worktree. The guards make the rules above mechanical:
 
 - `pre-commit` hook: blocks any commit on `main`/`master`; **blocks direct commits in the primary worktree** (every commit happens in a `git feat` worktree — the only exception is concluding a conflict-resolved merge via `git commit` with `MERGE_HEAD` present); runs the **Swift lint gate** on staged `*.swift`; normalizes any staged `*.xcstrings` via `scripts/xcstrings.py format`.
 - `pre-merge-commit` hook: blocks merge commits on `main`/`master` (PR-only); on `develop`, only `feature/*` / `hotfix/*` (or `origin/develop` self-sync) may merge.
@@ -477,8 +481,11 @@ Workflow:
 
 - Unit tests live in `NemoNotchTests/`, written with **Swift Testing** (`import Testing`, `@Test`, `#expect`). Do not use XCTest for new code.
 - Test pure logic — parsers, encoders, state transitions. Skip ScriptingBridge / AX / NSWindow integration tests (they need real macOS permissions and are flaky in CI).
-- Run locally: `xcodebuild test -project NemoNotch.xcodeproj -scheme NemoNotch -destination 'platform=macOS'`.
-- New tests must pass before merging to `develop`.
+- **Run via `sh scripts/test.sh`** (not raw `xcodebuild`): it carries the ad-hoc signing flags this machine needs, supports `--only <TestClass>` to focus, writes the full output to `build/test.log`, and prints the exit code + log path. **Report test results by quoting this script's exit code and log — never paraphrase "tests pass" from memory.** (The lint gate's sibling entry; see Evidence Discipline above.)
+- `git feat-done` **runs the unit tests in the feature worktree before merging** — merging means auto-deploying to `/Applications`, so tests must precede deployment. Features with no `*.swift` / `project.pbxproj` changes skip the gate; `NEMONOTCH_SKIP_TESTS=1` is the emergency escape.
+- **Test discernment (the "undefined check", language-agnostic):** every test must call the unit under test with a concrete input and assert a literal output or observable side effect. The razor: *if the unit under test returned default values everywhere, would this test still pass?* If yes, it has no discriminating power and cannot fail for a defect. Not acceptable: asserting only that a call happened, self-referential expectations (`#expect(f(a)) == f(a)`-shaped), pinning a hand-written constant. Exception: cross-table relationship assertions (a key exists in both tables, a child references its parent). The existing pure-fold tests (`CompletionDetector`, `BadgeGrouping`, `FABCapsuleState`, `LockScreenAIPanelModel`) are the model.
+- **Bug fixes ship a failing test first**: the regression test lands as its own commit (or the first commit of the feature) while it still fails, with the actual failure output quoted in the commit message (`sh scripts/test.sh --only <Class>` red, then the fix on top) — so a reviewer can replay red→green instead of trusting a claim. Skip only when there is no cheap local test target (test path unclear, expensive, or integration-heavy).
+- **No mandatory TDD for new features — settled, don't re-litigate:** blind-reviewed data shows no quality difference at 3–8.5× token cost (Böckeler, *TDD in the Agent Loop*); the failing-test rule above already covers the case where evidence actually matters.
 
 ### Localization (String Catalog)
 

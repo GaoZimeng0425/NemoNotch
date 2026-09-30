@@ -17,8 +17,9 @@ sh .githooks/install.sh
 
 This copies the hooks and helper scripts **out of the working tree into the
 shared `.git` dir**, so they stay active on every branch and every worktree
-regardless of what is checked out. Re-run it after editing anything in
-`.githooks/`.
+regardless of what is checked out. Re-run it after editing — or pulling a
+change that touches — anything under `.githooks/` (installed copies don't
+self-update).
 
 What it configures:
 
@@ -71,6 +72,21 @@ formatting) + SwiftLint (`.swiftlint.yml`, analysis). Pre-commit invokes it as
 
 Manual runs: `sh scripts/lint.sh` (whole repo, read-only), `--fix` (format
 whole repo), `--staged [--fix]` (what the hook does).
+
+## Test gate & independent review
+
+- **`git feat-done` runs the unit tests in the feature worktree *before*
+  merging** — merging means auto-deploying to `/Applications`, so tests must
+  precede deployment. A failure aborts the merge with the worktree and branch
+  intact. Features with no `*.swift` changes skip the gate;
+  `NEMONOTCH_SKIP_TESTS=1` is the emergency escape.
+- `sh scripts/test.sh` is the manual entry (signing flags built in,
+  `--only <TestClass>` to focus, full log → `build/test.log`, exit code printed).
+  Report test results by quoting its exit code and log path, never paraphrased.
+- **Judge ≠ author:** before `git feat-done`, the feature diff gets an
+  independent review (code-review subagent or another session — never the one
+  that wrote the change). CI green, lint green, and a successful build are
+  signals, not verdicts.
 
 ## Branch rules (what the guards enforce)
 

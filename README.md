@@ -98,7 +98,7 @@ NemoNotch/
 2. Select the `NemoNotch` target
 3. Build & Run (requires macOS 14+)
 
-> **Developer setup:** committing requires the lint gate tools — `brew install swiftlint swiftformat`, then `sh .githooks/install.sh` (worktree workflow + hooks; merging into `develop` auto-builds and installs via `./build.sh`). See `docs/git-worktree-workflow.md`.
+> **Developer setup:** committing requires the lint gate tools — `brew install swiftlint swiftformat`, then `sh .githooks/install.sh` (worktree workflow + hooks; `git feat-done` runs the unit tests before merging into `develop` and auto-builds/installs via `./build.sh`). See `docs/git-worktree-workflow.md`.
 
 > **Note:** If macOS blocks the app on first launch, run the following command to remove the quarantine attribute:
 >

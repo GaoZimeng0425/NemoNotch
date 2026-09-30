@@ -98,7 +98,7 @@ NemoNotch/
 2. 选择 `NemoNotch` target
 3. Build & Run（需要 macOS 14+）
 
-> **开发者环境：** 提交代码需要先装 lint 门禁工具 —— `brew install swiftlint swiftformat`，再执行 `sh .githooks/install.sh`（安装 worktree 工作流与 hooks；合并进 `develop` 会自动执行 `./build.sh` 构建并安装新版）。详见 `docs/git-worktree-workflow.md`。
+> **开发者环境：** 提交代码需要先装 lint 门禁工具 —— `brew install swiftlint swiftformat`，再执行 `sh .githooks/install.sh`（安装 worktree 工作流与 hooks；`git feat-done` 合并进 `develop` 前会先跑单元测试，合并后自动执行 `./build.sh` 构建并安装新版）。详见 `docs/git-worktree-workflow.md`。
 
 > **注意：** 首次启动时如果 macOS 阻止打开应用，请执行以下命令移除隔离属性：
 >
