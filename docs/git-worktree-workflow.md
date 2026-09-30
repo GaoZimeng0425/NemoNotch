@@ -38,9 +38,12 @@ What it configures:
 ## Daily commands
 
 ```sh
-git feat <name>        # feature/<name> off local develop, in a sibling worktree
-                       #   ../NemoNotch-worktrees/<name>
-                       #   (warns if local develop is behind origin/develop)
+git feat <name>        # pull latest first: ff-only --autostash develop to
+                       #   origin/develop when purely behind (aborts the feat
+                       #   if the pull fails), then feature/<name> off the
+                       #   refreshed develop, in ../NemoNotch-worktrees/<name>
+                       #   (diverged → warns, stays on local develop;
+                       #    primary not on develop → warns, skips the pull)
 cd ../NemoNotch-worktrees/<name>
 # ...work, commit freely on the feature branch (lint gate runs on commit)...
 
