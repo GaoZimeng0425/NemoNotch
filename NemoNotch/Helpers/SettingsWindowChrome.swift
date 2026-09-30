@@ -13,14 +13,34 @@ enum SettingsWindowChrome {
     private static let toolbarIdentifier = NSToolbar.Identifier("NemoNotchSettingsToolbar")
     private static let toggleItemIdentifier = NSToolbarItem.Identifier("NemoNotchSettingsToggleSidebar")
 
-    /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口标题可能尚未就位
-    /// (Settings 场景的窗口元数据晚于内容出现),找不到就短暂重试。
+    /// SwiftUI Settings 场景窗口的 frame autosave 名(实测常量,`NSWindow Frame
+    /// com_apple_SwiftUI_Settings_window` 即由它写入)。用它认窗口是确定性的:
+    /// 按标题匹配在真机上会扑空(title 在 onAppear 时未必就位),而 notch 各窗口
+    /// 与它天然互斥——只有 Settings 场景窗口带这个 autosave 名。
+    private static let settingsAutosaveName = "com_apple_SwiftUI_Settings_window"
+    /// 默认窗口尺寸,与 SettingsView 根视图的
+    /// `.frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 540)`
+    /// 保持同步——Settings 场景自己定窗口尺寸(实测开 900 宽、约 minHeight 高),
+    /// ideal 值它根本不看,所以默认值得在这里由 NSWindow 层强制。
+    private static let defaultContentWidth: CGFloat = 680
+    private static let defaultContentHeight: CGFloat = 540
+
+    /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口的 autosave 名可能尚未
+    /// 就位(场景的窗口元数据晚于内容出现),找不到就短暂重试。
     @MainActor static func install(retries: Int = 8) {
         guard let window = NSApp.windows.first(where: {
-            $0.isVisible && $0.title.hasPrefix("NemoNotch") && $0.toolbar == nil
+            $0.frameAutosaveName == settingsAutosaveName
         }) else {
             guard retries > 0 else {
-                LogService.warn("Settings toolbar install gave up: window not found", category: "Settings")
+                let dump = NSApp.windows
+                    .map {
+                        "\($0.frameAutosaveName.isEmpty ? "-" : $0.frameAutosaveName)|'\($0.title)'|vis=\($0.isVisible)|tb=\($0.toolbar != nil)"
+                    }
+                    .joined(separator: "; ")
+                LogService.warn(
+                    "Settings toolbar install gave up: window not found. windows=[\(dump)]",
+                    category: "Settings"
+                )
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -28,6 +48,7 @@ enum SettingsWindowChrome {
             }
             return
         }
+        guard window.toolbar == nil else { return } // 本会话已装过
         let toolbar = NSToolbar(identifier: toolbarIdentifier)
         toolbar.delegate = Delegate.shared
         toolbar.displayMode = .iconOnly
@@ -45,12 +66,18 @@ enum SettingsWindowChrome {
         // Settings 场景造的窗口天生没有 .resizable,用户无法拖拽缩放;内容的
         // frame(minWidth:minHeight:) 会以 auto-layout 约束落在 hosting view 上,
         // 拖不破版式。缺这一位时,autosave 恢复的旧 frame(曾存下 900 宽)永远
-        // 改不回来,idealWidth 也夺不回控制权。
+        // 改不回来。
         window.styleMask.insert(.resizable)
         window.titlebarAppearsTransparent = true
         // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
         // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
         window.titleVisibility = .hidden
+        // 仅在没有持久化 frame 时套默认尺寸(首开,或 frame 缓存被清后);
+        // 已有 frame——包括用户拖出来的尺寸——NSWindow 已恢复,不能踩。
+        if UserDefaults.standard.object(forKey: "NSWindow Frame \(settingsAutosaveName)") == nil {
+            window.setContentSize(NSSize(width: defaultContentWidth, height: defaultContentHeight))
+            window.center()
+        }
         LogService.info("Settings window toolbar installed", category: "Settings")
     }
 
