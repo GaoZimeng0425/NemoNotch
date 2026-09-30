@@ -82,3 +82,18 @@ enum SettingsWindowChrome {
         }
     }
 }
+
+/// Settings 窗口的底层(凹陷层):真正的 sidebar 材质,behind-window 混合,
+/// 与 Finder / 系统设置侧栏同一种半透明质感。侧栏直接画在它上面,右侧
+/// 内容卡片压在它之上,卡片四周露出的一圈就是凹陷边框。
+struct SettingsSidebarMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}

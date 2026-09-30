@@ -52,42 +52,41 @@ struct SettingsView: View {
     @State private var cityDebounceTask: Task<Void, Never>? = nil
 
     @State private var showSidebar = true
+    /// 标题条(红绿灯 + 收起按钮那一排)的高度,取自系统安全区。
+    @State private var titlebarInset: CGFloat = 0
+
+    /// 卡片与窗口边、与侧栏之间的间距——也是收起侧栏后卡片四周
+    /// 露出的"凹陷边框"宽度。
+    private let cardInset: CGFloat = 8
+    private let sidebarWidth: CGFloat = 200
 
     var body: some View {
-        // NavigationSplitView 原生布局:侧栏材质直通窗口顶、行避让灯区、
-        // 详情间距都是它原生的——之前显丑的根源是窗口没开
-        // fullSizeContentView,内容被挡在标题条外形成"横带";现在
-        // SettingsWindowChrome 已开该标志 + 透明标题条,原生布局即正确。
-        // 收起按钮仍走 AppKit 工具栏桥(.toolbar 通道缺失 + 自动 toggle
-        // 移除需贴在 List 上)。
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(selection: Binding(
-                get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
-                set: { if let page = $0 { selectedPageRaw = page.rawValue } }
-            )) {
-                ForEach(SettingsPage.allCases) { page in
-                    // LocalizedStringKey 包装是必须的:`labelKey` 是 String
-                    // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
-                    Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
-                        .tag(page)
-                }
+        // 手排布局而非 NavigationSplitView:macOS 26 原生侧栏是"浮起的玻璃
+        // 面板",与要求的层次相反——这里窗口底层是 sidebar 材质(凹陷层),
+        // 侧栏直接画在上面,右侧内容是凸起的圆角卡片;收起侧栏后卡片四周
+        // 留出等宽的凹陷边框。红绿灯与收起按钮同在标题条一排(AppKit
+        // 工具栏桥,见 SettingsWindowChrome);卡片不让标题条安全区,四边
+        // 等距铺满,只有侧栏行避让红绿灯。
+        HStack(spacing: 0) {
+            if showSidebar {
+                sidebar
+                    .frame(width: sidebarWidth)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(200)
-            // 自动的 sidebar toggle 掉在侧栏自己的工具条里(第二排居中);
-            // 移除修饰符要贴在拥有该工具条的视图(List)上才生效。
-            // 替代品是 SettingsWindowChrome 的 AppKit 工具栏按钮(红绿灯旁)。
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
-            detailView
+            detailCard
+                .padding(.leading, showSidebar ? 0 : cardInset)
+                .padding([.top, .trailing, .bottom], cardInset)
+                .ignoresSafeArea(.container, edges: .top)
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { titlebarInset = $0 }
+        .background(SettingsSidebarMaterial().ignoresSafeArea())
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
         .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 480)
         .onAppear { SettingsWindowChrome.install() }
         .onReceive(NotificationCenter.default.publisher(for: SettingsWindowChrome.toggleSidebar)) { _ in
-            withAnimation(.spring(duration: 0.25, bounce: 0.1)) {
-                columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+            withAnimation(.spring(duration: 0.3, bounce: 0.1)) {
+                showSidebar.toggle()
             }
         }
         .environment(\.locale, appSettings.currentLocale)
@@ -103,7 +102,38 @@ struct SettingsView: View {
         }
     }
 
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    private var sidebar: some View {
+        List(selection: Binding(
+            get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
+            set: { if let page = $0 { selectedPageRaw = page.rawValue } }
+        )) {
+            ForEach(SettingsPage.allCases) { page in
+                // LocalizedStringKey 包装是必须的:`labelKey` 是 String
+                // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
+                Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
+                    .tag(page)
+            }
+        }
+        .listStyle(.sidebar)
+        // 列表自身不铺底色,透出窗口底层的 sidebar 材质(凹陷层)。
+        .scrollContentBackground(.hidden)
+    }
+
+    private var detailCard: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return detailView
+            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底色。
+            .scrollContentBackground(.hidden)
+            // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
+            // 只把内容让出标题条高度。
+            .safeAreaPadding(.top, showSidebar ? 0 : max(0, titlebarInset - cardInset))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .clipShape(shape)
+            // 细描边 + 柔和投影让卡片浮起,周围的材质边框随之读作凹陷。
+            .overlay(shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+    }
 
     private var currentPage: SettingsPage {
         SettingsPage(rawValue: selectedPageRaw) ?? .general
