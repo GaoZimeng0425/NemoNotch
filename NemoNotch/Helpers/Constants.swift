@@ -109,6 +109,13 @@ enum NotchConstants {
     /// How long the completion toast stays before dismissing (own value — the
     /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
     static let completionToastDuration: Double = 5.0
+    /// Calendar due monitor tick cadence — how late an "on start" reminder can
+    /// be in the worst case.
+    static let calendarDueTickInterval: TimeInterval = 10
+    /// How long after an event's start it still counts as "due". Beyond this,
+    /// the monitor stays silent: reminding about a meeting that started long
+    /// ago (e.g. before the app launched) is noise, not a reminder.
+    static let calendarDueLateGrace: TimeInterval = 120
     /// Thickness (points) of the accent halo band wrapping the screen edge.
     /// Kept narrower than the blur so the halo reads as an edge-anchored glow
     /// that fades smoothly inward rather than a flat-topped band.
@@ -145,8 +152,11 @@ enum NotchConstants {
     static let aiStatusFabFadeDuration: Double = 0.24
     // Fixed-canvas sizing (the window never resizes on expand/collapse, mirroring
     // NotchWindow). Canvas = panel size + shadow blur room on both axes.
-    static let aiStatusFabPanelHeight: CGFloat = 280
+    static let aiStatusFabPanelHeight: CGFloat = 340
     static let aiStatusFabShadowPad: CGFloat = 20
+    /// Height reserved at the panel's bottom for the usage/quota strip. Always
+    /// reserved (even while collapsed) so expanding never reflows the list.
+    static let aiStatusFabQuotaStripHeight: CGFloat = 52
     // Collapsed capsule geometry — corner radius = height/2 yields a pill.
     static let aiStatusFabCapsuleHeight: CGFloat = 32
     // Open/close spring durations match NotchCoordinator's notch transitions.
@@ -208,4 +218,11 @@ enum NotchConstants {
     static let hudSegmentHeight: CGFloat = 14
     static let hudSegmentSpacing: CGFloat = 2.5
     static let hudSegmentCornerRadius: CGFloat = 2
+    // Notch capsule (Dynamic-Island-style transient expansion, shared by the
+    // Bluetooth connect/disconnect and charging capsules)
+    /// How long the capsule stays grown before collapsing back to the notch.
+    static let notchCapsuleDwell: Double = 2.8
+    static let notchCapsuleHPadding: CGFloat = 14
+    static let notchCapsuleFontSize: CGFloat = 13
+    static let notchCapsuleIconSize: CGFloat = 14
 }

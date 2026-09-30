@@ -1,5 +1,30 @@
 import Foundation
 
+/// Decodes any JSON value and stringifies it — used for `message`, which
+/// emitters disagree on (string vs object/array).
+private struct FlexibleString: Decodable {
+    let value: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let s = try? container.decode(String.self) {
+            value = s
+        } else if let n = try? container.decode(Double.self) {
+            value = n == n.rounded() ? String(Int(n)) : String(n)
+        } else if let b = try? container.decode(Bool.self) {
+            value = String(b)
+        } else if let arr = try? container.decode([FlexibleString].self) {
+            value = arr.compactMap(\.value).joined(separator: "\n")
+        } else if let obj = try? container.decode([String: FlexibleString].self) {
+            value = obj.sorted(by: { $0.key < $1.key })
+                .compactMap { "\($0.key): \($0.value.value ?? "")" }
+                .joined(separator: "\n")
+        } else {
+            value = nil
+        }
+    }
+}
+
 struct HookEvent: Codable, Sendable {
     let hookEventName: String
     let sessionId: String?
@@ -22,7 +47,10 @@ struct HookEvent: Codable, Sendable {
         sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
         toolName = try container.decodeIfPresent(String.self, forKey: .toolName)
         toolUseId = try container.decodeIfPresent(String.self, forKey: .toolUseId)
-        message = try container.decodeIfPresent(String.self, forKey: .message)
+        // Claude/zcode deliver `message` as a plain string, but some emitters
+        // (zcode's Stop) send the assistant message as a JSON object — keep the
+        // event alive by stringifying whatever shape arrives.
+        message = (try? container.decodeIfPresent(FlexibleString.self, forKey: .message))?.value
         cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
         source = try container.decodeIfPresent(String.self, forKey: .source)
         cliSource = try container.decodeIfPresent(String.self, forKey: .cliSource)

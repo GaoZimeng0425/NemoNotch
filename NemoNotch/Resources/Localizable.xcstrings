@@ -4,15 +4,6 @@
     "" : {
 
     },
-    "--" : {
-
-    },
-    "·" : {
-
-    },
-    "· %@" : {
-
-    },
     "%@\n" : {
 
     },
@@ -88,19 +79,16 @@
     "+%lld more" : {
 
     },
-    "~ %lld" : {
+    "--" : {
 
     },
-    "✓ %lld" : {
+    "Hermes Agent" : {
 
     },
-    "✗ %lld" : {
+    "NemoNotch %@" : {
 
     },
-    "🍅" : {
-
-    },
-    "🦞" : {
+    "OpenClaw" : {
 
     },
     "agents.all_offline" : {
@@ -1013,8 +1001,85 @@
     "ctx" : {
 
     },
-    "Hermes Agent" : {
-
+    "keepawake.error.cancelled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorization was cancelled."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消授权。"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.copyCommand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制命令"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac is still set to stay awake with the lid closed, and that setting survives a restart. Run “sudo pmset -a disablesleep 0” in Terminal to undo it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 仍处于「合盖不休眠」状态，且该设置重启后依然有效。请在终端执行 “sudo pmset -a disablesleep 0” 还原。"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
+          }
+        }
+      }
+    },
+    "keepawake.restoreFailed.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not restore normal sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能还原休眠设置"
+          }
+        }
+      }
     },
     "launcher.search_apps" : {
       "localizations" : {
@@ -1028,6 +1093,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索应用"
+          }
+        }
+      }
+    },
+    "lockscreen.ai.more %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld more"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还有 %lld 个"
+          }
+        }
+      }
+    },
+    "lockscreen.ai.status.awaiting_approval" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Awaiting approval"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待批准"
+          }
+        }
+      }
+    },
+    "lockscreen.ai.status.compacting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compacting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理上下文"
+          }
+        }
+      }
+    },
+    "lockscreen.ai.status.running" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Running"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行中"
+          }
+        }
+      }
+    },
+    "lockscreen.ai.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Processes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 进程"
           }
         }
       }
@@ -1125,6 +1270,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "安装 zcode 钩子"
+          }
+        }
+      }
+    },
+    "menu.keep_awake" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Awake (Lid Closed)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖不休眠"
+          }
+        }
+      }
+    },
+    "menu.keep_awake.external" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled outside NemoNotch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由其他方式开启"
           }
         }
       }
@@ -1339,9 +1516,6 @@
         }
       }
     },
-    "NemoNotch %@" : {
-
-    },
     "notch.context.quit" : {
       "localizations" : {
         "en" : {
@@ -1375,9 +1549,6 @@
       }
     },
     "npm install -g openclaw@latest" : {
-
-    },
-    "OpenClaw" : {
 
     },
     "openclaw.all_agents_idle" : {
@@ -1650,6 +1821,38 @@
         }
       }
     },
+    "permission.appmanagement.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App Management"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用管理"
+          }
+        }
+      }
+    },
+    "permission.bluetooth.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bluetooth"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝牙"
+          }
+        }
+      }
+    },
     "permission.calendar.detail" : {
       "localizations" : {
         "en" : {
@@ -1699,6 +1902,150 @@
         }
       }
     },
+    "permission.devtools.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Developer Tools"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开发者工具"
+          }
+        }
+      }
+    },
+    "permission.flow.after_hint %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Then switch on the toggle next to %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "然后打开 %@ 旁边的开关"
+          }
+        }
+      }
+    },
+    "permission.flow.close_help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
+    "permission.flow.drag_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag the app into the list above"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把应用拖到上方的列表中"
+          }
+        }
+      }
+    },
+    "permission.flow.drag_target %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Under %@ in the list above"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放到上方 %@ 的列表中"
+          }
+        }
+      }
+    },
+    "permission.flow.granted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permission granted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已授权"
+          }
+        }
+      }
+    },
+    "permission.flow.granted_detail %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ now has access — you can close System Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已获得权限，可以关闭系统设置了。"
+          }
+        }
+      }
+    },
+    "permission.flow.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorization needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要授权"
+          }
+        }
+      }
+    },
+    "permission.fulldisk.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Disk Access"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完全磁盘访问"
+          }
+        }
+      }
+    },
     "permission.grant" : {
       "localizations" : {
         "en" : {
@@ -1711,6 +2058,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "授权"
+          }
+        }
+      }
+    },
+    "permission.inputmonitoring.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Input Monitoring"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入监控"
           }
         }
       }
@@ -1743,6 +2106,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "位置访问权限"
+          }
+        }
+      }
+    },
+    "permission.media.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media & Apple Music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体与 Apple Music"
           }
         }
       }
@@ -1793,6 +2172,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开设置"
+          }
+        }
+      }
+    },
+    "permission.screenrecording.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Recording"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏幕录制"
           }
         }
       }
@@ -3023,6 +3418,54 @@
         }
       }
     },
+    "quota.zcode.compact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日 %@"
+          }
+        }
+      }
+    },
+    "quota.zcode.today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日"
+          }
+        }
+      }
+    },
+    "quota.zcode.week" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7 days"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近 7 天"
+          }
+        }
+      }
+    },
     "settings.about.acknowledgements" : {
       "localizations" : {
         "en" : {
@@ -3201,6 +3644,40 @@
         }
       }
     },
+    "settings.ai_status_fab.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show floating AI-status button while sessions run"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话运行时显示悬浮 AI 状态按钮"
+          }
+        }
+      }
+    },
+    "settings.ai_status_fab.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Status Button"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 状态按钮"
+          }
+        }
+      }
+    },
     "settings.app_list" : {
       "localizations" : {
         "en" : {
@@ -3295,40 +3772,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成闪烁"
-          }
-        }
-      }
-    },
-    "settings.ai_status_fab.enabled" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show floating AI-status button while sessions run"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话运行时显示悬浮 AI 状态按钮"
-          }
-        }
-      }
-    },
-    "settings.ai_status_fab.header" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI Status Button"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI 状态按钮"
           }
         }
       }
@@ -3495,6 +3938,246 @@
         }
       }
     },
+    "settings.keepawake.about.persistent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That setting is global and survives a restart. If NemoNotch is force-quit before restoring it, run this in Terminal:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该设置是全局的，重启后依然有效。若 NemoNotch 被强制退出而来不及还原，可在终端执行："
+          }
+        }
+      }
+    },
+    "settings.keepawake.about.privilege" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Closing the lid triggers sleep inside the kernel, which ignores the usual sleep-prevention APIs. The only way to stop it is a global system power setting, so each toggle needs one administrator authorization."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖休眠由内核处理，会忽略常规的防休眠接口。唯一能挡住它的是一项全局系统电源设置，因此每次切换都需要一次管理员授权。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.aboutHeader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How this works"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工作原理"
+          }
+        }
+      }
+    },
+    "settings.keepawake.copyCommand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制"
+          }
+        }
+      }
+    },
+    "settings.keepawake.enable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prevent sleep when the lid closes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖时不休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.lidDisplayOff" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn off the display when the lid closes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖时自动熄屏"
+          }
+        }
+      }
+    },
+    "settings.keepawake.lidDisplayOff.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With sleep disabled the screen stays lit behind a closed lid, which keeps draining the battery and building up heat. Skipped when an external display is connected — that is the clamshell setup you probably want."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "禁用休眠后，合盖时屏幕不会自动熄灭，会持续耗电发热。接有外接显示器时不熄屏 —— 那正是常见的合盖外接工作方式。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.optionsHeader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Options"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选项"
+          }
+        }
+      }
+    },
+    "settings.keepawake.restoreOnQuit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore normal sleep when quitting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出时还原休眠设置"
+          }
+        }
+      }
+    },
+    "settings.keepawake.restoreOnQuit.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitting NemoNotch turns sleep prevention back off, which needs one more authorization prompt. Leave this off to keep the setting after quitting — you will have to turn it off yourself."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出 NemoNotch 时自动关闭防休眠，会再弹一次授权框。关掉此项则退出后设置继续保留 —— 需要你自己记得关。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.status.authorizing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for administrator authorization…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待管理员授权…"
+          }
+        }
+      }
+    },
+    "settings.keepawake.status.external" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep is already disabled on this system, but NemoNotch did not turn it on. Switching this off will disable it anyway."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统已禁用休眠，但不是 NemoNotch 开启的。关闭此开关会一并把它关掉。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.status.on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep is disabled — closing the lid will not put this Mac to sleep."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "休眠已禁用 —— 合盖不会让这台 Mac 进入睡眠。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.tab" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Awake"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "防休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Awake with Lid Closed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖不休眠"
+          }
+        }
+      }
+    },
     "settings.language" : {
       "localizations" : {
         "en" : {
@@ -3555,6 +4238,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "简体中文"
+          }
+        }
+      }
+    },
+    "settings.lockscreen_ai.enabled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show AI activity when locked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "锁屏时显示 AI 运行状态"
+          }
+        }
+      }
+    },
+    "settings.lockscreen_ai.header" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock Screen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "锁屏"
           }
         }
       }
@@ -4457,44 +5172,385 @@
         }
       }
     },
-    "menu.keep_awake" : {
+    "~ %lld" : {
+
+    },
+    "·" : {
+
+    },
+    "· %@" : {
+
+    },
+    "✓ %lld" : {
+
+    },
+    "✗ %lld" : {
+
+    },
+    "🍅" : {
+
+    },
+    "🦞" : {
+
+    },
+    "settings.event_alerts.header" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep Awake (Lid Closed)"
+            "value" : "Event Alerts"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合盖不休眠"
+            "value" : "事件提醒"
           }
         }
       }
     },
-    "menu.keep_awake.external" : {
+    "settings.bluetooth_alerts.enabled" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enabled outside NemoNotch"
+            "value" : "Flash when a Bluetooth audio device connects or disconnects"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "由其他方式开启"
+            "value" : "蓝牙音频设备连接/断开时提醒"
           }
         }
       }
     },
-    "settings.keepawake.tab" : {
+    "settings.calendar_alerts.enabled" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Awake"
+            "value" : "Flash when a calendar event is due"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日历事件到点时提醒"
+          }
+        }
+      }
+    },
+    "settings.calendar_alerts.lead" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind ahead of start"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提前提醒"
+          }
+        }
+      }
+    },
+    "settings.calendar_alerts.lead.at_start" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At start"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到点"
+          }
+        }
+      }
+    },
+    "settings.calendar_alerts.lead.5min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 minutes before"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提前 5 分钟"
+          }
+        }
+      }
+    },
+    "settings.calendar_alerts.lead.10min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10 minutes before"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提前 10 分钟"
+          }
+        }
+      }
+    },
+    "settings.calendar_alerts.lead.15min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "15 minutes before"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提前 15 分钟"
+          }
+        }
+      }
+    },
+    "bluetooth.connected %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已连接"
+          }
+        }
+      }
+    },
+    "bluetooth.disconnected %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnected: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已断开"
+          }
+        }
+      }
+    },
+    "calendar.untitled_event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendar event"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日历事件"
+          }
+        }
+      }
+    },
+    "settings.charging_alerts.enabled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flash the notch when the power adapter connects or disconnects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接入/断开电源时刘海动效提醒"
+          }
+        }
+      }
+    },
+    "charging.connected %d%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charging · %d%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在充电 · %d%%"
+          }
+        }
+      }
+    },
+    "charging.plugged %d%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Power connected · %d%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已接通电源 · %d%%"
+          }
+        }
+      }
+    },
+    "charging.disconnected %d%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On battery · %d%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已断开电源 · %d%%"
+          }
+        }
+      }
+    },
+    "settings.nav.general" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用"
+          }
+        }
+      }
+    },
+    "settings.nav.alerts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alerts & Effects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提醒与动效"
+          }
+        }
+      }
+    },
+    "settings.nav.ai" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI & Agents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 与 Agent"
+          }
+        }
+      }
+    },
+    "settings.nav.apps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App List"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用列表"
+          }
+        }
+      }
+    },
+    "settings.nav.notifications" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知"
+          }
+        }
+      }
+    },
+    "settings.nav.hotkeys" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hotkeys"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快捷键"
+          }
+        }
+      }
+    },
+    "settings.nav.pomodoro" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomodoro"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "番茄钟"
+          }
+        }
+      }
+    },
+    "settings.nav.awake" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Awake"
           }
         },
         "zh-Hans" : {
@@ -4505,418 +5561,34 @@
         }
       }
     },
-    "settings.keepawake.title" : {
+    "settings.nav.about" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep Awake with Lid Closed"
+            "value" : "About"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合盖不休眠"
+            "value" : "关于"
           }
         }
       }
     },
-    "settings.keepawake.enable" : {
+    "settings.nav.toggle_sidebar" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prevent sleep when the lid closes"
+            "value" : "Toggle Sidebar"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合盖时不休眠"
-          }
-        }
-      }
-    },
-    "settings.keepawake.status.on" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sleep is disabled — closing the lid will not put this Mac to sleep."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "休眠已禁用 —— 合盖不会让这台 Mac 进入睡眠。"
-          }
-        }
-      }
-    },
-    "settings.keepawake.status.external" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sleep is already disabled on this system, but NemoNotch did not turn it on. Switching this off will disable it anyway."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "系统已禁用休眠，但不是 NemoNotch 开启的。关闭此开关会一并把它关掉。"
-          }
-        }
-      }
-    },
-    "settings.keepawake.status.authorizing" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for administrator authorization…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待管理员授权…"
-          }
-        }
-      }
-    },
-    "settings.keepawake.optionsHeader" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Options"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选项"
-          }
-        }
-      }
-    },
-    "settings.keepawake.lidDisplayOff" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn off the display when the lid closes"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合盖时自动熄屏"
-          }
-        }
-      }
-    },
-    "settings.keepawake.lidDisplayOff.detail" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With sleep disabled the screen stays lit behind a closed lid, which keeps draining the battery and building up heat. Skipped when an external display is connected — that is the clamshell setup you probably want."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "禁用休眠后，合盖时屏幕不会自动熄灭，会持续耗电发热。接有外接显示器时不熄屏 —— 那正是常见的合盖外接工作方式。"
-          }
-        }
-      }
-    },
-    "settings.keepawake.restoreOnQuit" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restore normal sleep when quitting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出时还原休眠设置"
-          }
-        }
-      }
-    },
-    "settings.keepawake.restoreOnQuit.detail" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quitting NemoNotch turns sleep prevention back off, which needs one more authorization prompt. Leave this off to keep the setting after quitting — you will have to turn it off yourself."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出 NemoNotch 时自动关闭防休眠，会再弹一次授权框。关掉此项则退出后设置继续保留 —— 需要你自己记得关。"
-          }
-        }
-      }
-    },
-    "settings.keepawake.aboutHeader" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "How this works"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "工作原理"
-          }
-        }
-      }
-    },
-    "settings.keepawake.about.privilege" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Closing the lid triggers sleep inside the kernel, which ignores the usual sleep-prevention APIs. The only way to stop it is a global system power setting, so each toggle needs one administrator authorization."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合盖休眠由内核处理，会忽略常规的防休眠接口。唯一能挡住它的是一项全局系统电源设置，因此每次切换都需要一次管理员授权。"
-          }
-        }
-      }
-    },
-    "settings.keepawake.about.persistent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That setting is global and survives a restart. If NemoNotch is force-quit before restoring it, run this in Terminal:"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "该设置是全局的，重启后依然有效。若 NemoNotch 被强制退出而来不及还原，可在终端执行："
-          }
-        }
-      }
-    },
-    "settings.keepawake.copyCommand" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "复制"
-          }
-        }
-      }
-    },
-    "keepawake.error.cancelled" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Authorization was cancelled."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已取消授权。"
-          }
-        }
-      }
-    },
-    "keepawake.restoreFailed.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not restore normal sleep"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未能还原休眠设置"
-          }
-        }
-      }
-    },
-    "keepawake.restoreFailed.detail" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This Mac is still set to stay awake with the lid closed, and that setting survives a restart. Run “sudo pmset -a disablesleep 0” in Terminal to undo it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 仍处于「合盖不休眠」状态，且该设置重启后依然有效。请在终端执行 “sudo pmset -a disablesleep 0” 还原。"
-          }
-        }
-      }
-    },
-    "keepawake.restoreFailed.copyCommand" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy Command"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "复制命令"
-          }
-        }
-      }
-    },
-    "keepawake.restoreFailed.dismiss" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OK"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "知道了"
-          }
-        }
-      }
-    },
-    "settings.lockscreen_ai.header" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lock Screen"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "锁屏"
-          }
-        }
-      }
-    },
-    "settings.lockscreen_ai.enabled" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show AI activity when locked"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "锁屏时显示 AI 运行状态"
-          }
-        }
-      }
-    },
-    "lockscreen.ai.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI Processes"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI 进程"
-          }
-        }
-      }
-    },
-    "lockscreen.ai.status.running" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "运行中"
-          }
-        }
-      }
-    },
-    "lockscreen.ai.status.compacting" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compacting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "整理上下文"
-          }
-        }
-      }
-    },
-    "lockscreen.ai.status.awaiting_approval" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Awaiting approval"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待批准"
-          }
-        }
-      }
-    },
-    "lockscreen.ai.more %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld more"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还有 %lld 个"
+            "value" : "收起/展开侧栏"
           }
         }
       }

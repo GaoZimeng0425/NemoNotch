@@ -332,13 +332,16 @@ struct CompactBadgesView: View {
 
     // MARK: - Right column (statuses)
 
-    // Mirror of the left column. A group of more than one (same-app instances)
-    // shows just its count in place of the status indicator. Each coin slides
-    // in from the notch side (negative x) and settles rightward.
+    // Mirror of the left column: the highest-priority coin sits at the outer
+    // RIGHT edge, frontmost, and the fan extends leftward toward the notch —
+    // so the iteration runs reversed (index 0 rendered last/rightmost) while
+    // zIndex keeps index 0 frontmost. A group of more than one (same-app
+    // instances) shows just its count in place of the status indicator. Each
+    // coin slides in from the notch side (negative x) as before.
     @ViewBuilder
     private var rightColumn: some View {
         HStack(spacing: -coinOverlap) {
-            ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
+            ForEach(Array(cluster.groups.enumerated().reversed()), id: \.element.id) { index, group in
                 Button { primary.map(onBadgeTap) } label: {
                     if group.count > 1 {
                         BadgeCountChip(text: "\(group.count)", fontSize: 10)

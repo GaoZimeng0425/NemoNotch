@@ -10,12 +10,10 @@ struct HotkeysSettingsView: View {
             Section("settings.hotkeys.tabs") {
                 KeyboardShortcuts.Recorder("models.tab.overview", name: .openOverview)
                 KeyboardShortcuts.Recorder("models.tab.ai", name: .openAI)
-                KeyboardShortcuts.Recorder("models.tab.agents", name: .openAgents)
                 KeyboardShortcuts.Recorder("models.tab.launcher", name: .openLauncher)
                 KeyboardShortcuts.Recorder("models.tab.system", name: .openSystem)
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 }

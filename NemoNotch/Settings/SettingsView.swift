@@ -1,6 +1,43 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Settings sidebar pages (System-Settings-style navigation). Raw values
+/// persist via `@AppStorage` so reopening the window returns to the last
+/// visited page.
+enum SettingsPage: String, CaseIterable, Identifiable {
+    case general, alerts, aiAgents, appList, notifications, hotkeys, pomodoro, keepAwake, about
+
+    var id: String { rawValue }
+
+    var labelKey: String {
+        switch self {
+        case .general: "settings.nav.general"
+        case .alerts: "settings.nav.alerts"
+        case .aiAgents: "settings.nav.ai"
+        case .appList: "settings.nav.apps"
+        case .notifications: "settings.nav.notifications"
+        case .hotkeys: "settings.nav.hotkeys"
+        case .pomodoro: "settings.nav.pomodoro"
+        case .keepAwake: "settings.nav.awake"
+        case .about: "settings.nav.about"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .alerts: "bell.badge"
+        case .aiAgents: "sparkles"
+        case .appList: "square.grid.2x2"
+        case .notifications: "bell"
+        case .hotkeys: "keyboard"
+        case .pomodoro: "timer"
+        case .keepAwake: "moon.zzz"
+        case .about: "info.circle"
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(AICLIMonitorService.self) var aiService
@@ -10,55 +47,116 @@ struct SettingsView: View {
     @Environment(HermesService.self) var hermesService
     @Environment(OpenClawService.self) var openClawService
 
-    @State private var selectedTab = 0
+    @AppStorage("settings.selectedPage") private var selectedPageRaw = SettingsPage.general.rawValue
     @State private var showAppPicker = false
     @State private var cityDebounceTask: Task<Void, Never>? = nil
 
+    @State private var showSidebar = true
+    /// 标题条(红绿灯 + 收起按钮那一排)的高度,取自系统安全区。
+    @State private var titlebarInset: CGFloat = 0
+
+    /// 卡片与窗口边、与侧栏之间的间距——也是收起侧栏后卡片四周
+    /// 露出的"凹陷边框"宽度。
+    private let cardInset: CGFloat = 8
+    private let sidebarWidth: CGFloat = 200
+
     var body: some View {
-        TabView(selection: $selectedTab) {
-            tabManagementView
-                .tabItem { Label("settings.tabs", systemImage: "sidebar.left") }
-                .tag(0)
-
-            appListView
-                .tabItem { Label("settings.app_list", systemImage: "square.grid.2x2") }
-                .tag(1)
-
-            claudeView
-                .tabItem { Label("settings.tab.ai_agents", systemImage: "sparkles") }
-                .tag(2)
-
-            notificationListView
-                .tabItem { Label("settings.notifications", systemImage: "bell.badge") }
-                .tag(3)
-
-            HotkeysSettingsView()
-                .tabItem { Label("settings.hotkeys", systemImage: "keyboard") }
-                .tag(4)
-
-            PomodoroSettingsView()
-                .tabItem { Label("settings.pomodoro.title", systemImage: "timer") }
-                .tag(5)
-
-            KeepAwakeSettingsView()
-                .tabItem { Label("settings.keepawake.tab", systemImage: "moon.zzz") }
-                .tag(6)
-
-            aboutView
-                .tabItem { Label("settings.about.title", systemImage: "info.circle") }
-                .tag(7)
+        // 手排布局而非 NavigationSplitView:macOS 26 原生侧栏是"浮起的玻璃
+        // 面板",与要求的层次相反——这里窗口底层是 sidebar 材质(凹陷层),
+        // 侧栏直接画在上面,右侧内容是凸起的圆角卡片;收起侧栏后卡片四周
+        // 留出等宽的凹陷边框。红绿灯与收起按钮同在标题条一排(AppKit
+        // 工具栏桥,见 SettingsWindowChrome);卡片不让标题条安全区,四边
+        // 等距铺满,只有侧栏行避让红绿灯。
+        HStack(spacing: 0) {
+            if showSidebar {
+                sidebar
+                    .frame(width: sidebarWidth)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+            detailCard
+                .padding(.leading, showSidebar ? 0 : cardInset)
+                .padding([.top, .trailing, .bottom], cardInset)
+                .ignoresSafeArea(.container, edges: .top)
         }
-        // 宽度必须容得下全部 8 个 tab。430pt 时 macOS 只渲染得下 5 个,
-        // 其余(AI 智能体 / 防休眠 / 关于)会被 SwiftUI 静默折叠进工具栏的
-        // 「更多工具栏项」溢出菜单里 —— 表现为"这个 tab 点不到"。英文的
-        // "Notifications" 是最宽的一项,按它取值。
-        .frame(width: 700, height: 460)
+        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { titlebarInset = $0 }
+        .background(SettingsSidebarMaterial().ignoresSafeArea())
+        // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
+        // 裁切(侧栏首项消失、按钮错位全是它造成的)。
+        .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 480)
+        .onAppear { SettingsWindowChrome.install() }
+        .onReceive(NotificationCenter.default.publisher(for: SettingsWindowChrome.toggleSidebar)) { _ in
+            withAnimation(.spring(duration: 0.3, bounce: 0.1)) {
+                showSidebar.toggle()
+            }
+        }
         .environment(\.locale, appSettings.currentLocale)
+        .task {
+            // The AX grant happens in System Settings, outside this process.
+            // Poll while Settings is open so the permission card clears itself
+            // the moment the user finishes the drag-and-toggle. Scoped to the
+            // window's lifetime — no timer lingers once Settings closes.
+            while !Task.isCancelled {
+                notificationService.refreshAXTrust()
+                try? await Task.sleep(for: .seconds(1.5))
+            }
+        }
     }
 
-    // MARK: - Tab Management
+    private var sidebar: some View {
+        List(selection: Binding(
+            get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
+            set: { if let page = $0 { selectedPageRaw = page.rawValue } }
+        )) {
+            ForEach(SettingsPage.allCases) { page in
+                // LocalizedStringKey 包装是必须的:`labelKey` 是 String
+                // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
+                Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
+                    .tag(page)
+            }
+        }
+        .listStyle(.sidebar)
+        // 列表自身不铺底色,透出窗口底层的 sidebar 材质(凹陷层)。
+        .scrollContentBackground(.hidden)
+    }
 
-    private var tabManagementView: some View {
+    private var detailCard: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return detailView
+            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底色。
+            .scrollContentBackground(.hidden)
+            // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
+            // 只把内容让出标题条高度。
+            .safeAreaPadding(.top, showSidebar ? 0 : max(0, titlebarInset - cardInset))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .clipShape(shape)
+            // 细描边 + 柔和投影让卡片浮起,周围的材质边框随之读作凹陷。
+            .overlay(shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+    }
+
+    private var currentPage: SettingsPage {
+        SettingsPage(rawValue: selectedPageRaw) ?? .general
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch SettingsPage(rawValue: selectedPageRaw) ?? .general {
+        case .general: generalView
+        case .alerts: alertsView
+        case .aiAgents: aiAgentsView
+        case .appList: appListView
+        case .notifications: notificationListView
+        case .hotkeys: HotkeysSettingsView()
+        case .pomodoro: PomodoroSettingsView()
+        case .keepAwake: KeepAwakeSettingsView()
+        case .about: aboutView
+        }
+    }
+
+    // MARK: - General
+
+    private var generalView: some View {
         Form {
             Section("settings.visible_tabs") {
                 ForEach(Tab.allCases) { tab in
@@ -117,7 +215,14 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+        .formStyle(.grouped)
+    }
 
+    // MARK: - Alerts & effects
+
+    private var alertsView: some View {
+        Form {
             Section("settings.completion_flash.header") {
                 Toggle("settings.completion_flash.enabled", isOn: Binding(
                     get: { appSettings.completionFlashEnabled },
@@ -125,22 +230,31 @@ struct SettingsView: View {
                 ))
             }
 
-            Section("settings.ai_status_fab.header") {
-                Toggle("settings.ai_status_fab.enabled", isOn: Binding(
-                    get: { appSettings.aiStatusFabEnabled },
-                    set: { appSettings.aiStatusFabEnabled = $0 }
+            Section("settings.event_alerts.header") {
+                Toggle("settings.bluetooth_alerts.enabled", isOn: Binding(
+                    get: { appSettings.bluetoothToastEnabled },
+                    set: { appSettings.bluetoothToastEnabled = $0 }
                 ))
-            }
-
-            Section("settings.lockscreen_ai.header") {
-                Toggle("settings.lockscreen_ai.enabled", isOn: Binding(
-                    get: { appSettings.lockScreenAIPanelEnabled },
-                    set: { appSettings.lockScreenAIPanelEnabled = $0 }
+                Toggle("settings.calendar_alerts.enabled", isOn: Binding(
+                    get: { appSettings.calendarDueFlashEnabled },
+                    set: { appSettings.calendarDueFlashEnabled = $0 }
+                ))
+                Picker("settings.calendar_alerts.lead", selection: Binding(
+                    get: { appSettings.calendarDueLeadMinutes },
+                    set: { appSettings.calendarDueLeadMinutes = $0 }
+                )) {
+                    Text("settings.calendar_alerts.lead.at_start").tag(0)
+                    Text("settings.calendar_alerts.lead.5min").tag(5)
+                    Text("settings.calendar_alerts.lead.10min").tag(10)
+                    Text("settings.calendar_alerts.lead.15min").tag(15)
+                }
+                Toggle("settings.charging_alerts.enabled", isOn: Binding(
+                    get: { appSettings.chargingCapsuleEnabled },
+                    set: { appSettings.chargingCapsuleEnabled = $0 }
                 ))
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     // MARK: - About
@@ -353,11 +467,54 @@ struct SettingsView: View {
         .frame(width: 400, height: 500)
     }
 
-    // MARK: - AI CLI Hooks
+    // MARK: - AI & Agents
 
-    private var claudeView: some View {
+    /// AI 悬浮胶囊 + 锁屏 AI 面板开关,卡片外观与 provider 卡片一致。
+    /// 标签在左、开关(.switch 样式,macOS 默认是复选框)在右的标准行。
+    private var aiSurfacesCard: some View {
+        VStack(spacing: 0) {
+            aiSurfaceRow("settings.ai_status_fab.enabled", isOn: Binding(
+                get: { appSettings.aiStatusFabEnabled },
+                set: { appSettings.aiStatusFabEnabled = $0 }
+            ))
+            Divider().padding(.horizontal, 12)
+            aiSurfaceRow("settings.lockscreen_ai.enabled", isOn: Binding(
+                get: { appSettings.lockScreenAIPanelEnabled },
+                set: { appSettings.lockScreenAIPanelEnabled = $0 }
+            ))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func aiSurfaceRow(_ labelKey: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(LocalizedStringKey(labelKey))
+                .font(.system(size: 13, weight: .medium))
+            Spacer()
+            Toggle("", isOn: isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+    }
+
+    private var aiAgentsView: some View {
         ScrollView {
             VStack(spacing: 10) {
+                // 快速开关:AI 悬浮胶囊 + 锁屏 AI 面板(从旧"Tab 管理"并入,
+                // AI 相关设置集中在一页)。视觉与下方 provider 卡片同语言。
+                aiSurfacesCard
+
                 // Claude Code
                 hookCard(
                     name: "Claude Code",
@@ -502,7 +659,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding()
+            // 顶部收紧:卡片页只需留出与标题条的血缘间距,不要 Form 式大 padding。
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
         }
     }
 
@@ -614,7 +774,10 @@ struct SettingsView: View {
                         detailKey: "permission.accessibility.detail",
                         status: .notDetermined,
                         primary: .settingsOnly,
-                        openSettings: { notificationService.openAccessibilitySettings() }
+                        // Opens the pane *and* parks the drag guide beside it —
+                        // Accessibility has no programmatic request API, so the
+                        // user has to drop the app into the list themselves.
+                        openSettings: { PermissionFlowController.shared.start(pane: .accessibility) }
                     )
                     .padding(.vertical, 4)
                 }
@@ -687,7 +850,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     private func appName(for bundleID: String) -> String {

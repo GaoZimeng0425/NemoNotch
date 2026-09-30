@@ -35,8 +35,13 @@ struct NotchChinBar: View {
 
     private enum ActionKey: String { case settings, quit }
 
-    /// Breathing room between the shell's outer edge and the first/last button.
-    private static let chinEdgePadding: CGFloat = 10
+    /// Selection/hover background corner radius — deliberately squarer than a
+    /// capsule so the tabs don't read as pills.
+    private static let capsuleCornerRadius: CGFloat = 7
+
+    /// Gap between each tab group and the notch it hugs (both flex columns
+    /// align toward the center, so this is the notch-side padding on each).
+    private static let chinEdgePadding: CGFloat = 16
 
     private var leftTabs: [Tab] {
         tabs.filter { $0.chinPlacement == .left }
@@ -59,7 +64,7 @@ struct NotchChinBar: View {
 
             rightColumn
                 .padding(.leading, Self.chinEdgePadding)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: openedWidth, height: chinHeight)
     }
@@ -72,8 +77,8 @@ struct NotchChinBar: View {
             EmptyView()
         } else {
             let sideWidth = (openedWidth - notchWidth) / 2
-            let spacing: CGFloat = 2
-            let capsuleHeight: CGFloat = 24
+            let spacing: CGFloat = 6
+            let capsuleHeight: CGFloat = 26
             let capsuleWidth = idealCapsuleWidth(
                 sideWidth: sideWidth,
                 count: tabs.count,
@@ -112,24 +117,26 @@ struct NotchChinBar: View {
             }
         } label: {
             Image(systemName: tab.icon)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .rounded))
+                .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium, design: .rounded))
                 .symbolEffect(.bounce.down, value: bounceTriggers[tab, default: 0])
-                .foregroundStyle(isSelected ? NotchTheme.accent : NotchTheme.textSecondary)
+                .foregroundStyle(isSelected ? NotchTheme.textPrimary : NotchTheme.textSecondary)
                 .frame(width: width, height: height)
                 .background(alignment: .center) {
-                    // Sliding selection capsule: only the selected tab's capsule
+                    // Sliding selection capsule: only the selected tab's shape
                     // is visible and acts as the matched-geometry source, so
-                    // it glides between tabs on selection change.
+                    // it glides between tabs on selection change. The accent
+                    // tint + matching glow make the selection read as "lit".
                     if isSelected {
-                        Capsule(style: .continuous)
-                            .fill(NotchTheme.surfaceEmphasis)
+                        RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous)
+                            .fill(NotchTheme.accent.opacity(0.22))
+                            .shadow(color: NotchTheme.accent.opacity(0.35), radius: 8)
                             .matchedGeometryEffect(id: "tabSelection", in: capsuleAnimation)
                     } else if isHovered {
-                        Capsule(style: .continuous)
+                        RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous)
                             .fill(NotchTheme.surface)
                     }
                 }
-                .contentShape(Capsule(style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous))
         }
         .buttonStyle(NotchChinButtonStyle())
         .onHover { hovering in
@@ -141,7 +148,7 @@ struct NotchChinBar: View {
 
     @ViewBuilder
     private var rightColumn: some View {
-        let capsuleHeight: CGFloat = 24
+        let capsuleHeight: CGFloat = 26
         let capsuleWidth: CGFloat = 30
 
         HStack(spacing: 2) {
@@ -176,11 +183,11 @@ struct NotchChinBar: View {
             .frame(width: width, height: height)
             .background(alignment: .center) {
                 if isHovered {
-                    Capsule(style: .continuous)
+                    RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous)
                         .fill(NotchTheme.surface)
                 }
             }
-            .contentShape(Capsule(style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.capsuleCornerRadius, style: .continuous))
     }
 }
 

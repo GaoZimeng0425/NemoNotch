@@ -453,6 +453,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
+INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "NemoNotch 需要访问蓝牙，以便在蓝牙耳机等音频设备连接或断开时弹出提醒。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "NemoNotch 需要获取您的位置，用于在灵动岛中显示当地天气。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -508,6 +509,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "NemoNotch 需要访问您的日历，以便在灵动岛中显示今日日程和下一个事件提醒。";
+INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "NemoNotch 需要访问蓝牙，以便在蓝牙耳机等音频设备连接或断开时弹出提醒。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "NemoNotch 需要获取您的位置，用于在灵动岛中显示当地天气。";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (

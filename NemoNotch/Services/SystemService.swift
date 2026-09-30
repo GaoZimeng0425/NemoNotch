@@ -11,6 +11,8 @@ final class SystemService: LifecycleAware {
     var cpuHistory: [Double] = []
     var memoryUsed: UInt64 = 0
     var memoryTotal: UInt64 = 0
+    /// Memory usage history in bytes, one sample per poll, capped at maxHistory.
+    var memoryHistory: [Double] = []
     var batteryLevel: Int = 0
     var isCharging: Bool = false
     var timeRemaining: Int = -1
@@ -20,6 +22,9 @@ final class SystemService: LifecycleAware {
     // Network metrics
     var uploadSpeed: Double = 0
     var downloadSpeed: Double = 0
+    /// Speed histories in bytes/sec, one sample per poll, capped at maxHistory.
+    var uploadHistory: [Double] = []
+    var downloadHistory: [Double] = []
 
     // Process-level metrics
     var topProcessesByCPU: [ProcessEntry] = []
@@ -138,6 +143,9 @@ final class SystemService: LifecycleAware {
         let pageSize = UInt64(vm_kernel_page_size)
         memoryTotal = UInt64(ProcessInfo.processInfo.physicalMemory)
         memoryUsed = (UInt64(stats.active_count) + UInt64(stats.wire_count)) * pageSize
+
+        memoryHistory.append(Double(memoryUsed))
+        if memoryHistory.count > maxHistory { memoryHistory.removeFirst() }
     }
 
     private func updateBattery() {
@@ -213,6 +221,11 @@ final class SystemService: LifecycleAware {
 
         downloadSpeed = Double(deltaI) / elapsed
         uploadSpeed = Double(deltaO) / elapsed
+
+        uploadHistory.append(uploadSpeed)
+        if uploadHistory.count > maxHistory { uploadHistory.removeFirst() }
+        downloadHistory.append(downloadSpeed)
+        if downloadHistory.count > maxHistory { downloadHistory.removeFirst() }
 
         lastTotalIBytes = totalIBytes
         lastTotalOBytes = totalOBytes

@@ -67,7 +67,7 @@ struct SettingsSceneRoot: View {
                     .environment(notificationPermission)
             } else {
                 ProgressView()
-                    .frame(width: 700, height: 460)
+                    .frame(width: 680, height: 480)
             }
         }
         .onAppear { appDelegate.handleSettingsAppear() }
@@ -110,6 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var lockScreenAIPanelController: LockScreenAIPanelController?
     private(set) var completionFlashService: CompletionFlashService?
     private(set) var completionFlashWindowController: CompletionFlashWindowController?
+    private(set) var bluetoothService: BluetoothService?
+    private(set) var calendarDueMonitor: CalendarDueMonitor?
     private(set) var keepAwakeService: KeepAwakeService?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
@@ -183,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let usageQuota = UsageQuotaService()
         usageQuotaService = usageQuota
 
-        let hud = HUDService()
+        let hud = HUDService(settings: settings)
         hudService = hud
 
         let keepAwake = KeepAwakeService(settings: settings)
@@ -197,6 +199,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings
         )
         completionFlashService = completionFlash
+
+        // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
+        // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
+        // 全屏闪烁 + Toast。UI 测试与单测宿主不启动蓝牙:后者的 TCC 授权弹窗
+        // (进程模态)会挂起测试连接。
+        let bluetooth = BluetoothService(settings: settings)
+        bluetoothService = bluetooth
+        if !UITestMode.isActive, !UITestMode.isTestHost { bluetooth.start() }
+        let calendarDue = CalendarDueMonitor(
+            calendar: calendar,
+            completionFlash: completionFlash,
+            settings: settings
+        )
+        calendarDueMonitor = calendarDue
+        if !UITestMode.isActive { calendarDue.start() }
 
         let system = SystemService()
         systemService = system
@@ -224,7 +241,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         aiStatusController = AIStatusWindowController(
             store: aiMonitor.store,
-            appSettings: settings
+            appSettings: settings,
+            usageQuota: usageQuota
         )
         // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
         // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
@@ -257,6 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(weather)
                     .environment(hud)
                     .environment(completionFlash)
+                    .environment(bluetooth)
                     .environment(system)
                     .environment(tasks)
                     .environment(history)
@@ -271,7 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let session = aiMonitorService?.activeSession, session.status == .working {
                 return .claude
             }
-            if agentRegistry?.hasAnyActiveAgent == true { return .agents }
+            if agentRegistry?.hasAnyActiveAgent == true { return .claude }
             if mediaService?.playbackState.isPlaying == true { return .overview }
             return nil
         }

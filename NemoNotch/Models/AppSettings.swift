@@ -121,6 +121,30 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(completionFlashEnabled, forKey: Self.completionFlashEnabledKey) }
     }
 
+    // MARK: - Event alerts (calendar due / bluetooth audio / charging)
+
+    static let calendarDueFlashEnabledKey = "calendarDueFlashEnabled"
+    static let calendarDueLeadMinutesKey = "calendarDueLeadMinutes"
+    static let bluetoothToastEnabledKey = "bluetoothToastEnabled"
+    static let chargingCapsuleEnabledKey = "chargingCapsuleEnabled"
+
+    var calendarDueFlashEnabled: Bool {
+        didSet { UserDefaults.standard.set(calendarDueFlashEnabled, forKey: Self.calendarDueFlashEnabledKey) }
+    }
+
+    /// Minutes before an event's start the due flash fires; 0 = at start.
+    var calendarDueLeadMinutes: Int {
+        didSet { UserDefaults.standard.set(calendarDueLeadMinutes, forKey: Self.calendarDueLeadMinutesKey) }
+    }
+
+    var bluetoothToastEnabled: Bool {
+        didSet { UserDefaults.standard.set(bluetoothToastEnabled, forKey: Self.bluetoothToastEnabledKey) }
+    }
+
+    var chargingCapsuleEnabled: Bool {
+        didSet { UserDefaults.standard.set(chargingCapsuleEnabled, forKey: Self.chargingCapsuleEnabledKey) }
+    }
+
     // MARK: - AI status FAB
 
     var aiStatusFabEnabled: Bool {
@@ -171,7 +195,7 @@ final class AppSettings {
 
         // Migrate old "openclaw" → "agents" tab rename
         let rawTabs = UserDefaults.standard.stringArray(forKey: "enabledTabs")?
-            .map { $0 == "openclaw" ? Tab.agents.rawValue : $0 }
+            .map { $0 == "openclaw" || $0 == "agents" ? Tab.claude.rawValue : $0 }
         let storedTabs = rawTabs?.compactMap { Tab(rawValue: $0) }
         var tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
         if storedTabs != nil { tabs.insert(.overview) }
@@ -218,6 +242,14 @@ final class AppSettings {
             .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
         completionFlashEnabled = UserDefaults.standard
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
+        calendarDueFlashEnabled = UserDefaults.standard
+            .object(forKey: Self.calendarDueFlashEnabledKey) as? Bool ?? true
+        calendarDueLeadMinutes = UserDefaults.standard
+            .object(forKey: Self.calendarDueLeadMinutesKey) as? Int ?? 0
+        bluetoothToastEnabled = UserDefaults.standard
+            .object(forKey: Self.bluetoothToastEnabledKey) as? Bool ?? true
+        chargingCapsuleEnabled = UserDefaults.standard
+            .object(forKey: Self.chargingCapsuleEnabledKey) as? Bool ?? true
         aiStatusFabEnabled = UserDefaults.standard
             .object(forKey: Self.aiStatusFabEnabledKey) as? Bool ?? true
         lockScreenAIPanelEnabled = UserDefaults.standard

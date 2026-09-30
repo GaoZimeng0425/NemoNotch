@@ -33,7 +33,7 @@ enum BadgeItem: Identifiable, Equatable {
         case .notification: .overview
         case .media: .overview
         case .ai: .claude
-        case .agents: .agents
+        case .agents: .claude
         case .calendar: .overview
         case .pomodoro: .pomodoro
         }

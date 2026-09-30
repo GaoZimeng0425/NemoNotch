@@ -6,6 +6,7 @@ enum CompletionSource: Equatable, Hashable {
     case ai(AISource) // Claude Code / Gemini / opencode
     case agent // OpenClaw / Hermes multi-agent monitors
     case pomodoro // Pomodoro phase end
+    case calendar // Calendar event due
 }
 
 /// A finished unit of work: the name shown in the toast plus its source logo,
