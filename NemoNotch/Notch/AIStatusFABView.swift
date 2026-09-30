@@ -13,6 +13,11 @@ struct AIStatusFABView: View {
 
     private var isExpanded: Bool { controller?.isExpanded ?? false }
 
+    /// Measured width of the collapsed pill's content (see `capsuleWidth`).
+    /// The seed only has to be sane for the single layout pass before the first
+    /// measurement lands.
+    @State private var measuredCapsuleWidth: CGFloat = 92
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // Layer 0 — the morphing background shape. Its frame + corner radius
@@ -135,17 +140,14 @@ struct AIStatusFABView: View {
             .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
     }
 
-    /// Capsule width hugs its content. Grouped mode draws one dot+count chip per
-    /// non-empty status, so the shape has to grow with the group count; `done`
-    /// keeps the single dot + "done" label.
-    private var capsuleWidth: CGFloat {
-        let groups = statusCounts.groups
-        guard !groups.isEmpty else { return 92 } // dot + "done"
-        let chips = groups.reduce(CGFloat(0)) { width, group in
-            width + capsuleDotSize + 4 + CGFloat(String(group.count).count) * 8
-        }
-        return capsuleHPadding * 2 + chips + CGFloat(groups.count - 1) * capsuleChipSpacing
-    }
+    /// The collapsed pill's width, **measured from the real laid-out content**
+    /// rather than estimated. It has to be a number because the background
+    /// shape and the content mask both take an explicit `.frame(width:)`, but
+    /// the number must not be a guess: the chips are dot + count text, and a
+    /// guess that came up short silently squeezed the count `Text` to zero
+    /// width (the dots have rigid frames, so the text was the only thing that
+    /// could absorb the shortfall). Same pattern as `NotchView.closedContentSize`.
+    private var capsuleWidth: CGFloat { measuredCapsuleWidth }
 
     private var capsuleHPadding: CGFloat { 12 }
     private var capsuleChipSpacing: CGFloat { 11 }
@@ -173,13 +175,19 @@ struct AIStatusFABView: View {
     private var capsuleContent: some View {
         HStack(spacing: capsuleChipSpacing) {
             capsuleGroups
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, capsuleHPadding)
-        // Fill the capsule width so content sits at the start (leading) edge,
-        // matching the morphing background shape's footprint.
-        .frame(width: capsuleWidth, alignment: .leading)
         .frame(height: NotchConstants.aiStatusFabCapsuleHeight)
+        // Take the ideal width instead of whatever the 420pt-wide canvas offers:
+        // the pill hugs its chips, and nothing inside can be compressed.
+        .fixedSize(horizontal: true, vertical: false)
+        // Feed the measured width to the morphing shape + mask. Assigned
+        // WITHOUT `withAnimation` on purpose (mirroring NotchView): this fires
+        // on every layout pass, and the single spring lives on the shape.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            guard width > 0 else { return }
+            measuredCapsuleWidth = width
+        }
         .contentShape(Capsule())
     }
 

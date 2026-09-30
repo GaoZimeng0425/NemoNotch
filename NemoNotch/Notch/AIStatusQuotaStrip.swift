@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// Mounted ONLY while the panel is expanded (the panel layer itself is always
 /// in the view tree, hidden by opacity — see the collapsed-state view-tree
-/// pitfall in CLAUDE.md), so `.activates` keeps the quota service ticking
+/// pitfall in AGENTS.md), so `.activates` keeps the quota service ticking
 /// exactly while the user is looking at it.
 struct AIStatusQuotaStrip: View {
     @Environment(UsageQuotaService.self) private var service
@@ -23,10 +23,15 @@ struct AIStatusQuotaStrip: View {
                 chipView(chip)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // Nothing resolved yet: say so only while a fetch is actually in
+            // flight. Once it has settled with no data, the footer stays empty
+            // rather than parking a permanent status line there.
             if chips.isEmpty {
-                Text("quota.status.reading")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(NotchTheme.textTertiary)
+                if service.isRefreshing {
+                    Text("quota.status.reading")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(NotchTheme.textTertiary)
+                }
                 Spacer(minLength: 0)
             }
         }
@@ -40,12 +45,8 @@ struct AIStatusQuotaStrip: View {
         enum Kind {
             /// A percentage meter for one rolling window.
             case meter(QuotaTier)
-            /// Keychain item exists but this app isn't authorized to read it yet.
-            case authorize
             /// zcode has no quota credential — show local token usage instead.
             case localUsage(tokens: Int)
-            /// Credential missing / expired / still loading.
-            case status(LocalizedStringKey)
         }
 
         let id: String
@@ -67,51 +68,46 @@ struct AIStatusQuotaStrip: View {
         appSettings.zcodeEnabled ? service.zcodeUsage : nil
     }
 
+    /// Providers that actually resolved to numbers. A provider that is merely
+    /// *configured* (Claude is always in `visibleProviders`) but has no quota —
+    /// not logged in, awaiting Keychain authorization, still fetching, parse
+    /// error — is dropped rather than given a chip. The footer is a glanceable
+    /// readout, and a dead "not logged in" slot used to eat a third of it while
+    /// a provider with real data got squeezed out by the 3-chip cap. Granting
+    /// Keychain access still lives on the AI tab's full quota card.
+    private var providersWithData: [QuotaProvider] {
+        visibleProviders.filter { provider in
+            guard let quota = service.quotas[provider] else { return false }
+            return quota.status == .valid && !quota.tiers.isEmpty
+        }
+    }
+
     /// At most three chips. One provider → its two shortest windows; several →
     /// each provider's shortest window. The full breakdown stays in the AI tab.
     private var chips: [Chip] {
-        let providers = visibleProviders
+        let providers = providersWithData
         var out: [Chip] = []
 
         if providers.count == 1, let only = providers.first {
-            out.append(contentsOf: chips(for: only, tierLimit: 2))
+            out.append(contentsOf: meterChips(only, tierLimit: 2))
         } else {
             for provider in providers.prefix(3) {
-                out.append(contentsOf: chips(for: provider, tierLimit: 1))
+                out.append(contentsOf: meterChips(provider, tierLimit: 1))
             }
         }
 
-        if zcodeStats != nil, service.quotas[.zcode] == nil, let stats = zcodeStats {
+        // zcode has no remote quota API on every setup — when its quota is
+        // absent but the CLI's local sqlite has counts, that IS its data.
+        if service.quotas[.zcode] == nil, let stats = zcodeStats {
             out.append(Chip(id: "zcode.local", provider: .zcode, kind: .localUsage(tokens: stats.todayTokens)))
         }
         return Array(out.prefix(3))
     }
 
-    private func chips(for provider: QuotaProvider, tierLimit: Int) -> [Chip] {
-        let quota = service.quotas[provider]
-        if quota?.status == .needsAuthorization {
-            return [Chip(id: "\(provider.rawValue).auth", provider: provider, kind: .authorize)]
-        }
-        let tiers = quota?.tiers ?? []
-        guard !tiers.isEmpty else {
-            // zcode without a quota credential falls back to the local-usage chip
-            // appended separately; don't also render an empty status chip for it.
-            if provider == .zcode, zcodeStats != nil { return [] }
-            return [Chip(id: "\(provider.rawValue).status", provider: provider, kind: .status(statusKey(quota)))]
-        }
+    private func meterChips(_ provider: QuotaProvider, tierLimit: Int) -> [Chip] {
+        let tiers = service.quotas[provider]?.tiers ?? []
         return tiers.prefix(tierLimit).enumerated().map { index, tier in
             Chip(id: "\(provider.rawValue).\(index)", provider: provider, kind: .meter(tier))
-        }
-    }
-
-    private func statusKey(_ quota: ProviderUsageQuota?) -> LocalizedStringKey {
-        guard let quota else { return "quota.status.reading" }
-        switch quota.status {
-        case .valid: return "quota.status.no_data"
-        case .expired: return "quota.status.login_required"
-        case .notFound: return "quota.status.not_logged_in"
-        case .parseError: return "quota.status.error"
-        case .needsAuthorization: return "quota.status.needs_authorization"
         }
     }
 
@@ -126,16 +122,10 @@ struct AIStatusQuotaStrip: View {
                 .lineLimit(1)
             switch chip.kind {
             case let .meter(tier): meterBody(tier)
-            case .authorize: authorizeButton(chip.provider)
             case let .localUsage(tokens):
                 Text("quota.zcode.compact \(ZcodeUsageFormatter.tokens(tokens))")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(NotchTheme.textPrimary)
-                    .lineLimit(1)
-            case let .status(key):
-                Text(key)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(NotchTheme.textTertiary)
                     .lineLimit(1)
             }
         }
@@ -166,22 +156,8 @@ struct AIStatusQuotaStrip: View {
         }
     }
 
-    private func authorizeButton(_ provider: QuotaProvider) -> some View {
-        Button {
-            Task { await service.authorize(provider) }
-        } label: {
-            Text("quota.authorize")
-                .font(.system(size: 9, weight: .semibold))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(NotchTheme.accent))
-                .foregroundStyle(Color.black.opacity(0.85))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// `Claude Code · 5h`, or just the provider name when the chip carries no
-    /// window (authorize / status / local usage).
+    /// `Claude Code · 5h`, or just the provider name for the windowless
+    /// local-usage chip.
     private func providerLabel(_ chip: Chip) -> String {
         guard case let .meter(tier) = chip.kind else { return chip.provider.displayName }
         return "\(chip.provider.displayName) · \(windowShortLabel(tier.window))"
