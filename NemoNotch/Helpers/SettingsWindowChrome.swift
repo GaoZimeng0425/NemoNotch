@@ -18,37 +18,12 @@ enum SettingsWindowChrome {
     /// 按标题匹配在真机上会扑空(title 在 onAppear 时未必就位),而 notch 各窗口
     /// 与它天然互斥——只有 Settings 场景窗口带这个 autosave 名。
     private static let settingsAutosaveName = "com_apple_SwiftUI_Settings_window"
-    /// 默认窗口尺寸,与 SettingsView 根视图的
-    /// `.frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 540)`
-    /// 保持同步——Settings 场景自己定窗口尺寸(实测开 900 宽、约 minHeight 高),
-    /// ideal 值它根本不看,所以默认值得在这里由 NSWindow 层强制。
-    private static let defaultContentWidth: CGFloat = 680
-    private static let defaultContentHeight: CGFloat = 540
-    /// 一次性 frame 迁移标记(v2:实现换了两代,重武装一次)。修复前存下的
-    /// frame 全是 scene 自定尺寸的 900 宽遗留(那时窗口不可拖,不存在用户意
-    /// 图),清一次让默认尺寸生效;之后的 frame 都是用户拖出来的,必须尊重。
-    /// 必须在本进程内删——从外部 `defaults delete` 对运行中的 app 不可靠
-    /// (进程内 UserDefaults 缓存 + 旧实例退出时回写),实测删了也会复活。
-    private static let frameMigrationKey = "settings.windowFrameMigratedToDefault.v2"
-    /// 本会话是否要在首次打开设置窗时套默认尺寸。必须在 app 启动、设置窗
-    /// 尚未创建时判定:窗口一创建就会把 scene 强加的 900 宽 frame 写进
-    /// autosave key,之后(onAppear/install 时)再读 key 无法区分"刚写入的
-    /// 临时值"和"用户存下的尺寸"。install() 的重试循环里读 key 更是必错
-    /// ——首次尝试消费掉迁移标记,重试时读到的已是窗口刚写回的 900。
-    @MainActor private static var pendingDefaultSize = true
-
-    /// AppDelegate 启动时调用:一次性迁移 + 捕获本会话的默认尺寸决策。
-    @MainActor static func prepare() {
-        if !UserDefaults.standard.bool(forKey: frameMigrationKey) {
-            UserDefaults.standard.set(true, forKey: frameMigrationKey)
-            UserDefaults.standard.removeObject(forKey: "NSWindow Frame \(settingsAutosaveName)")
-        }
-        pendingDefaultSize = UserDefaults.standard
-            .object(forKey: "NSWindow Frame \(settingsAutosaveName)") == nil
-    }
 
     /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口的 autosave 名可能尚未
     /// 就位(场景的窗口元数据晚于内容出现),找不到就短暂重试。
+    /// 窗口的默认尺寸不在这一层设——Settings 场景认 scene 级的
+    /// `.defaultSize(width:height:)`(见 NemoNotchApp),不认内容根视图的
+    /// ideal 值(实测 ideal 被无视、开成 900 宽)。
     @MainActor static func install(retries: Int = 8) {
         guard let window = NSApp.windows.first(where: {
             $0.frameAutosaveName == settingsAutosaveName
@@ -87,37 +62,13 @@ enum SettingsWindowChrome {
         window.styleMask.insert(.fullSizeContentView)
         // Settings 场景造的窗口天生没有 .resizable,用户无法拖拽缩放;内容的
         // frame(minWidth:minHeight:) 会以 auto-layout 约束落在 hosting view 上,
-        // 拖不破版式。缺这一位时,autosave 恢复的旧 frame(曾存下 900 宽)永远
-        // 改不回来。
+        // 拖不破版式。
         window.styleMask.insert(.resizable)
         window.titlebarAppearsTransparent = true
         // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
         // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
         window.titleVisibility = .hidden
-        // 只在本会话首次打开且启动时没有用户 frame 时套默认尺寸(pendingDefaultSize,
-        // 启动时捕获);已有 frame——包括用户拖出来的尺寸——NSWindow 已恢复,不能踩。
-        // onAppear 早于 SwiftUI 给 Settings 窗口定尺寸的 pass,当场设会被它
-        // 回写成 900 宽;布局尘埃落定后必须再补设一次(探针实测:布局后
-        // 设置可粘住,onAppear 时设置被覆盖)。
-        if pendingDefaultSize {
-            pendingDefaultSize = false
-            applyDefaultSize(to: window)
-            Task { @MainActor [weak window] in
-                try? await Task.sleep(for: .milliseconds(350))
-                guard let window, window.toolbar != nil else { return }
-                applyDefaultSize(to: window)
-                LogService.info(
-                    "Settings window default size \(Int(window.frame.width))x\(Int(window.frame.height)) applied",
-                    category: "Settings"
-                )
-            }
-        }
         LogService.info("Settings window toolbar installed", category: "Settings")
-    }
-
-    @MainActor private static func applyDefaultSize(to window: NSWindow) {
-        window.setContentSize(NSSize(width: defaultContentWidth, height: defaultContentHeight))
-        window.center()
     }
 
     private final class Delegate: NSObject, NSToolbarDelegate {

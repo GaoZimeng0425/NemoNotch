@@ -20,6 +20,10 @@ struct NemoNotchApp: App {
         Settings {
             SettingsSceneRoot(appDelegate: appDelegate)
         }
+        // Settings 场景不认内容根视图的 ideal 尺寸(实测被无视、开成 900 宽),
+        // 默认宽高必须在 scene 级声明;内容侧保留 frame(minWidth:minHeight:)
+        // 作为拖拽下限的 auto-layout 约束。
+        .defaultSize(width: 680, height: 540)
     }
 
     init() {
@@ -132,10 +136,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         _ = LogService.shared
-
-        // 设置窗默认尺寸的启动期决策:必须在设置窗创建之前完成(窗口一创建就会把
-        // scene 强加的 frame 写进 autosave key,之后无法区分临时值与用户尺寸)。
-        SettingsWindowChrome.prepare()
 
         // 主线程卡顿探针:抓 watchdog 杀进程前那一轮主 runloop 卡在哪个业务函数。
         // 诊断 cpu_resource 崩溃(主线程卡在 NSView 递归 layout,由 CA::Transaction 每帧驱动)。
