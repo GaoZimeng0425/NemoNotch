@@ -8,10 +8,10 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(appSettings: appDelegate.appSettings)
-                .environment(appDelegate.mediaService ?? MediaService())
-                .environment(appDelegate.aiMonitorService ?? AICLIMonitorService())
-                .environment(appDelegate.keepAwakeService ?? KeepAwakeService())
+            MenuContent(appSettings: appDelegate.deps?.settings)
+                .environment(appDelegate.deps?.media ?? MediaService())
+                .environment(appDelegate.deps?.aiMonitor ?? AICLIMonitorService())
+                .environment(appDelegate.deps?.keepAwake ?? KeepAwakeService())
         } label: {
             MenuBarLabel()
         }
@@ -50,25 +50,17 @@ struct SettingsSceneRoot: View {
 
     var body: some View {
         Group {
-            if let settings = appDelegate.appSettings,
-               let aiMonitor = appDelegate.aiMonitorService,
-               let launcher = appDelegate.launcherService,
-               let notification = appDelegate.notificationService,
-               let weather = appDelegate.weatherService,
-               let hermes = appDelegate.hermesService,
-               let openClaw = appDelegate.openClawService,
-               let keepAwake = appDelegate.keepAwakeService,
-               let notificationPermission = appDelegate.notificationPermissionMonitor {
+            if let deps = appDelegate.deps {
                 SettingsView()
-                    .environment(settings)
-                    .environment(aiMonitor)
-                    .environment(launcher)
-                    .environment(notification)
-                    .environment(weather)
-                    .environment(hermes)
-                    .environment(openClaw)
-                    .environment(keepAwake)
-                    .environment(notificationPermission)
+                    .environment(deps.settings)
+                    .environment(deps.aiMonitor)
+                    .environment(deps.launcher)
+                    .environment(deps.notification)
+                    .environment(deps.weather)
+                    .environment(deps.hermes)
+                    .environment(deps.openClaw)
+                    .environment(deps.keepAwake)
+                    .environment(deps.notificationPermission)
             } else {
                 ProgressView()
                     .frame(width: 680, height: 480)
@@ -90,33 +82,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
 
+    /// Every service, assembled in `AppDependencies.build()` — one non-optional
+    /// table instead of 25 optional fields. nil only before
+    /// `applicationDidFinishLaunching` runs (the SwiftUI scenes' `??`
+    /// fallbacks cover that window).
+    private(set) var deps: AppDependencies?
     private(set) var coordinator: NotchCoordinator?
-    private(set) var appSettings: AppSettings?
-    private(set) var mediaService: MediaService?
-    private var calendarService: CalendarService?
-    private(set) var aiMonitorService: AICLIMonitorService?
-    private(set) var openClawService: OpenClawService?
-    private(set) var hermesService: HermesService?
-    private(set) var agentRegistry: AgentMonitorRegistry?
-    private(set) var launcherService: LauncherService?
-    private(set) var notificationService: NotificationService?
-    private(set) var weatherService: WeatherService?
-    private var hudService: HUDService?
-    private var systemService: SystemService?
-    private(set) var taskStore: TaskStore?
-    private(set) var historyStore: PomodoroHistoryStore?
-    private(set) var pomodoroTimerService: PomodoroTimerService?
-    private(set) var notificationPermissionMonitor: NotificationPermissionMonitor?
-    private(set) var usageQuotaService: UsageQuotaService?
-    private(set) var quickStartController: QuickStartWindowController?
-    private(set) var aiStatusController: AIStatusWindowController?
-    private(set) var lockScreenMonitor: LockScreenMonitor?
-    private(set) var lockScreenAIPanelController: LockScreenAIPanelController?
-    private(set) var completionFlashService: CompletionFlashService?
-    private(set) var completionFlashWindowController: CompletionFlashWindowController?
-    private(set) var bluetoothService: BluetoothService?
-    private(set) var calendarDueMonitor: CalendarDueMonitor?
-    private(set) var keepAwakeService: KeepAwakeService?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
     private var uiTestFlashBackdrop: NSWindow?
@@ -151,201 +122,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ModelContextWindow.warm()
         }
 
-        let settings = AppSettings()
-        let media = MediaService(disableLiveUpdates: UITestMode.isActive)
-        let calendar = CalendarService()
-        let aiMonitor = AICLIMonitorService()
-        let launcher = LauncherService(settings: settings)
+        let deps = AppDependencies.build()
+        self.deps = deps
 
-        if !UITestMode.isActive {
-            aiMonitor.startServer()
-        }
-
-        let openClaw = OpenClawService()
-        if !UITestMode.isActive {
-            openClaw.connect()
-        }
-        openClawService = openClaw
-
-        let hermes = HermesService()
-        if !UITestMode.isActive {
-            hermes.connect()
-        }
-        aiMonitor.hermesService = hermes
-        hermesService = hermes
-
-        let registry = AgentMonitorRegistry()
-        registry.register(openClaw)
-        registry.register(hermes)
-        agentRegistry = registry
-
-        appSettings = settings
-        mediaService = media
-        calendarService = calendar
-        aiMonitorService = aiMonitor
-        launcherService = launcher
-
-        let notification = NotificationService(monitoredApps: settings.monitoredApps)
-        notificationService = notification
-
-        let weather = WeatherService()
-        if !UITestMode.isActive, !settings.weatherCity.isEmpty {
-            weather.updateCity(settings.weatherCity)
-        }
-        weatherService = weather
-
-        let usageQuota = UsageQuotaService()
-        usageQuotaService = usageQuota
-
-        let hud = HUDService(settings: settings)
-        hudService = hud
-
-        let keepAwake = KeepAwakeService(settings: settings)
-        // UI 测试跑在无人值守的截图脚本里,绝不能让它去碰全局电源设置。
-        if !UITestMode.isActive {
-            keepAwake.start()
-        }
-        keepAwakeService = keepAwake
-
-        let completionFlash = CompletionFlashService(
-            store: aiMonitor.store,
-            registry: registry,
-            settings: settings
-        )
-        completionFlashService = completionFlash
-
-        // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
-        // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
-        // 全屏闪烁 + Toast。UI 测试与单测宿主不启动蓝牙:后者的 TCC 授权弹窗
-        // (进程模态)会挂起测试连接。
-        let bluetooth = BluetoothService(settings: settings)
-        bluetoothService = bluetooth
-        if !UITestMode.isActive, !UITestMode.isTestHost {
-            bluetooth.start()
-        }
-        let calendarDue = CalendarDueMonitor(
-            calendar: calendar,
-            completionFlash: completionFlash,
-            settings: settings
-        )
-        calendarDueMonitor = calendarDue
-        if !UITestMode.isActive {
-            calendarDue.start()
-        }
-
-        let system = SystemService()
-        systemService = system
-
-        let tasks = TaskStore(fileURL: UITestMode.isActive ? UITestSeeder.tasksURL : TaskStore.defaultURL)
-        let history = PomodoroHistoryStore(fileURL: UITestMode.isActive ? UITestSeeder.historyURL : PomodoroHistoryStore
-            .defaultURL)
-        let notificationPermission = NotificationPermissionMonitor()
-        let pomodoro = PomodoroTimerService(
-            taskStore: tasks,
-            historyStore: history,
-            appSettings: settings,
-            permissionMonitor: notificationPermission,
-            completionFlash: completionFlash
-        )
-        taskStore = tasks
-        historyStore = history
-        notificationPermissionMonitor = notificationPermission
-        pomodoroTimerService = pomodoro
-        quickStartController = QuickStartWindowController(
-            timerService: pomodoro,
-            taskStore: tasks,
-            appSettings: settings,
-            notificationMonitor: notificationPermission
-        )
-        aiStatusController = AIStatusWindowController(
-            store: aiMonitor.store,
-            appSettings: settings,
-            usageQuota: usageQuota
-        )
-        // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
-        // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
-        let lockMonitor = LockScreenMonitor()
-        lockScreenMonitor = lockMonitor
-        if !UITestMode.isActive {
-            lockScreenAIPanelController = LockScreenAIPanelController(
-                store: aiMonitor.store,
-                appSettings: settings,
-                monitor: lockMonitor
-            )
-        }
-
-        let qsController = quickStartController
-        let aiController = aiStatusController
-        let notchCoordinator = NotchCoordinator { coordinator, screen in
-            AnyView(
-                NotchView(screen: screen)
-                    .environment(coordinator)
-                    .environment(settings)
-                    .environment(media)
-                    .environment(calendar)
-                    .environment(aiMonitor)
-                    .environment(usageQuota)
-                    .environment(openClaw)
-                    .environment(registry)
-                    .environment(hermes)
-                    .environment(launcher)
-                    .environment(notification)
-                    .environment(weather)
-                    .environment(hud)
-                    .environment(completionFlash)
-                    .environment(bluetooth)
-                    .environment(system)
-                    .environment(tasks)
-                    .environment(history)
-                    .environment(pomodoro)
-                    .environment(notificationPermission)
-                    .environment(\.quickStartController, qsController)
-                    .environment(\.aiStatusController, aiController)
-            )
-        }
+        let notchCoordinator = NotchCoordinator(content: deps.notchContent())
         notchCoordinator.autoSelectTab = { [weak self] in
-            guard let self else { return nil }
-            if let session = aiMonitorService?.activeSession, session.status == .working {
+            guard let deps = self?.deps else { return nil }
+            if let session = deps.aiMonitor.activeSession, session.status == .working {
                 return .claude
             }
-            if agentRegistry?.hasAnyActiveAgent == true {
+            if deps.registry.hasAnyActiveAgent {
                 return .claude
             }
-            if mediaService?.playbackState.isPlaying == true {
+            if deps.media.playbackState.isPlaying {
                 return .overview
             }
             return nil
         }
-        notchCoordinator.appSettings = settings
+        notchCoordinator.appSettings = deps.settings
         notchCoordinator.restoreSuppressionCheck = { [weak self] in
             self?.shouldSuppressPreviousAppRestore ?? false
         }
         notchCoordinator.onOpen = { [weak self] in
-            self?.calendarService?.resetSelectedDateToToday()
+            self?.deps?.calendar.resetSelectedDateToToday()
         }
         coordinator = notchCoordinator
-
-        // 正常运行时常驻;UI 测试下仅在 --flash 截图模式才需要全屏 glow 窗口。
-        if !UITestMode.isActive || UITestMode.flash {
-            completionFlashWindowController = CompletionFlashWindowController(service: completionFlash)
-        }
 
         setupHotkeys(coordinator: notchCoordinator)
 
         if UITestMode.isActive {
             if UITestMode.flash {
                 // 只填一个工作中的 Claude 会话,收起的刘海只显示 Claude Code 一行徽标。
-                UITestSeeder.seedFlash(aiStore: aiMonitor.store)
+                UITestSeeder.seedFlash(aiStore: deps.aiMonitor.store)
             } else {
                 UITestSeeder.seed(
-                    media: media,
-                    calendar: calendar,
-                    weather: weather,
-                    system: system,
-                    aiStore: aiMonitor.store,
-                    registry: registry,
-                    pomodoro: pomodoro,
-                    tasks: tasks
+                    media: deps.media,
+                    calendar: deps.calendar,
+                    weather: deps.weather,
+                    system: deps.system,
+                    aiStore: deps.aiMonitor.store,
+                    registry: deps.registry,
+                    pomodoro: deps.pomodoro,
+                    tasks: deps.tasks
                 )
             }
             let target = NSScreen.screens.first(where: { $0.isBuiltInDisplay && $0.hasNotch })
@@ -364,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if UITestMode.flash {
                 // 保持刘海收起,只钉住完成态 glow + toast —— 贴合真实开发场景:
                 // 正在写代码、刘海收着,AI 跑完时屏幕一闪 + 刘海旁弹出完成 Toast。
-                completionFlash.holdForUITest(names: ["NemoNotch"])
+                deps.completionFlash.holdForUITest(names: ["NemoNotch"])
                 // 安全网:--flash 会铺满屏的暗色背景窗;万一截图脚本被强杀来不及
                 // 清理,也让 app 自己 12s 后退出,绝不把全屏窗永久挂在屏幕上。
                 DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
@@ -413,7 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 只还原我们自己开的那份(`needsRestoreOnQuit` 检查落盘标记);用户自己
     /// `sudo pmset` 开的不动。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let keepAwake = keepAwakeService, keepAwake.needsRestoreOnQuit else {
+        guard let keepAwake = deps?.keepAwake, keepAwake.needsRestoreOnQuit else {
             return .terminateNow
         }
         // 还原已在进行中(用户又按了一次 ⌘Q):继续等,别叠第二个授权框。
@@ -450,7 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         LogService.info("applicationWillTerminate received", category: "AppDelegate")
-        if let pomodoro = pomodoroTimerService {
+        if let pomodoro = deps?.pomodoro {
             switch pomodoro.state {
             case .running, .paused:
                 pomodoro.abandon()
@@ -507,7 +325,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         KeyboardShortcuts.onKeyDown(for: .openQuickStart) { [weak self] in
-            self?.quickStartController?.toggle()
+            self?.deps?.quickStart.toggle()
         }
     }
 }
