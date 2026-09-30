@@ -42,6 +42,11 @@ enum SettingsWindowChrome {
         // 透明标题条;此前 SwiftUI ignoresSafeArea 不生效就是因为窗口没开
         // fullSizeContentView,SwiftUI 内容被挡在标题条下。
         window.styleMask.insert(.fullSizeContentView)
+        // Settings 场景造的窗口天生没有 .resizable,用户无法拖拽缩放;内容的
+        // frame(minWidth:minHeight:) 会以 auto-layout 约束落在 hosting view 上,
+        // 拖不破版式。缺这一位时,autosave 恢复的旧 frame(曾存下 900 宽)永远
+        // 改不回来,idealWidth 也夺不回控制权。
+        window.styleMask.insert(.resizable)
         window.titlebarAppearsTransparent = true
         // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
         // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。
