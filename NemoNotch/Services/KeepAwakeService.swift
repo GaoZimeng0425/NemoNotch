@@ -114,6 +114,9 @@ final class KeepAwakeService {
     /// `holdIdleSleepAssertion(_:)` 的说明。
     private var idleSleepAssertion: IOPMAssertionID = 0
 
+    /// 断言创建失败的日志已记过(持续失败只记第一次,防轮询刷屏)。
+    private var idleSleepAssertionFailureLogged = false
+
     /// 周期对账任务 —— 兜底发现外部对 `SleepDisabled` 的改动(通知可能漏发)。
     private var pollTask: Task<Void, Never>?
 
@@ -234,8 +237,14 @@ final class KeepAwakeService {
                 )
             }
         }
-        isEnabled = outcome.isEnabled
-        isOwned = outcome.isOwned
+        // 只在有变化时写回 —— @Observable 的写通知不区分值是否相同,轮询每
+        // 10s 无条件赋值会让菜单栏/设置页跟着每轮重算。
+        if isEnabled != outcome.isEnabled {
+            isEnabled = outcome.isEnabled
+        }
+        if isOwned != outcome.isOwned {
+            isOwned = outcome.isOwned
+        }
 
         if outcome.shouldDropMarker {
             LogService.info("stale marker with sleep re-enabled → dropping marker", category: "KeepAwake")
@@ -370,6 +379,8 @@ final class KeepAwakeService {
     /// 是因为它的回调带 observer 上下文指针 —— 和 `LidMonitor` 的 refcon 一个
     /// 模式,不需要把非 Sendable 的 self 捕获进 C 回调。
     private func registerPrefsChangeObserver() {
+        // 重入保护:重复注册会产生双份回调,每次通知的复查任务翻倍。
+        guard prefsChangeObserver == nil else { return }
         let observer = Unmanaged.passUnretained(self).toOpaque()
         prefsChangeObserver = observer
         CFNotificationCenterAddObserver(
@@ -391,6 +402,9 @@ final class KeepAwakeService {
 
     /// 兜底轮询:万一通知漏发(比如睡眠期间被改动),周期对账也能发现。
     private func startStatePolling() {
+        // 重入保护(镜像 LidMonitor.start 的自守卫):重复 start() 会覆盖
+        // pollTask,孤儿任务永不取消,变成一个不死的 10s 循环。
+        guard pollTask == nil else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Self.pollInterval))
@@ -438,8 +452,12 @@ final class KeepAwakeService {
             )
             if result == kIOReturnSuccess {
                 idleSleepAssertion = assertionID
+                idleSleepAssertionFailureLogged = false
                 LogService.info("idle-sleep assertion held", category: "KeepAwake")
-            } else {
+            } else if !idleSleepAssertionFailureLogged {
+                // 创建失败每个轮询周期都会重试,但日志只记第一次 —— 持续失败
+                // 也不能刷屏(高频循环只记状态转移的规则)。
+                idleSleepAssertionFailureLogged = true
                 LogService.warn(
                     "could not hold idle-sleep assertion: 0x\(String(result, radix: 16))",
                     category: "KeepAwake"
@@ -462,6 +480,9 @@ final class KeepAwakeService {
         if let settleDelay {
             try? await Task.sleep(for: .seconds(settleDelay))
         }
+        // 结算窗口内用户可能又开始重新开启(授权框还弹着、写尚未落地)—— 此时
+        // live 读到的仍是旧值,千万别把机器睡下去。
+        guard !isBusy, !isEnabled else { return }
         let decision = KeepAwakeSleepNowDecision(
             systemSleepDisabled: PMSet.readSleepDisabledLive(),
             lidClosed: lidMonitor.isLidClosed(),

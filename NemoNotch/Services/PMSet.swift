@@ -44,9 +44,10 @@ enum PMSet {
     /// 相比 spawn `/usr/bin/pmset` 再解析文本,这是一次注册表属性读取,开销可
     /// 忽略 —— 轮询对账(见 `KeepAwakeService`)因此才做得起。
     ///
-    /// 返回值语义:找不到 IOPMrootDomain → `nil`(读不到,调用方回退到
-    /// `pmset -g`);属性缺席或非布尔 → `false` —— 标志没设就是"确定没开",
-    /// 区别于"读不到"。
+    /// 返回值语义与 `pmset -g` 解析对齐:读不到(rootDomain 拿不到、属性缺席
+    /// 或非布尔)→ `nil`,"读不到"而非"确定没开",调用方回退到 `pmset -g`。
+    /// 属性**在且是布尔**才有 true/false —— 实测关着时它也是一个在场的
+    /// CFBoolean false,缺席属于异常,不该被当成"关"。
     nonisolated static func readSleepDisabledLive() -> Bool? {
         let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
         guard root != IO_OBJECT_NULL else { return nil }
@@ -56,8 +57,10 @@ enum PMSet {
             let value = IORegistryEntryCreateCFProperty(
                 root, "SleepDisabled" as CFString, kCFAllocatorDefault, 0
             )?.takeRetainedValue()
-        else { return false }
-        return (value as? Bool) ?? false
+        else { return nil }
+        guard CFGetTypeID(value) == CFBooleanGetTypeID() else { return nil }
+        // swiftlint:disable:next force_cast
+        return CFBooleanGetValue((value as! CFBoolean))
     }
 
     /// 读系统当前的 `SleepDisabled`。无法确定时返回 `nil`。
