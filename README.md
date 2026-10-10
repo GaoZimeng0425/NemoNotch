@@ -63,7 +63,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Menu Bar Entry** — Fixed pixel-art notch icon (state is visible on the notch panel above the menubar); menu shows Now Playing controls (previous / play-pause / next) when media is active
 - **HUD Overlay** — Volume, brightness, and battery level indicators with segmented bars
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
-- **Explicit permission requests.** NemoNotch does not auto-request permissions on launch. Each feature surfaces a "Grant Access" button (Calendar in the Overview tab, Location in the Weather card) — click to invoke the system dialog. Media control needs no permission at all — it goes through the Perl bridge.
+- **Explicit permission requests.** NemoNotch does not auto-request permissions on launch. Each feature surfaces a "Grant Access" button (Calendar in the Overview tab, Location in the Weather card) — click to invoke the system dialog. For permissions that have no system dialog (Accessibility and other list-style privacy panes), the button opens the right System Settings pane and parks a small floating guide beside it: drag the NemoNotch icon from the guide into the list, flip the switch, and the guide confirms and disappears on its own (the grant itself still happens in System Settings — nothing is bypassed). Media control needs no permission at all — it goes through the Perl bridge.
 - **ESC closes the notch.** Press ESC any time the notch is opened.
 
 ## Tech Stack
