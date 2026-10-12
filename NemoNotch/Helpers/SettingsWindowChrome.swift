@@ -13,14 +13,31 @@ enum SettingsWindowChrome {
     private static let toolbarIdentifier = NSToolbar.Identifier("NemoNotchSettingsToolbar")
     private static let toggleItemIdentifier = NSToolbarItem.Identifier("NemoNotchSettingsToggleSidebar")
 
-    /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口标题可能尚未就位
-    /// (Settings 场景的窗口元数据晚于内容出现),找不到就短暂重试。
+    /// SwiftUI Settings 场景窗口的 frame autosave 名(实测常量,`NSWindow Frame
+    /// com_apple_SwiftUI_Settings_window` 即由它写入)。用它认窗口是确定性的:
+    /// 按标题匹配在真机上会扑空(title 在 onAppear 时未必就位),而 notch 各窗口
+    /// 与它天然互斥——只有 Settings 场景窗口带这个 autosave 名。
+    private static let settingsAutosaveName = "com_apple_SwiftUI_Settings_window"
+
+    /// 幂等安装。在 SettingsView.onAppear 调用;此刻窗口的 autosave 名可能尚未
+    /// 就位(场景的窗口元数据晚于内容出现),找不到就短暂重试。
+    /// 窗口的默认尺寸不在这一层设——Settings 场景认 scene 级的
+    /// `.defaultSize(width:height:)`(见 NemoNotchApp),不认内容根视图的
+    /// ideal 值(实测 ideal 被无视、开成 900 宽)。
     @MainActor static func install(retries: Int = 8) {
         guard let window = NSApp.windows.first(where: {
-            $0.isVisible && $0.title.hasPrefix("NemoNotch") && $0.toolbar == nil
+            $0.frameAutosaveName == settingsAutosaveName
         }) else {
             guard retries > 0 else {
-                LogService.warn("Settings toolbar install gave up: window not found", category: "Settings")
+                let dump = NSApp.windows
+                    .map {
+                        "\($0.frameAutosaveName.isEmpty ? "-" : $0.frameAutosaveName)|'\($0.title)'|vis=\($0.isVisible)|tb=\($0.toolbar != nil)"
+                    }
+                    .joined(separator: "; ")
+                LogService.warn(
+                    "Settings toolbar install gave up: window not found. windows=[\(dump)]",
+                    category: "Settings"
+                )
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -28,6 +45,7 @@ enum SettingsWindowChrome {
             }
             return
         }
+        guard window.toolbar == nil else { return } // 本会话已装过
         let toolbar = NSToolbar(identifier: toolbarIdentifier)
         toolbar.delegate = Delegate.shared
         toolbar.displayMode = .iconOnly
@@ -42,6 +60,22 @@ enum SettingsWindowChrome {
         // 透明标题条;此前 SwiftUI ignoresSafeArea 不生效就是因为窗口没开
         // fullSizeContentView,SwiftUI 内容被挡在标题条下。
         window.styleMask.insert(.fullSizeContentView)
+        // Settings 场景造的窗口天生没有 .resizable,用户无法拖拽缩放;内容的
+        // frame(minWidth:minHeight:) 会以 auto-layout 约束落在 hosting view 上,
+        // 拖不破版式。注意:onAppear 时立刻插入的这一位活不久——上面装
+        // NSToolbar 触发的异步窗口重配置会重建 styleMask,把它抹掉(探针实测:
+        // 带 toolbar 的插入 4 秒内被剥,无 toolbar 的存活);所以还要在重配置
+        // 尘埃落定后补插一次。
+        window.styleMask.insert(.resizable)
+        Task { @MainActor [weak window] in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard let window, window.toolbar != nil else { return }
+            window.styleMask.insert(.resizable)
+            LogService.info(
+                "Settings window resizable=\(window.styleMask.contains(.resizable))",
+                category: "Settings"
+            )
+        }
         window.titlebarAppearsTransparent = true
         // 隐藏窗口标题(侧栏选中项已表明当前页),唯一的工具栏项 +
         // flexibleSpace 把收起按钮钉在最左侧——紧挨红绿灯。

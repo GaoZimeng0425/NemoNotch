@@ -84,6 +84,13 @@ struct NotchView: View {
     /// `.background` did.
     @State private var closedContentSize: CGSize = .zero
 
+    /// Morph namespace shared by the collapsed media coin and the opened
+    /// panel's vinyl — the two ends of the vinyl morph
+    /// (`NotchConstants.mediaVinylMorphID`). Owned here so both state's views
+    /// resolve against one identity; per-screen, so multi-display instances
+    /// never cross-match.
+    @Namespace private var notchMorph
+
     /// Collapsed shape size, floored at the physical notch so the first frame
     /// (before any measurement lands) and the empty-badge state still span the
     /// notch slot.
@@ -140,48 +147,21 @@ struct NotchView: View {
             // mid-flight. Keeping one identity turns that into a real frame
             // animation (size + corner radii interpolate), with no cross-fade
             // and nothing translucent.
-            notchShape(shown: shown)
-                .animation(notchStateAnimation, value: effectiveStatus)
-                .animation(
-                    .spring(
-                        duration: NotchConstants.tabSwitchSpringDuration,
-                        bounce: NotchConstants.tabSwitchSpringBounce
-                    ),
-                    value: coordinator.selectedTab
-                )
+            notchShell(shown: shown)
                 .zIndex(0)
 
             // Badges ride on top of the shape rather than owning it. Still
             // conditionally mounted (they contain continuously-animating views
             // like VinylDiscView — see `contentMounted`), but their removal no
-            // longer takes the shape with them.
+            // longer takes the shape with them. Sibling by design: the badge
+            // row is the source the closed body width is measured FROM, so it
+            // cannot overflow the shell, and hosting it inside the shell's
+            // frame would create a parent-size-depends-on-child layout loop
+            // (see NotchBackgroundView's doc comment).
             if effectiveStatus == .closed {
                 collapsedBadges(shown: shown)
                     .zIndex(0.5)
             }
-
-            // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
-            // .transition 承担：新插入的视图不会对绑定 effectiveStatus 的
-            // scaleEffect/opacity 做动画（没有上一个值可插值），只有 transition
-            // 才描述得了进出过程。
-            if contentMounted {
-                contentPanel
-                    .allowsHitTesting(effectiveStatus == .opened)
-                    .animation(
-                        .spring(
-                            duration: NotchConstants.tabSwitchSpringDuration,
-                            bounce: NotchConstants.tabSwitchSpringBounce
-                        ),
-                        value: coordinator.selectedTab
-                    )
-                    .transition(
-                        .scale(scale: 0.2, anchor: .top).combined(with: .opacity)
-                    )
-                    .zIndex(1)
-            }
-
-            chinBar
-                .zIndex(2)
 
             // HUD overlay - render only on the primary HUD screen so it
             // doesn't flash on every connected display simultaneously.
@@ -236,10 +216,14 @@ struct NotchView: View {
         }
         .onChange(of: bluetoothService.capsuleEvent?.id) { _, _ in
             // 事件在刘海展开期间到达:同样立即隐藏,收起后不回放陈旧胶囊。
-            if effectiveStatus == .opened { bluetoothService.hideCapsule() }
+            if effectiveStatus == .opened {
+                bluetoothService.hideCapsule()
+            }
         }
         .onChange(of: hudService.chargingCapsule?.id) { _, _ in
-            if effectiveStatus == .opened { hudService.hideChargingCapsule() }
+            if effectiveStatus == .opened {
+                hudService.hideChargingCapsule()
+            }
         }
         .onChange(of: coordinator.selectedTab) { _, newTab in
             syncTabDisplay(to: newTab)
@@ -312,7 +296,9 @@ struct NotchView: View {
     /// Three-column row straddling the hardware notch: tabs on the left,
     /// a clear notch-width spacer in the middle, actions on the right.
     /// The outer frame (openedWidth) constrains everything inside, so content
-    /// can never spill past the notch shell.
+    /// can never spill past the notch shell. Lives INSIDE the shell's clip
+    /// subtree now — top-aligned in the shell's top-aligned ZStack it occupies
+    /// exactly the notch-straddling band it used to `.position` itself into.
     private var chinBar: some View {
         NotchChinBar(
             tabs: enabledTabs,
@@ -324,10 +310,8 @@ struct NotchView: View {
             onSettings: openSettings,
             onQuit: { NSApp.terminate(nil) }
         )
-        .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
         .opacity(effectiveStatus == .opened ? 1 : 0)
         .allowsHitTesting(effectiveStatus == .opened)
-        .animation(notchStateAnimation, value: effectiveStatus)
     }
 
     // MARK: - Content panel (drops down from notch)
@@ -343,10 +327,8 @@ struct NotchView: View {
             Spacer(minLength: 0)
         }
         .frame(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
-        .clipShape(.rect(
-            bottomLeadingRadius: NotchConstants.cornerRadiusBottomOpened,
-            bottomTrailingRadius: NotchConstants.cornerRadiusBottomOpened
-        ))
+        // No own clip: the shell's single NotchShape clip owns the silhouette
+        // (bottom corners included) — content lives inside it structurally.
     }
 
     // MARK: - Swipeable tab content
@@ -408,7 +390,7 @@ struct NotchView: View {
     private func tabContent(for tab: Tab) -> some View {
         switch tab {
         case .overview:
-            OverviewTab()
+            OverviewTab(morphNamespace: notchMorph)
         case .claude:
             AIChatTab()
         case .launcher:
@@ -451,7 +433,8 @@ struct NotchView: View {
             onBadgeTap: handleBadgeTap,
             notificationService: notificationService,
             mediaService: mediaService,
-            pomodoroService: pomodoroService
+            pomodoroService: pomodoroService,
+            morphNamespace: notchMorph
         )
         .frame(height: hardwareNotchSize.height)
         .animation(
@@ -478,19 +461,41 @@ struct NotchView: View {
         )
     }
 
-    private func notchShape(shown: Bool) -> some View {
+    /// The shell AND its content (panel + chin), one clip — boring.notch
+    /// architecture. All state animations consolidate on this one container:
+    /// open/close drives the frame + corner radii + chin visibility, the tab
+    /// spring drives the openedWidth switch (shell and content reframe
+    /// together — overview is wider than the other tabs), `shown` makes the
+    /// closed shell track the badge springs, and the glow crossfades.
+    private func notchShell(shown: Bool) -> some View {
         NotchBackgroundView(
             status: effectiveStatus,
             notchSize: notchSize,
             topCornerRadius: notchTopCornerRadius,
             bottomCornerRadius: notchBottomCornerRadius,
-            spacing: NotchConstants.notchBackgroundSpacing,
-            glow: notchGlow,
-            // Always fixed now: the collapsed width used to come from flexing
-            // to a parent badge row, but the shape has no such parent anymore —
-            // it takes the measured width through `notchSize` instead, which is
-            // what lets one view animate across both states.
-            flexibleWidth: false
+            glow: notchGlow
+        ) {
+            // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
+            // .transition 承担：新插入的视图不会对绑定 effectiveStatus 的
+            // scaleEffect/opacity 做动画（没有上一个值可插值），只有 transition
+            // 才描述得了进出过程。收起时内容在被裁掉的形状内同步缩回刘海。
+            if contentMounted {
+                contentPanel
+                    .allowsHitTesting(effectiveStatus == .opened)
+                    .transition(
+                        .scale(scale: 0.2, anchor: .top).combined(with: .opacity)
+                    )
+            }
+
+            chinBar
+        }
+        .animation(notchStateAnimation, value: effectiveStatus)
+        .animation(
+            .spring(
+                duration: NotchConstants.tabSwitchSpringDuration,
+                bounce: NotchConstants.tabSwitchSpringBounce
+            ),
+            value: coordinator.selectedTab
         )
         .animation(
             .spring(duration: NotchConstants.badgeSpringDuration, bounce: NotchConstants.badgeSpringBounce),
@@ -518,7 +523,10 @@ struct NotchView: View {
             displayedTab = tab
             return
         }
-        withAnimation(.spring(duration: NotchConstants.tabSwitchEnterDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+        withAnimation(.spring(
+            duration: NotchConstants.tabSwitchEnterDuration,
+            bounce: NotchConstants.tabSwitchSpringBounce
+        )) {
             displayedTab = tab
         }
         tabBlurOn = true

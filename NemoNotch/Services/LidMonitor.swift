@@ -3,11 +3,17 @@ import Foundation
 import IOKit
 import IOKit.pwr_mgt
 
-// `kIOPMMessageClamshellStateChange` 没有被导出到 Swift(它是 C 宏
-// `iokit_family_msg(sub_iokit_powermanagement, 0x100)` 展开的结果),按
-// `IOReturn.h` 里的位布局自己算。
-private func errSystem(_ value: UInt32) -> UInt32 { (value & 0x3F) << 26 }
-private func errSub(_ value: UInt32) -> UInt32 { (value & 0xFFF) << 14 }
+/// `kIOPMMessageClamshellStateChange` 没有被导出到 Swift(它是 C 宏
+/// `iokit_family_msg(sub_iokit_powermanagement, 0x100)` 展开的结果),按
+/// `IOReturn.h` 里的位布局自己算。
+private func errSystem(_ value: UInt32) -> UInt32 {
+    (value & 0x3F) << 26
+}
+
+private func errSub(_ value: UInt32) -> UInt32 {
+    (value & 0xFFF) << 14
+}
+
 private func iokitFamilyMessage(subsystem: UInt32, message: UInt32) -> UInt32 {
     errSystem(0x38) | subsystem | message
 }
@@ -169,6 +175,20 @@ final class LidMonitor {
         return CFBooleanGetValue((property as! CFBoolean))
     }
 
+    /// 读 `AppleClamshellCausesSleep` —— 内核对"合盖会不会导致睡眠"的权威判断。
+    ///
+    /// 接着外接显示器的 clamshell 工作模式下它是 `false`:那时合盖是用户要的
+    /// 工作状态,不该把机器睡下去。读不到时返回 `nil`,调用方按"不会"处理。
+    func clamshellCausesSleep() -> Bool? {
+        guard rootDomain != IO_OBJECT_NULL else { return nil }
+        guard let property = IORegistryEntryCreateCFProperty(
+            rootDomain, "AppleClamshellCausesSleep" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() else { return nil }
+        guard CFGetTypeID(property) == CFBooleanGetTypeID() else { return nil }
+        // swiftlint:disable:next force_cast
+        return CFBooleanGetValue((property as! CFBoolean))
+    }
+
     // MARK: - 内部
 
     private func handlePowerMessage(messageType: natural_t, messageArgument: UnsafeMutableRawPointer?) {
@@ -205,10 +225,16 @@ final class LidMonitor {
     /// 不熄屏的原因;`nil` 表示应当熄屏。抽出来是为了让"跳过"在日志里带上
     /// 可读的理由,而不是一个静默的 `guard`。
     private func skipReason(isEnabled: Bool, autoDisplayOff: Bool, hasExternal: Bool) -> String? {
-        if !isEnabled { return "keep-awake is off" }
-        if !autoDisplayOff { return "auto display-off disabled in settings" }
+        if !isEnabled {
+            return "keep-awake is off"
+        }
+        if !autoDisplayOff {
+            return "auto display-off disabled in settings"
+        }
         // 有外接显示器时不熄屏 —— 那正是用户想要的 clamshell 工作模式。
-        if hasExternal { return "an external display is attached" }
+        if hasExternal {
+            return "an external display is attached"
+        }
         return nil
     }
 
@@ -228,7 +254,9 @@ final class LidMonitor {
         let matched = IOServiceGetMatchingService(
             kIOMainPortDefault, IOServiceMatching("IOPMrootDomain")
         )
-        if matched != IO_OBJECT_NULL { return matched }
+        if matched != IO_OBJECT_NULL {
+            return matched
+        }
 
         return IORegistryEntryFromPath(
             kIOMainPortDefault,

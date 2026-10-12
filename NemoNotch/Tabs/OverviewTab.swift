@@ -6,6 +6,11 @@ import SwiftUI
 struct OverviewTab: View {
     @Environment(MediaService.self) var mediaService
 
+    /// Cross-state morph namespace (see `NotchConstants.mediaVinylMorphID`).
+    /// Owned by `NotchView` so the collapsed coin and this tab's vinyl are
+    /// two ends of the same handoff. nil in previews/tests → no morph.
+    var morphNamespace: Namespace.ID?
+
     private var hasTrack: Bool {
         !mediaService.playbackState.isEmpty
     }
@@ -25,7 +30,7 @@ struct OverviewTab: View {
                     .frame(width: calendarWidth)
 
                 if hasTrack {
-                    OverviewMediaSection()
+                    OverviewMediaSection(morphNamespace: morphNamespace)
                         .frame(width: mediaWidth)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .leading)),
@@ -211,6 +216,9 @@ private struct CalendarMeetingIcon: View {
 private struct OverviewMediaSection: View {
     @Environment(MediaService.self) var mediaService
 
+    /// Forwarded from `OverviewTab` — see `NotchConstants.mediaVinylMorphID`.
+    var morphNamespace: Namespace.ID?
+
     private var state: PlaybackState {
         mediaService.playbackState
     }
@@ -247,38 +255,37 @@ private struct OverviewMediaSection: View {
 
     private var artwork: some View {
         ZStack(alignment: .bottomTrailing) {
-            VinylDiscView(
-                isPlaying: state.isPlaying,
-                artworkData: state.artworkData,
-                appIcon: mediaService.appIcon,
-                size: Self.discSize
-            )
-            .background {
-                // Mood-light halo behind the vinyl in the album's dominant
-                // color — bright while playing, embers when paused.
-                //
-                // A radial falloff, not a blurred disc: the old
-                // Circle().fill().blur(14) was scaled only 1.12, so the opaque
-                // vinyl covered everything except a hard smudged rim. The
-                // stops ease out (rather than fading linearly) so the spill
-                // has no banding, and dropping the blur also drops an
-                // offscreen render pass.
-                RadialGradient(
-                    stops: [
-                        .init(color: accent, location: 0.45),
-                        .init(color: accent.opacity(0.5), location: 0.72),
-                        .init(color: accent.opacity(0), location: 1)
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: Self.discSize / 2
-                )
-                .scaleEffect(Self.haloScale)
-                .opacity(state.isPlaying ? 0.5 : 0.14)
-                .animation(.easeInOut(duration: 0.6), value: state.isPlaying)
-                .animation(.easeInOut(duration: 0.6), value: accent)
-            }
-            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+            // The opened-panel end of the vinyl morph: matched against the
+            // collapsed media coin so the disc flies between the two across
+            // open/close. Applied to the bare disc (before the halo) so the
+            // matched frame is exactly the disc, not the halo spill.
+            vinylDisc
+                .background {
+                    // Mood-light halo behind the vinyl in the album's dominant
+                    // color — bright while playing, embers when paused.
+                    //
+                    // A radial falloff, not a blurred disc: the old
+                    // Circle().fill().blur(14) was scaled only 1.12, so the opaque
+                    // vinyl covered everything except a hard smudged rim. The
+                    // stops ease out (rather than fading linearly) so the spill
+                    // has no banding, and dropping the blur also drops an
+                    // offscreen render pass.
+                    RadialGradient(
+                        stops: [
+                            .init(color: accent, location: 0.45),
+                            .init(color: accent.opacity(0.5), location: 0.72),
+                            .init(color: accent.opacity(0), location: 1),
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: Self.discSize / 2
+                    )
+                    .scaleEffect(Self.haloScale)
+                    .opacity(state.isPlaying ? 0.5 : 0.14)
+                    .animation(.easeInOut(duration: 0.6), value: state.isPlaying)
+                    .animation(.easeInOut(duration: 0.6), value: accent)
+                }
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
             if let appIcon = mediaService.appIcon {
                 Image(nsImage: appIcon)
@@ -296,6 +303,23 @@ private struct OverviewMediaSection: View {
             }
         }
         .frame(height: Self.discSize)
+    }
+
+    /// The disc itself; wrapped in its own builder so the morph modifier can
+    /// attach conditionally (nil namespace in previews → plain disc).
+    @ViewBuilder
+    private var vinylDisc: some View {
+        let disc = VinylDiscView(
+            isPlaying: state.isPlaying,
+            artworkData: state.artworkData,
+            appIcon: mediaService.appIcon,
+            size: Self.discSize
+        )
+        if let morphNamespace {
+            disc.matchedGeometryEffect(id: NotchConstants.mediaVinylMorphID, in: morphNamespace)
+        } else {
+            disc
+        }
     }
 
     private var trackInfo: some View {

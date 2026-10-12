@@ -9,7 +9,7 @@ final class HermesService: MultiAgentMonitor {
     /// Returns true when the NemoNotch hook is wired into the user's Hermes
     /// config (i.e. data can actually flow). Previously this checked whether
     /// `~/.hermes/` directory exists, but a stale directory shouldn't keep the
-    /// monitor "visible" in the AgentMonitorTab once the user uninstalls the
+    /// monitor "visible" in the AI tab's agent list once the user uninstalls the
     /// hook.
     var isInstalled: Bool {
         isHookInstalled
@@ -232,7 +232,9 @@ final class HermesService: MultiAgentMonitor {
                       let modDate = attrs[.modificationDate] as? Date else { continue }
 
                 let isActive = now.timeIntervalSince(modDate) < activeThreshold
-                if isActive { keepAlive.append((file.sessionId, modDate)) }
+                if isActive {
+                    keepAlive.append((file.sessionId, modDate))
+                }
 
                 // Skip the expensive full read+parse for files untouched since
                 // we last looked — this is the bulk of the saved work.
@@ -449,8 +451,12 @@ final class HermesService: MultiAgentMonitor {
             agent.name = "Hermes (\(model))"
         }
         agent.state = state
-        if let currentTool { agent.currentTool = currentTool }
-        if let workspace { agent.workspace = workspace }
+        if let currentTool {
+            agent.currentTool = currentTool
+        }
+        if let workspace {
+            agent.workspace = workspace
+        }
         agent.lastEventTime = Date()
         agents[id] = agent
         updateActiveAgent()

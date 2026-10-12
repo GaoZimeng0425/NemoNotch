@@ -1,0 +1,50 @@
+#!/bin/sh
+# NemoNotch post-merge hook (source of truth: .githooks/post-merge)
+# Installed into the real hooks dir by .githooks/install.sh — DO NOT edit the
+# installed copy; edit this file and re-run install.sh.
+#
+# 合并进 develop = 集成完成 → 自动构建并部署(./build.sh 全链:archive → export
+# → DMG → 装入 /Applications → 重启)。gate 是昂贵的,所以触发面从严:
+#   1. 当前分支必须是 develop —— 在 feature worktree 里 merge develop 是同步,不是集成
+#   2. HEAD subject 必须是 "Merge branch 'feature/…'" 这类来自 feature/hotfix 的集成合并;
+#      从 HEAD subject 解析来源,不依赖 MERGE_MSG 文件(hook 运行时它可能已被清理)
+#   3. 必须在主 worktree(develop 只可能检出自主检出)
+# 其余所有 merge(含 fast-forward pull、squash)静默放行。
+#
+# 干跑:NEMONOTCH_HOOK_DEBUG=1 只打印将执行的命令,不真构建 —— 用于测试 hook 触发。
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+[ "$branch" = "develop" ] || exit 0
+
+primary=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+here=$(git rev-parse --show-toplevel)
+[ "$here" = "$primary" ] || exit 0
+
+subject=$(git show -s --format=%s HEAD 2>/dev/null)
+src=$(printf '%s\n' "$subject" | sed -n "s/^Merge \(remote-tracking \)*branch '\([^']*\)'.*/\2/p")
+# feat-done 的自定义合并信息没有 `branch '…'` 引号包裹("Merge feature/x into develop"),
+# 默认 sed 匹配不到 —— 补一条无引号形态,否则自动构建永远不会触发。
+if [ -z "$src" ]; then
+  src=$(printf '%s\n' "$subject" | sed -n "s/^Merge \(feature\/[^ ]*\).*/\1/p")
+fi
+src=${src#origin/}
+case "$src" in
+  feature/*|hotfix/*|fix/*|feat/*) : ;;
+  *) exit 0 ;;
+esac
+
+echo ""
+echo "🛠  develop 收下 $src — 自动构建并部署 (./build.sh)"
+if [ "${NEMONOTCH_HOOK_DEBUG:-0}" = "1" ]; then
+  echo "[debug] NEMONOTCH_HOOK_DEBUG=1 — 干跑,不真构建。将执行: cd \"$primary\" && ./build.sh"
+  exit 0
+fi
+
+if (cd "$primary" && ./build.sh); then
+  echo "✅ 新 build 已部署到 /Applications 并重启"
+else
+  echo "" >&2
+  echo "❌ 自动构建失败 —— 合并本身已完成,不会回滚。" >&2
+  echo "   手动重试: cd \"$primary\" && ./build.sh" >&2
+  exit 1
+fi

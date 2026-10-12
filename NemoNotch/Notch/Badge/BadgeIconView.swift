@@ -13,6 +13,9 @@ struct BadgeIconView: View {
     let notificationService: NotificationService
     let mediaService: MediaService
     let pomodoroService: PomodoroTimerService
+    /// Cross-state morph namespace, consumed only by the media coin —
+    /// see `NotchConstants.mediaVinylMorphID`. nil → no morph.
+    var morphNamespace: Namespace.ID?
 
     var body: some View {
         let _ = PerfProbe.hit("BadgeIconView.body")
@@ -73,12 +76,20 @@ struct BadgeIconView: View {
         let isPlaying = mediaService.playbackState.isPlaying
         switch style {
         case .compactLeft:
-            VinylDiscView(
+            // The collapsed end of the vinyl morph: matched against the
+            // opened panel's disc (`OverviewMediaSection.artwork`) so the
+            // disc visibly flies out of / back into the notch.
+            let coin = VinylDiscView(
                 isPlaying: isPlaying,
                 artworkData: mediaService.playbackState.artworkData,
                 appIcon: mediaService.appIcon,
                 size: 20
             )
+            if let morphNamespace {
+                coin.matchedGeometryEffect(id: NotchConstants.mediaVinylMorphID, in: morphNamespace)
+            } else {
+                coin
+            }
         case .compactRight:
             AudioEqualizerView(
                 isActive: isPlaying,
@@ -244,6 +255,9 @@ struct CompactBadgesView: View {
     let notificationService: NotificationService
     let mediaService: MediaService
     let pomodoroService: PomodoroTimerService
+    /// Forwarded to the media coin for the vinyl morph —
+    /// see `NotchConstants.mediaVinylMorphID`.
+    var morphNamespace: Namespace.ID?
 
     /// Tapping anywhere opens the highest-priority group's tab.
     private var primary: BadgeItem? {
@@ -257,13 +271,13 @@ struct CompactBadgesView: View {
         NotchConstants.badgeCoinDiameter - NotchConstants.badgeStackStep
     }
 
-    // The three columns size to their content: the coin HStacks are intrinsic,
-    // the middle spacer is the physical notch core. `.fixedSize` makes the
-    // HStack report its natural width (coins + notch core) instead of letting
-    // the `maxWidth:.infinity` columns expand to the screen. `.frame(minWidth:)`
-    // then applies the physical-notch floor so an empty state still spans the
-    // notch. The notch shape rides behind as a `.background` and flexes to this
-    // resolved width — no pre-computed width needed.
+    /// The three columns size to their content: the coin HStacks are intrinsic,
+    /// the middle spacer is the physical notch core. `.fixedSize` makes the
+    /// HStack report its natural width (coins + notch core) instead of letting
+    /// the `maxWidth:.infinity` columns expand to the screen. `.frame(minWidth:)`
+    /// then applies the physical-notch floor so an empty state still spans the
+    /// notch. The notch shape rides behind as a `.background` and flexes to this
+    /// resolved width — no pre-computed width needed.
     var body: some View {
         let pad: CGFloat = shownHasActiveBadge ? NotchConstants.badgeNotchGap : 0
 
@@ -299,11 +313,10 @@ struct CompactBadgesView: View {
 
     // MARK: - Left column (logos)
 
-    // Coins stack with negative spacing (`-coinOverlap`); index 0 is the
-    // highest priority and sits frontmost. A trailing "+K" chip sits at the far
-    // (backmost) end when groups overflowed. Each coin slides in from the notch
-    // side (positive x) and settles leftward.
-    @ViewBuilder
+    /// Coins stack with negative spacing (`-coinOverlap`); index 0 is the
+    /// highest priority and sits frontmost. A trailing "+K" chip sits at the far
+    /// (backmost) end when groups overflowed. Each coin slides in from the notch
+    /// side (positive x) and settles leftward.
     private var leftColumn: some View {
         HStack(spacing: -coinOverlap) {
             ForEach(Array(cluster.groups.enumerated()), id: \.element.id) { index, group in
@@ -312,7 +325,8 @@ struct CompactBadgesView: View {
                         item: group.representative, style: .compactLeft,
                         notificationService: notificationService,
                         mediaService: mediaService,
-                        pomodoroService: pomodoroService
+                        pomodoroService: pomodoroService,
+                        morphNamespace: morphNamespace
                     )
                     .coinBackground()
                 }
@@ -332,13 +346,12 @@ struct CompactBadgesView: View {
 
     // MARK: - Right column (statuses)
 
-    // Mirror of the left column: the highest-priority coin sits at the outer
-    // RIGHT edge, frontmost, and the fan extends leftward toward the notch —
-    // so the iteration runs reversed (index 0 rendered last/rightmost) while
-    // zIndex keeps index 0 frontmost. A group of more than one (same-app
-    // instances) shows just its count in place of the status indicator. Each
-    // coin slides in from the notch side (negative x) as before.
-    @ViewBuilder
+    /// Mirror of the left column: the highest-priority coin sits at the outer
+    /// RIGHT edge, frontmost, and the fan extends leftward toward the notch —
+    /// so the iteration runs reversed (index 0 rendered last/rightmost) while
+    /// zIndex keeps index 0 frontmost. A group of more than one (same-app
+    /// instances) shows just its count in place of the status indicator. Each
+    /// coin slides in from the notch side (negative x) as before.
     private var rightColumn: some View {
         HStack(spacing: -coinOverlap) {
             ForEach(Array(cluster.groups.enumerated().reversed()), id: \.element.id) { index, group in
@@ -384,7 +397,9 @@ private struct CoinBackground: ViewModifier {
 }
 
 private extension View {
-    func coinBackground() -> some View { modifier(CoinBackground()) }
+    func coinBackground() -> some View {
+        modifier(CoinBackground())
+    }
 }
 
 // MARK: - BadgeCountChip

@@ -1,4 +1,5 @@
 import Foundation
+import IOKit
 
 /// `pmset` 命令封装。
 ///
@@ -37,6 +38,30 @@ enum PMSet {
     }
 
     // MARK: - 读
+
+    /// 直读 IOPMrootDomain 的 `SleepDisabled` 内核标志。
+    ///
+    /// 相比 spawn `/usr/bin/pmset` 再解析文本,这是一次注册表属性读取,开销可
+    /// 忽略 —— 轮询对账(见 `KeepAwakeService`)因此才做得起。
+    ///
+    /// 返回值语义与 `pmset -g` 解析对齐:读不到(rootDomain 拿不到、属性缺席
+    /// 或非布尔)→ `nil`,"读不到"而非"确定没开",调用方回退到 `pmset -g`。
+    /// 属性**在且是布尔**才有 true/false —— 实测关着时它也是一个在场的
+    /// CFBoolean false,缺席属于异常,不该被当成"关"。
+    nonisolated static func readSleepDisabledLive() -> Bool? {
+        let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        guard root != IO_OBJECT_NULL else { return nil }
+        defer { IOObjectRelease(root) }
+
+        guard
+            let value = IORegistryEntryCreateCFProperty(
+                root, "SleepDisabled" as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue()
+        else { return nil }
+        guard CFGetTypeID(value) == CFBooleanGetTypeID() else { return nil }
+        // swiftlint:disable:next force_cast
+        return CFBooleanGetValue((value as! CFBoolean))
+    }
 
     /// 读系统当前的 `SleepDisabled`。无法确定时返回 `nil`。
     ///
@@ -84,11 +109,23 @@ enum PMSet {
 
     /// 立刻熄屏。**不需要 root** —— 合盖后主动熄屏的策略因此可以留在无特权侧。
     nonisolated static func displaySleepNow() {
+        runUnprivileged(["displaysleepnow"])
+    }
+
+    /// 立刻睡眠。**不需要 root**。用于"关闭防休眠时盖子已经合着"的场景 ——
+    /// 清掉 `disablesleep` 并不会让已合盖的机器自己睡下去,不补这一脚它会
+    /// 睁着眼继续跑、在包里发热。
+    nonisolated static func sleepNow() {
+        runUnprivileged(["sleepnow"])
+    }
+
+    private nonisolated static func runUnprivileged(_ arguments: [String]) {
+        let action = arguments.joined(separator: " ")
         do {
-            _ = try run(executable, ["displaysleepnow"])
-            LogService.info("pmset displaysleepnow issued", category: "PMSet")
+            _ = try run(executable, arguments)
+            LogService.info("pmset \(action) issued", category: "PMSet")
         } catch {
-            LogService.error("pmset displaysleepnow failed: \(error.localizedDescription)", category: "PMSet")
+            LogService.error("pmset \(action) failed: \(error.localizedDescription)", category: "PMSet")
         }
     }
 
