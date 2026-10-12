@@ -42,9 +42,10 @@ struct BluetoothDeviceEvent: Equatable {
 /// CoreBluetooth, with a different permission story). macOS 26 requires
 /// `NSBluetoothAlwaysUsageDescription` (set in pbxproj) and raises the
 /// Bluetooth TCC prompt on first use — the reason `start()` is skipped under
-/// `UITestMode.isTestHost`. IOBluetooth user notifications are delivered on
-/// the runloop that registered them; we register from the main actor, so the
-/// @objc callbacks arrive on the main thread.
+/// `UITestMode.isTestHost`. IOBluetooth user notifications are NOT guaranteed
+/// to arrive on the runloop that registered them (see the IOBluetooth callbacks
+/// section below), so the @objc callbacks are `nonisolated` and hop to the
+/// main actor.
 @MainActor
 @Observable
 final class BluetoothService: NSObject {
@@ -119,43 +120,80 @@ final class BluetoothService: NSObject {
         capsuleDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(NotchConstants.notchCapsuleDwell))
             guard let self, !Task.isCancelled else { return }
-            self.capsuleEvent = nil
+            capsuleEvent = nil
         }
     }
 
     // MARK: - IOBluetooth callbacks
-    //
-    // Kept MainActor-isolated (not `nonisolated` + hop): IOBluetooth delivers
-    // user notifications on the runloop that registered them — the main
-    // runloop, since `start()` runs on the main actor — so the @objc dispatch
-    // lands on the main thread and the isolation assert holds. Passing the
-    // non-Sendable `IOBluetoothDevice` across a `nonisolated` boundary instead
-    // would be rejected by the compiler as a data-race risk.
 
-    @objc private func deviceDidConnect(
+    //
+    // These MUST be `nonisolated`: IOBluetooth does not reliably deliver user
+    // notifications on the runloop that registered them. Connection events
+    // routed through the CoreBluetooth coordinator (BLE-reconnectable devices
+    // such as AirPods) arrive on IOBluetooth's internal
+    // `com.apple.bluetooth.iobluetooth.coordinatorQueue` — measured as a
+    // launch-time SIGTRAP in build 861 on macOS 27.0.1 (2026-10-12): a
+    // @MainActor-isolated @objc callback tripped Swift 6's dispatch_assert_queue
+    // isolation check ~1s after every launch while an AirPods reconnect
+    // coincided, so the app "wouldn't open". Pattern: extract Sendable fields
+    // (name / address / class-of-device) on the callback thread, then hop to
+    // the main actor. The non-Sendable `IOBluetoothDevice` never crosses the
+    // boundary — the main-actor side re-resolves it by address
+    // (`IOBluetoothDevice(addressString:)`, the header's
+    // +deviceWithAddressString:) when it needs the object for the
+    // disconnect watcher.
+
+    @objc private nonisolated func deviceDidConnect(
         _ notification: IOBluetoothUserNotification,
         device: IOBluetoothDevice
     ) {
-        guard isAudio(device) else {
+        let name = device.nameOrAddress ?? "?"
+        let address = device.addressString ?? ""
+        guard BluetoothAudioClassifier.isAudioDevice(classOfDevice: device.classOfDevice) else {
             LogService.debug(
-                "Bluetooth connect ignored (non-audio): \(device.nameOrAddress ?? "?")",
+                "Bluetooth connect ignored (non-audio): \(name)",
                 category: "BluetoothService"
             )
             return
         }
-        let name = device.nameOrAddress ?? "?"
         LogService.info("Bluetooth audio connected: \(name)", category: "BluetoothService")
-        watchDisconnect(device)
-        showCapsule(name: name, isConnected: true)
+        Task { @MainActor [weak self] in
+            self?.handleAudioConnect(name: name, address: address)
+        }
     }
 
-    @objc private func deviceDidDisconnect(
+    @objc private nonisolated func deviceDidDisconnect(
         _ notification: IOBluetoothUserNotification,
         device: IOBluetoothDevice
     ) {
-        disconnectTokens.removeValue(forKey: device.addressString ?? "")
         let name = device.nameOrAddress ?? "?"
+        let address = device.addressString ?? ""
         LogService.info("Bluetooth audio disconnected: \(name)", category: "BluetoothService")
+        Task { @MainActor [weak self] in
+            self?.handleAudioDisconnect(name: name, address: address)
+        }
+    }
+
+    /// Main-actor side of the IOBluetooth callbacks above.
+    private func handleAudioConnect(name: String, address: String) {
+        if !address.isEmpty {
+            // IOBluetoothDevice(addressString:) is the Swift import of the
+            // header's +deviceWithAddressString: — lookup-or-create; for a
+            // just-connected device this returns the live cached object.
+            if let device = IOBluetoothDevice(addressString: address) {
+                watchDisconnect(device)
+            } else {
+                LogService.warn(
+                    "Bluetooth disconnect watcher skipped (device lookup failed): \(name)",
+                    category: "BluetoothService"
+                )
+            }
+        }
+        showCapsule(name: name, isConnected: true)
+    }
+
+    private func handleAudioDisconnect(name: String, address: String) {
+        disconnectTokens.removeValue(forKey: address)
         showCapsule(name: name, isConnected: false)
     }
 
