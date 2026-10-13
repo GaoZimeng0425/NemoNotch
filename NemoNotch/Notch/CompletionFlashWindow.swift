@@ -30,6 +30,8 @@ final class CompletionFlashWindow: NSWindow {
 @MainActor
 final class CompletionFlashWindowController {
     private var windows: [UInt32: CompletionFlashWindow] = [:]
+    /// L1:屏幕参数变化的重建立务是否已排队(同一次重配常连发多条通知,合并成一次)。
+    private var rebuildPending = false
     private let service: CompletionFlashService
     private nonisolated(unsafe) var observer: Any?
 
@@ -42,9 +44,28 @@ final class CompletionFlashWindowController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.rebuild() }
+            // L1:窗口销毁/重建显式推迟到下一个 runloop turn。queue: .main 的
+            // 交付通常已不在派发栈内,但这个契约不该依赖 NotificationCenter 的
+            // 内部实现 —— AppKit 屏幕重配派发栈内的同步重建是过度释放 SIGSEGV
+            // 崩溃族的根因(见 NotchCoordinator.screenParametersChanged)。
+            MainActor.assumeIsolated {
+                self?.scheduleRebuild()
+            }
         }
         observeOverlayVisibility()
+    }
+
+    /// L1:见 `NotchCoordinator.screenParametersChanged` 的崩溃族说明 ——
+    /// 屏幕重配的窗口重建推迟一个 runloop turn,pending 标志合并连发的多条通知。
+    private func scheduleRebuild() {
+        guard !rebuildPending else { return }
+        rebuildPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            rebuildPending = false
+            LogService.info("screen parameters changed — rebuilding flash windows", category: "CompletionFlash")
+            rebuild()
+        }
     }
 
     /// Keep the windows on screen only while there is something to show.

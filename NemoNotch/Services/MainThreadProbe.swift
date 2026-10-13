@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 /// 主线程卡顿探针:挂一个 CFRunLoopObserver,测每轮主 runloop 耗时。
 /// 单轮超过阈值(默认 50ms)即抓主线程调用栈 + 窗口快照,写进 LogService。
@@ -55,8 +55,8 @@ final class MainThreadProbe {
         guard let obs = CFRunLoopObserverCreate(
             kCFAllocatorDefault,
             activities.rawValue,
-            true,  // repeats
-            0,     // order: 最早
+            true, // repeats
+            0, // order: 最早
             { _, activity, info in
                 guard let info else { return }
                 let ctx = info.assumingMemoryBound(to: RunLoopProbeContext.self).pointee
@@ -78,7 +78,7 @@ final class MainThreadProbe {
         LogService.info("installed (threshold=\(thresholdMs)ms)", category: "MainThreadProbe")
     }
 
-    // CF 回调入口。绝对不能在这里做重活 —— 只读时间、必要时切回主线程采样。
+    /// CF 回调入口。绝对不能在这里做重活 —— 只读时间、必要时切回主线程采样。
     private func handle(activity: CFRunLoopActivity) {
         // 主线程被唤醒(一轮活跃期开始):记起点。
         if activity.contains(.afterWaiting) {
@@ -101,12 +101,25 @@ final class MainThreadProbe {
 
         // 冷却检查。
         let now = Date().timeIntervalSince1970
-        if now - lastLogTime < cooldownSeconds { return }
+        if now - lastLogTime < cooldownSeconds {
+            return
+        }
         lastLogTime = now
 
         // 已在主线程(beforeWaiting 阶段,主线程即将休眠)。直接采样 —— 下一轮 runloop 会
         // 把日志写入也跑掉。无需 async 切换(那反而引入 Swift 6 sendable 问题)。
         recordSlowRunloop(elapsedMs: elapsedMs)
+    }
+
+    /// 窗口清单快照(共享给屏幕重配路径的现场日志 —— L3)。
+    static func windowSnapshot() -> String {
+        let windows = NSApp?.windows ?? []
+        guard !windows.isEmpty else { return "(none)" }
+        return windows.map { win -> String in
+            let cv = win.contentView
+            let cvSize = cv.map { "\(Int($0.bounds.width))x\(Int($0.bounds.height))" } ?? "nil"
+            return "\(type(of: win)) title=\"\(win.title)\" frame=\(Int(win.frame.width))x\(Int(win.frame.height)) contentView=\(cvSize) visible=\(win.isVisible)"
+        }.joined(separator: "\n  ")
     }
 
     private func recordSlowRunloop(elapsedMs: Double) {
@@ -116,11 +129,7 @@ final class MainThreadProbe {
 
         // 窗口快照:看哪个窗口在疯布局。
         let windows = NSApp?.windows ?? []
-        let windowSnap = windows.map { win -> String in
-            let cv = win.contentView
-            let cvSize = cv.map { "\(Int($0.bounds.width))x\(Int($0.bounds.height))" } ?? "nil"
-            return "\(type(of: win)) title=\"\(win.title)\" frame=\(Int(win.frame.width))x\(Int(win.frame.height)) contentView=\(cvSize) visible=\(win.isVisible)"
-        }.joined(separator: "\n  ")
+        let windowSnap = Self.windowSnapshot()
 
         LogService.warn(
             """
