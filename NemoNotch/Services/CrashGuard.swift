@@ -84,19 +84,26 @@ enum CrashGuard {
         let dir = NSHomeDirectory() + "/.NemoNotch"
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
 
-        // /bin/sh -c "P=$PPID; while kill -0 $P...; exec /usr/bin/open -a '<bundle>'"
-        // 等垂死进程真正退出(pid 释放)再 open,避免 open 只是激活垂死旧实例;
-        // P 必须先捕获 —— 垂死进程退出后 shell 会被重挂到 launchd(PPID 变 1),
-        // 那之后读 $PPID 就永远活着了。上限 100×0.2s=20s,防进程异常滞留时永不重启。
+        // 重启子进程脚本(在崩溃进程的孤儿 shell 里跑,普通 shell 语义):
+        // 1) 先捕获 P=$PPID 再轮询 kill -0 —— 等垂死进程真正退出(pid 释放)再
+        //    open,避免 open 只是激活垂死旧实例;P 必须先捕获,进程死后 shell 被
+        //    重挂到 launchd($PPID 变 1),那之后读就永远活着了。上限 100×0.2s=20s。
+        // 2) open 重试 3 次:实测崩溃上下文里 open 偶发静默失败(3 次端到端验证
+        //    1 次未拉起,机制本身在最小 env 下正常),失败时把 rc 落进审计日志,
+        //    绝不无声消失。
         let bundlePath = Bundle.main.bundleURL.path
-        guard !bundlePath.contains("'") else {
+        let auditPath = dir + "/crash-restart.log"
+        guard !bundlePath.contains("'"), !auditPath.contains("'") else {
             LogService.error(
-                "CrashGuard not installed: bundle path contains a quote: \(bundlePath)",
+                "CrashGuard not installed: path contains a quote: \(bundlePath) / \(auditPath)",
                 category: "CrashGuard"
             )
             return
         }
-        let command = "P=$PPID; n=0; while kill -0 $P 2>/dev/null && [ $n -lt 100 ]; do sleep 0.2; n=$((n+1)); done; exec /usr/bin/open -a '\(bundlePath)'"
+        let command = "P=$PPID; n=0; while kill -0 $P 2>/dev/null && [ $n -lt 100 ]; do sleep 0.2; n=$((n+1)); done; "
+            + "m=0; while [ $m -lt 3 ]; do /usr/bin/open -a '\(bundlePath)' && exit 0; "
+            + "echo \"epoch=$(date +%s) sig=0 count=0 action=open-failed rc=$?\" >> '\(auditPath)'; "
+            + "sleep 2; m=$((m+1)); done"
 
         shPath = copyC("/bin/sh")
         statePath = copyC(dir + "/crash-restart.state")
