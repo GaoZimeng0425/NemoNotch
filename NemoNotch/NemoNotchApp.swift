@@ -108,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         _ = LogService.shared
 
+        // 崩溃自愈(L2):致命信号 → 循环保护重启 + 重发信号保留 .ips 报告。
+        // 先于其余装配安装,启动早期的崩溃也被覆盖。
+        CrashGuard.install()
+
         // 主线程卡顿探针:抓 watchdog 杀进程前那一轮主 runloop 卡在哪个业务函数。
         // 诊断 cpu_resource 崩溃(主线程卡在 NSView 递归 layout,由 CA::Transaction 每帧驱动)。
         MainThreadProbe.shared.install()

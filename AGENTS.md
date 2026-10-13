@@ -60,6 +60,7 @@ graph TB
         CFS["CompletionFlashService<br/>Observes AISessionStore + AgentMonitorRegistry<br/>throttle/merge → drives flash + toast"]
         BTS["BluetoothService<br/>IOBluetooth audio connect/disconnect → notch capsule"]
         CDM["CalendarDueMonitor<br/>10s tick → due calendar events → unified flash"]
+        CGL["CrashGuard<br/>fatal-signal self-restart (loop-guarded)"]
     end
 
     subgraph NotchUI["Notch UI Layer"]
@@ -386,6 +387,16 @@ When adding notch UI, keep in mind:
 - **Bind `.animation(value:)` to what actually changes on screen, not to the upstream datum.** The elapsed-time label bound its `numericText` transition to `playbackPosition` (0.5s cadence) while `formatTime` only resolves to whole seconds — so half the 0.25s animations ran with an identical string on screen. Binding the formatted string instead halves the trigger rate with no visual difference.
 - Animation driving style is a red herring for CPU: rewriting `VinylDiscView` from a 20fps `@State` loop to a `repeatForever` animation, and `AudioEqualizerView` from animating `frame(height:)` (layout) to `scaleEffect` (transform), each measured **zero** CPU improvement — both kept an animation *active*. Only unmounting helped. (The `scaleEffect` rewrite was reverted: `Capsule` corner radii distort under non-uniform scaling. The `repeatForever` rewrite was later replaced too — next bullet.)
 - **`repeatForever` cannot be stopped by assigning a new value, not even inside a `disablesAnimations` transaction.** The animation stays attached to the property and keeps driving it — the vinyl went on spinning after playback paused. It also hides the current interpolated value (the property already equals the target), so stopping can only reset it, which snaps the artwork upright. `TimelineView(.animation(paused:))` fixes both: the driver halts and the last rendered frame holds. Derive the value from `context.date` (`VinylDiscView.angle(at:)`) so there is no state to coordinate and a view rebuild can't lose phase. Caveat: `TimelineView` keys off `paused` alone, **not visibility** — a mounted-but-invisible view keeps ticking every frame, so never pair it with opacity-style hiding.
+
+### 屏幕重配崩溃族(2026-10 根治)
+
+**崩溃签名**(2026-08-19 / 10-12 / 10-13 三份 .ips 完全一致):主线程 SIGSEGV,栈 = `objc_release ← __RELEASE_OBJECTS_IN_THE_ARRAY__ ← NSArrayM dealloc ← autoreleasePoolPop ← AppKit _NSCGSDisplayConfigurationUpdateAndInvokeObservers ← SkyLight 屏幕重配 datagram`,**栈内无任何应用帧** —— AppKit 在屏幕配置变更通知的派发栈里对一个(被我们弄成僵尸的)窗口对象过度释放。触发不限于唤醒:插拔显示器、切显示模式、开合盖都会发这条通知;用户接上外接显示器后频率从 30 天 1 次升到 24h 2 次。
+
+**L1(根因)**:`didChangeScreenParametersNotification` 的观察者绝不能在通知派发栈内同步销毁/重建 NSWindow。`NotchCoordinator.screenParametersChanged` 与 `CompletionFlashWindowController` 均已改为 pending 标志合并 + `DispatchQueue.main.async` 推迟一个 runloop turn(调用栈退净后才执行重建)。新增屏幕相关 observer 时遵守同一条:重建永远 async。附带发现:NotificationCenter 的 block 观察者 `queue: .main` 在主线程 post 时可能同步执行 —— 不要依赖它异步,自己显式推迟。
+
+**L2(兜底)CrashGuard**(`NemoNotch/Services/CrashGuard.swift`,装配于 `applicationDidFinishLaunching` 最前):SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT/SIGTRAP 的信号 handler。循环保护决策是纯函数 `CrashRestartPolicy`(600s 窗口 ≤3 次自动重启,之后放弃等用户;稳定运行 120s 清零计数,有单测);允许重启时 `posix_spawn` 一个 `/bin/sh` 子进程 —— 它先捕获 `P=$PPID` 再轮询 `kill -0 $P` 等**垂死进程真正退出**(pid 释放;上限 20s)然后 `exec /usr/bin/open -a` 拉起新实例(直接 sleep 会赶在旧实例死透前 open,只是激活垂死实例);最后 handler 恢复 SIG_DFL 重发信号,系统照常写 .ips 报告。测试宿主/`--uitest` 跳过(测试崩溃不复活);逃生开关 `crashGuardEnabled=false`。状态 `~/.NemoNotch/crash-restart.state`(定长 "count last\n" 原地覆写),审计 `~/.NemoNotch/crash-restart.log`(独立文件不随主日志滚动,KeepAwakeEventLog 思路)。
+
+**async-signal-safe 纪律**(改 CrashGuard 前必读):(1) handler 内禁止任何 String/Array/Foundation 构造 —— 它们 malloc,而崩溃线程可能正持有 malloc 锁,重入即死锁;数字格式化/解析全部手写标量运算。(2) 所有缓冲 install() 时预分配;**Swift static var 懒初始化本身要拿锁分配,handler 读的每个 static —— 包括 `CrashRestartPolicy` 的策略常量,默认参数在每个调用点求值 —— 必须在 `signal()` 注册前显式触碰**。(3) C 函数指针只能由**顶层函数引用**形成:Swift 6 拒绝静态方法引用与"捕获上下文"的闭包字面量,所以文件尾有一个 `crashGuardSignalC` trampoline。(4) `ftruncate`/`sscanf`/`localtime` 都不是 async-signal-safe —— 状态文件靠定长记录避开截断,解析手写,审计只记 epoch 秒。
 
 ### Performance Probe
 
