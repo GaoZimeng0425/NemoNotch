@@ -13,6 +13,12 @@ final class CompletionFlashWindow: NSWindow {
         ignoresMouseEvents = true
         isMovable = false
         collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
+        // close() 绝不能走默认的释放语义(isReleasedWhenClosed=true):旧窗在
+        // Swift 并发 job 的 autorelease pool 里被释放后,pool 排干时对同一对象
+        // 再 release → 过度释放 SIGSEGV(2026-10-14 两次实锤,栈 =
+        // AutoreleasePoolPage::releaseUntil ← runJobInEstablishedExecutorContext)。
+        // false 之后 close() 仅隐藏,窗口由字典引用计数自然析构(且必须先 orderOut)。
+        isReleasedWhenClosed = false
     }
 
     override var canBecomeKey: Bool {
@@ -120,11 +126,23 @@ final class CompletionFlashWindowController {
         // 86c87dd 要省的常驻布局开销不变。完成事件低频,每闪光新建两扇窗的代价可忽略。
         // cooldown 内合并进存活 toast 的闪光不经过这里(overlayVisible 未翻转),
         // 那些窗口常驻在屏、有表面,无需重建。
-        for screen in NSScreen.screens {
-            let id = screen.displayID
-            windows[id]?.close()
-            windows[id] = makeWindow(for: screen)
-            LogService.debug("CompletionFlash window recreated for display \(id)", category: "CompletionFlash")
+        //
+        // 换出旧窗的纪律(2026-10-14 二次修复,两次 SIGSEGV 实锤):**不用 close()**,
+        // 窗口操作也**不留在观察 Task(Swift 并发 job)里** —— close() 的释放语义
+        // (isReleasedWhenClosed)会让旧窗在并发 job 的 autorelease pool 中被释放,
+        // pool 排干时再次 release 同一对象 → 过度释放崩溃(栈 = releaseUntil ←
+        // runJobInEstablishedExecutorContext)。旧窗此刻必已 orderOut(上一场闪光
+        // 结束时收起),先建新窗、再 orderOut 旧窗、字典换引用后由引用计数自然析构;
+        // 整段挪进普通 main-queue block,避开并发 job 的 autorelease 池。
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            for screen in NSScreen.screens {
+                let id = screen.displayID
+                let fresh = makeWindow(for: screen)
+                windows[id]?.orderOut(nil)
+                windows[id] = fresh
+                LogService.debug("CompletionFlash window recreated for display \(id)", category: "CompletionFlash")
+            }
         }
     }
 

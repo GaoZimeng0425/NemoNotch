@@ -276,9 +276,13 @@ When an AI session transitions working→idle or an agent transitions active→i
 **Per-screen overlay windows** are managed by `CompletionFlashWindowController` (`NemoNotch/Notch/CompletionFlashWindow.swift`). It creates one borderless transparent `CompletionFlashWindow` per `NSScreen`, covering the full screen frame, and rebuilds on `NSApplication.didChangeScreenParametersNotification`.
 Each window hosts a `CompletionFlashView` — a `.blendMode(.screen)` accent frame (a `Rectangle().strokeBorder` rim wrapping all four sides: a crisp solid outer line plus a blurred halo fading inward), with `allowsHitTesting(false)`. See [§5.10] in the cookbook for the full window recipe.
 
-**具文窗口陷阱(2026-10-14):闪光窗口必须「闪光时重建」,不能复用长期 orderOut 的旧窗。** 86c87dd 的省电优化(窗口闲置时 orderOut、闪光才首次 orderFrontRegardless)在外接屏上孵化出一个静默 bug:创建后一直隐藏、晚些才首次入屏的全屏 borderless 窗口,在**非主屏**上可能永远拿不到渲染表面 —— AppKit `isVisible=true`、CGWindowList `onscreen=true`、frame 分毫不差,但 WindowServer 里没有图像(`screencapture -l<id>` 报 `could not create image`,屏幕像素里零光晕);主屏同路径不受影响;`--uitest --flash`(创建即入屏)两块屏都正常。排查手法可直接复用:`screencapture -l` 直截窗口本体二分「窗口无表面」vs「被遮挡」。因此 `applyOverlayVisibility` 的显示分支在 **overlay 从消隐转可见时** close+重建所有屏幕的窗口
+**具文窗口陷阱(2026-10-14):闪光窗口必须「闪光时重建」,不能复用长期 orderOut 的旧窗。** 86c87dd 的省电优化(窗口闲置时 orderOut、闪光才首次 orderFrontRegardless)在外接屏上孵化出一个静默 bug:创建后一直隐藏、晚些才首次入屏的全屏 borderless 窗口,在**非主屏**上可能永远拿不到渲染表面 —— AppKit `isVisible=true`、CGWindowList `onscreen=true`、frame 分毫不差,但 WindowServer 里没有图像(`screencapture -l<id>` 报 `could not create image`,屏幕像素里零光晕);主屏同路径不受影响;`--uitest --flash`(创建即入屏)两块屏都正常。排查手法可直接复用:`screencapture -l` 直截窗口本体二分「窗口无表面」vs「被遮挡」。因此 `applyOverlayVisibility` 的显示分支在 **overlay 从消隐转可见时** 重建所有屏幕的窗口
 (新建+立即入屏 = 实测能渲染的路径;cooldown 内合并进存活 toast 的闪光不经过此翻转,无需重建),
-闲置仍 orderOut,省电目标不变。
+闲置仍 orderOut,省电目标不变。**换出旧窗绝不能用 `close()`**:close 的释放语义
+(isReleasedWhenClosed)曾在 Swift 并发 job 的 autorelease pool 里过度释放旧窗 → pool 排干时
+再 release → SIGSEGV(2026-10-14 两次实锤,栈 = releaseUntil ← runJobInEstablishedExecutorContext)。
+纪律 = `isReleasedWhenClosed = false` + 先建新窗、orderOut 旧窗、字典换引用由引用计数析构,
+且窗口操作不留在观察 Task 里(挪进普通 main-queue block,避开并发 job 的 autorelease 池)。
 
 **Toast** (`NemoNotch/Notch/CompletionToastView.swift`) is rendered **inside `CompletionFlashView`** (the full-screen overlay), not the notch window — so it can sit at bottom-center, out of the ~800×430 notch panel's reach. It's positioned via a `GeometryReader`/`.position` at `y = height * (1 - completionToastBottomFraction)`, horizontally centered, sized by `.fixedSize(horizontal:)` so the capsule hugs its content instead of stretching to the offered full-screen width, and fades/slides in on `service.toastVisible`. The glow flashes every display, but the toast renders on **one screen only** (`showsToast`, computed by `CompletionFlashWindowController` to match `NotchView.isHUDScreen` — built-in display, else first) so a multi-monitor setup shows no duplicate capsule. The toast dwells for `completionToastDuration` (5 s) before fading.
 
