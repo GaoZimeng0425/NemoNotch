@@ -95,6 +95,9 @@ final class BluetoothService: NSObject {
         // 非 Sendable 不能跨线程携带 —— 线程里只收集地址串,回主线程按址重查再挂
         // 断开监听。
         nonisolated(unsafe) let observer = self
+        // 派发锚点:协调器挂死时线程不返回、finishStartup 不执行,日志里将只有这一行
+        // 蓝牙痕迹 —— "有 dispatch 无 started" 即可断定挂死,不必再盲猜(评审 P1)。
+        LogService.info("Bluetooth startup thread dispatched", category: "BluetoothService")
         Thread.detachNewThread {
             let token = IOBluetoothDevice.register(
                 forConnectNotifications: observer,
