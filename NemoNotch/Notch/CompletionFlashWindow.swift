@@ -95,12 +95,27 @@ final class CompletionFlashWindowController {
 
     private func applyOverlayVisibility() {
         let visible = service.overlayVisible
-        for window in windows.values {
-            if visible {
-                window.orderFrontRegardless()
-            } else {
+        guard visible else {
+            for window in windows.values {
                 window.orderOut(nil)
             }
+            return
+        }
+        // 闪光开始时**重建**窗口而非复用长期 orderOut 的旧窗。
+        //
+        // 具文窗口 bug(2026-10-14 定性,外接屏 DELL U2720QM + macOS 27 复现):
+        // 创建后一直 orderOut、等第一次闪光才首次 orderFrontRegardless 的窗口,
+        // 在**非主屏**上可能永远拿不到渲染表面 —— AppKit isVisible=true、CGWindowList
+        // onscreen=true、frame 正确,但 WindowServer 里没有图像(screencapture -l 报
+        // "could not create image",整块屏像素里零光晕);主屏窗口同样路径不受影响;
+        // --uitest --flash(创建后立即入屏)则两块屏都正常渲染。
+        // 该模式由 86c87dd(闪光时才入屏的省电优化)引入。闪光时新建窗口 + 立即
+        // 入屏,复刻的正是实测能渲染的创建即入屏路径;闲置时窗口照旧 orderOut,
+        // 86c87dd 要省的常驻布局开销不变。完成事件低频,每闪光新建两扇窗的代价可忽略。
+        for screen in NSScreen.screens {
+            let id = screen.displayID
+            windows[id]?.close()
+            windows[id] = makeWindow(for: screen)
         }
     }
 
