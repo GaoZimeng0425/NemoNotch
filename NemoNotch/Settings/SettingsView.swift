@@ -1,5 +1,25 @@
 import SwiftUI
-import UniformTypeIdentifiers
+
+/// Sidebar navigation groups (System-Settings-style sectioned sidebar).
+enum SettingsNavGroup: String, CaseIterable, Identifiable {
+    case general, aiWorkspace, system
+
+    var id: String {
+        rawValue
+    }
+
+    var labelKey: String {
+        switch self {
+        case .general: "settings.group.general"
+        case .aiWorkspace: "settings.group.ai"
+        case .system: "settings.group.system"
+        }
+    }
+
+    var pages: [SettingsPage] {
+        SettingsPage.allCases.filter { $0.navGroup == self }
+    }
+}
 
 /// Settings sidebar pages (System-Settings-style navigation). Raw values
 /// persist via `@AppStorage` so reopening the window returns to the last
@@ -9,6 +29,18 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var id: String {
         rawValue
+    }
+
+    /// "关于"单独成区不列组头,跟在分组之后(系统设置的尾部条目惯例)。
+    static let ungrouped: [SettingsPage] = [.about]
+
+    var navGroup: SettingsNavGroup? {
+        switch self {
+        case .general, .alerts: .general
+        case .aiAgents, .hotkeys, .pomodoro: .aiWorkspace
+        case .appList, .notifications, .keepAwake: .system
+        case .about: nil
+        }
     }
 
     var labelKey: String {
@@ -38,20 +70,44 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .about: "info.circle"
         }
     }
+
+    /// 侧栏图标渐变的起止色(固定色,不随明暗切换 —— 与系统设置图标一致)。
+    var tintA: Color {
+        switch self {
+        case .general: Color(red: 0.62, green: 0.62, blue: 0.66)
+        case .alerts: Color(red: 0.98, green: 0.62, blue: 0.09)
+        case .aiAgents: Color(red: 0.60, green: 0.45, blue: 0.95)
+        case .appList: Color(red: 0.25, green: 0.75, blue: 0.45)
+        case .notifications: Color(red: 0.94, green: 0.30, blue: 0.30)
+        case .hotkeys: Color(red: 0.45, green: 0.45, blue: 0.50)
+        case .pomodoro: Color(red: 0.95, green: 0.42, blue: 0.25)
+        case .keepAwake: Color(red: 0.30, green: 0.40, blue: 0.85)
+        case .about: Color(red: 0.20, green: 0.55, blue: 0.95)
+        }
+    }
+
+    var tintB: Color {
+        switch self {
+        case .general: Color(red: 0.42, green: 0.42, blue: 0.47)
+        case .alerts: Color(red: 0.92, green: 0.42, blue: 0.10)
+        case .aiAgents: Color(red: 0.35, green: 0.30, blue: 0.90)
+        case .appList: Color(red: 0.10, green: 0.58, blue: 0.32)
+        case .notifications: Color(red: 0.80, green: 0.15, blue: 0.20)
+        case .hotkeys: Color(red: 0.25, green: 0.25, blue: 0.30)
+        case .pomodoro: Color(red: 0.85, green: 0.20, blue: 0.15)
+        case .keepAwake: Color(red: 0.15, green: 0.22, blue: 0.60)
+        case .about: Color(red: 0.05, green: 0.35, blue: 0.80)
+        }
+    }
 }
 
+/// 设置窗外壳:手排双栏(侧栏 + 详情卡)+ 页切换。各页内容在 `Pages/` 下,
+/// 共享视觉组件在 `SettingsComponents.swift`。
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
-    @Environment(AICLIMonitorService.self) var aiService
-    @Environment(LauncherService.self) var launcherService
     @Environment(NotificationService.self) var notificationService
-    @Environment(WeatherService.self) var weatherService
-    @Environment(HermesService.self) var hermesService
-    @Environment(OpenClawService.self) var openClawService
 
     @AppStorage("settings.selectedPage") private var selectedPageRaw = SettingsPage.general.rawValue
-    @State private var showAppPicker = false
-    @State private var cityDebounceTask: Task<Void, Never>? = nil
 
     @State private var showSidebar = true
     /// 标题条(红绿灯 + 收起按钮那一排)的高度,取自系统安全区。
@@ -113,11 +169,22 @@ struct SettingsView: View {
                 }
             }
         )) {
-            ForEach(SettingsPage.allCases) { page in
+            ForEach(SettingsNavGroup.allCases) { group in
                 // LocalizedStringKey 包装是必须的:`labelKey` 是 String
-                // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
-                Label(LocalizedStringKey(page.labelKey), systemImage: page.symbol)
-                    .tag(page)
+                // 变量,直接传会被当字面文本渲染成 "settings.group.general"。
+                Section(LocalizedStringKey(group.labelKey)) {
+                    ForEach(group.pages) { page in
+                        sidebarRow(page)
+                            .tag(page)
+                    }
+                }
+            }
+            // "关于"不列组头,静默跟在分组之后。
+            Section {
+                ForEach(SettingsPage.ungrouped) { page in
+                    sidebarRow(page)
+                        .tag(page)
+                }
             }
         }
         .listStyle(.sidebar)
@@ -125,754 +192,48 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private var detailCard: some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        return detailView
-            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底色。
-            .scrollContentBackground(.hidden)
-            // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
-            // 只把内容让出标题条高度。
-            .safeAreaPadding(.top, showSidebar ? 0 : max(0, titlebarInset - cardInset))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .clipShape(shape)
-            // 细描边 + 柔和投影让卡片浮起,周围的材质边框随之读作凹陷。
-            .overlay(shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+    private func sidebarRow(_ page: SettingsPage) -> some View {
+        HStack(spacing: 8) {
+            SidebarIconView(symbol: page.symbol, tintA: page.tintA, tintB: page.tintB)
+            // LocalizedStringKey 包装是必须的:`labelKey` 是 String
+            // 变量,直接传会被当字面文本渲染成 "settings.nav.general"。
+            Text(LocalizedStringKey(page.labelKey))
+        }
     }
 
-    private var currentPage: SettingsPage {
-        SettingsPage(rawValue: selectedPageRaw) ?? .general
+    private var detailCard: some View {
+        let shape = RoundedRectangle(cornerRadius: SettingsMetrics.detailCardRadius, style: .continuous)
+        return detailView
+            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底。
+            .scrollContentBackground(.hidden)
+            // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
+            // 只把内容让出标题条高度;侧栏展开时也留一点顶部呼吸位,
+            // 别让首个节标题贴着卡片裁切边缘。
+            .safeAreaPadding(.top, showSidebar ? 10 : max(0, titlebarInset - cardInset))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 玻璃卡片:磨砂材质透出底下的凹陷侧栏底,层次来自"凹陷材质
+            // 之上浮一块玻璃"(Atoll / 系统设置同款),而非实色填充。
+            // 用 regularMaterial 而非 ultraThin:ultraThin 透明度过高,浅色
+            // 模式下会把窗口背后的深色壁纸直接透进来,整卡读成黑色。
+            .background(.regularMaterial)
+            .clipShape(shape)
+            // 自适应发丝描边 + 柔和投影让卡片浮起,周围的材质边框读作凹陷。
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
     }
 
     @ViewBuilder
     private var detailView: some View {
         switch SettingsPage(rawValue: selectedPageRaw) ?? .general {
-        case .general: generalView
-        case .alerts: alertsView
-        case .aiAgents: aiAgentsView
-        case .appList: appListView
-        case .notifications: notificationListView
+        case .general: GeneralSettingsPage()
+        case .alerts: AlertsSettingsPage()
+        case .aiAgents: AIAgentsSettingsPage()
+        case .appList: AppListSettingsPage()
+        case .notifications: NotificationListSettingsPage()
         case .hotkeys: HotkeysSettingsView()
         case .pomodoro: PomodoroSettingsView()
         case .keepAwake: KeepAwakeSettingsView()
-        case .about: aboutView
-        }
-    }
-
-    // MARK: - General
-
-    private var generalView: some View {
-        Form {
-            Section("settings.visible_tabs") {
-                ForEach(Tab.allCases) { tab in
-                    Toggle(tab.title, isOn: Binding(
-                        get: { appSettings.enabledTabs.contains(tab) },
-                        set: { enabled in
-                            if enabled {
-                                appSettings.enabledTabs.insert(tab)
-                            } else if appSettings.enabledTabs.count > 1 {
-                                appSettings.enabledTabs.remove(tab)
-                            }
-                        }
-                    ))
-                }
-            }
-
-            Section("settings.default_tab") {
-                Picker("settings.default_tab_picker", selection: Binding(
-                    get: { appSettings.defaultTab },
-                    set: { appSettings.defaultTab = $0 }
-                )) {
-                    ForEach(Tab.sorted(appSettings.enabledTabs)) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-            }
-
-            Section {
-                TextField("settings.weather_city_placeholder", text: Binding(
-                    get: { appSettings.weatherCity },
-                    set: { appSettings.weatherCity = $0 }
-                ))
-                .onChange(of: appSettings.weatherCity) { _, newCity in
-                    cityDebounceTask?.cancel()
-                    cityDebounceTask = Task {
-                        try? await Task.sleep(for: .milliseconds(800))
-                        guard !Task.isCancelled else { return }
-                        weatherService.updateCity(newCity)
-                    }
-                }
-            } header: {
-                Text("settings.weather_city")
-            } footer: {
-                Text("settings.weather_city_footer")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("settings.language") {
-                Picker("settings.language", selection: Binding(
-                    get: { appSettings.language },
-                    set: { appSettings.language = $0 }
-                )) {
-                    ForEach(AppLanguage.allCases, id: \.self) { lang in
-                        Text(languageDisplayName(lang)).tag(lang)
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    // MARK: - Alerts & effects
-
-    private var alertsView: some View {
-        Form {
-            Section("settings.completion_flash.header") {
-                Toggle("settings.completion_flash.enabled", isOn: Binding(
-                    get: { appSettings.completionFlashEnabled },
-                    set: { appSettings.completionFlashEnabled = $0 }
-                ))
-            }
-
-            Section("settings.event_alerts.header") {
-                Toggle("settings.bluetooth_alerts.enabled", isOn: Binding(
-                    get: { appSettings.bluetoothToastEnabled },
-                    set: { appSettings.bluetoothToastEnabled = $0 }
-                ))
-                Toggle("settings.calendar_alerts.enabled", isOn: Binding(
-                    get: { appSettings.calendarDueFlashEnabled },
-                    set: { appSettings.calendarDueFlashEnabled = $0 }
-                ))
-                Picker("settings.calendar_alerts.lead", selection: Binding(
-                    get: { appSettings.calendarDueLeadMinutes },
-                    set: { appSettings.calendarDueLeadMinutes = $0 }
-                )) {
-                    Text("settings.calendar_alerts.lead.at_start").tag(0)
-                    Text("settings.calendar_alerts.lead.5min").tag(5)
-                    Text("settings.calendar_alerts.lead.10min").tag(10)
-                    Text("settings.calendar_alerts.lead.15min").tag(15)
-                }
-                Toggle("settings.charging_alerts.enabled", isOn: Binding(
-                    get: { appSettings.chargingCapsuleEnabled },
-                    set: { appSettings.chargingCapsuleEnabled = $0 }
-                ))
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    // MARK: - About
-
-    private static let githubURL = URL(string: "https://github.com/GaoZimeng0425/NemoNotch")!
-    private static let releasesURL = URL(string: "https://github.com/GaoZimeng0425/NemoNotch/releases")!
-    private static let issuesURL = URL(string: "https://github.com/GaoZimeng0425/NemoNotch/issues/new")!
-
-    /// App version for display, e.g. "1.0 (1)". Read from the built Info.plist
-    /// (populated from MARKETING_VERSION / CURRENT_PROJECT_VERSION in
-    /// project.pbxproj since GENERATE_INFOPLIST_FILE = YES).
-    private var appVersionString: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "\(short) (\(build))"
-    }
-
-    /// Bundled open-source dependencies credited in the About tab, matching the
-    /// resolved Swift Package graph (Package.resolved).
-    private static let acknowledgements: [(name: String, url: URL)] = [
-        ("CocoaLumberjack", URL(string: "https://github.com/CocoaLumberjack/CocoaLumberjack")!),
-        ("KeyboardShortcuts", URL(string: "https://github.com/sindresorhus/KeyboardShortcuts")!),
-        ("mediaremote-adapter", URL(string: "https://github.com/ejbills/mediaremote-adapter")!),
-        ("swift-log", URL(string: "https://github.com/apple/swift-log")!),
-    ]
-
-    private var aboutView: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                if let icon = NSApp.applicationIconImage {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .frame(width: 96, height: 96)
-                        .accessibilityHidden(true)
-                }
-
-                VStack(spacing: 4) {
-                    Text("NemoNotch \(appVersionString)")
-                        .font(.title3).fontWeight(.semibold)
-                        .textSelection(.enabled)
-                    Text("settings.about.tagline")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 18) {
-                    Link("settings.about.github", destination: Self.githubURL)
-                    Link("settings.about.check_updates", destination: Self.releasesURL)
-                    Link("settings.about.report_issue", destination: Self.issuesURL)
-                }
-                .font(.callout)
-
-                Divider().padding(.vertical, 2)
-
-                VStack(spacing: 6) {
-                    Text("settings.about.acknowledgements")
-                        .font(.caption).fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                    ForEach(Self.acknowledgements, id: \.name) { dep in
-                        Link(dep.name, destination: dep.url)
-                            .font(.callout)
-                    }
-                }
-
-                Text("settings.about.copyright")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 4)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-        }
-    }
-
-    // MARK: - App List
-
-    private var appListView: some View {
-        List {
-            ForEach(Array(launcherService.apps.enumerated()), id: \.element.id) { index, app in
-                HStack(spacing: 10) {
-                    if let image = launcherService.icon(for: app) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(app.name)
-                            .font(.body)
-                        Text(app.bundleIdentifier)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button {
-                        launcherService.removeApp(at: index)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.red)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.vertical, 2)
-            }
-            .onMove { source, destination in
-                launcherService.moveApp(from: source, to: destination)
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Text("settings.apps_count \(launcherService.apps.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    launcherService.scanInstalledApps()
-                    showAppPicker = true
-                } label: {
-                    Label("settings.add_app", systemImage: "plus")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(.bar)
-        }
-        .sheet(isPresented: $showAppPicker) {
-            appPickerSheet
-        }
-    }
-
-    private var appPickerSheet: some View {
-        VStack(spacing: 0) {
-            Text("settings.app_picker_title")
-                .font(.headline)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("launcher.search_apps", text: Binding(
-                    get: { launcherService.scanSearchText },
-                    set: { launcherService.scanSearchText = $0 }
-                ))
-                .textFieldStyle(.plain)
-                if !launcherService.scanSearchText.isEmpty {
-                    Button {
-                        launcherService.scanSearchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(.bar)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-
-            List(launcherService.filteredScannedApps) { app in
-                let isSelected = launcherService.apps.contains { $0.bundleIdentifier == app.bundleIdentifier }
-                HStack(spacing: 10) {
-                    if let icon = launcherService.icon(forBundleID: app.bundleIdentifier) {
-                        Image(nsImage: icon)
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(app.name)
-                            .font(.body)
-                        Text(app.bundleIdentifier)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title2)
-                        .foregroundStyle(isSelected ? .blue : .secondary.opacity(0.5))
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    launcherService.toggleInstalledApp(app)
-                }
-                .padding(.vertical, 2)
-            }
-            .listStyle(.plain)
-
-            HStack {
-                Text("settings.apps_selected_count \(launcherService.apps.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("common.done") {
-                    showAppPicker = false
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-        .frame(width: 400, height: 500)
-    }
-
-    // MARK: - AI & Agents
-
-    /// AI 悬浮胶囊 + 锁屏 AI 面板开关,卡片外观与 provider 卡片一致。
-    /// 标签在左、开关(.switch 样式,macOS 默认是复选框)在右的标准行。
-    private var aiSurfacesCard: some View {
-        VStack(spacing: 0) {
-            aiSurfaceRow("settings.ai_status_fab.enabled", isOn: Binding(
-                get: { appSettings.aiStatusFabEnabled },
-                set: { appSettings.aiStatusFabEnabled = $0 }
-            ))
-            Divider().padding(.horizontal, 12)
-            aiSurfaceRow("settings.lockscreen_ai.enabled", isOn: Binding(
-                get: { appSettings.lockScreenAIPanelEnabled },
-                set: { appSettings.lockScreenAIPanelEnabled = $0 }
-            ))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    private func aiSurfaceRow(_ labelKey: String, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Text(LocalizedStringKey(labelKey))
-                .font(.system(size: 13, weight: .medium))
-            Spacer()
-            Toggle("", isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-    }
-
-    private var aiAgentsView: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                // 快速开关:AI 悬浮胶囊 + 锁屏 AI 面板(从旧"Tab 管理"并入,
-                // AI 相关设置集中在一页)。视觉与下方 provider 卡片同语言。
-                aiSurfacesCard
-
-                // Claude Code
-                hookCard(
-                    name: "Claude Code",
-                    tint: Self.claudeTint,
-                    isInstalled: aiService.claudeProvider.isHookInstalled,
-                    logo: { ClaudeCrabIcon(size: 20, color: Self.claudeTint) },
-                    onInstall: {
-                        appSettings.claudeEnabled = true
-                        aiService.claudeProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.claudeEnabled = false
-                        aiService.claudeProvider.uninstallHooks()
-                    }
-                )
-
-                // Gemini CLI
-                hookCard(
-                    name: "Gemini CLI",
-                    tint: Self.geminiTint,
-                    isInstalled: aiService.geminiProvider.isHookInstalled,
-                    logo: {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Self.geminiTint)
-                    },
-                    onInstall: {
-                        appSettings.geminiEnabled = true
-                        aiService.geminiProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.geminiEnabled = false
-                        aiService.geminiProvider.uninstallHooks()
-                    }
-                )
-
-                // opencode
-                hookCard(
-                    name: "opencode",
-                    tint: Self.opencodeTint,
-                    isInstalled: aiService.opencodeProvider.isHookInstalled,
-                    logo: { OpencodeLogoIcon(size: 19, color: Self.opencodeTint) },
-                    onInstall: {
-                        appSettings.opencodeEnabled = true
-                        aiService.opencodeProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.opencodeEnabled = false
-                        aiService.opencodeProvider.uninstallHooks()
-                    }
-                )
-
-                // zcode
-                hookCard(
-                    name: "zcode",
-                    tint: Self.zcodeTint,
-                    isInstalled: aiService.zcodeProvider.isHookInstalled,
-                    logo: { ZcodeLogoIcon(size: 19, color: Self.zcodeTint) },
-                    onInstall: {
-                        appSettings.zcodeEnabled = true
-                        aiService.zcodeProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.zcodeEnabled = false
-                        aiService.zcodeProvider.uninstallHooks()
-                    }
-                )
-
-                // Hermes Agent
-                hookCard(
-                    name: "Hermes Agent",
-                    tint: Self.hermesTint,
-                    isInstalled: hermesService.isHookInstalled,
-                    logo: {
-                        Image("HermesIcon")
-                            .renderingMode(.original)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 22, height: 22)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    },
-                    onInstall: {
-                        appSettings.hermesEnabled = true
-                        hermesService.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.hermesEnabled = false
-                        hermesService.uninstallHooks()
-                    }
-                )
-
-                // OpenClaw — connect/disconnect/revoke semantics rather than hooks.
-                providerCard(
-                    name: "OpenClaw",
-                    tint: Self.openClawTint,
-                    isOn: openClawService.gatewayOnline,
-                    onLabel: "settings.openclaw.connected \(openClawService.deviceIdShort)",
-                    offLabel: "settings.openclaw.disconnected",
-                    logo: {
-                        Image(systemName: "brain")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(Self.openClawTint)
-                    },
-                    actions: {
-                        VStack(alignment: .trailing, spacing: 6) {
-                            if appSettings.openClawEnabled {
-                                Button("settings.openclaw.disconnect") {
-                                    appSettings.openClawEnabled = false
-                                    openClawService.disconnect()
-                                }
-                                .controlSize(.small)
-                            } else {
-                                Button("settings.openclaw.connect") {
-                                    appSettings.openClawEnabled = true
-                                    openClawService.connect()
-                                }
-                                .controlSize(.small)
-                                .buttonStyle(.borderedProminent)
-                            }
-
-                            if openClawService.gatewayOnline {
-                                Button("settings.openclaw.remove_device", role: .destructive) {
-                                    openClawService.removeDeviceSelf()
-                                }
-                                .controlSize(.small)
-                                .disabled(openClawService.isRemovingDevice)
-                            }
-                        }
-                    }
-                )
-
-                Text("settings.hooks_description")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-
-                if aiService.serverRunning {
-                    Label("settings.server_running", systemImage: "antenna.radiowaves.left.and.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            // 顶部收紧:卡片页只需留出与标题条的血缘间距,不要 Form 式大 padding。
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 20)
-        }
-    }
-
-    // MARK: - Provider Cards
-
-    // Per-provider brand tints, tuned to read on both light and dark windows
-    // (the Settings window follows the system appearance, unlike the dark-only
-    // NotchTheme used inside the notch panel).
-    private static let claudeTint = Color(red: 0.93, green: 0.49, blue: 0.19)
-    private static let geminiTint = Color(red: 0.26, green: 0.52, blue: 0.96)
-    private static let opencodeTint = Color(red: 0.30, green: 0.66, blue: 0.40)
-    private static let zcodeTint = Color(red: 0.11, green: 0.44, blue: 0.96)
-    private static let hermesTint = Color(red: 0.52, green: 0.43, blue: 0.92)
-    private static let openClawTint = Color(red: 0.14, green: 0.62, blue: 0.60)
-
-    /// A hook-based provider card with install / reinstall / uninstall actions.
-    private func hookCard(
-        name: String,
-        tint: Color,
-        isInstalled: Bool,
-        @ViewBuilder logo: () -> some View,
-        onInstall: @escaping () -> Void,
-        onUninstall: @escaping () -> Void
-    ) -> some View {
-        providerCard(
-            name: name,
-            tint: tint,
-            isOn: isInstalled,
-            onLabel: "settings.status.installed",
-            offLabel: "settings.status.not_installed",
-            logo: logo,
-            actions: {
-                VStack(alignment: .trailing, spacing: 6) {
-                    if isInstalled {
-                        Button("settings.reinstall", action: onInstall)
-                            .controlSize(.small)
-                        Button("settings.uninstall_hooks", role: .destructive, action: onUninstall)
-                            .controlSize(.small)
-                    } else {
-                        Button("settings.install_hooks", action: onInstall)
-                            .controlSize(.small)
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-            }
-        )
-    }
-
-    /// Generic provider card shell: tinted logo chip + name + on/off status row
-    /// + trailing actions. Used for both hook providers and OpenClaw.
-    private func providerCard(
-        name: String,
-        tint: Color,
-        isOn: Bool,
-        onLabel: LocalizedStringKey,
-        offLabel: LocalizedStringKey,
-        @ViewBuilder logo: () -> some View,
-        @ViewBuilder actions: () -> some View
-    ) -> some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(tint.opacity(0.16))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(tint.opacity(0.32), lineWidth: 1)
-                )
-                .frame(width: 40, height: 40)
-                .overlay { logo() }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                HStack(spacing: 4) {
-                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle.dashed")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(isOn ? Color.green : Color.secondary)
-                    Text(isOn ? onLabel : offLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            actions()
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Notification List
-
-    private var notificationListView: some View {
-        Form {
-            if !notificationService.isAXTrusted {
-                Section {
-                    PermissionCard(
-                        icon: "exclamationmark.triangle.fill",
-                        titleKey: "permission.accessibility.title",
-                        detailKey: "permission.accessibility.detail",
-                        status: .notDetermined,
-                        primary: .settingsOnly,
-                        // Opens the pane *and* parks the drag guide beside it —
-                        // Accessibility has no programmatic request API, so the
-                        // user has to drop the app into the list themselves.
-                        openSettings: { PermissionFlowController.shared.start(pane: .accessibility) }
-                    )
-                    .padding(.vertical, 4)
-                }
-            }
-
-            Section("settings.monitored_apps") {
-                if appSettings.monitoredApps.isEmpty {
-                    Text("settings.no_monitored_apps")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(appSettings.monitoredApps, id: \.self) { bundleID in
-                        HStack {
-                            if let icon = launcherService.icon(forBundleID: bundleID) {
-                                Image(nsImage: icon)
-                                    .resizable()
-                                    .frame(width: 24, height: 24)
-                            }
-                            VStack(alignment: .leading) {
-                                Text(appName(for: bundleID))
-                                Text(bundleID)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button {
-                                appSettings.monitoredApps.removeAll { $0 == bundleID }
-                                notificationService.updateMonitoredApps(appSettings.monitoredApps)
-                            } label: {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(.red.opacity(0.6))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .onDelete { offsets in
-                        for index in offsets.sorted().reversed() {
-                            appSettings.monitoredApps.remove(at: index)
-                        }
-                        notificationService.updateMonitoredApps(appSettings.monitoredApps)
-                    }
-                }
-            }
-
-            Section {
-                Button("settings.add_monitored_app") {
-                    let panel = NSOpenPanel()
-                    panel.title = String(localized: "settings.select_monitored_app")
-                    panel.canChooseFiles = true
-                    panel.canChooseDirectories = false
-                    panel.allowsMultipleSelection = false
-                    panel.allowedContentTypes = [.application]
-                    panel.directoryURL = URL(fileURLWithPath: "/Applications")
-
-                    if panel.runModal() == .OK, let url = panel.url {
-                        if let bundle = Bundle(url: url),
-                           let bundleID = bundle.bundleIdentifier {
-                            if !appSettings.monitoredApps.contains(bundleID) {
-                                appSettings.monitoredApps.append(bundleID)
-                                notificationService.updateMonitoredApps(appSettings.monitoredApps)
-                            }
-                        }
-                    }
-                }
-            } header: {
-                Text("settings.add_monitored_app")
-            } footer: {
-                Text("settings.monitored_footer")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func appName(for bundleID: String) -> String {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
-           let bundle = Bundle(url: url),
-           let name = bundle.localizedInfoDictionary?["CFBundleName"] as? String
-           ?? bundle.infoDictionary?["CFBundleName"] as? String {
-            return name
-        }
-        return bundleID
-    }
-
-    private func languageDisplayName(_ language: AppLanguage) -> String {
-        switch language {
-        case .system: return String(localized: "settings.language.system")
-        case .en: return String(localized: "settings.language.en")
-        case .zhHans: return String(localized: "settings.language.zh")
+        case .about: AboutSettingsPage()
         }
     }
 }
