@@ -15,6 +15,9 @@ struct CompletionFlashView: View {
     /// edge glow still flashes every screen.
     var showsToast: Bool = true
 
+    /// 首帧挂载闸门,见 `toast` 的注释 —— 重建窗口的入场动画依赖它。
+    @State private var toastMounted = false
+
     /// Warm near-white center — the "hot" core of the neon tube.
     private static let core = Color(red: 1.0, green: 0.93, blue: 0.82)
 
@@ -43,9 +46,15 @@ struct CompletionFlashView: View {
     /// The unified completion capsule, horizontally centered with its vertical
     /// center at `completionToastBottomFraction` of the screen height up from
     /// the bottom edge. Fades/slides in on `service.toastVisible`.
+    ///
+    /// `mounted` 延迟一帧才放行 toast:闪光窗口现在是**闪光时重建**的(具文窗口
+    /// 修复,见 CompletionFlashWindow.applyOverlayVisibility),全新 SwiftUI 树挂载
+    /// 时 `toastVisible` 往往已是 true —— 直接首渲染终态,入场弹簧/transition 不会
+    /// 播放。先以"无 toast"状态挂载、下一帧翻 `mounted`,插入动画两条路径
+    /// (新建窗/存活窗翻转)都照常播放。
     private var toast: some View {
         GeometryReader { geo in
-            if service.toastVisible, !service.toastItems.isEmpty {
+            if toastMounted, service.toastVisible, !service.toastItems.isEmpty {
                 CompletionToastView(items: service.toastItems)
                     .position(
                         x: geo.size.width / 2,
@@ -59,6 +68,14 @@ struct CompletionFlashView: View {
             .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
             value: service.toastVisible
         )
+        .animation(
+            .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
+            value: toastMounted
+        )
+        .onAppear {
+            guard !toastMounted else { return }
+            DispatchQueue.main.async { toastMounted = true }
+        }
     }
 
     private var glow: some View {
