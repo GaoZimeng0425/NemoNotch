@@ -79,7 +79,7 @@ private struct PermissionRow: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                 Text("settings.pomodoro.permission.granted")
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
             }
         } else {
             PermissionCard(
@@ -88,7 +88,8 @@ private struct PermissionRow: View {
                 detailKey: "permission.notification.detail",
                 status: monitor.status == .denied ? .denied : .notDetermined,
                 primary: .programmatic { Task { await monitor.request() } },
-                openSettings: { monitor.openSystemSettings() }
+                openSettings: { monitor.openSystemSettings() },
+                style: .adaptive
             )
         }
     }

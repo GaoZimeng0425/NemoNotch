@@ -20,7 +20,8 @@ struct NotificationListSettingsPage: View {
                         // Opens the pane *and* parks the drag guide beside it —
                         // Accessibility has no programmatic request API, so the
                         // user has to drop the app into the list themselves.
-                        openSettings: { PermissionFlowController.shared.start(pane: .accessibility) }
+                        openSettings: { PermissionFlowController.shared.start(pane: .accessibility) },
+                        style: .adaptive
                     )
                     .padding(.vertical, 4)
                 }

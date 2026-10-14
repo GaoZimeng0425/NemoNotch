@@ -23,7 +23,7 @@ struct KeepAwakeSettingsView: View {
                             .foregroundStyle(.orange)
                         Text(error)
                             .font(.caption)
-                            .foregroundStyle(NotchTheme.textSecondary)
+                            .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
                 }
@@ -37,22 +37,22 @@ struct KeepAwakeSettingsView: View {
                     }
                 Text("settings.keepawake.lidDisplayOff.detail")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
 
                 Toggle("settings.keepawake.restoreOnQuit", isOn: $settings.keepAwakeRestoreOnQuit)
                     .toggleStyle(.switch)
                 Text("settings.keepawake.restoreOnQuit.detail")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
             }
 
             Section("settings.keepawake.aboutHeader") {
                 Text("settings.keepawake.about.privilege")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
                 Text("settings.keepawake.about.persistent")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
                 HStack {
                     Text(verbatim: "sudo pmset -a disablesleep 0")
                         .font(.system(.caption, design: .monospaced))
@@ -77,7 +77,7 @@ struct KeepAwakeSettingsView: View {
                 ProgressView().controlSize(.small)
                 Text("settings.keepawake.status.authorizing")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
             }
         } else if keepAwake.isEnabled, !keepAwake.isOwned {
             // 系统里已经开着,但不是本 App 开的 —— 说清楚,免得用户困惑于
@@ -87,7 +87,7 @@ struct KeepAwakeSettingsView: View {
                     .foregroundStyle(.secondary)
                 Text("settings.keepawake.status.external")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
             }
         } else if keepAwake.isEnabled {
             HStack(spacing: 6) {
@@ -95,7 +95,7 @@ struct KeepAwakeSettingsView: View {
                     .foregroundStyle(.green)
                 Text("settings.keepawake.status.on")
                     .font(.caption)
-                    .foregroundStyle(NotchTheme.textSecondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }
