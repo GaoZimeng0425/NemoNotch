@@ -110,21 +110,21 @@ struct SettingsView: View {
     @AppStorage("settings.selectedPage") private var selectedPageRaw = SettingsPage.general.rawValue
 
     @State private var showSidebar = true
-    /// 标题条(红绿灯 + 收起按钮那一排)的高度,取自系统安全区。
-    @State private var titlebarInset: CGFloat = 0
 
-    /// 卡片与窗口边、与侧栏之间的间距——也是收起侧栏后卡片四周
-    /// 露出的"凹陷边框"宽度。
+    /// 卡片与窗口边、与侧栏之间的间距——展开与收起两态都是这同一条
+    /// 均匀凹陷边框(收起动画不再伴随左缘额外的 0↔8 跳变)。
     private let cardInset: CGFloat = 8
     private let sidebarWidth: CGFloat = 200
 
     var body: some View {
         // 手排布局而非 NavigationSplitView:macOS 26 原生侧栏是"浮起的玻璃
         // 面板",与要求的层次相反——这里窗口底层是 sidebar 材质(凹陷层),
-        // 侧栏直接画在上面,右侧内容是凸起的圆角卡片;收起侧栏后卡片四周
+        // 侧栏直接画在上面,右侧内容是凸起的玻璃卡片;收起侧栏后卡片四周
         // 留出等宽的凹陷边框。红绿灯与收起按钮同在标题条一排(AppKit
-        // 工具栏桥,见 SettingsWindowChrome);卡片不让标题条安全区,四边
-        // 等距铺满,只有侧栏行避让红绿灯。
+        // 工具栏桥,见 SettingsWindowChrome);卡片**不伸进标题条**——
+        // 透明标题条透出底层凹陷材质,整条顶带与侧栏同材质连成一体
+        // (Finder / 系统设置同款),卡片浮在带的下方。内容 Y 恒定,
+        // 收放侧栏只剩宽度动画,不会上下跳。
         HStack(spacing: 0) {
             if showSidebar {
                 sidebar
@@ -132,11 +132,8 @@ struct SettingsView: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
             detailCard
-                .padding(.leading, showSidebar ? 0 : cardInset)
-                .padding([.top, .trailing, .bottom], cardInset)
-                .ignoresSafeArea(.container, edges: .top)
+                .padding(cardInset)
         }
-        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { titlebarInset = $0 }
         .background(SettingsSidebarMaterial().ignoresSafeArea())
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
@@ -206,13 +203,11 @@ struct SettingsView: View {
         return detailView
             // 各页 Form/ScrollView 不铺自己的底,统一用卡片底。
             .scrollContentBackground(.hidden)
-            // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
-            // 只把内容让出标题条高度;侧栏展开时也留一点顶部呼吸位,
-            // 别让首个节标题贴着卡片裁切边缘。
-            .safeAreaPadding(.top, showSidebar ? 10 : max(0, titlebarInset - cardInset))
+            // 恒定的顶部呼吸位:首个节标题不贴卡片裁切边缘;恒定还保证
+            // 收放侧栏时内容 Y 不动(此前随红绿灯让位 10↔30pt 跳变)。
+            .safeAreaPadding(.top, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 玻璃卡片:磨砂材质透出底下的凹陷侧栏底,层次来自"凹陷材质
-            // 之上浮一块玻璃"(Atoll / 系统设置同款),而非实色填充。
+            // 玻璃卡片:磨砂材质浮在凹陷底之上(Atoll / 系统设置同款)。
             // 用 regularMaterial 而非 ultraThin:ultraThin 透明度过高,浅色
             // 模式下会把窗口背后的深色壁纸直接透进来,整卡读成黑色。
             .background(.regularMaterial)
