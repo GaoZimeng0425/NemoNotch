@@ -396,6 +396,8 @@ When adding notch UI, keep in mind:
 
 **L2(兜底)CrashGuard**(`NemoNotch/Services/CrashGuard.swift`,装配于 `applicationDidFinishLaunching` 最前):SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT/SIGTRAP 的信号 handler。循环保护决策是纯函数 `CrashRestartPolicy`(600s 窗口 ≤3 次自动重启,之后放弃等用户;稳定运行 120s 清零计数,有单测);允许重启时 `posix_spawn` 一个 `/bin/sh` 子进程 —— 它先捕获 `P=$PPID` 再轮询 `kill -0 $P` 等**垂死进程真正退出**(pid 释放;上限 20s)然后 `open -a` 拉起新实例(直接 sleep 会赶在旧实例死透前 open,只是激活垂死实例;**open 带三次重试**,崩溃上下文里偶发静默失败,失败 rc 落审计日志 `action=open-failed`,绝不无声消失);最后 handler 恢复 SIG_DFL 重发信号,系统照常写 .ips 报告。测试宿主/`--uitest` 跳过(测试崩溃不复活);逃生开关 `crashGuardEnabled=false`。状态 `~/.NemoNotch/crash-restart.state`(定长 "count last\n" 原地覆写),审计 `~/.NemoNotch/crash-restart.log`(独立文件不随主日志滚动,KeepAwakeEventLog 思路)。
 
+**App Nap 会推迟稳定清零(实测,无害)**:`scheduleCounterReset` 的 `asyncAfter(120s)` 是 mach-uptime 时钟 —— 用户离开、GUI 会话空闲时被 App Nap 小憩的 app,其 dispatch 定时器会被无限期推迟(同一二进制:用户在场时准时触发,不在场的晚上连漏 3 个实例;闭包体首行即无条件日志,排除静默失败)。循环保护的正确性不依赖它:handler 侧的 600s 窗口读的是 `time(nil)` 挂钟,不受小憩影响,清零只是加速归还重启配额的第二路径。排查"清零没触发"时先问用户当时在不在机器前,别再挖代码。
+
 **async-signal-safe 纪律**(改 CrashGuard 前必读):(1) handler 内禁止任何 String/Array/Foundation 构造 —— 它们 malloc,而崩溃线程可能正持有 malloc 锁,重入即死锁;数字格式化/解析全部手写标量运算。(2) 所有缓冲 install() 时预分配;**Swift static var 懒初始化本身要拿锁分配,handler 读的每个 static —— 包括 `CrashRestartPolicy` 的策略常量,默认参数在每个调用点求值 —— 必须在 `signal()` 注册前显式触碰**。(3) C 函数指针只能由**顶层函数引用**形成:Swift 6 拒绝静态方法引用与"捕获上下文"的闭包字面量,所以文件尾有一个 `crashGuardSignalC` trampoline。(4) `ftruncate`/`sscanf`/`localtime` 都不是 async-signal-safe —— 状态文件靠定长记录避开截断,解析手写,审计只记 epoch 秒。
 
 ### Performance Probe
