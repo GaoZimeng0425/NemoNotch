@@ -3,6 +3,19 @@ import SwiftUI
 // 设置窗共享的视觉组件与品牌色令牌。窗口跟随系统外观(浅/深色),
 // 这里的颜色必须用系统语义色或自带明暗两套 —— 不能用仅暗色的 NotchTheme。
 
+// MARK: - 设计令牌
+
+/// 设置窗的圆角/间距令牌:详情大卡、页内分组卡、行内距统一从这里取值,
+/// 各页不再自造常数。
+enum SettingsMetrics {
+    /// 详情区大玻璃卡的圆角。
+    static let detailCardRadius: CGFloat = 16
+    /// 页内分组卡(provider 卡、开关组卡)的圆角。
+    static let cardRadius: CGFloat = 14
+    /// 分组卡内部行 的左右内距。
+    static let rowHPadding: CGFloat = 12
+}
+
 // MARK: - 侧栏图标
 
 /// 系统设置风格的彩色渐变图标方块:渐变底 + 白色 SF Symbol + 0.5pt 高光
@@ -131,11 +144,11 @@ struct ProviderCard<Logo: View, Actions: View>: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }

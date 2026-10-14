@@ -202,18 +202,20 @@ struct SettingsView: View {
     }
 
     private var detailCard: some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: SettingsMetrics.detailCardRadius, style: .continuous)
         return detailView
-            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底色。
+            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底。
             .scrollContentBackground(.hidden)
             // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
             // 只把内容让出标题条高度。
             .safeAreaPadding(.top, showSidebar ? 0 : max(0, titlebarInset - cardInset))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
+            // 玻璃卡片:毛玻璃材质透出底下的凹陷侧栏底,层次来自"凹陷材质
+            // 之上浮一块玻璃"(Atoll / 系统设置同款),而非实色填充。
+            .background(.ultraThinMaterial)
             .clipShape(shape)
-            // 细描边 + 柔和投影让卡片浮起,周围的材质边框随之读作凹陷。
-            .overlay(shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
+            // 自适应发丝描边 + 柔和投影让卡片浮起,周围的材质边框读作凹陷。
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
     }
 

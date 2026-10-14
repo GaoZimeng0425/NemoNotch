@@ -12,6 +12,7 @@ struct KeepAwakeSettingsView: View {
                     get: { keepAwake.isEnabled },
                     set: { on in Task { await keepAwake.setEnabled(on) } }
                 ))
+                .toggleStyle(.switch)
                 .disabled(keepAwake.isBusy)
 
                 statusRow
@@ -30,6 +31,7 @@ struct KeepAwakeSettingsView: View {
 
             Section("settings.keepawake.optionsHeader") {
                 Toggle("settings.keepawake.lidDisplayOff", isOn: $settings.keepAwakeLidDisplayOff)
+                    .toggleStyle(.switch)
                     .onChange(of: settings.keepAwakeLidDisplayOff) { _, enabled in
                         keepAwake.applyLidDisplayOffSetting(enabled)
                     }
@@ -38,6 +40,7 @@ struct KeepAwakeSettingsView: View {
                     .foregroundStyle(NotchTheme.textSecondary)
 
                 Toggle("settings.keepawake.restoreOnQuit", isOn: $settings.keepAwakeRestoreOnQuit)
+                    .toggleStyle(.switch)
                 Text("settings.keepawake.restoreOnQuit.detail")
                     .font(.caption)
                     .foregroundStyle(NotchTheme.textSecondary)

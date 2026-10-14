@@ -11,6 +11,7 @@ struct AlertsSettingsPage: View {
                     get: { appSettings.completionFlashEnabled },
                     set: { appSettings.completionFlashEnabled = $0 }
                 ))
+                .toggleStyle(.switch)
             }
 
             Section("settings.event_alerts.header") {
@@ -18,10 +19,12 @@ struct AlertsSettingsPage: View {
                     get: { appSettings.bluetoothToastEnabled },
                     set: { appSettings.bluetoothToastEnabled = $0 }
                 ))
+                .toggleStyle(.switch)
                 Toggle("settings.calendar_alerts.enabled", isOn: Binding(
                     get: { appSettings.calendarDueFlashEnabled },
                     set: { appSettings.calendarDueFlashEnabled = $0 }
                 ))
+                .toggleStyle(.switch)
                 Picker("settings.calendar_alerts.lead", selection: Binding(
                     get: { appSettings.calendarDueLeadMinutes },
                     set: { appSettings.calendarDueLeadMinutes = $0 }
@@ -35,6 +38,7 @@ struct AlertsSettingsPage: View {
                     get: { appSettings.chargingCapsuleEnabled },
                     set: { appSettings.chargingCapsuleEnabled = $0 }
                 ))
+                .toggleStyle(.switch)
             }
         }
         .formStyle(.grouped)

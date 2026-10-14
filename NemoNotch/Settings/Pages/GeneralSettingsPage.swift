@@ -21,6 +21,7 @@ struct GeneralSettingsPage: View {
                             }
                         }
                     ))
+                    .toggleStyle(.switch)
                 }
             }
 

@@ -39,7 +39,9 @@ struct PomodoroSettingsView: View {
                 }
 
                 Toggle("settings.pomodoro.soundEnabled", isOn: $settings.pomodoroSoundEnabled)
+                    .toggleStyle(.switch)
                 Toggle("settings.pomodoro.notificationEnabled", isOn: $settings.pomodoroNotificationEnabled)
+                    .toggleStyle(.switch)
             }
 
             Section("settings.pomodoro.hotkeyHeader") {
