@@ -207,12 +207,15 @@ struct SettingsView: View {
             // 各页 Form/ScrollView 不铺自己的底,统一用卡片底。
             .scrollContentBackground(.hidden)
             // 侧栏收起时红绿灯 + 收起按钮叠在卡片左上角:卡片仍铺满,
-            // 只把内容让出标题条高度。
-            .safeAreaPadding(.top, showSidebar ? 0 : max(0, titlebarInset - cardInset))
+            // 只把内容让出标题条高度;侧栏展开时也留一点顶部呼吸位,
+            // 别让首个节标题贴着卡片裁切边缘。
+            .safeAreaPadding(.top, showSidebar ? 10 : max(0, titlebarInset - cardInset))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 玻璃卡片:毛玻璃材质透出底下的凹陷侧栏底,层次来自"凹陷材质
+            // 玻璃卡片:磨砂材质透出底下的凹陷侧栏底,层次来自"凹陷材质
             // 之上浮一块玻璃"(Atoll / 系统设置同款),而非实色填充。
-            .background(.ultraThinMaterial)
+            // 用 regularMaterial 而非 ultraThin:ultraThin 透明度过高,浅色
+            // 模式下会把窗口背后的深色壁纸直接透进来,整卡读成黑色。
+            .background(.regularMaterial)
             .clipShape(shape)
             // 自适应发丝描边 + 柔和投影让卡片浮起,周围的材质边框读作凹陷。
             .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
