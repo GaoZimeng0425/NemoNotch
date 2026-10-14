@@ -3,6 +3,40 @@ import SwiftUI
 // 设置窗共享的视觉组件与品牌色令牌。窗口跟随系统外观(浅/深色),
 // 这里的颜色必须用系统语义色或自带明暗两套 —— 不能用仅暗色的 NotchTheme。
 
+// MARK: - 侧栏图标
+
+/// 系统设置风格的彩色渐变图标方块:渐变底 + 白色 SF Symbol + 0.5pt 高光
+/// 描边 + 柔影。渐变色固定(不随明暗切换),与 macOS 系统设置的侧栏图标
+/// 行为一致。
+struct SidebarIconView: View {
+    let symbol: String
+    let tintA: Color
+    let tintB: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [tintA, tintB],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
+            )
+            .frame(width: 26, height: 26)
+            .overlay {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.25), radius: 0.5, y: 0.5)
+            }
+            .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+    }
+}
+
 // MARK: - Provider 品牌色
 
 /// Per-provider brand tints, tuned to read on both light and dark windows
