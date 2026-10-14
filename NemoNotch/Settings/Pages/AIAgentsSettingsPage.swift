@@ -176,13 +176,13 @@ struct AIAgentsSettingsPage: View {
                 get: { appSettings.aiStatusFabEnabled },
                 set: { appSettings.aiStatusFabEnabled = $0 }
             ))
-            Divider().padding(.horizontal, 12)
+            Divider().padding(.horizontal, SettingsMetrics.rowHPadding)
             aiSurfaceRow("settings.lockscreen_ai.enabled", isOn: Binding(
                 get: { appSettings.lockScreenAIPanelEnabled },
                 set: { appSettings.lockScreenAIPanelEnabled = $0 }
             ))
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, SettingsMetrics.rowHPadding)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
@@ -203,7 +203,7 @@ struct AIAgentsSettingsPage: View {
                 .toggleStyle(.switch)
                 .labelsHidden()
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, SettingsMetrics.rowHPadding)
         .padding(.vertical, 7)
     }
 }

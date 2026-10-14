@@ -47,6 +47,8 @@ struct SidebarIconView: View {
                     .shadow(color: .black.opacity(0.25), radius: 0.5, y: 0.5)
             }
             .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+            // 装饰性图标:行文本自身就是完整的可访问性标签。
+            .accessibilityHidden(true)
     }
 }
 
