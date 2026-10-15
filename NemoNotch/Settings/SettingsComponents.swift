@@ -16,6 +16,47 @@ enum SettingsMetrics {
     static let rowHPadding: CGFloat = 12
 }
 
+// MARK: - 侧栏搜索条
+
+/// Atoll 式侧栏顶部搜索条:放大镜 + plain TextField + 清除钮,圆角材质底。
+/// 实时驱动 `SettingsSearchModel.query`(侧栏过滤),回车触发 `onSubmit`。
+struct SettingsSidebarSearchBar: View {
+    @Binding var text: String
+    var onSubmit: () -> Void = {}
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("settings.search.placeholder", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .onSubmit(onSubmit)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("settings.search.clear"))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary)
+        )
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
+}
+
 // MARK: - 侧栏图标
 
 /// 系统设置风格的彩色渐变图标方块:渐变底 + 白色 SF Symbol + 0.5pt 高光

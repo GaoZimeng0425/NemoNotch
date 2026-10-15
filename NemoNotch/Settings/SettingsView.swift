@@ -101,48 +101,37 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     }
 }
 
-/// 设置窗外壳:手排双栏(侧栏 + 详情卡)+ 页切换。各页内容在 `Pages/` 下,
-/// 共享视觉组件在 `SettingsComponents.swift`。
+/// 设置窗外壳(Atoll 同构):标准 `NavigationSplitView` 双栏 + 侧栏顶搜索条
+/// + 整窗玻璃背景。侧栏开关用 SwiftUI 自带的标准工具栏按钮,不手装
+/// NSToolbar。各页内容在 `Pages/` 下,共享视觉组件在
+/// `SettingsComponents.swift`,搜索索引/过滤在 `SettingsSearchIndex.swift`。
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(NotificationService.self) var notificationService
 
     @AppStorage("settings.selectedPage") private var selectedPageRaw = SettingsPage.general.rawValue
 
-    @State private var showSidebar = true
-
-    /// 卡片与窗口边、与侧栏之间的间距——展开与收起两态都是这同一条
-    /// 均匀凹陷边框(收起动画不再伴随左缘额外的 0↔8 跳变)。
-    private let cardInset: CGFloat = 8
-    private let sidebarWidth: CGFloat = 200
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        // 手排布局而非 NavigationSplitView:macOS 26 原生侧栏是"浮起的玻璃
-        // 面板",与要求的层次相反——这里窗口底层是 sidebar 材质(凹陷层),
-        // 侧栏直接画在上面,右侧内容是凸起的玻璃卡片;收起侧栏后卡片四周
-        // 留出等宽的凹陷边框。红绿灯与收起按钮同在标题条一排(AppKit
-        // 工具栏桥,见 SettingsWindowChrome);卡片**不伸进标题条**——
-        // 透明标题条透出底层凹陷材质,整条顶带与侧栏同材质连成一体
-        // (Finder / 系统设置同款),卡片浮在带的下方。内容 Y 恒定,
-        // 收放侧栏只剩宽度动画,不会上下跳。
-        HStack(spacing: 0) {
-            if showSidebar {
-                sidebar
-                    .frame(width: sidebarWidth)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-            }
-            detailCard
-                .padding(cardInset)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarColumn
+        } detail: {
+            detailView
+                // 各页 Form/ScrollView/List 不铺自己的底,透出整窗玻璃。
+                .scrollContentBackground(.hidden)
         }
-        .background(SettingsSidebarMaterial().ignoresSafeArea())
+        .navigationSplitViewStyle(.balanced)
+        // 整窗玻璃(Atoll 同款):两栏共同浮在一块 macOS 26 玻璃上。
+        .background(windowGlass.ignoresSafeArea())
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
         .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 540)
-        .onAppear { SettingsWindowChrome.install() }
-        .onReceive(NotificationCenter.default.publisher(for: SettingsWindowChrome.toggleSidebar)) { _ in
-            withAnimation(.spring(duration: 0.3, bounce: 0.1)) {
-                showSidebar.toggle()
-            }
+        .onAppear {
+            SettingsWindowChrome.install()
+            // 模型跨窗口会话存活:重开窗口时搜索从空词开始,别让看不见的
+            // 旧词继续过滤侧栏。
+            SettingsSearchModel.shared.query = ""
         }
         .environment(\.locale, appSettings.currentLocale)
         .task {
@@ -157,7 +146,36 @@ struct SettingsView: View {
         }
     }
 
-    private var sidebar: some View {
+    /// macOS 26 玻璃:整窗一块圆角玻璃垫底,侧栏与详情都画在它上面。
+    private var windowGlass: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(.clear)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+    }
+
+    // MARK: - 侧栏
+
+    private var sidebarColumn: some View {
+        VStack(spacing: 0) {
+            SettingsSidebarSearchBar(
+                text: Binding(
+                    get: { SettingsSearchModel.shared.query },
+                    set: { SettingsSearchModel.shared.query = $0 }
+                ),
+                onSubmit: {
+                    // 回车 → 跳首个命中页(过滤器保留,可继续点其他命中行)。
+                    if let first = matchedPages?.first {
+                        selectedPageRaw = first.rawValue
+                    }
+                }
+            )
+            Divider()
+            pageList
+        }
+        .navigationSplitViewColumnWidth(min: 200, ideal: 210, max: 240)
+    }
+
+    private var pageList: some View {
         List(selection: Binding(
             get: { SettingsPage(rawValue: selectedPageRaw) ?? .general },
             set: {
@@ -166,27 +184,55 @@ struct SettingsView: View {
                 }
             }
         )) {
-            ForEach(SettingsNavGroup.allCases) { group in
-                // LocalizedStringKey 包装是必须的:`labelKey` 是 String
-                // 变量,直接传会被当字面文本渲染成 "settings.group.general"。
-                Section(LocalizedStringKey(group.labelKey)) {
-                    ForEach(group.pages) { page in
+            if let matches = matchedPages {
+                // 搜索中:分组折叠成一个扁平的结果节。
+                Section(LocalizedStringKey("settings.search.results")) {
+                    if matches.isEmpty {
+                        Text("settings.search.no_matches")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(matches) { page in
+                            sidebarRow(page)
+                                .tag(page)
+                        }
+                    }
+                }
+            } else {
+                ForEach(SettingsNavGroup.allCases) { group in
+                    // LocalizedStringKey 包装是必须的:`labelKey` 是 String
+                    // 变量,直接传会被当字面文本渲染成 "settings.group.general"。
+                    Section(LocalizedStringKey(group.labelKey)) {
+                        ForEach(group.pages) { page in
+                            sidebarRow(page)
+                                .tag(page)
+                        }
+                    }
+                }
+                // "关于"不列组头,静默跟在分组之后。
+                Section {
+                    ForEach(SettingsPage.ungrouped) { page in
                         sidebarRow(page)
                             .tag(page)
                     }
                 }
             }
-            // "关于"不列组头,静默跟在分组之后。
-            Section {
-                ForEach(SettingsPage.ungrouped) { page in
-                    sidebarRow(page)
-                        .tag(page)
-                }
-            }
         }
         .listStyle(.sidebar)
-        // 列表自身不铺底色,透出窗口底层的 sidebar 材质(凹陷层)。
-        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - 搜索过滤
+
+    /// 去空白后的有效搜索词;`nil` 表示"未在搜索",侧栏走正常分组。
+    /// 读取 `SettingsSearchModel.shared.query` 发生在 body 求值期间,
+    /// Observation 会自动建立依赖 —— 搜索条一改词,侧栏即重算。
+    private var matchedPages: [SettingsPage]? {
+        let query = SettingsSearchModel.shared.query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return nil }
+        return SettingsSearchIndex.matchingPages(
+            query,
+            stringsByPage: SettingsSearchIndex.stringsByPage(language: appSettings.language)
+        )
     }
 
     private func sidebarRow(_ page: SettingsPage) -> some View {
@@ -198,24 +244,7 @@ struct SettingsView: View {
         }
     }
 
-    private var detailCard: some View {
-        let shape = RoundedRectangle(cornerRadius: SettingsMetrics.detailCardRadius, style: .continuous)
-        return detailView
-            // 各页 Form/ScrollView 不铺自己的底,统一用卡片底。
-            .scrollContentBackground(.hidden)
-            // 恒定的顶部呼吸位:首个节标题不贴卡片裁切边缘;恒定还保证
-            // 收放侧栏时内容 Y 不动(此前随红绿灯让位 10↔30pt 跳变)。
-            .safeAreaPadding(.top, 10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 玻璃卡片:磨砂材质浮在凹陷底之上(Atoll / 系统设置同款)。
-            // 用 regularMaterial 而非 ultraThin:ultraThin 透明度过高,浅色
-            // 模式下会把窗口背后的深色壁纸直接透进来,整卡读成黑色。
-            .background(.regularMaterial)
-            .clipShape(shape)
-            // 自适应发丝描边 + 柔和投影让卡片浮起,周围的材质边框读作凹陷。
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-    }
+    // MARK: - 详情
 
     @ViewBuilder
     private var detailView: some View {
