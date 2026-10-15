@@ -5,15 +5,54 @@ import SwiftUI
 
 // MARK: - 设计令牌
 
-/// 设置窗的圆角/间距令牌:详情大卡、页内分组卡、行内距统一从这里取值,
+/// 设置窗的圆角/间距令牌:页内分组卡、行内距统一从这里取值,
 /// 各页不再自造常数。
 enum SettingsMetrics {
-    /// 详情区大玻璃卡的圆角。
-    static let detailCardRadius: CGFloat = 16
     /// 页内分组卡(provider 卡、开关组卡)的圆角。
     static let cardRadius: CGFloat = 14
     /// 分组卡内部行 的左右内距。
     static let rowHPadding: CGFloat = 12
+}
+
+// MARK: - 侧栏搜索条
+
+/// Atoll 式侧栏顶部搜索条:放大镜 + plain TextField + 清除钮,圆角材质底。
+/// 实时驱动 `SettingsSearchModel.query`(侧栏过滤),回车触发 `onSubmit`。
+struct SettingsSidebarSearchBar: View {
+    @Binding var text: String
+    var onSubmit: () -> Void = {}
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("settings.search.placeholder", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .onSubmit(onSubmit)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("settings.search.clear"))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary)
+        )
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
 }
 
 // MARK: - 侧栏图标
