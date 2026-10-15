@@ -49,5 +49,18 @@ enum SettingsWindowChrome {
             "Settings window resizable=\(window.styleMask.contains(.resizable))",
             category: "Settings"
         )
+        // 紧随其后插入的这位活不久:`NavigationSplitView` 会给自己的标准
+        // 侧栏开关装一条原生工具栏,装工具栏触发的异步窗口重配置会重建
+        // styleMask 并剥掉它(2026-10-15 实测:打开设置 6.5s 后 AX 依然改
+        // 不动窗口尺寸,而位置写入正常)。重配置尘埃落定后补插一次。
+        Task { @MainActor [weak window] in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard let window, !window.styleMask.contains(.resizable) else { return }
+            window.styleMask.insert(.resizable)
+            LogService.info(
+                "Settings window resizable re-inserted after toolbar reconfiguration",
+                category: "Settings"
+            )
+        }
     }
 }
