@@ -5,11 +5,9 @@ import SwiftUI
 
 // MARK: - 设计令牌
 
-/// 设置窗的圆角/间距令牌:详情大卡、页内分组卡、行内距统一从这里取值,
+/// 设置窗的圆角/间距令牌:页内分组卡、行内距统一从这里取值,
 /// 各页不再自造常数。
 enum SettingsMetrics {
-    /// 详情区大玻璃卡的圆角。
-    static let detailCardRadius: CGFloat = 16
     /// 页内分组卡(provider 卡、开关组卡)的圆角。
     static let cardRadius: CGFloat = 14
     /// 分组卡内部行 的左右内距。

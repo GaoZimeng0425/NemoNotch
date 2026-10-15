@@ -29,7 +29,7 @@ enum SettingsSearchIndex {
             keys: [
                 "settings.nav.ai", "settings.ai_status_fab.enabled", "settings.lockscreen_ai.enabled",
                 "settings.status.installed", "settings.status.not_installed", "settings.install_hooks",
-                "settings.reinstall", "settings.uninstall_hooks", "settings.openclaw.connected",
+                "settings.reinstall", "settings.uninstall_hooks", "settings.openclaw.connected %@",
                 "settings.openclaw.connect", "settings.openclaw.disconnect", "settings.openclaw.remove_device",
                 "settings.hooks_description", "settings.server_running",
             ],
@@ -37,8 +37,10 @@ enum SettingsSearchIndex {
         ),
         .appList: (
             keys: [
-                "settings.nav.apps", "settings.apps_count", "settings.add_app",
-                "settings.app_picker_title", "settings.apps_selected_count", "launcher.search_apps",
+                // 带 %lld/%@ 的 key 必须按目录里的完整格式串列出 —— 漏掉占位符
+                // 会查不到词条,回退值(=key 本身)反而把原始 key 漏进搜索语料。
+                "settings.nav.apps", "settings.apps_count %lld", "settings.add_app",
+                "settings.app_picker_title", "settings.apps_selected_count %lld", "launcher.search_apps",
             ],
             literals: []
         ),

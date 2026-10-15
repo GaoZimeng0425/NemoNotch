@@ -53,13 +53,17 @@ struct SettingsSearchTests {
 
     @Test("索引词条按应用内语言解析,系统语言不参与")
     func stringsByPageHonorsAppLanguage() {
-        // zh-Hans lproj 存在时:每页词条非空,固定字面量(provider 名)原样保留。
-        let strings = SettingsSearchIndex.stringsByPage(language: .zhHans)
-        #expect(!(strings[.aiAgents]?.isEmpty ?? true))
-        #expect(strings[.aiAgents]?.contains("opencode") == true)
-        #expect(!(strings[.general]?.isEmpty ?? true))
-        // system(nil)与 zh-Hans 两条路径都产出全量页面,页面集合一致。
+        // 判别性断言:settings.nav.general 的 zh-Hans 值是"通用"、en 值是
+        // "General" —— 若 bundle 解析坏了(恒回退 .main),按固定语言取的
+        // 词条就对不上目录里的已知译文。
+        let zh = SettingsSearchIndex.stringsByPage(language: .zhHans)
+        #expect(zh[.general]?.contains("通用") == true)
+        let en = SettingsSearchIndex.stringsByPage(language: .en)
+        #expect(en[.general]?.contains("General") == true)
+        // 固定字面量(provider 名)原样保留;system(nil)与显式语言产出
+        // 相同的页面集合。
+        #expect(zh[.aiAgents]?.contains("opencode") == true)
         let systemStrings = SettingsSearchIndex.stringsByPage(language: nil)
-        #expect(Set(strings.keys) == Set(systemStrings.keys))
+        #expect(Set(zh.keys) == Set(systemStrings.keys))
     }
 }
