@@ -70,3 +70,38 @@ struct OpencodeProviderTests {
         #expect(store.sortedSessions.isEmpty)
     }
 }
+
+extension OpencodeProviderTests {
+    @Test func permissionRequestEventMovesToWaitingForApproval() {
+        let store = AISessionStore()
+        let provider = OpencodeProvider(store: store)
+        provider.handleEvent(
+            event(
+                #"{"hook_event_name":"PermissionRequest","session_id":"ses_pr","tool_name":"bash","tool_use_id":"perm-1","message":"allow rm?","cli_source":"opencode"}"#
+            )
+        )
+        guard case let .waitingForApproval(ctx) = store.get("ses_pr")?.phase else {
+            Issue.record("expected waitingForApproval, got \(String(describing: store.get("ses_pr")?.phase))")
+            return
+        }
+        #expect(ctx.toolUseId == "perm-1")
+        #expect(ctx.toolName == "bash")
+    }
+
+    @Test func respondToPermissionAdvancesPhaseToProcessing() {
+        let store = AISessionStore()
+        let provider = OpencodeProvider(store: store)
+        provider.handleEvent(
+            event(
+                #"{"hook_event_name":"PermissionRequest","session_id":"ses_ans","tool_name":"bash","tool_use_id":"perm-2","cli_source":"opencode"}"#
+            )
+        )
+        // No HookServer attached (nil weak ref) — the write lands nowhere but
+        // the phase must still advance, mirroring the Gemini provider.
+        provider.respondToPermission(sessionId: "ses_ans", approved: true)
+        guard case .processing = store.get("ses_ans")?.phase else {
+            Issue.record("expected processing after answer")
+            return
+        }
+    }
+}

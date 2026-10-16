@@ -22,6 +22,9 @@ struct AIStatusFABView: View {
 
     /// Session chip currently under the cursor; drives the hover preview card.
     @State private var hoveredSessionId: String?
+    /// Grace timer keeping the card alive while the pointer crosses the dead
+    /// gap between the chip and the card below it.
+    @State private var hoverGraceTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -309,12 +312,26 @@ struct AIStatusFABView: View {
 
     /// Keep the incoming hover unless a newer chip already took over — a
     /// leave from the previous chip can arrive after the enter on the next.
+    /// Leaving the chip does NOT clear immediately: the pointer has to cross
+    /// a dead gap to reach the card below, so the clear is deferred ~300ms
+    /// and cancelled when the card's own hover asserts.
     private func setHovered(_ id: String, hovering: Bool) {
         withAnimation(.easeOut(duration: 0.15)) {
             if hovering {
+                hoverGraceTask?.cancel()
+                hoverGraceTask = nil
                 hoveredSessionId = id
             } else if hoveredSessionId == id {
-                hoveredSessionId = nil
+                hoverGraceTask?.cancel()
+                hoverGraceTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        if hoveredSessionId == id {
+                            hoveredSessionId = nil
+                        }
+                    }
+                }
             }
         }
     }
@@ -345,9 +362,18 @@ struct AIStatusFABView: View {
                         toolBadge(tool, tint: sourceTint(session.source))
                     }
                 }
-                Text(chip.hasHost ? "Click to jump to terminal" : "Click for details")
-                    .font(.system(size: 9))
-                    .foregroundStyle(NotchTheme.textTertiary)
+                if chip.phase.isWaitingForApproval {
+                    // Answer from the capsule — the whole point of the amber
+                    // state; no need to open the notch or the terminal.
+                    HStack(spacing: 6) {
+                        answerButton(chip, title: "Deny", approved: false)
+                        answerButton(chip, title: "Allow", approved: true)
+                    }
+                } else {
+                    Text(chip.hasHost ? "Click to jump to terminal" : "Click for details")
+                        .font(.system(size: 9))
+                        .foregroundStyle(NotchTheme.textTertiary)
+                }
             }
             .padding(10)
             .frame(width: 210, alignment: .leading)
@@ -364,8 +390,33 @@ struct AIStatusFABView: View {
                 radius: NotchConstants.openedShadowRadius
             )
             .offset(y: NotchConstants.aiStatusFabCapsuleHeight + 10)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // Hovering the card itself re-asserts the chip's hover — this is
+            // what keeps the card (and its answer buttons) alive while the
+            // pointer travels off the chip.
+            .onHover { setHovered(chip.id, hovering: $0) }
             .transition(.opacity)
         }
+    }
+
+    /// Tiny capsule button answering a permission from the hover card.
+    private func answerButton(_ chip: FABSessionChip, title: String, approved: Bool) -> some View {
+        let tint: Color = approved
+            ? Color(red: 0.30, green: 0.85, blue: 0.45)
+            : Color(red: 1.0, green: 0.34, blue: 0.28)
+        return Button {
+            controller?.respondToPermission(sessionId: chip.id, approved: approved)
+        } label: {
+            Text(title)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .background(tint.opacity(0.16))
+                .clipShape(Capsule(style: .continuous))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func phaseLabel(_ phase: SessionPhase) -> String {

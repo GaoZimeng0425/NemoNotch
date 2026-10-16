@@ -21,3 +21,24 @@ struct OpencodePluginInstallerTests {
         #expect(src.contains("session.compacted"))
     }
 }
+
+extension OpencodePluginInstallerTests {
+    @Test func pluginV3HoldsApprovalBridgeAndAppliesViaClient() {
+        let src = OpencodePluginInstaller.pluginSource(port: 1)
+        // The held bridge: a PermissionRequest POST without a short timeout
+        #expect(src.contains("hook_event_name: \"PermissionRequest\""))
+        #expect(src.contains("AbortController"))
+        // Decisions are applied through opencode's own client API
+        #expect(src.contains("postSessionIdPermissionsPermissionId"))
+        // Only once/reject are ever sent — never "always"
+        #expect(src.contains("\"once\""))
+        #expect(src.contains("\"reject\""))
+        #expect(!src.contains("\"always\""))
+        // Timeout must NOT decide (opencode's TUI stays in charge)
+        #expect(src.contains("!== \"timeout\""))
+        // The TUI answering first drops the held copy
+        #expect(src.contains("permission.replied"))
+        // The entry captures the plugin input's client (1.x apply path)
+        #expect(src.contains("input.client"))
+    }
+}
