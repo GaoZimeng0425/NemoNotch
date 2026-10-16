@@ -12,11 +12,18 @@ final class AIStatusWindowController: NSObject {
     @ObservationIgnored private let store: AISessionStore
     @ObservationIgnored private let appSettings: AppSettings
     @ObservationIgnored private let usageQuota: UsageQuotaService
+    @ObservationIgnored private let aiMonitor: AICLIMonitorService
 
-    init(store: AISessionStore, appSettings: AppSettings, usageQuota: UsageQuotaService) {
+    init(
+        store: AISessionStore,
+        appSettings: AppSettings,
+        usageQuota: UsageQuotaService,
+        aiMonitor: AICLIMonitorService
+    ) {
         self.store = store
         self.appSettings = appSettings
         self.usageQuota = usageQuota
+        self.aiMonitor = aiMonitor
         super.init()
         LogService.info("AIStatusWindowController init", category: "AIStatusFAB")
         observe()
@@ -29,7 +36,11 @@ final class AIStatusWindowController: NSObject {
     // MARK: - Public (called by the SwiftUI view)
 
     func toggleExpanded() {
-        if isExpanded { collapse() } else { expand() }
+        if isExpanded {
+            collapse()
+        } else {
+            expand()
+        }
     }
 
     func collapse() {
@@ -56,6 +67,12 @@ final class AIStatusWindowController: NSObject {
         window?.performDrag(with: event)
     }
 
+    /// Permission answer from the capsule's hover card — routed to the owning
+    /// provider (Claude/Gemini hook, opencode bridge) by source.
+    func respondToPermission(sessionId: String, approved: Bool) {
+        aiMonitor.respondToPermission(sessionId: sessionId, approved: approved)
+    }
+
     // MARK: - Observation + show/hide
 
     private var capsuleState: FABCapsuleState {
@@ -69,8 +86,8 @@ final class AIStatusWindowController: NSObject {
         } onChange: {
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.observe() // re-arm before evaluating
-                self.evaluateVisibility()
+                observe() // re-arm before evaluating
+                evaluateVisibility()
             }
         }
     }
@@ -138,7 +155,7 @@ final class AIStatusWindowController: NSObject {
         hideTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(NotchConstants.aiStatusFabHideDelay))
             guard let self, !Task.isCancelled else { return }
-            self.hide(immediate: false)
+            hide(immediate: false)
         }
     }
 
@@ -167,7 +184,9 @@ final class AIStatusWindowController: NSObject {
     private func applyPosition(to w: NSWindow) {
         // Only set position on first show; afterwards the window keeps its frame
         // (user may have dragged it).
-        if w.frame.origin != .zero { return }
+        if w.frame.origin != .zero {
+            return
+        }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let visible = screen.visibleFrame
         let size = w.frame.size

@@ -2,7 +2,10 @@ import Foundation
 
 /// Third AIProvider. Receives opencode lifecycle events (pushed by the
 /// NemoNotch opencode plugin via HookServer) and maps them into AISessionStore.
-/// Notify-only: no conversation/token parsing, no notch-side approval.
+/// No conversation/token parsing. Permission approvals ARE supported: the
+/// plugin holds a bridge connection while opencode's own TUI dialog is up, and
+/// `respondToPermission` writes the decision onto it — the plugin then applies
+/// it inside opencode through its own client API.
 @MainActor
 @Observable
 final class OpencodeProvider: AIProvider {
@@ -44,8 +47,17 @@ final class OpencodeProvider: AIProvider {
         }
     }
 
-    /// Notify-only — opencode's own TUI owns the approval decision.
-    func respondToPermission(sessionId: String, approved: Bool) {}
+    /// Applies a bar/notch-side answer: HookServer writes the decision onto
+    /// the plugin's held bridge connection (the plugin then applies it inside
+    /// opencode through its own client API) and the session moves on. When the
+    /// TUI already answered, the write lands nowhere and the phase change is
+    /// corrected by the next event.
+    func respondToPermission(sessionId: String, approved: Bool) {
+        hookServer?.respondToPermission(sessionId: sessionId, approved: approved)
+        store.mutate(sessionId) { s in
+            s.phase = s.phase.transition(to: .processing)
+        }
+    }
 
     // MARK: - Event Handling
 
@@ -75,6 +87,10 @@ final class OpencodeProvider: AIProvider {
             }
 
         case "PostToolUse":
+            // A tool completed → any still-held permission bridge for this
+            // session is moot (answered in the TUI or superseded); a late
+            // allow/deny would be wrong.
+            hookServer?.clearPendingPermissions(sessionId: sessionId)
             store.mutateOrCreate(sessionId, source: .opencode) { s in
                 s.phase = s.phase.transition(to: .processing)
                 s.currentTool = nil
@@ -83,7 +99,9 @@ final class OpencodeProvider: AIProvider {
                 s.lastEventTime = now
             }
 
-        case "Notification":
+        // The plugin forwards permission.ask both as this event (held bridge)
+        // and lifts the wait via a PostToolUse when the TUI replies first.
+        case "Notification", "PermissionRequest":
             store.mutateOrCreate(sessionId, source: .opencode) { s in
                 let ctx = PermissionContext(
                     toolUseId: event.toolUseId ?? UUID().uuidString,
@@ -103,6 +121,8 @@ final class OpencodeProvider: AIProvider {
             }
 
         case "Stop":
+            // Session parked at its prompt → a held bridge is stale.
+            hookServer?.clearPendingPermissions(sessionId: sessionId)
             store.mutateOrCreate(sessionId, source: .opencode) { s in
                 s.phase = s.phase.transition(to: .waitingForInput)
                 s.currentTool = nil
@@ -119,9 +139,15 @@ final class OpencodeProvider: AIProvider {
     }
 
     private func applyContext(to session: inout AISessionState, event: HookEvent) {
-        if let cwd = event.cwd { session.cwd = cwd }
-        if let model = event.model, !model.isEmpty { session.model = model }
-        if let msg = event.message, !msg.isEmpty { session.lastMessage = msg }
+        if let cwd = event.cwd {
+            session.cwd = cwd
+        }
+        if let model = event.model, !model.isEmpty {
+            session.model = model
+        }
+        if let msg = event.message, !msg.isEmpty {
+            session.lastMessage = msg
+        }
         session.lastEventName = event.hookEventName
     }
 
@@ -152,8 +178,12 @@ final class OpencodeProvider: AIProvider {
             // Demote ANY active phase, not just .waitingForInput — an aborted or
             // Stop-missed session stuck in .processing would otherwise spin for
             // up to 30 min (removeStaleThreshold).
-            if case .idle = session.phase { continue }
-            if case .ended = session.phase { continue }
+            if case .idle = session.phase {
+                continue
+            }
+            if case .ended = session.phase {
+                continue
+            }
             store.mutate(session.id) { s in
                 s.phase = s.phase.transition(to: .idle)
                 s.currentTool = nil
