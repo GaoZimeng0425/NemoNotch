@@ -11,12 +11,17 @@ struct AIStatusFABView: View {
     @Environment(AISessionStore.self) var store
     @Environment(\.aiStatusController) var controller
 
-    private var isExpanded: Bool { controller?.isExpanded ?? false }
+    private var isExpanded: Bool {
+        controller?.isExpanded ?? false
+    }
 
     /// Measured width of the collapsed pill's content (see `capsuleWidth`).
     /// The seed only has to be sane for the single layout pass before the first
     /// measurement lands.
     @State private var measuredCapsuleWidth: CGFloat = 92
+
+    /// Session chip currently under the cursor; drives the hover preview card.
+    @State private var hoveredSessionId: String?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -40,22 +45,6 @@ struct AIStatusFABView: View {
                 // present; faded/scaled out when expanding so it reads as
                 // "growing into" the panel, like `NotchView`'s CompactBadgesView.
                 capsuleContent
-                    // The drag/click handle sits in `.overlay` (above the capsule
-                    // content), NOT `.background`. SwiftUI's hosting view dispatches
-                    // AppKit mouseDown to the topmost hit view first; an overlay
-                    // NSView is above the content, so it reliably receives mouseDown.
-                    // With `.background`, the SwiftUI content above would swallow the
-                    // event (it has no gesture after we removed .onTapGesture, so
-                    // SwiftUI would drop it instead of forwarding to the background).
-                    // Kept INNERMOST so it follows the `allowsHitTesting` state below —
-                    // outermost, it kept receiving drags from the panel's top-right
-                    // corner even while expanded.
-                    .overlay(
-                        DragHandleView(
-                            onDrag: { controller?.beginWindowDrag(with: $0) },
-                            onTap: { controller?.toggleExpanded() }
-                        )
-                    )
                     .opacity(isExpanded ? 0 : 1)
                     .scaleEffect(isExpanded ? 0.8 : 1, anchor: .topTrailing)
                     .allowsHitTesting(!isExpanded)
@@ -71,6 +60,14 @@ struct AIStatusFABView: View {
             }
             .mask(alignment: .topTrailing) { morphShape }
             .zIndex(1)
+
+            // Layer 3 — hover preview card. Deliberately OUTSIDE the mask: the
+            // content ZStack above is clipped to the morphing shape, which is
+            // the 32pt pill while collapsed and would shear the card away. The
+            // fixed canvas has transparent, click-through room below the pill
+            // (PassThroughView), so the card needs no window changes.
+            hoverCard
+                .zIndex(2)
         }
         // Anchor the visible shape to the top-right of the fixed canvas; the
         // transparent remainder (bottom-left) click-throughs via PassThroughView.
@@ -137,7 +134,10 @@ struct AIStatusFABView: View {
                 RoundedRectangle(cornerRadius: morphCornerRadius, style: .continuous)
                     .stroke(NotchTheme.stroke, lineWidth: 0.6)
             )
-            .shadow(color: .black.opacity(NotchConstants.openedShadowOpacity), radius: NotchConstants.openedShadowRadius)
+            .shadow(
+                color: .black.opacity(NotchConstants.openedShadowOpacity),
+                radius: NotchConstants.openedShadowRadius
+            )
     }
 
     /// The collapsed pill's width, **measured from the real laid-out content**
@@ -147,34 +147,50 @@ struct AIStatusFABView: View {
     /// guess that came up short silently squeezed the count `Text` to zero
     /// width (the dots have rigid frames, so the text was the only thing that
     /// could absorb the shortfall). Same pattern as `NotchView.closedContentSize`.
-    private var capsuleWidth: CGFloat { measuredCapsuleWidth }
+    private var capsuleWidth: CGFloat {
+        measuredCapsuleWidth
+    }
 
-    private var capsuleHPadding: CGFloat { 12 }
-    private var capsuleChipSpacing: CGFloat { 11 }
-    private var capsuleDotSize: CGFloat { 10 }
+    private var capsuleHPadding: CGFloat {
+        12
+    }
+
+    private var capsuleChipSpacing: CGFloat {
+        11
+    }
+
+    private var capsuleDotSize: CGFloat {
+        10
+    }
+
+    private var capsuleChipSize: CGFloat {
+        20
+    }
 
     // MARK: - Layer 1: capsule content
 
     /// Aggregate capsule state — the most attention-needing phase across all
-    /// sessions (approval > running > waiting-input).
+    /// sessions (approval > running > waiting-input). Drives the head dot and
+    /// the expanded header; the per-session strip below is `sessionStrip`.
     private var capsuleState: FABCapsuleState {
         FABCapsuleState.of(store.sortedSessions)
     }
 
-    /// Per-status counts — the capsule shows every non-empty group at once.
-    private var statusCounts: FABStatusCounts {
-        FABStatusCounts.of(store.sortedSessions)
+    /// Per-session chips on the strip (evlat-style, one ring per session).
+    private var sessionStrip: FABSessionStrip {
+        FABSessionStrip.of(store.sortedSessions, cap: NotchConstants.aiStatusFabChipCap)
     }
 
     /// Sessions the expanded panel lists: everything still mid-conversation
     /// (running or parked at a prompt / permission choice).
     private var engagedSessions: [AISessionState] {
-        store.sortedSessions.filter { $0.phase.isEngaged }
+        store.sortedSessions.filter(\.phase.isEngaged)
     }
 
     private var capsuleContent: some View {
         HStack(spacing: capsuleChipSpacing) {
-            capsuleGroups
+            capsuleHead
+            sessionChips
         }
         .padding(.horizontal, capsuleHPadding)
         .frame(height: NotchConstants.aiStatusFabCapsuleHeight)
@@ -188,34 +204,162 @@ struct AIStatusFABView: View {
             guard width > 0 else { return }
             measuredCapsuleWidth = width
         }
-        .contentShape(Capsule())
     }
 
-    /// One chip per non-empty status group (red approvals · yellow running ·
-    /// green awaiting input), in the same attention order the header uses. When
-    /// everything went quiet, the single hollow-green "done" chip takes over
-    /// during the fade-out window.
-    @ViewBuilder
-    private var capsuleGroups: some View {
-        let groups = statusCounts.groups
-        if groups.isEmpty {
-            HStack(spacing: 6) {
+    /// The pill's head: the aggregate-state dot and the ONLY drag surface —
+    /// the drag/click handle moved here now that each per-session chip handles
+    /// its own taps (a capsule-wide handle would swallow them). Tap = toggle
+    /// the panel. Everything quiet keeps the hollow-green "done" look during
+    /// the fade-out window.
+    private var capsuleHead: some View {
+        HStack(spacing: 6) {
+            if capsuleState == .done {
                 statusCircle(statusColor(.done), size: capsuleDotSize, hollow: true)
                 capsuleLabel("done")
+            } else {
+                statusCircle(
+                    statusColor(capsuleState),
+                    size: capsuleDotSize + 4,
+                    hollow: false,
+                    pulsing: capsuleState.isRunning
+                )
             }
+        }
+        .frame(minWidth: 30)
+        .contentShape(Rectangle())
+        // The drag/click handle sits in `.overlay` (above the head content),
+        // NOT `.background`: SwiftUI's hosting view dispatches AppKit mouseDown
+        // to the topmost hit view first, so an overlay NSView reliably receives
+        // mouseDown, while SwiftUI content above a background NSView would
+        // swallow the event. A SwiftUI tap gesture is NOT paired with it — the
+        // handle's own mouseDown loop decides drag-vs-click.
+        .overlay(
+            DragHandleView(
+                onDrag: { controller?.beginWindowDrag(with: $0) },
+                onTap: { controller?.toggleExpanded() }
+            )
+        )
+    }
+
+    /// One ring per engaged session (attention order, capped), then a "+N"
+    /// overflow chip for the rest.
+    @ViewBuilder
+    private var sessionChips: some View {
+        let strip = sessionStrip
+        ForEach(strip.chips) { chip in
+            sessionChip(chip)
+        }
+        if strip.overflow > 0 {
+            Text("+\(strip.overflow)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(NotchTheme.textSecondary)
+                .help("\(strip.overflow) more sessions")
+        }
+    }
+
+    /// One session indicator: the CLI source icon inside a ring colored by the
+    /// session's phase — running pulses, attention states glow harder. Click
+    /// jumps to the host terminal; without a known host it expands the panel
+    /// onto this session instead.
+    private func sessionChip(_ chip: FABSessionChip) -> some View {
+        let color = statusColor(chip.phase)
+        return ZStack {
+            Circle()
+                .stroke(color, lineWidth: 2)
+                .modifier(PulseModifier(isActive: chip.phase == .processing || chip.phase == .compacting))
+            sourceIcon(chip.source, size: 11)
+        }
+        .frame(width: capsuleChipSize, height: capsuleChipSize)
+        .shadow(color: color.opacity(chip.phase.needsAttention ? 0.65 : 0.35), radius: capsuleChipSize / 3)
+        .contentShape(Circle())
+        .onTapGesture { chipTapped(chip) }
+        .onHover { setHovered(chip.id, hovering: $0) }
+    }
+
+    private func chipTapped(_ chip: FABSessionChip) {
+        guard let session = store.get(chip.id) else { return }
+        if chip.hasHost {
+            AppActivator.activate(
+                pid: session.launchingAppPID,
+                expectedBundleId: session.launchingAppBundleId
+            )
         } else {
-            ForEach(groups) { group in
-                HStack(spacing: 4) {
-                    statusCircle(
-                        statusColor(group.state),
-                        size: capsuleDotSize,
-                        hollow: false,
-                        pulsing: group.state.isRunning
-                    )
-                    capsuleCount(group.count)
-                }
-                .help(groupTooltip(group.state, group.count))
+            selectedSessionId = chip.id
+            // Chips are only hit-testable while collapsed, so the public
+            // toggle lands on expand — the private expand() isn't reachable.
+            controller?.toggleExpanded()
+        }
+    }
+
+    /// Keep the incoming hover unless a newer chip already took over — a
+    /// leave from the previous chip can arrive after the enter on the next.
+    private func setHovered(_ id: String, hovering: Bool) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            if hovering {
+                hoveredSessionId = id
+            } else if hoveredSessionId == id {
+                hoveredSessionId = nil
             }
+        }
+    }
+
+    /// Evlat-style hover peek: what this session is and where a click goes.
+    /// Mounted only while a chip is hovered and the panel is collapsed.
+    @ViewBuilder
+    private var hoverCard: some View {
+        if !isExpanded,
+           let chip = sessionStrip.chips.first(where: { $0.id == hoveredSessionId }),
+           let session = store.get(chip.id) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 7) {
+                    sourceBadge(session.source)
+                    Text(session.displayTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(NotchTheme.textPrimary)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(statusColor(chip.phase))
+                        .frame(width: 7, height: 7)
+                    Text(phaseLabel(chip.phase))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(NotchTheme.textSecondary)
+                    if let tool = session.currentTool, !tool.isEmpty {
+                        toolBadge(tool, tint: sourceTint(session.source))
+                    }
+                }
+                Text(chip.hasHost ? "Click to jump to terminal" : "Click for details")
+                    .font(.system(size: 9))
+                    .foregroundStyle(NotchTheme.textTertiary)
+            }
+            .padding(10)
+            .frame(width: 210, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(NotchTheme.panelBase.opacity(0.97))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(NotchTheme.stroke, lineWidth: 0.6)
+            )
+            .shadow(
+                color: .black.opacity(NotchConstants.openedShadowOpacity),
+                radius: NotchConstants.openedShadowRadius
+            )
+            .offset(y: NotchConstants.aiStatusFabCapsuleHeight + 10)
+            .transition(.opacity)
+        }
+    }
+
+    private func phaseLabel(_ phase: SessionPhase) -> String {
+        switch phase {
+        case .processing: "running"
+        case .compacting: "compacting"
+        case .waitingForApproval: "waiting for approval"
+        case .waitingForInput: "waiting for input"
+        case .idle, .ended: "idle"
         }
     }
 
@@ -241,22 +385,6 @@ struct AIStatusFABView: View {
         }
     }
 
-    private func groupTooltip(_ state: FABCapsuleState, _ count: Int) -> String {
-        switch state {
-        case .running: "\(count) running"
-        case .waitingApproval: count == 1 ? "1 approval" : "\(count) approvals"
-        case .waitingInput: "\(count) awaiting input"
-        case .done: "done"
-        }
-    }
-
-    private func capsuleCount(_ count: Int) -> some View {
-        Text("\(count)")
-            .font(.system(size: 12, weight: .bold, design: .rounded))
-            .monospacedDigit()
-            .foregroundStyle(NotchTheme.textPrimary)
-    }
-
     private func capsuleLabel(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 11, weight: .medium))
@@ -268,7 +396,9 @@ struct AIStatusFABView: View {
     @State private var selectedSessionId: String?
 
     private var selectedSession: AISessionState? {
-        if let id = selectedSessionId, let s = store.get(id) { return s }
+        if let id = selectedSessionId, let s = store.get(id) {
+            return s
+        }
         return engagedSessions.first
     }
 
@@ -299,10 +429,11 @@ struct AIStatusFABView: View {
     /// while expanded: the panel layer stays in the view tree at `opacity(0)`
     /// when collapsed, and an always-mounted strip would keep `UsageQuotaService`
     /// active (and polling) for as long as the capsule is on screen.
-    @ViewBuilder
     private var quotaStrip: some View {
         Group {
-            if isExpanded { AIStatusQuotaStrip() }
+            if isExpanded {
+                AIStatusQuotaStrip()
+            }
         }
         .frame(height: NotchConstants.aiStatusFabQuotaStripHeight)
         .frame(maxWidth: .infinity)
@@ -358,9 +489,9 @@ struct AIStatusFABView: View {
 
     private var headerStatusLabel: String {
         switch capsuleState {
-        case .running(let count): "\(count) running"
-        case .waitingApproval(let count): count == 1 ? "1 approval" : "\(count) approvals"
-        case .waitingInput(let count): "\(count) awaiting input"
+        case let .running(count): "\(count) running"
+        case let .waitingApproval(count): count == 1 ? "1 approval" : "\(count) approvals"
+        case let .waitingInput(count): "\(count) awaiting input"
         case .done: "done"
         }
     }
@@ -403,7 +534,6 @@ struct AIStatusFABView: View {
         }
     }
 
-    @ViewBuilder
     private func detailContent(_ session: AISessionState) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
@@ -577,7 +707,7 @@ struct AIStatusFABView: View {
 /// panel) acts immediately without a preliminary focus click.
 private struct DragHandleView: NSViewRepresentable {
     let onDrag: (NSEvent) -> Void
-    var onTap: (() -> Void)? = nil
+    var onTap: (() -> Void)?
 
     func makeNSView(context: Context) -> HandleView {
         HandleView(onDrag: onDrag, onTap: onTap)
@@ -599,11 +729,21 @@ private struct DragHandleView: NSViewRepresentable {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError() }
+        required init?(coder: NSCoder) {
+            fatalError()
+        }
 
-        override var acceptsFirstResponder: Bool { false }
-        override var isFlipped: Bool { true }
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override var acceptsFirstResponder: Bool {
+            false
+        }
+
+        override var isFlipped: Bool {
+            true
+        }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+            true
+        }
 
         override func mouseDown(with event: NSEvent) {
             // Only left-button is handled; let other buttons fall through.
@@ -620,7 +760,9 @@ private struct DragHandleView: NSViewRepresentable {
             // to `window.performDrag` — which runs its own tracking loop and
             // moves the window. Otherwise it's a click → onTap on release.
             while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
-                if next.type == .leftMouseUp { break }
+                if next.type == .leftMouseUp {
+                    break
+                }
                 let now = NSEvent.mouseLocation
                 if hypot(now.x - start.x, now.y - start.y) > threshold {
                     didDrag = true
