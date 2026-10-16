@@ -49,6 +49,11 @@ struct AISessionState: Identifiable {
     /// (opencode) and CLI runs with no GUI ancestor (tmux/ssh).
     var launchingAppPID: Int32?
     var launchingAppBundleId: String?
+    /// Tab-reveal URL captured from the CLI's inherited environment at event
+    /// time (`TabLink`): terminals that publish one (iTerm2, Warp, …) let a
+    /// jump land on the exact tab, not just the app. Never changes for the
+    /// process's lifetime, so it stays valid after the CLI exits.
+    var tabLinkURL: String?
     var lastParsedOffset: UInt64 = 0
     var subagentState = SubagentState()
 
@@ -73,8 +78,12 @@ struct AISessionState: Identifiable {
     }
 
     var displayTitle: String {
-        if let msg = firstUserMessage, !msg.isEmpty { return msg }
-        if let folder = projectFolder { return folder }
+        if let msg = firstUserMessage, !msg.isEmpty {
+            return msg
+        }
+        if let folder = projectFolder {
+            return folder
+        }
         return "Session \(id.prefix(8))"
     }
 
@@ -155,7 +164,9 @@ struct AISessionState: Identifiable {
 
     private func formatClaudeModel(_ model: String) -> String {
         var cleaned = model
-        if cleaned.hasPrefix("claude-") { cleaned = String(cleaned.dropFirst(6)) }
+        if cleaned.hasPrefix("claude-") {
+            cleaned = String(cleaned.dropFirst(6))
+        }
         if let range = cleaned.range(of: "-\\d{8,}$", options: .regularExpression) {
             cleaned = String(cleaned[..<range.lowerBound])
         }
@@ -171,7 +182,9 @@ struct AISessionState: Identifiable {
 
     private func formatGeminiModel(_ model: String) -> String {
         var cleaned = model
-        if cleaned.hasPrefix("gemini-") { cleaned = String(cleaned.dropFirst(6)) }
+        if cleaned.hasPrefix("gemini-") {
+            cleaned = String(cleaned.dropFirst(6))
+        }
         if let range = cleaned.range(of: "-\\d{8,}$", options: .regularExpression) {
             cleaned = String(cleaned[..<range.lowerBound])
         }
