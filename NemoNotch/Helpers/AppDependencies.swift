@@ -42,6 +42,7 @@ struct AppDependencies {
 
     let completionFlash: CompletionFlashService
     let aiStatus: AIStatusWindowController
+    let chatBubble: ChatBubbleController
     let lockScreenMonitor: LockScreenMonitor
     let lockScreenAIPanel: LockScreenAIPanelController?
 
@@ -152,11 +153,13 @@ struct AppDependencies {
             appSettings: settings,
             notificationMonitor: notificationPermission
         )
+        let chatBubble = ChatBubbleController(store: aiMonitor.store, aiMonitor: aiMonitor)
         let aiStatus = AIStatusWindowController(
             store: aiMonitor.store,
             appSettings: settings,
             usageQuota: usageQuota,
-            aiMonitor: aiMonitor
+            aiMonitor: aiMonitor,
+            chatBubble: chatBubble
         )
         // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
         // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
@@ -207,6 +210,7 @@ struct AppDependencies {
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
             aiStatus: aiStatus,
+            chatBubble: chatBubble,
             lockScreenMonitor: lockMonitor,
             lockScreenAIPanel: lockScreenAIPanel,
             bluetooth: bluetooth,
