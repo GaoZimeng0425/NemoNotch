@@ -13,17 +13,20 @@ final class AIStatusWindowController: NSObject {
     @ObservationIgnored private let appSettings: AppSettings
     @ObservationIgnored private let usageQuota: UsageQuotaService
     @ObservationIgnored private let aiMonitor: AICLIMonitorService
+    @ObservationIgnored private let chatBubble: ChatBubbleController
 
     init(
         store: AISessionStore,
         appSettings: AppSettings,
         usageQuota: UsageQuotaService,
-        aiMonitor: AICLIMonitorService
+        aiMonitor: AICLIMonitorService,
+        chatBubble: ChatBubbleController
     ) {
         self.store = store
         self.appSettings = appSettings
         self.usageQuota = usageQuota
         self.aiMonitor = aiMonitor
+        self.chatBubble = chatBubble
         super.init()
         LogService.info("AIStatusWindowController init", category: "AIStatusFAB")
         observe()
@@ -122,6 +125,7 @@ final class AIStatusWindowController: NSObject {
                         .environment(store)
                         .environment(appSettings)
                         .environment(usageQuota)
+                        .environment(chatBubble)
                         .environment(\.aiStatusController, self)
                 )
             )

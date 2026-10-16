@@ -9,6 +9,7 @@ import SwiftUI
 /// no flicker from re-hosting or `setFrame(animate:)`.
 struct AIStatusFABView: View {
     @Environment(AISessionStore.self) var store
+    @Environment(ChatBubbleController.self) var chatBubble
     @Environment(\.aiStatusController) var controller
 
     private var isExpanded: Bool {
@@ -516,6 +517,19 @@ struct AIStatusFABView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(NotchTheme.textSecondary)
             Spacer(minLength: 8)
+            Button {
+                chatBubble.show()
+            } label: {
+                Image(systemName: "bubble.left.and.text.bubble.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(NotchTheme.surface))
+                    .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("chat_bubble.open")
             Button {
                 controller?.collapse()
             } label: {
