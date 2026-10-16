@@ -139,7 +139,7 @@ enum WaitingReminder {
         guard enabled, authorized else {
             // Off (or no permission): retract anything still delivered so a
             // disabled reminder doesn't leave stale notifications behind.
-            plan.retract = Array(alreadyReminded)
+            plan.retract = alreadyReminded.sorted()
             return plan
         }
         for session in sessions where session.isWaiting {
