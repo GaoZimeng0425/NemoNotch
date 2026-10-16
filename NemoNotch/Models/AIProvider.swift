@@ -25,6 +25,11 @@ struct AISessionState: Identifiable {
     /// `AISessionStore.mutateOrCreate`.
     var source: AISource
     var phase: SessionPhase = .idle
+    /// When `phase` last changed — stamped by `AISessionStore` on every
+    /// mutation that moves the phase. Time-in-phase readers (waiting
+    /// reminder) key off this; nil means the session never left its initial
+    /// phase.
+    var phaseChangedAt: Date?
     var currentTool: String?
     var cwd: String?
     var lastMessage: String?

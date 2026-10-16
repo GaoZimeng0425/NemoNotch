@@ -1,8 +1,10 @@
 import SwiftUI
+import UserNotifications
 
-/// 提醒与动效:完成闪光 / 蓝牙·日历·充电动效开关。
+/// 提醒与动效:完成闪光 / 蓝牙·日历·充电动效 / 审批等待提醒开关。
 struct AlertsSettingsPage: View {
     @Environment(AppSettings.self) var appSettings
+    @Environment(NotificationPermissionMonitor.self) var notificationMonitor
 
     var body: some View {
         Form {
@@ -39,6 +41,29 @@ struct AlertsSettingsPage: View {
                     set: { appSettings.chargingCapsuleEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
+            }
+
+            Section("settings.waiting_reminder.header") {
+                Toggle("settings.waiting_reminder.enabled", isOn: Binding(
+                    get: { appSettings.waitingReminderEnabled },
+                    set: { appSettings.waitingReminderEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                Picker("settings.waiting_reminder.minutes", selection: Binding(
+                    get: { appSettings.waitingReminderMinutes },
+                    set: { appSettings.waitingReminderMinutes = $0 }
+                )) {
+                    Text("settings.waiting_reminder.1min").tag(1)
+                    Text("settings.waiting_reminder.2min").tag(2)
+                    Text("settings.waiting_reminder.5min").tag(5)
+                    Text("settings.waiting_reminder.10min").tag(10)
+                    Text("settings.waiting_reminder.20min").tag(20)
+                }
+                if notificationMonitor.status != .authorized {
+                    Text("settings.waiting_reminder.no_permission")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

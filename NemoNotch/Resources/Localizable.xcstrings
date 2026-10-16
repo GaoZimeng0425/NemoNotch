@@ -5688,6 +5688,182 @@
           }
         }
       }
+    },
+    "settings.waiting_reminder.header" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting approvals"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审批等待提醒"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.enabled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notify when a permission waits too long"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审批等待超时提醒"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.minutes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind after"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待时长"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.1min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 minute"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 分钟"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.2min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 minutes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 分钟"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.5min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 minutes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 分钟"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.10min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10 minutes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10 分钟"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.20min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "20 minutes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "20 分钟"
+          }
+        }
+      }
+    },
+    "settings.waiting_reminder.no_permission" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications are not authorized — enable them in System Settings to receive reminders."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未授权通知——请在系统设置中允许后才能收到提醒。"
+          }
+        }
+      }
+    },
+    "waiting_reminder.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for approval"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待审批"
+          }
+        }
+      }
+    },
+    "waiting_reminder.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” has been waiting for %@ approval for %d minutes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」等待 %@ 审批已 %d 分钟"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
