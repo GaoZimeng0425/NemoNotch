@@ -259,15 +259,21 @@ struct AIStatusFABView: View {
     }
 
     /// One session indicator: the CLI source icon inside a ring colored by the
-    /// session's phase — running pulses, attention states glow harder. Click
-    /// jumps to the host terminal; without a known host it expands the panel
-    /// onto this session instead.
+    /// session's phase — attention states glow harder. Click jumps to the host
+    /// terminal; without a known host it expands the panel onto this session
+    /// instead.
+    ///
+    /// Deliberately NO pulse on the ring: the ring's `repeatForever` animation
+    /// renders interpolated frames against the chip's layout origin, and chips
+    /// REORDER whenever phases flip (attention sort) — the stale-origin frames
+    /// showed up as ghost rings sliding between slots (captured on screen:
+    /// five rings for four chips). The head dot keeps its pulse; it is always
+    /// the first element, so its origin never changes.
     private func sessionChip(_ chip: FABSessionChip) -> some View {
         let color = statusColor(chip.phase)
         return ZStack {
             Circle()
                 .stroke(color, lineWidth: 2)
-                .modifier(PulseModifier(isActive: chip.phase == .processing || chip.phase == .compacting))
             sourceIcon(chip.source, size: 11)
         }
         .frame(width: capsuleChipSize, height: capsuleChipSize)
