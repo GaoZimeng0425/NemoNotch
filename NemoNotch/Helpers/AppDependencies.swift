@@ -178,6 +178,18 @@ struct AppDependencies {
             nil
         }
 
+        // 等待审批提醒:不发通知权限请求,只在已授权时投递,UI 测试下跳过。
+        let waitingReminder: WaitingReminderMonitor? = if !UITestMode.isActive {
+            WaitingReminderMonitor(
+                store: aiMonitor.store,
+                appSettings: settings,
+                permissionMonitor: notificationPermission
+            )
+        } else {
+            nil
+        }
+        waitingReminder?.start()
+
         return AppDependencies(
             settings: settings,
             media: media,

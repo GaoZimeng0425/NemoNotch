@@ -94,6 +94,8 @@ final class AppSettings {
     static let aiStatusFabEnabledKey = "aiStatusFabEnabled"
     static let aiStatusFabPositionKey = "aiStatusFabPosition"
     static let lockScreenAIPanelEnabledKey = "lockScreenAIPanelEnabled"
+    static let waitingReminderEnabledKey = "waitingReminderEnabled"
+    static let waitingReminderMinutesKey = "waitingReminderMinutes"
 
     var claudeEnabled: Bool {
         didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
@@ -157,6 +159,19 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(lockScreenAIPanelEnabled, forKey: Self.lockScreenAIPanelEnabledKey) }
     }
 
+    // MARK: - Waiting reminder
+
+    /// System-notification reminder when a session sits in waiting-for-approval
+    /// longer than `waitingReminderMinutes`. Default off — reminders nag by
+    /// design, so they are strictly opt-in.
+    var waitingReminderEnabled: Bool {
+        didSet { UserDefaults.standard.set(waitingReminderEnabled, forKey: Self.waitingReminderEnabledKey) }
+    }
+
+    var waitingReminderMinutes: Int {
+        didSet { UserDefaults.standard.set(waitingReminderMinutes, forKey: Self.waitingReminderMinutesKey) }
+    }
+
     // MARK: - Keep awake (合盖不休眠)
 
     static let keepAwakeLidDisplayOffKey = "keepAwake.lidDisplayOff"
@@ -198,7 +213,9 @@ final class AppSettings {
             .map { $0 == "openclaw" || $0 == "agents" ? Tab.claude.rawValue : $0 }
         let storedTabs = rawTabs?.compactMap { Tab(rawValue: $0) }
         var tabs = storedTabs.map(Set.init) ?? Set(Tab.allCases)
-        if storedTabs != nil { tabs.insert(.overview) }
+        if storedTabs != nil {
+            tabs.insert(.overview)
+        }
 
         enabledTabs = tabs
 
@@ -254,6 +271,10 @@ final class AppSettings {
             .object(forKey: Self.aiStatusFabEnabledKey) as? Bool ?? true
         lockScreenAIPanelEnabled = UserDefaults.standard
             .object(forKey: Self.lockScreenAIPanelEnabledKey) as? Bool ?? true
+        waitingReminderEnabled = UserDefaults.standard
+            .object(forKey: Self.waitingReminderEnabledKey) as? Bool ?? false
+        waitingReminderMinutes = UserDefaults.standard
+            .object(forKey: Self.waitingReminderMinutesKey) as? Int ?? 5
         keepAwakeLidDisplayOff = UserDefaults.standard
             .object(forKey: Self.keepAwakeLidDisplayOffKey) as? Bool ?? true
         keepAwakeRestoreOnQuit = UserDefaults.standard

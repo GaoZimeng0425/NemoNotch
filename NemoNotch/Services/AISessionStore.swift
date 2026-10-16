@@ -44,7 +44,9 @@ final class AISessionStore {
         sortedSessions.max { lhs, rhs in
             let lp = Self.priority(of: lhs.phase)
             let rp = Self.priority(of: rhs.phase)
-            if lp != rp { return lp < rp }
+            if lp != rp {
+                return lp < rp
+            }
             return lhs.lastEventTime < rhs.lastEventTime
         }
     }
@@ -62,7 +64,11 @@ final class AISessionStore {
     /// callers that need to create-or-mutate should `upsert` first.
     func mutate(_ id: String, _ block: (inout AISessionState) -> Void) {
         guard var session = sessions[id] else { return }
+        let previousPhase = session.phase
         block(&session)
+        if session.phase != previousPhase {
+            session.phaseChangedAt = Date()
+        }
         sessions[id] = session
         rebuildSorted()
     }
@@ -74,7 +80,11 @@ final class AISessionStore {
         // The caller's cli_source is authoritative: correct a session that a
         // different provider created first (the untagged-event phantom race).
         session.source = source
+        let previousPhase = session.phase
         block(&session)
+        if session.phase != previousPhase {
+            session.phaseChangedAt = Date()
+        }
         sessions[id] = session
         rebuildSorted()
         return session
@@ -82,7 +92,9 @@ final class AISessionStore {
 
     func remove(_ id: String) {
         sessions.removeValue(forKey: id)
-        if selectedSessionId == id { selectedSessionId = nil }
+        if selectedSessionId == id {
+            selectedSessionId = nil
+        }
         rebuildSorted()
     }
 
@@ -90,7 +102,9 @@ final class AISessionStore {
     /// hook, or when shutting it down for diagnostics.
     func removeAll(source: AISource) {
         sessions = sessions.filter { $0.value.source != source }
-        if let id = selectedSessionId, sessions[id] == nil { selectedSessionId = nil }
+        if let id = selectedSessionId, sessions[id] == nil {
+            selectedSessionId = nil
+        }
         rebuildSorted()
     }
 
