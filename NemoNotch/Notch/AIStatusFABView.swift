@@ -167,6 +167,10 @@ struct AIStatusFABView: View {
         20
     }
 
+    private var mascotSize: CGFloat {
+        16
+    }
+
     // MARK: - Layer 1: capsule content
 
     /// Aggregate capsule state — the most attention-needing phase across all
@@ -206,23 +210,28 @@ struct AIStatusFABView: View {
         }
     }
 
-    /// The pill's head: the aggregate-state dot and the ONLY drag surface —
-    /// the drag/click handle moved here now that each per-session chip handles
-    /// its own taps (a capsule-wide handle would swallow them). Tap = toggle
-    /// the panel. Everything quiet keeps the hollow-green "done" look during
-    /// the fade-out window.
+    /// The pill's head — the mascot slot: the app icon, the ONLY drag surface
+    /// and the tap-to-expand anchor (the drag/click handle moved here now that
+    /// each per-session chip handles its own taps; a capsule-wide handle would
+    /// swallow them). It deliberately shows NO aggregate state: the chips are
+    /// attention-ordered, so the first ring already is the worst state and a
+    /// winning-state dot in front was pure duplication. Everything quiet keeps
+    /// the hollow-green "done" look during the fade-out window, where it is
+    /// the strip's only content.
     private var capsuleHead: some View {
         HStack(spacing: 6) {
             if capsuleState == .done {
                 statusCircle(statusColor(.done), size: capsuleDotSize, hollow: true)
                 capsuleLabel("done")
             } else {
-                statusCircle(
-                    statusColor(capsuleState),
-                    size: capsuleDotSize + 4,
-                    hollow: false,
-                    pulsing: capsuleState.isRunning
-                )
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .frame(width: mascotSize, height: mascotSize)
+                    .clipShape(RoundedRectangle(cornerRadius: mascotSize * 0.28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: mascotSize * 0.28, style: .continuous)
+                            .stroke(NotchTheme.stroke, lineWidth: 0.6)
+                    )
             }
         }
         .frame(minWidth: 30)
