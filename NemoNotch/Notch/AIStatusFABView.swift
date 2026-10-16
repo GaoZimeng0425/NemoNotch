@@ -300,7 +300,8 @@ struct AIStatusFABView: View {
         if chip.hasHost {
             AppActivator.activate(
                 pid: session.launchingAppPID,
-                expectedBundleId: session.launchingAppBundleId
+                expectedBundleId: session.launchingAppBundleId,
+                tabLink: session.tabLinkURL
             )
         } else {
             selectedSessionId = chip.id
@@ -616,7 +617,8 @@ struct AIStatusFABView: View {
                     Button {
                         AppActivator.activate(
                             pid: session.launchingAppPID,
-                            expectedBundleId: session.launchingAppBundleId
+                            expectedBundleId: session.launchingAppBundleId,
+                            tabLink: session.tabLinkURL
                         )
                     } label: {
                         Image(systemName: "arrow.up.forward.app")

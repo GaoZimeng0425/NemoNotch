@@ -21,8 +21,20 @@ enum AppActivator {
     ///   - expectedBundleId: bundle id resolved alongside `pid` and cached on
     ///     the session; used to detect PID reuse. May be nil if the app had no
     ///     readable bundle id.
+    ///   - tabLink: tab-reveal URL captured from the CLI's environment
+    ///     (`TabLink`); when present and openable it wins — the terminal
+    ///     reveals its own tab, which is strictly more precise than pid
+    ///     activation (app-level at best otherwise).
     @MainActor
-    static func activate(pid: Int32?, expectedBundleId: String?) {
+    static func activate(pid: Int32?, expectedBundleId: String?, tabLink: String? = nil) {
+        // 0. Tab-level jump when the terminal published a link.
+        if let tabLink, let url = URL(string: tabLink) {
+            LogService.info("Jumping via tab link: \(tabLink)", category: "AppActivator")
+            if NSWorkspace.shared.open(url) {
+                return
+            }
+            LogService.warn("Tab link failed to open; falling back to app activation", category: "AppActivator")
+        }
         // 1. Prefer PID activation (precise to the window/process).
         if let pid, let app = NSRunningApplication(processIdentifier: pid) {
             if let expected = expectedBundleId,
@@ -66,6 +78,17 @@ enum AppActivator {
     /// clearing it on a transient miss.
     @MainActor
     static func recordHost(cliPID: Int32, on session: inout AISessionState) {
+        // Tab link first: it lives in the CLI's own inherited environment and
+        // never changes for the process's lifetime, so it is read only until
+        // captured. Independent of the GUI-host walk below (a CLI whose tree
+        // tops out at launchd can still carry one).
+        if session.tabLinkURL == nil, let url = TabLink.resolve(ProcessEnvironment.of(cliPID)) {
+            session.tabLinkURL = url.absoluteString
+            LogService.info(
+                "Tab link captured for \(session.id.prefix(8)): \(url.absoluteString)",
+                category: "AppActivator"
+            )
+        }
         guard let host = hostAppPID(of: cliPID) else { return }
         guard session.launchingAppPID != host else { return }
         session.launchingAppPID = host
@@ -84,7 +107,7 @@ enum AppActivator {
         var current = pid
         // Bound guards against pathological depth; real chains are ≤ ~6 hops
         // (hook bash → CLI → shell → login → terminal app).
-        for _ in 0..<16 {
+        for _ in 0 ..< 16 {
             if NSRunningApplication(processIdentifier: current) != nil {
                 return current
             }
