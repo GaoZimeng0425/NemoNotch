@@ -159,6 +159,9 @@ enum NotchConstants {
     static let aiStatusFabQuotaStripHeight: CGFloat = 52
     // Collapsed capsule geometry — corner radius = height/2 yields a pill.
     static let aiStatusFabCapsuleHeight: CGFloat = 32
+    /// Per-session chips visible on the collapsed strip before the rest folds
+    /// into a "+N" overflow chip (FABSessionStrip).
+    static let aiStatusFabChipCap = 6
     // Open/close spring durations match NotchCoordinator's notch transitions.
     static let aiStatusFabOpenSpringDuration: Double = 0.314
     static let aiStatusFabCloseSpringDuration: Double = 0.24
