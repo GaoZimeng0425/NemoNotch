@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// Borderless, non-activating floating panel for the AI-status FAB. Mirrors
 /// `NotchWindow`'s fixed-canvas approach: the window is sized ONCE to the full
@@ -7,6 +8,17 @@ import AppKit
 /// re-hosting or `setFrame(animate:)`. Click-through is handled by the
 /// `PassThroughView` contentView (transparent canvas regions return `nil` from
 /// `hitTest`, so they neither absorb clicks nor start drags).
+/// Hosting view that accepts the first mouse click. `NSHostingView`'s
+/// default rejects it, so the first click on the (non-activating, always
+/// on-top) capsule was consumed as a "focus click" and SwiftUI tap targets
+/// — session chips, hover-card buttons — never fired even though the
+/// NSView-level drag handle (which overrides this to true) worked fine.
+final class FABHostingView: NSHostingView<AnyView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+}
+
 final class AIStatusWindow: NSPanel {
     init() {
         // Canvas = panel size + shadow-blur room on both axes. Fixed for the
@@ -37,8 +49,20 @@ final class AIStatusWindow: NSPanel {
         animationBehavior = .none
     }
 
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
+    /// Key-accepting (Spotlight pattern, mirroring ChatBubblePanel): the
+    /// capsule gained SwiftUI tap targets (session chips, hover-card
+    /// buttons) and SwiftUI discrete gestures do not fire in a panel that
+    /// can never become key — taps were dead for every surface except the
+    /// NSView-level drag handle. A nonactivating panel takes key WITHOUT
+    /// activating the app, so clicking the capsule still never steals focus
+    /// from the terminal.
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
 
     /// Keep the fixed canvas on-screen during drags. The visible shape
     /// (capsule/panel) hugs the canvas's top-right corner, and a borderless
@@ -52,10 +76,18 @@ final class AIStatusWindow: NSPanel {
             return super.constrainFrameRect(frameRect, to: screen)
         }
         var rect = frameRect
-        if rect.maxX > visible.maxX { rect.origin.x = visible.maxX - rect.width }
-        if rect.minX < visible.minX { rect.origin.x = visible.minX }
-        if rect.maxY > visible.maxY { rect.origin.y = visible.maxY - rect.height }
-        if rect.minY < visible.minY { rect.origin.y = visible.minY }
+        if rect.maxX > visible.maxX {
+            rect.origin.x = visible.maxX - rect.width
+        }
+        if rect.minX < visible.minX {
+            rect.origin.x = visible.minX
+        }
+        if rect.maxY > visible.maxY {
+            rect.origin.y = visible.maxY - rect.height
+        }
+        if rect.minY < visible.minY {
+            rect.origin.y = visible.minY
+        }
         return super.constrainFrameRect(rect, to: screen)
     }
 }

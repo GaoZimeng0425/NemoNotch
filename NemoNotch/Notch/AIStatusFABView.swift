@@ -291,9 +291,19 @@ struct AIStatusFABView: View {
         }
         .frame(width: capsuleChipSize, height: capsuleChipSize)
         .shadow(color: color.opacity(chip.phase.needsAttention ? 0.65 : 0.35), radius: capsuleChipSize / 3)
-        .contentShape(Circle())
-        .onTapGesture { chipTapped(chip) }
-        .onHover { setHovered(chip.id, hovering: $0) }
+        // Tap + hover live in an AppKit overlay, NOT SwiftUI gestures:
+        // SwiftUI discrete taps never fire in this non-activating panel
+        // (NSHostingView rejects the first mouse and the panel is never
+        // first-responder through the SwiftUI path), while NSView
+        // mouseDown works — the head's drag handle always did. Hover is
+        // handled by the same view so both interactions share one event
+        // path.
+        .overlay(
+            ChipInteractView(
+                onTap: { chipTapped(chip) },
+                onHover: { setHovered(chip.id, hovering: $0) }
+            )
+        )
     }
 
     /// Tapping a chip opens the panel onto that session. Expand is the
@@ -304,6 +314,7 @@ struct AIStatusFABView: View {
     /// longer open the panel at all (reported, reverted same day).
     /// Jump-to-terminal lives in the hover card as an explicit button.
     private func chipTapped(_ chip: FABSessionChip) {
+        LogService.debug("chipTapped expand", category: "FABDebug")
         selectedSessionId = chip.id
         // Chips are only hit-testable while collapsed, so the public
         // toggle lands on expand — the private expand() isn't reachable.
@@ -793,6 +804,95 @@ struct AIStatusFABView: View {
         case .gemini: Color(red: 0.42, green: 0.68, blue: 1.0)
         case .opencode: Color(red: 0.55, green: 0.78, blue: 0.55)
         case .zcode: Color(red: 0.11, green: 0.44, blue: 0.96)
+        }
+    }
+}
+
+// MARK: - Chip interaction (AppKit)
+
+/// Transparent AppKit view owning a chip's tap and hover. `mouseDown`
+/// tracks to `mouseUp` and fires `onTap` (chips don't drag — dragging is
+/// the head's job); a tracking area drives `onHover` for the preview card.
+/// Everything here rides the same NSView event path as `DragHandleView`,
+/// which is the only event path that works in this non-activating panel.
+private struct ChipInteractView: NSViewRepresentable {
+    let onTap: () -> Void
+    let onHover: (Bool) -> Void
+
+    func makeNSView(context: Context) -> InteractView {
+        InteractView(onTap: onTap, onHover: onHover)
+    }
+
+    func updateNSView(_ view: InteractView, context: Context) {
+        view.onTap = onTap
+        view.onHover = onHover
+    }
+
+    final class InteractView: NSView {
+        var onTap: () -> Void
+        var onHover: (Bool) -> Void
+
+        init(onTap: @escaping () -> Void, onHover: @escaping (Bool) -> Void) {
+            self.onTap = onTap
+            self.onHover = onHover
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError()
+        }
+
+        override var acceptsFirstResponder: Bool {
+            false
+        }
+
+        override var isFlipped: Bool {
+            true
+        }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+            true
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for area in trackingAreas where area.userInfo?["hover"] != nil {
+                removeTrackingArea(area)
+            }
+            addTrackingArea(NSTrackingArea(
+                rect: bounds,
+                options: [
+                    .mouseEnteredAndExited,
+                    .mouseMoved,
+                    .activeInKeyWindow,
+                    .activeWhenFirstResponder,
+                    .inVisibleRect,
+                ],
+                owner: self,
+                userInfo: ["hover": "hover"]
+            ))
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            onHover(true)
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            onHover(false)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            LogService.debug("interact mouseDown", category: "FABDebug")
+            guard event.buttonNumber == 0 else {
+                super.mouseDown(with: event)
+                return
+            }
+            // Tap: wait for mouseUp (anywhere — a tiny slide off the 20pt
+            // chip still reads as the intended click).
+            let up = window?.nextEvent(matching: [.leftMouseUp])
+            LogService.debug("interact got up: \(up != nil)", category: "FABDebug")
+            onTap()
         }
     }
 }
