@@ -22,6 +22,13 @@ struct AlertsSettingsPage: View {
                     set: { appSettings.bluetoothToastEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
+                // 只在已明确拒绝时提示;notDetermined 下开开关会正常弹系统
+                // 授权框(那正是用户触发的时刻),不需要打扰。
+                if appSettings.bluetoothToastEnabled, BluetoothService.isDenied {
+                    Text("settings.bluetooth_alerts.no_permission")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 Toggle("settings.calendar_alerts.enabled", isOn: Binding(
                     get: { appSettings.calendarDueFlashEnabled },
                     set: { appSettings.calendarDueFlashEnabled = $0 }

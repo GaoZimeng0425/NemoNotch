@@ -5992,6 +5992,22 @@
           }
         }
       }
+    },
+    "settings.bluetooth_alerts.no_permission" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bluetooth permission was denied — allow it in System Settings → Privacy & Security → Bluetooth, then toggle this switch off and on."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝牙权限被拒绝——请在系统设置 → 隐私与安全性 → 蓝牙中允许,然后将本开关关闭再打开。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
