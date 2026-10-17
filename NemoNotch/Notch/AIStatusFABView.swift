@@ -249,7 +249,8 @@ struct AIStatusFABView: View {
         .overlay(
             DragHandleView(
                 onDrag: { controller?.beginWindowDrag(with: $0) },
-                onTap: { controller?.toggleExpanded() }
+                onTap: { controller?.toggleExpanded() },
+                disabled: isExpanded
             )
         )
     }
@@ -301,7 +302,8 @@ struct AIStatusFABView: View {
         .overlay(
             ChipInteractView(
                 onTap: { chipTapped(chip) },
-                onHover: { setHovered(chip.id, hovering: $0) }
+                onHover: { setHovered(chip.id, hovering: $0) },
+                disabled: isExpanded
             )
         )
     }
@@ -314,7 +316,6 @@ struct AIStatusFABView: View {
     /// longer open the panel at all (reported, reverted same day).
     /// Jump-to-terminal lives in the hover card as an explicit button.
     private func chipTapped(_ chip: FABSessionChip) {
-        LogService.debug("chipTapped expand", category: "FABDebug")
         selectedSessionId = chip.id
         // Chips are only hit-testable while collapsed, so the public
         // toggle lands on expand — the private expand() isn't reachable.
@@ -430,48 +431,36 @@ struct AIStatusFABView: View {
         .onHover { setHovered(chip.id, hovering: $0) }
     }
 
-    /// Explicit jump-to-terminal button in the hover card. The jump used to
-    /// be the chip tap itself; it moved here when chip taps became
-    /// expand-and-select (see chipTapped).
-    private func jumpButton(_ chip: FABSessionChip) -> some View {
-        Button {
-            guard let session = store.get(chip.id) else { return }
-            AppActivator.activate(
-                pid: session.launchingAppPID,
-                expectedBundleId: session.launchingAppBundleId,
-                tabLink: session.tabLinkURL
-            )
-        } label: {
-            Text(String(localized: "fab.jump"))
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(NotchTheme.accentText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3)
-                .background(NotchTheme.accentText.opacity(0.14))
-                .clipShape(Capsule(style: .continuous))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
     /// Tiny capsule button answering a permission from the hover card.
+    /// The tap rides ChipInteractView (NSView) — SwiftUI Buttons do not
+    /// fire in this non-activating panel.
     private func answerButton(_ chip: FABSessionChip, title: String, approved: Bool) -> some View {
         let tint: Color = approved
             ? Color(red: 0.30, green: 0.85, blue: 0.45)
             : Color(red: 1.0, green: 0.34, blue: 0.28)
-        return Button {
-            controller?.respondToPermission(sessionId: chip.id, approved: approved)
-        } label: {
-            Text(title)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(tint)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3)
-                .background(tint.opacity(0.16))
-                .clipShape(Capsule(style: .continuous))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        return NSButtonLabel(
+            title: title,
+            tint: tint,
+            onTap: { controller?.respondToPermission(sessionId: chip.id, approved: approved) }
+        )
+    }
+
+    /// Explicit jump-to-terminal button in the hover card. The jump used to
+    /// be the chip tap itself; it moved here when chip taps became
+    /// expand-and-select (see chipTapped).
+    private func jumpButton(_ chip: FABSessionChip) -> some View {
+        NSButtonLabel(
+            title: String(localized: "fab.jump"),
+            tint: NotchTheme.accentText,
+            onTap: {
+                guard let session = store.get(chip.id) else { return }
+                AppActivator.activate(
+                    pid: session.launchingAppPID,
+                    expectedBundleId: session.launchingAppBundleId,
+                    tabLink: session.tabLinkURL
+                )
+            }
+        )
     }
 
     private func phaseLabel(_ phase: SessionPhase) -> String {
@@ -562,48 +551,31 @@ struct AIStatusFABView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            headerDot
-            Text(headerStatusLabel)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(NotchTheme.textPrimary)
-            Text("· AI sessions")
-                .font(.system(size: 11))
-                .foregroundStyle(NotchTheme.textSecondary)
+            HStack(spacing: 8) {
+                headerDot
+                Text(headerStatusLabel)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                Text("· AI sessions")
+                    .font(.system(size: 11))
+                    .foregroundStyle(NotchTheme.textSecondary)
+            }
+            // Expanded-state drag surface: the title area only. Scoping it
+            // here keeps the trailing buttons clear — a full-row background
+            // handle ate their taps (the handle's mouseDown loop consumed
+            // mouseUp with a nil onTap).
+            .background(DragHandleView(onDrag: { controller?.beginWindowDrag(with: $0) }, disabled: !isExpanded))
+            .contentShape(Rectangle())
             Spacer(minLength: 8)
-            Button {
+            headerCircleButton("bubble.left.and.text.bubble.right", help: "chat_bubble.open") {
                 chatBubble.show()
-            } label: {
-                Image(systemName: "bubble.left.and.text.bubble.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(NotchTheme.surface))
-                    .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
-                    .contentShape(Circle())
             }
-            .buttonStyle(.plain)
-            .help("chat_bubble.open")
-            Button {
+            headerCircleButton("chevron.up", help: "Collapse") {
                 controller?.collapse()
-            } label: {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(NotchTheme.textSecondary)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(NotchTheme.surface))
-                    .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
-                    .contentShape(Circle())
             }
-            .buttonStyle(.plain)
-            .help("Collapse")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        // Expanded-state drag handle. `isMovableByWindowBackground` is false
-        // (so list-row taps don't start a drag); dragging is moved here, to the
-        // header, via performDrag. The collapse button sits above this
-        // background and still receives its taps normally.
-        .background(DragHandleView { controller?.beginWindowDrag(with: $0) })
     }
 
     /// Miniature of the capsule dot in the expanded header — same state color,
@@ -619,6 +591,20 @@ struct AIStatusFABView: View {
                 .frame(width: 8, height: 8)
                 .shadow(color: color.opacity(0.6), radius: 4)
         }
+    }
+
+    /// Circular header button whose tap rides the NSView path (SwiftUI
+    /// Buttons are dead in this panel — see NSButtonLabel).
+    private func headerCircleButton(_ systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(NotchTheme.textSecondary)
+            .frame(width: 20, height: 20)
+            .background(Circle().fill(NotchTheme.surface))
+            .overlay(Circle().stroke(NotchTheme.stroke, lineWidth: 0.6))
+            .contentShape(Circle())
+            .overlay(ChipInteractView(onTap: action, onHover: { _ in }))
+            .help(help)
     }
 
     private var headerStatusLabel: String {
@@ -826,6 +812,35 @@ struct AIStatusFABView: View {
     }
 }
 
+// MARK: - NSView-backed button
+
+/// A styled capsule label whose tap is delivered by an AppKit overlay
+/// (`ChipInteractView`) instead of a SwiftUI Button — SwiftUI discrete
+/// gestures do not fire in AIStatusWindow's non-activating panel.
+private struct NSButtonLabel: View {
+    let title: String
+    let tint: Color
+    let onTap: () -> Void
+
+    @State private var highlighted = false
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 3)
+            .background(tint.opacity(highlighted ? 0.30 : 0.16))
+            .clipShape(Capsule(style: .continuous))
+            .overlay(
+                ChipInteractView(
+                    onTap: onTap,
+                    onHover: { highlighted = $0 }
+                )
+            )
+    }
+}
+
 // MARK: - Chip interaction (AppKit)
 
 /// Transparent AppKit view owning a chip's tap and hover. `mouseDown`
@@ -833,17 +848,23 @@ struct AIStatusFABView: View {
 /// the head's job); a tracking area drives `onHover` for the preview card.
 /// Everything here rides the same NSView event path as `DragHandleView`,
 /// which is the only event path that works in this non-activating panel.
+/// Used for the hover card's buttons too — SwiftUI Buttons are dead in
+/// this window (same gesture gate as the chip taps were).
 private struct ChipInteractView: NSViewRepresentable {
     let onTap: () -> Void
     let onHover: (Bool) -> Void
+    var disabled: Bool = false
 
     func makeNSView(context: Context) -> InteractView {
-        InteractView(onTap: onTap, onHover: onHover)
+        let view = InteractView(onTap: onTap, onHover: onHover)
+        view.isHidden = disabled
+        return view
     }
 
     func updateNSView(_ view: InteractView, context: Context) {
         view.onTap = onTap
         view.onHover = onHover
+        view.isHidden = disabled
     }
 
     final class InteractView: NSView {
@@ -901,7 +922,6 @@ private struct ChipInteractView: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
-            LogService.debug("interact mouseDown", category: "FABDebug")
             guard event.buttonNumber == 0 else {
                 super.mouseDown(with: event)
                 return
@@ -909,7 +929,6 @@ private struct ChipInteractView: NSViewRepresentable {
             // Tap: wait for mouseUp (anywhere — a tiny slide off the 20pt
             // chip still reads as the intended click).
             let up = window?.nextEvent(matching: [.leftMouseUp])
-            LogService.debug("interact got up: \(up != nil)", category: "FABDebug")
             onTap()
         }
     }
@@ -932,14 +951,22 @@ private struct ChipInteractView: NSViewRepresentable {
 private struct DragHandleView: NSViewRepresentable {
     let onDrag: (NSEvent) -> Void
     var onTap: (() -> Void)?
+    /// True when the handle's layer is invisible (`.allowsHitTesting` does
+    /// NOT gate events delivered to NSViewRepresentable views — AppKit
+    /// dispatches mouseDown straight to the deepest platform view, so a
+    /// hidden-by-opacity handle kept eating clicks meant for the panel).
+    var disabled: Bool = false
 
     func makeNSView(context: Context) -> HandleView {
-        HandleView(onDrag: onDrag, onTap: onTap)
+        let view = HandleView(onDrag: onDrag, onTap: onTap)
+        view.isHidden = disabled
+        return view
     }
 
     func updateNSView(_ nsView: HandleView, context: Context) {
         nsView.onDrag = onDrag
         nsView.onTap = onTap
+        nsView.isHidden = disabled
     }
 
     final class HandleView: NSView {
