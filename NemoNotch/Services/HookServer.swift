@@ -188,7 +188,16 @@ final class HookServer {
         activeConnections.remove(id)
     }
 
-    private func receive(connection: NWConnection, accumulated: Data) {
+    /// Receive loop for one request. The accumulate/complete checks are pure
+    /// and run WITHOUT hopping to the main actor: if every chunk waited for a
+    /// MainActor turn, a busy main thread (long layout pass, dialog stall)
+    /// would stop the server reading, the sender's socket buffer would fill,
+    /// and a `--max-time`-capped curl (hook-sender.sh posts events with
+    /// `--max-time 2`) would abort mid-body — the truncated event then failed
+    /// to decode and was silently dropped (observed: a 65KB PostToolUse with
+    /// a base64 tool_response died exactly this way). Only the FINAL
+    /// processing needs the main actor.
+    private nonisolated func receive(connection: NWConnection, accumulated: Data) {
         connection
             .receive(minimumIncompleteLength: 1, maximumLength: 65536) {
                 [weak self] data, _, isComplete, error in
@@ -196,20 +205,21 @@ final class HookServer {
                 if let data {
                     buf.append(data)
                 }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    // 请求体积硬上限:超限即断,不再继续累积。
-                    if buf.count > Self.maxRequestBytes {
-                        retireConnection(connection)
-                        sendHTTP(connection, status: "413 Payload Too Large", body: #"{"status":"error"}"#)
-                        return
+                // 请求体积硬上限:超限即断,不再继续累积。
+                if buf.count > Self.maxRequestBytes {
+                    Task { @MainActor [weak self] in
+                        self?.retireConnection(connection)
+                        self?.sendHTTP(connection, status: "413 Payload Too Large", body: #"{"status":"error"}"#)
                     }
-                    if Self.hasCompleteHTTPRequest(buf) || isComplete || error != nil {
-                        retireConnection(connection)
-                        processRequest(buf, connection: connection)
-                    } else {
-                        receive(connection: connection, accumulated: buf)
+                    return
+                }
+                if Self.hasCompleteHTTPRequest(buf) || isComplete || error != nil {
+                    Task { @MainActor [weak self] in
+                        self?.retireConnection(connection)
+                        self?.processRequest(buf, connection: connection)
                     }
+                } else {
+                    self?.receive(connection: connection, accumulated: buf)
                 }
             }
     }
@@ -262,16 +272,25 @@ final class HookServer {
             LogService.debug("Received hook message: \(bodyData.count) bytes", category: "HookServer")
 
             let decoder = JSONDecoder()
-            if let event = try? decoder.decode(HookEvent.self, from: bodyData) {
+            do {
+                let event = try decoder.decode(HookEvent.self, from: bodyData)
                 onEventReceived?(event)
                 if event.hookEventName == "PermissionRequest" {
                     handlePermissionRequest(event, connection: connection)
                     return
                 }
                 sendJSON(connection, payload: .ack)
-            } else {
-                let snippet = String(bodyString.prefix(2000))
-                LogService.error("Failed to decode HookEvent: \(snippet)", category: "HookServer")
+            } catch {
+                // Log the decode ERROR itself (a typeMismatch names the JSON
+                // path) plus the body size — a size below the request's
+                // Content-Length means the sender aborted mid-body (e.g. the
+                // hook script's --max-time), which is the signature of the
+                // silently-dropped 65KB PostToolUse incident.
+                let snippet = String(bodyString.prefix(500))
+                LogService.error(
+                    "Failed to decode HookEvent: \(error) — body \(bodyData.count)B, head: \(snippet)",
+                    category: "HookServer"
+                )
                 sendJSON(connection, payload: .ack)
             }
             return
@@ -375,7 +394,7 @@ final class HookServer {
         let path = Self.tokenFilePath
         if let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
            let token = String(data: data, encoding: .utf8)?
-           .trimmingCharacters(in: .whitespacesAndNewlines),
+               .trimmingCharacters(in: .whitespacesAndNewlines),
            token.count >= 32 {
             return token
         }
