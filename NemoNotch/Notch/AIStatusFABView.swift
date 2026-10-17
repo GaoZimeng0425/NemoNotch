@@ -296,20 +296,18 @@ struct AIStatusFABView: View {
         .onHover { setHovered(chip.id, hovering: $0) }
     }
 
+    /// Tapping a chip opens the panel onto that session. Expand is the
+    /// capsule's primary action and must not depend on hitting the small
+    /// head: the first evlat-faithful revision made every chip a
+    /// jump-to-terminal shortcut instead, which shrank the panel affordance
+    /// to a ~30pt target that MOVES as chips come and go — users could no
+    /// longer open the panel at all (reported, reverted same day).
+    /// Jump-to-terminal lives in the hover card as an explicit button.
     private func chipTapped(_ chip: FABSessionChip) {
-        guard let session = store.get(chip.id) else { return }
-        if chip.hasHost {
-            AppActivator.activate(
-                pid: session.launchingAppPID,
-                expectedBundleId: session.launchingAppBundleId,
-                tabLink: session.tabLinkURL
-            )
-        } else {
-            selectedSessionId = chip.id
-            // Chips are only hit-testable while collapsed, so the public
-            // toggle lands on expand — the private expand() isn't reachable.
-            controller?.toggleExpanded()
-        }
+        selectedSessionId = chip.id
+        // Chips are only hit-testable while collapsed, so the public
+        // toggle lands on expand — the private expand() isn't reachable.
+        controller?.toggleExpanded()
     }
 
     /// Keep the incoming hover unless a newer chip already took over — a
@@ -364,17 +362,19 @@ struct AIStatusFABView: View {
                         toolBadge(tool, tint: sourceTint(session.source))
                     }
                 }
-                if chip.phase.isWaitingForApproval {
-                    // Answer from the capsule — the whole point of the amber
-                    // state; no need to open the notch or the terminal.
+                if chip.phase.isWaitingForApproval || chip.hasHost {
                     HStack(spacing: 6) {
-                        answerButton(chip, title: "Deny", approved: false)
-                        answerButton(chip, title: "Allow", approved: true)
+                        if chip.phase.isWaitingForApproval {
+                            // Answer from the capsule — the whole point of the
+                            // amber state; no need to open the notch or the
+                            // terminal.
+                            answerButton(chip, title: "Deny", approved: false)
+                            answerButton(chip, title: "Allow", approved: true)
+                        }
+                        if chip.hasHost {
+                            jumpButton(chip)
+                        }
                     }
-                } else {
-                    Text(chip.hasHost ? "Click to jump to terminal" : "Click for details")
-                        .font(.system(size: 9))
-                        .foregroundStyle(NotchTheme.textTertiary)
                 }
             }
             .padding(10)
@@ -399,6 +399,30 @@ struct AIStatusFABView: View {
             .onHover { setHovered(chip.id, hovering: $0) }
             .transition(.opacity)
         }
+    }
+
+    /// Explicit jump-to-terminal button in the hover card. The jump used to
+    /// be the chip tap itself; it moved here when chip taps became
+    /// expand-and-select (see chipTapped).
+    private func jumpButton(_ chip: FABSessionChip) -> some View {
+        Button {
+            guard let session = store.get(chip.id) else { return }
+            AppActivator.activate(
+                pid: session.launchingAppPID,
+                expectedBundleId: session.launchingAppBundleId,
+                tabLink: session.tabLinkURL
+            )
+        } label: {
+            Text(String(localized: "fab.jump"))
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(NotchTheme.accentText)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .background(NotchTheme.accentText.opacity(0.14))
+                .clipShape(Capsule(style: .continuous))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     /// Tiny capsule button answering a permission from the hover card.
