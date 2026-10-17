@@ -263,8 +263,10 @@ final class AppSettings {
             .object(forKey: Self.calendarDueFlashEnabledKey) as? Bool ?? true
         calendarDueLeadMinutes = UserDefaults.standard
             .object(forKey: Self.calendarDueLeadMinutesKey) as? Int ?? 0
+        // 默认关闭:开启后才碰 IOBluetooth,而碰它正是蓝牙 TCC 弹窗的触发时刻
+        // (BluetoothService.bind)。与 waitingReminderEnabled 的 opt-in 同理。
         bluetoothToastEnabled = UserDefaults.standard
-            .object(forKey: Self.bluetoothToastEnabledKey) as? Bool ?? true
+            .object(forKey: Self.bluetoothToastEnabledKey) as? Bool ?? false
         chargingCapsuleEnabled = UserDefaults.standard
             .object(forKey: Self.chargingCapsuleEnabledKey) as? Bool ?? true
         aiStatusFabEnabled = UserDefaults.standard

@@ -1,3 +1,4 @@
+import CoreBluetooth
 import Foundation
 import IOBluetooth
 
@@ -41,11 +42,16 @@ struct BluetoothDeviceEvent: Equatable {
 /// headphones qualify; BLE-only peripherals are not covered (that would need
 /// CoreBluetooth, with a different permission story). macOS 26 requires
 /// `NSBluetoothAlwaysUsageDescription` (set in pbxproj) and raises the
-/// Bluetooth TCC prompt on first use — the reason `start()` is skipped under
-/// `UITestMode.isTestHost`. IOBluetooth user notifications are NOT guaranteed
-/// to arrive on the runloop that registered them (see the IOBluetooth callbacks
-/// section below), so the @objc callbacks are `nonisolated` and hop to the
-/// main actor.
+/// Bluetooth TCC prompt the first time the process touches IOBluetooth — so
+/// `bind()` makes the 蓝牙动效 settings toggle the ONLY start source: the app
+/// never touches IOBluetooth (and thus never prompts, not even after a
+/// reinstall, where the changed ad-hoc signature resets TCC trust) until the
+/// user flips the toggle on, which is exactly when the prompt is legitimate.
+/// `start()` is additionally skipped under `UITestMode.isTestHost` — the
+/// process-modal prompt hangs the unit-test host before the runner connects.
+/// IOBluetooth user notifications are NOT guaranteed to arrive on the runloop
+/// that registered them (see the IOBluetooth callbacks section below), so the
+/// @objc callbacks are `nonisolated` and hop to the main actor.
 @MainActor
 @Observable
 final class BluetoothService: NSObject {
@@ -57,6 +63,11 @@ final class BluetoothService: NSObject {
     /// on connect (and seeded at start for already-connected devices) and
     /// dropped when the device disconnects.
     private var disconnectTokens: [String: IOBluetoothUserNotification] = [:]
+    /// `start()`'s dedicated monitor thread's runloop — `stop()` ends it with
+    /// `CFRunLoopStop` so toggle cycles don't park one idle thread each.
+    /// Captured on the monitor thread itself (`RunLoop.current` is
+    /// thread-local, so it must NOT be read from the main thread).
+    private var monitorRunLoop: RunLoop?
 
     /// Latest audio-device event to show as the notch capsule; nil = hidden.
     /// A new event overwrites the showing one and restarts the dwell.
@@ -77,6 +88,44 @@ final class BluetoothService: NSObject {
             }
             capsuleDismissTask?.cancel()
             LogService.info("BluetoothService deinit", category: "BluetoothService")
+        }
+    }
+
+    /// 授权被明确拒绝(弹窗选了不允许 / 系统设置里已关)。与 `.notDetermined`
+    /// 刻意区分:后者在用户打开开关时正常弹窗,不需要提示。`CBCentralManager
+    /// .authorization` 是类属性,只读 TCC 状态,不初始化协调器、绝不触发弹窗
+    /// —— 弹窗只属于用户开开关之后的 `start()`。设置页用它渲染被拒提示。
+    static var isDenied: Bool {
+        CBCentralManager.authorization == .denied || CBCentralManager.authorization == .restricted
+    }
+
+    /// 让设置开关成为监听生命周期的唯一驱动:开 = `start()`(未授权时系统弹窗
+    /// 就在此刻出现 —— 用户亲手触发),关 = `stop()` 注销全部监听。组合根在
+    /// 启动时调用一次;之前的版本是无条件 `start()`,那是「每次重装都弹蓝牙
+    /// 权限」的根源(重装 = 新 ad-hoc 签名 = TCC 视为陌生 app)。
+    func bind() {
+        observe()
+        applySetting()
+    }
+
+    /// Re-armable observation, mirroring WaitingReminderMonitor.observe():
+    /// re-arm BEFORE acting so a change during evaluation isn't lost.
+    private func observe() {
+        withObservationTracking {
+            _ = settings.bluetoothToastEnabled
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.observe()
+                self?.applySetting()
+            }
+        }
+    }
+
+    private func applySetting() {
+        if settings.bluetoothToastEnabled {
+            start()
+        } else {
+            stop()
         }
     }
 
@@ -112,18 +161,52 @@ final class BluetoothService: NSObject {
                     connectedAudioAddresses.append(address)
                 }
             }
+            // RunLoop.current 是线程本地的,必须在本线程读取、只把引用带回主线程。
+            let monitorRunLoop = RunLoop.current
             DispatchQueue.main.async {
                 observer.finishStartup(token: token, connectedAudioAddresses: connectedAudioAddresses)
+                observer.monitorRunLoop = monitorRunLoop
             }
-            // 常驻:经典蓝牙的连接通知要投递到本线程的 runloop。
+            // 常驻:经典蓝牙的连接通知要投递到本线程的 runloop;stop() 注销
+            // token 后用 CFRunLoopStop 结束它,否则线程滞留。
             RunLoop.current.run()
         }
+    }
+
+    /// 注销全部 IOBluetooth 监听并收尾胶囊与专用线程。幂等;未启动时 no-op。
+    /// (监听只随设置开关存在 —— 用户关掉开关,进程就不再持有任何蓝牙监听。)
+    func stop() {
+        guard started else { return }
+        started = false
+        connectToken?.unregister()
+        connectToken = nil
+        for token in disconnectTokens.values {
+            token.unregister()
+        }
+        disconnectTokens.removeAll()
+        capsuleDismissTask?.cancel()
+        capsuleEvent = nil
+        if let monitorRunLoop {
+            CFRunLoopStop(monitorRunLoop.getCFRunLoop())
+        }
+        monitorRunLoop = nil
+        LogService.info("Bluetooth monitoring stopped", category: "BluetoothService")
     }
 
     /// `start()` 的主线程收尾:落注册 token、为启动时已连接的音频设备挂断开监听。
     /// Devices already connected at launch get disconnect watchers but no
     /// capsule — that connection isn't news.
     private func finishStartup(token: IOBluetoothUserNotification?, connectedAudioAddresses: [String]) {
+        // stop() 可能在专用线程的收尾 hop 回主线程之前执行 —— 这时本次注册
+        // 立即作废,绝不能把 token 留在已停止的服务里(变相复活监听)。
+        guard started else {
+            token?.unregister()
+            LogService.info(
+                "Bluetooth startup finished after stop — registration discarded",
+                category: "BluetoothService"
+            )
+            return
+        }
         connectToken = token
         for address in connectedAudioAddresses {
             if let device = IOBluetoothDevice(addressString: address) {
@@ -211,8 +294,11 @@ final class BluetoothService: NSObject {
         }
     }
 
-    /// Main-actor side of the IOBluetooth callbacks above.
+    /// Main-actor side of the IOBluetooth callbacks above. `started` guard:
+    /// a callback already in flight when `stop()` ran must not re-register a
+    /// disconnect watcher on a stopped service.
     private func handleAudioConnect(name: String, address: String) {
+        guard started else { return }
         if !address.isEmpty {
             // IOBluetoothDevice(addressString:) is the Swift import of the
             // header's +deviceWithAddressString: — lookup-or-create; for a
@@ -230,6 +316,7 @@ final class BluetoothService: NSObject {
     }
 
     private func handleAudioDisconnect(name: String, address: String) {
+        guard started else { return }
         disconnectTokens.removeValue(forKey: address)
         showCapsule(name: name, isConnected: false)
     }
@@ -237,8 +324,7 @@ final class BluetoothService: NSObject {
     // MARK: - Helpers
 
     private func watchDisconnect(_ device: IOBluetoothDevice) {
-        guard let key = device.addressString, !key.isEmpty else { return }
-        guard disconnectTokens[key] == nil else { return }
+        guard let key = device.addressString, !key.isEmpty, disconnectTokens[key] == nil else { return }
         disconnectTokens[key] = device.register(
             forDisconnectNotification: self,
             selector: #selector(deviceDidDisconnect(_:device:))
