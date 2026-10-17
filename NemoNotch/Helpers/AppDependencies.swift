@@ -41,7 +41,7 @@ struct AppDependencies {
     // MARK: AI-derived events (cross-domain: consumes `aiMonitor.store` + `registry`)
 
     let completionFlash: CompletionFlashService
-    let aiStatus: AIStatusWindowController
+    let edgeBar: EdgeBarController
     let chatBubble: ChatBubbleController
     let lockScreenMonitor: LockScreenMonitor
     let lockScreenAIPanel: LockScreenAIPanelController?
@@ -156,13 +156,13 @@ struct AppDependencies {
             notificationMonitor: notificationPermission
         )
         let chatBubble = ChatBubbleController(store: aiMonitor.store, aiMonitor: aiMonitor)
-        let aiStatus = AIStatusWindowController(
+        let edgeBar = EdgeBarController(
             store: aiMonitor.store,
             appSettings: settings,
-            usageQuota: usageQuota,
             aiMonitor: aiMonitor,
             chatBubble: chatBubble
         )
+        edgeBar.start()
         // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
         // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
         let lockMonitor = LockScreenMonitor()
@@ -211,7 +211,7 @@ struct AppDependencies {
             system: system,
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
-            aiStatus: aiStatus,
+            edgeBar: edgeBar,
             chatBubble: chatBubble,
             lockScreenMonitor: lockMonitor,
             lockScreenAIPanel: lockScreenAIPanel,
@@ -256,7 +256,6 @@ struct AppDependencies {
                     .environment(pomodoro)
                     .environment(notificationPermission)
                     .environment(\.quickStartController, quickStart)
-                    .environment(\.aiStatusController, aiStatus)
             )
         }
     }

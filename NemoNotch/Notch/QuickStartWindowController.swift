@@ -35,7 +35,9 @@ final class QuickStartWindowController {
         if let window, window.isVisible {
             // Ignore the duplicate invocation that can arrive when the trigger button is
             // clicked from a background window (app activation replays the click).
-            if Date().timeIntervalSince(presentedAt) < dismissGrace { return }
+            if Date().timeIntervalSince(presentedAt) < dismissGrace {
+                return
+            }
             dismiss()
         } else {
             present(editingTask: nil)
@@ -130,7 +132,9 @@ final class QuickStartWindowController {
             Task { @MainActor in
                 guard let self, let window = self.window, window.isVisible else { return }
                 // Skip the click burst right after present (activation can replay it here).
-                if Date().timeIntervalSince(self.presentedAt) < self.dismissGrace { return }
+                if Date().timeIntervalSince(self.presentedAt) < self.dismissGrace {
+                    return
+                }
                 if !window.frame.contains(global) {
                     self.dismiss()
                 }
@@ -183,5 +187,4 @@ final class QuickStartWindowController {
 
 extension EnvironmentValues {
     @Entry var quickStartController: QuickStartWindowController?
-    @Entry var aiStatusController: AIStatusWindowController?
 }
