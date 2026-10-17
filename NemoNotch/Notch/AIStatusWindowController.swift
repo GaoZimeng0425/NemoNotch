@@ -7,7 +7,7 @@ final class AIStatusWindowController: NSObject {
     private(set) var isExpanded = false
 
     @ObservationIgnored private var window: AIStatusWindow?
-    @ObservationIgnored private var hostingController: NSHostingController<AnyView>?
+    @ObservationIgnored private var hostingView: FABHostingView?
     @ObservationIgnored private var hideTask: Task<Void, Never>?
     @ObservationIgnored private let store: AISessionStore
     @ObservationIgnored private let appSettings: AppSettings
@@ -118,8 +118,8 @@ final class AIStatusWindowController: NSObject {
         guard window == nil || !window!.isVisible else { return }
         let w = window ?? AIStatusWindow()
         window = w
-        if hostingController == nil {
-            let host = NSHostingController(
+        if hostingView == nil {
+            let host = FABHostingView(
                 rootView: AnyView(
                     AIStatusFABView()
                         .environment(store)
@@ -129,17 +129,17 @@ final class AIStatusWindowController: NSObject {
                         .environment(\.aiStatusController, self)
                 )
             )
-            host.view.wantsLayer = true
-            host.view.layer?.backgroundColor = NSColor.clear.cgColor
-            hostingController = host
+            host.wantsLayer = true
+            host.layer?.backgroundColor = NSColor.clear.cgColor
+            hostingView = host
             // Wrap the hosting view in a PassThroughView so empty canvas regions
             // click through to whatever is behind (mirrors NotchWindow). `isBlocking`
             // stays true: hitTest returns the SwiftUI subview for points that land on
             // interactive content, and nil for the transparent canvas.
             let passThrough = PassThroughView(frame: NSRect(origin: .zero, size: w.frame.size))
             passThrough.isBlocking = true
-            host.view.frame = passThrough.bounds
-            passThrough.addSubview(host.view)
+            host.frame = passThrough.bounds
+            passThrough.addSubview(host)
             w.contentView = passThrough
         }
         // Fixed canvas: do NOT call setContentSize(fittingSize) here — the window
