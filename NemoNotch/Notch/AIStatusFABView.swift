@@ -349,67 +349,85 @@ struct AIStatusFABView: View {
 
     /// Evlat-style hover peek: what this session is and where a click goes.
     /// Mounted only while a chip is hovered and the panel is collapsed.
-    @ViewBuilder
+    ///
+    /// Positioned by LAYOUT (a full-canvas container + top padding), never by
+    /// `.offset`: offset moves rendering only, so the card's hit-testing area
+    /// stayed glued to the top-trailing corner — invisibly covering the
+    /// rightmost chips. Every tap on a chip then landed on the card (no
+    /// gesture → swallowed), moving onto the visible card left its hit area
+    /// (card vanished), and the card's buttons were unclickable. Layout
+    /// placement puts hit area and pixels in the same place.
     private var hoverCard: some View {
-        if !isExpanded,
-           let chip = sessionStrip.chips.first(where: { $0.id == hoveredSessionId }),
-           let session = store.get(chip.id) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 7) {
-                    sourceBadge(session.source)
-                    Text(session.displayTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(NotchTheme.textPrimary)
-                        .lineLimit(1)
+        ZStack(alignment: .topTrailing) {
+            if !isExpanded,
+               let chip = sessionStrip.chips.first(where: { $0.id == hoveredSessionId }),
+               let session = store.get(chip.id) {
+                hoverCardContent(chip, session)
+                    .padding(.top, NotchConstants.aiStatusFabCapsuleHeight + 10)
+                    .transition(.opacity)
+            }
+        }
+        .frame(
+            width: NotchConstants.aiStatusFabPanelWidth + NotchConstants.aiStatusFabShadowPad * 2,
+            height: NotchConstants.aiStatusFabPanelHeight + NotchConstants.aiStatusFabShadowPad * 2,
+            alignment: .topTrailing
+        )
+    }
+
+    private func hoverCardContent(_ chip: FABSessionChip, _ session: AISessionState) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                sourceBadge(session.source)
+                Text(session.displayTitle)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+            }
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(statusColor(chip.phase))
+                    .frame(width: 7, height: 7)
+                Text(phaseLabel(chip.phase))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                if let tool = session.currentTool, !tool.isEmpty {
+                    toolBadge(tool, tint: sourceTint(session.source))
                 }
+            }
+            if chip.phase.isWaitingForApproval || chip.hasHost {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(statusColor(chip.phase))
-                        .frame(width: 7, height: 7)
-                    Text(phaseLabel(chip.phase))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(NotchTheme.textSecondary)
-                    if let tool = session.currentTool, !tool.isEmpty {
-                        toolBadge(tool, tint: sourceTint(session.source))
+                    if chip.phase.isWaitingForApproval {
+                        // Answer from the capsule — the whole point of the
+                        // amber state; no need to open the notch or the
+                        // terminal.
+                        answerButton(chip, title: "Deny", approved: false)
+                        answerButton(chip, title: "Allow", approved: true)
                     }
-                }
-                if chip.phase.isWaitingForApproval || chip.hasHost {
-                    HStack(spacing: 6) {
-                        if chip.phase.isWaitingForApproval {
-                            // Answer from the capsule — the whole point of the
-                            // amber state; no need to open the notch or the
-                            // terminal.
-                            answerButton(chip, title: "Deny", approved: false)
-                            answerButton(chip, title: "Allow", approved: true)
-                        }
-                        if chip.hasHost {
-                            jumpButton(chip)
-                        }
+                    if chip.hasHost {
+                        jumpButton(chip)
                     }
                 }
             }
-            .padding(10)
-            .frame(width: 210, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(NotchTheme.panelBase.opacity(0.97))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(NotchTheme.stroke, lineWidth: 0.6)
-            )
-            .shadow(
-                color: .black.opacity(NotchConstants.openedShadowOpacity),
-                radius: NotchConstants.openedShadowRadius
-            )
-            .offset(y: NotchConstants.aiStatusFabCapsuleHeight + 10)
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            // Hovering the card itself re-asserts the chip's hover — this is
-            // what keeps the card (and its answer buttons) alive while the
-            // pointer travels off the chip.
-            .onHover { setHovered(chip.id, hovering: $0) }
-            .transition(.opacity)
         }
+        .padding(10)
+        .frame(width: 210, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(NotchTheme.panelBase.opacity(0.97))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(NotchTheme.stroke, lineWidth: 0.6)
+        )
+        .shadow(
+            color: .black.opacity(NotchConstants.openedShadowOpacity),
+            radius: NotchConstants.openedShadowRadius
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // Hovering the card itself re-asserts the chip's hover — this is
+        // what keeps the card (and its answer buttons) alive while the
+        // pointer travels off the chip.
+        .onHover { setHovered(chip.id, hovering: $0) }
     }
 
     /// Explicit jump-to-terminal button in the hover card. The jump used to
