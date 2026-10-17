@@ -5976,6 +5976,22 @@
           }
         }
       }
+    },
+    "fab.jump" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jump to terminal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳转终端"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
