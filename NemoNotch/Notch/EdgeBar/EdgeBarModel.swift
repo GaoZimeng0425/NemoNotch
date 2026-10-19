@@ -91,7 +91,9 @@ enum EdgeBarModel {
                     name: session.projectFolder ?? session.displayTitle,
                     source: session.source,
                     phase: session.phase,
-                    hasHost: session.launchingAppPID != nil || session.launchingAppBundleId != nil,
+                    // A tab link alone can jump (AppActivator tries it first).
+                    hasHost: session.launchingAppPID != nil || session.launchingAppBundleId != nil
+                        || session.tabLinkURL != nil,
                     since: session.phaseChangedAt ?? session.lastEventTime
                 )
             }

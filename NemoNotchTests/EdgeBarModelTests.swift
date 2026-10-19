@@ -66,6 +66,13 @@ struct EdgeBarModelTests {
         #expect(content.rows.first?.since == Date(timeIntervalSince1970: 100))
     }
 
+    @Test func aTabLinkAloneCountsAsAHost() {
+        var s = session("a", phase: .processing)
+        #expect(EdgeBarModel.content(of: [s]).rows.first?.hasHost == false)
+        s.tabLinkURL = "iterm2:///session?id=1"
+        #expect(EdgeBarModel.content(of: [s]).rows.first?.hasHost == true)
+    }
+
     @Test func openWidthStaysWithinBounds() {
         #expect(EdgeBarModel.openWidth(of: .empty) == EdgeBarMetrics.barWidth)
         let short = EdgeBarModel.content(of: [session("a", phase: .processing, name: "a")])

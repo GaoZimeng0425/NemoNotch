@@ -125,7 +125,10 @@ enum AppActivator {
     /// no permission and no subprocess. Returns nil for exited/recycled pids.
     static func parentPID(of pid: pid_t) -> pid_t? {
         var info = kinfo_proc()
-        var size = 0
+        // The buffer's length IN: with 0 sysctl returns -1/ENOMEM and writes
+        // nothing — the walk never left the CLI pid (terminal-hosted sessions
+        // got no host, so no Go-to-session).
+        var size = MemoryLayout<kinfo_proc>.stride
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         guard sysctl(&mib, 4, &info, &size, nil, 0) == 0,
               size >= MemoryLayout<kinfo_proc>.stride,
