@@ -25,3 +25,4 @@ excluded:
   - .githooks
   - scripts
   - .scratch
+  - .worktree                              # git feat 的嵌套 worktree,别把副本当源码扫

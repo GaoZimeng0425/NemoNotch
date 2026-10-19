@@ -516,7 +516,7 @@ Category naming: use module name, e.g. `"MediaService"`, `"HookServer"`, `"Notch
 
 Workflow:
 
-1. New feature: `git feat xxx` → `cd ../NemoNotch-worktrees/xxx` → work and commit inside the worktree
+1. New feature: `git feat xxx` → `cd .worktree/xxx` → work and commit inside the worktree
 2. Finish: `git feat-done xxx` — runs the unit tests in the worktree first (Swift changes only; `NEMONOTCH_SKIP_TESTS=1` escapes), then auto-stashes the primary checkout's dirty state, merges into develop (`--no-ff`), restores the stash, tears the worktree down
 3. The `post-merge` hook then runs `./build.sh` automatically, so the installed app always matches develop
 4. Release: tag from main (`vX.Y.Z`)
@@ -533,7 +533,7 @@ Workflow:
 
 **Swift lint gate (eslint-style):** `scripts/lint.sh` = SwiftFormat (formatting, `.swiftformat`) + SwiftLint (analysis, `.swiftlint.yml`). Pre-commit runs it as `--staged --fix`: SwiftFormat auto-fixes staged files and re-stages them (files that also have unstaged changes are checked only, so partial staging never leaks unstaged hunks into the commit); SwiftLint **error**-level violations block the commit while warnings pass. Requires `brew install swiftlint swiftformat` — a missing tool **blocks** instead of silently skipping (no false green). Manual use: `sh scripts/lint.sh [--staged] [--fix]`.
 
-**Worktree workflow (parallel features):** `git feat <name>` **pulls latest first** — when local develop is purely behind `origin/develop` it fast-forwards the primary checkout's develop (`--ff-only --autostash`, so in-flight dirty files survive; a pull failure aborts the feat) — then creates `feature/<name>` off the refreshed develop in a sibling worktree at `../NemoNotch-worktrees/<name>` (diverged local/remote → warns and stays on local develop, the build/deploy source on this machine; primary checkout not on develop → warns and skips the pull); `git feat-done <name>` merges it back to `develop` (`--no-ff`), auto-stashing/restoring the primary checkout's dirty state around the merge, then tears the worktree down; `git feat-list` shows all worktrees. See `docs/git-worktree-workflow.md`.
+**Worktree workflow (parallel features):** `git feat <name>` **pulls latest first** — when local develop is purely behind `origin/develop` it fast-forwards the primary checkout's develop (`--ff-only --autostash`, so in-flight dirty files survive; a pull failure aborts the feat) — then creates `feature/<name>` off the refreshed develop in a worktree **nested inside the primary checkout at `.worktree/<name>`** (git-ignored and excluded in `.swiftlint.yml` / `.swiftformat`, so the whole-repo `scripts/lint.sh` never scans or formats the nested copy and `git add -A` can never stage it as an embedded repo; the sibling `../NemoNotch-worktrees/` layout was retired 2026-10-19) (diverged local/remote → warns and stays on local develop, the build/deploy source on this machine; primary checkout not on develop → warns and skips the pull); `git feat-done <name>` merges it back to `develop` (`--no-ff`), auto-stashing/restoring the primary checkout's dirty state around the merge, then tears the worktree down; `git feat-list` shows all worktrees. See `docs/git-worktree-workflow.md`.
 
 ### Testing
 
