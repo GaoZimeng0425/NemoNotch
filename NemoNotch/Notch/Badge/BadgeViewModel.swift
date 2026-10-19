@@ -37,27 +37,15 @@ final class BadgeViewModel {
     // MARK: - Computed
 
     var activeBadgeItems: [BadgeItem] {
-        var items: [BadgeItem] = []
-
-        let activeSessions = aiService.store.sortedSessions.filter { session in
-            let providerEnabled: Bool = switch session.source {
+        var items = BadgeItem.sessionItems(
+            aiService.store.sortedSessions,
+            edgeBarShown: appSettings.aiStatusFabEnabled
+        ) { [appSettings] source in
+            switch source {
             case .claude: appSettings.claudeEnabled
             case .gemini: appSettings.geminiEnabled
             case .opencode: appSettings.opencodeEnabled
             case .zcode: appSettings.zcodeEnabled
-            }
-            return providerEnabled && (session.phase.isActive || session.phase.needsAttention)
-        }
-
-        for session in activeSessions {
-            if session.phase.isWaitingForApproval {
-                items.append(.ai(
-                    source: session.source,
-                    status: .waiting,
-                    tool: session.phase.approvalToolName,
-                    waitingApproval: true,
-                    sessionID: session.id
-                ))
             }
         }
 
@@ -73,25 +61,19 @@ final class BadgeViewModel {
             items.append(.agents(agentID: agent.id, state: agent.state, emoji: agent.emoji))
         }
 
-        for session in activeSessions {
-            if !session.phase.isWaitingForApproval, session.status == .working {
-                items.append(.ai(
-                    source: session.source,
-                    status: session.status,
-                    tool: session.currentTool,
-                    waitingApproval: false,
-                    sessionID: session.id
-                ))
-            }
+        if mediaService.playbackState.isPlaying {
+            items.append(.media)
         }
-
-        if mediaService.playbackState.isPlaying { items.append(.media) }
         if let next = calendarService.nextEvent, !next.isPast {
             let minutes = Int(next.startDate.timeIntervalSinceNow / 60)
-            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes { items.append(.calendar) }
+            if minutes >= 0, minutes < NotchConstants.upcomingEventThresholdMinutes {
+                items.append(.calendar)
+            }
         }
         return items.sorted { lhs, rhs in
-            if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+            if lhs.priority != rhs.priority {
+                return lhs.priority < rhs.priority
+            }
             return lhs.id < rhs.id
         }
     }

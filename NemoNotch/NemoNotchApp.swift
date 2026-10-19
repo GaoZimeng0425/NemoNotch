@@ -194,7 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let notchCoordinator = NotchCoordinator(content: deps.notchContent())
         notchCoordinator.autoSelectTab = { [weak self] in
             guard let deps = self?.deps else { return nil }
-            if let session = deps.aiMonitor.activeSession, session.status == .working {
+            // With the edge bar on, running sessions are already in view there —
+            // opening the notch doesn't need to land on them.
+            if !deps.settings.aiStatusFabEnabled,
+               let session = deps.aiMonitor.activeSession, session.status == .working {
                 return .claude
             }
             if deps.registry.hasAnyActiveAgent {
