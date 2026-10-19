@@ -3,7 +3,9 @@ import SwiftUI
 /// Geometry for the edge bar, in one place (evlat-measured). Every measure
 /// along the edge is from the bar's TOP (the head's end of the drawn shape),
 /// never the window's: the window is a fixed envelope and the bar hangs in
-/// it at `EdgeBarController.barTop`.
+/// it at `EdgeBarController.barTop`. Across it, x is from the ANCHORED side
+/// (the screen edge, or a floating capsule's head end) — the right side is
+/// the same numbers mirrored.
 ///
 /// Rows are fixed-height, so hit-testing is pure arithmetic here — the
 /// controller reads the row under the cursor and the clicks from these
@@ -22,9 +24,9 @@ enum EdgeBarMetrics {
     /// Transparent room on the inner side for the shadow and around the card.
     static let gutter: CGFloat = 18
 
-    /// The body's silhouette: the notch shell's shape, docked left.
-    static var shape: BezelShape {
-        BezelShape(edge: .leading, flare: flare, corner: corner)
+    /// The body's silhouette: the notch shell's shape, docked to `side`.
+    static func shape(_ side: EdgeBarSide) -> BezelShape {
+        BezelShape(edge: side == .left ? .leading : .trailing, flare: flare, corner: corner)
     }
 
     // MARK: Head
@@ -134,6 +136,33 @@ enum EdgeBarMetrics {
         closedLength(slots: slotCount)
     }
 
+    // MARK: Capsule (floating)
+
+    /// The capsule is the closed bar laid on its side: as tall as the bar is
+    /// wide, its head exactly where an open panel's head is — so opening
+    /// moves no head, and one `isOverHead` serves both.
+    static var capsuleHeight: CGFloat {
+        barWidth
+    }
+
+    /// The capsule's top under the bar's top.
+    static var capsuleTop: CGFloat {
+        headTop - (barWidth - headSize) / 2
+    }
+
+    /// From the anchored end to the first ring: the head's margin, the head,
+    /// the gap a docked bar leaves under its head.
+    static var capsuleRingStart: CGFloat {
+        (barWidth - headSize) / 2 + headSize + ringTopGap
+    }
+
+    /// The capsule hugs what it holds, like the closed bar; the far end
+    /// keeps a ring's own inset.
+    static func capsuleLength(slots: Int) -> CGFloat {
+        guard slots > 0 else { return barWidth }
+        return capsuleRingStart + CGFloat(slots) * ringSize + CGFloat(slots - 1) * ringSpacing + ringLead
+    }
+
     // MARK: Card
 
     static let cardWidth: CGFloat = 320
@@ -146,6 +175,19 @@ enum EdgeBarMetrics {
     /// shadow's room.
     static var canvasWidth: CGFloat {
         maxOpenWidth + cardGap + cardWidth + gutter
+    }
+
+    /// A floating bar's envelope: the docked one plus the gutter behind the
+    /// anchored end (a docked bar's is the screen edge; a capsule's shadow
+    /// needs the room).
+    static var floatingCanvasWidth: CGFloat {
+        gutter + canvasWidth
+    }
+
+    /// How far an opened bar and its card reach from the anchored end — the
+    /// room a floating capsule needs on its open side.
+    static var reach: CGFloat {
+        canvasWidth
     }
 
     /// The card's top in canvas coordinates: level with its row (scrolled
@@ -223,15 +265,55 @@ enum EdgeBarMotion {
 
     /// The card comes out of the bar's side — a few points of travel away
     /// from the edge, a touch of growth, a fade — and leaves quicker.
-    static var cardTransition: AnyTransition {
+    static func cardTransition(_ side: EdgeBarSide) -> AnyTransition {
         .asymmetric(
             insertion: .opacity
-                .combined(with: .scale(scale: 0.96, anchor: .leading))
-                .combined(with: .offset(x: -cardTravel))
+                .combined(with: .scale(scale: 0.96, anchor: side.unitPoint))
+                .combined(with: .offset(x: -side.sign * cardTravel))
                 .animation(cardIn),
             removal: .opacity
-                .combined(with: .scale(scale: 0.98, anchor: .leading))
+                .combined(with: .scale(scale: 0.98, anchor: side.unitPoint))
                 .animation(cardOut)
         )
+    }
+
+    /// Docking, undocking: one form gives way to the other where it is.
+    static let form = Animation.easeOut(duration: 0.16)
+}
+
+/// The side, for layout: everything anchored on the left in the docked-left
+/// bar is anchored on `side` here.
+extension EdgeBarSide {
+    /// +1 when x grows away from the anchor, −1 when mirrored.
+    var sign: CGFloat {
+        self == .left ? 1 : -1
+    }
+
+    var edge: Edge.Set {
+        self == .left ? .leading : .trailing
+    }
+
+    var farEdge: Edge.Set {
+        self == .left ? .trailing : .leading
+    }
+
+    var horizontal: HorizontalAlignment {
+        self == .left ? .leading : .trailing
+    }
+
+    var alignment: Alignment {
+        self == .left ? .leading : .trailing
+    }
+
+    var topAlignment: Alignment {
+        self == .left ? .topLeading : .topTrailing
+    }
+
+    var bottomAlignment: Alignment {
+        self == .left ? .bottomLeading : .bottomTrailing
+    }
+
+    var unitPoint: UnitPoint {
+        self == .left ? .leading : .trailing
     }
 }

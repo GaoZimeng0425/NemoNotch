@@ -32,10 +32,39 @@ final class EdgeBarController: NSObject {
     private(set) var pressedButton: CardButton?
     /// The beat counter: runs only while a drawn ring is waiting.
     private(set) var beat = 0
-    /// Where the bar's top sits in the canvas, and the canvas height — set
-    /// by the dock cycle so view and window never disagree.
-    private(set) var barTop: CGFloat = 200
+    /// Where the bar lives: docked to a screen's left or right edge, or a
+    /// floating capsule anywhere.
+    private(set) var placement = EdgeBarPlacement.load(from: .standard)
+    /// Where the bar's top rests in the canvas, and the canvas height — set
+    /// by the dock cycle and the drag so view and window never disagree.
+    private(set) var restTop: CGFloat = 200
     private(set) var canvasHeight: CGFloat = 900
+
+    var side: EdgeBarSide {
+        placement.side
+    }
+
+    var isFloating: Bool {
+        placement.mode == .floating
+    }
+
+    /// The anchored side's inset in the canvas: a docked bar sits on the
+    /// window's edge; a capsule leaves the gutter for its shadow.
+    var anchorInset: CGFloat {
+        isFloating ? EdgeBarMetrics.gutter : 0
+    }
+
+    var canvasWidth: CGFloat {
+        isFloating ? EdgeBarMetrics.floatingCanvasWidth : EdgeBarMetrics.canvasWidth
+    }
+
+    /// Where the bar's top is drawn: where it rests, except an opened capsule
+    /// too low for its panel, which rises just enough to fit.
+    var barTop: CGFloat {
+        guard isFloating, isOpen else { return restTop }
+        let lowest = canvasHeight - EdgeBarMetrics.gutter - bodyLength + EdgeBarMetrics.flare
+        return max(EdgeBarMetrics.gutter - EdgeBarMetrics.flare, min(restTop, lowest))
+    }
 
     @ObservationIgnored private let store: AISessionStore
     @ObservationIgnored private let appSettings: AppSettings
@@ -134,10 +163,7 @@ final class EdgeBarController: NSObject {
         }
         rawUsageLines = EdgeBarUsage.lines(from: usageQuota.quotas, previous: rawUsageLines)
         fitUsage()
-        let width = EdgeBarModel.openWidth(of: next, usage: usageLines)
-        if width != openWidth {
-            openWidth = width
-        }
+        setIfChanged(\.openWidth, measuredOpenWidth(next))
         setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
         if let selectedRow, !next.rows.contains(where: { $0.id == selectedRow }) {
             deselect()
@@ -181,57 +207,113 @@ final class EdgeBarController: NSObject {
         applyDock()
     }
 
-    /// The bar pins to the BUILT-IN screen's left edge (external displays
-    /// here flap, and a bar on a dropped display is simply gone).
+    /// The placement's screen while it is connected; else the built-in one
+    /// (else the first) — a bar on a dropped display would simply be gone.
     private func dockScreen() -> NSScreen? {
-        NSScreen.screens.first(where: { CGDisplayIsBuiltin($0.displayID) != 0 }) ?? NSScreen.screens.first
+        if let id = placement.screen, let screen = NSScreen.screens.first(where: { $0.displayUUID == id }) {
+            return screen
+        }
+        return NSScreen.screens.first(where: { CGDisplayIsBuiltin($0.displayID) != 0 }) ?? NSScreen.screens.first
     }
 
     /// Frame, bar position and order: the envelope spans the visible height,
-    /// the bar's head sits where a full bar centred on the screen would start.
+    /// the bar's head sits where the user left it (a share of the height:
+    /// survives a resolution change or another screen), by default where a
+    /// full bar centred on the screen would start.
     func applyDock() {
         // A screen change landing mid-drag would yank the bar back.
         guard !isDragging, appSettings.aiStatusFabEnabled, let window, let screen = dockScreen() else { return }
         let visible = screen.visibleFrame
+        setIfChanged(\.canvasHeight, visible.height)
         let top: CGFloat
-        if let fraction = Self.storedTopFraction {
-            // Where the user dragged it, as a share of the height: survives a
-            // resolution change or another screen.
-            top = clampedTop(fraction * visible.height, canvasHeight: visible.height)
+        if let fraction = placement.top {
+            top = fraction * visible.height
         } else {
             let headScreenY = screen.frame.midY + EdgeBarMetrics.anchorLength / 2
             top = min(max(EdgeBarMetrics.gutter, visible.maxY - headScreenY), visible.height / 3)
         }
-        if top != barTop {
-            barTop = top
-        }
-        if visible.height != canvasHeight {
-            canvasHeight = visible.height
-        }
-        window.setFrame(NSRect(
-            x: visible.minX,
-            y: visible.minY,
-            width: EdgeBarMetrics.canvasWidth,
-            height: visible.height
-        ), display: true)
+        setIfChanged(\.restTop, isFloating ? clampedCapsuleTop(top) : clampedTop(top, canvasHeight: visible.height))
+        window.setFrame(envelope(on: visible), display: true)
         window.orderFrontRegardless()
         // The room under the bar may have changed: refit the usage block.
         fitUsage()
-        setIfChanged(\.openWidth, EdgeBarModel.openWidth(of: content, usage: usageLines))
+        setIfChanged(\.openWidth, measuredOpenWidth(content))
         updateBodyRect()
     }
 
-    /// The body's hover/hit rect: the TARGET size (open or closed), not the
-    /// animating one — so the strip an opening reveals already counts as
-    /// inside, and a closing body stops taking clicks at once.
-    private func updateBodyRect() {
-        let width = isOpen ? openWidth : EdgeBarMetrics.barWidth
-        hosting?.bodyRect = CGRect(x: 0, y: barTop, width: width, height: bodyLength)
+    /// The window: the visible height; across, from the docked edge, or
+    /// around a capsule's anchored end.
+    private func envelope(on visible: CGRect) -> NSRect {
+        let x: CGFloat = switch (placement.mode, side) {
+        case (.docked, .left):
+            visible.minX
+        case (.docked, .right):
+            visible.maxX - canvasWidth
+        case (.floating, .left):
+            clampedAnchor(visible.minX + placement.anchor * visible.width, visible: visible) - anchorInset
+        case (.floating, .right):
+            clampedAnchor(visible.minX + placement.anchor * visible.width, visible: visible) + anchorInset - canvasWidth
+        }
+        return NSRect(x: x, y: visible.minY, width: canvasWidth, height: visible.height)
     }
 
-    /// Usage cut to the room under the bar's top in the window.
+    /// A capsule's anchored end, kept where the whole capsule (at its
+    /// longest) stays on the screen.
+    private func clampedAnchor(_ x: CGFloat, visible: CGRect) -> CGFloat {
+        let longest = EdgeBarMetrics.capsuleLength(slots: EdgeBarMetrics.slotCount)
+        return side == .left
+            ? min(max(visible.minX, x), visible.maxX - longest)
+            : min(max(visible.minX + longest, x), visible.maxX)
+    }
+
+    /// A capsule's rest top: the capsule whole inside the canvas.
+    private func clampedCapsuleTop(_ top: CGFloat) -> CGFloat {
+        let lowest = canvasHeight - EdgeBarMetrics.capsuleHeight - EdgeBarMetrics.capsuleTop
+        return min(max(-EdgeBarMetrics.capsuleTop, top), lowest)
+    }
+
+    /// The open body's width, measured from the text. A capsule's panel is
+    /// never narrower than the capsule: the cursor on the capsule's far end
+    /// would be outside the panel it opened and fold it at once.
+    private func measuredOpenWidth(_ content: EdgeBarModel.Content) -> CGFloat {
+        let width = EdgeBarModel.openWidth(of: content, usage: usageLines)
+        return isFloating ? max(width, EdgeBarMetrics.capsuleLength(slots: content.closedSlots)) : width
+    }
+
+    /// The body's rect in the canvas at its TARGET size (open or closed),
+    /// not the animating one — so the strip an opening reveals already
+    /// counts as inside, and a closing body stops taking clicks at once.
+    private var bodyRect: CGRect {
+        let size: CGSize
+        let top: CGFloat
+        if !isFloating {
+            size = CGSize(width: isOpen ? openWidth : EdgeBarMetrics.barWidth, height: bodyLength)
+            top = barTop
+        } else if isOpen {
+            size = CGSize(width: openWidth, height: bodyLength - 2 * EdgeBarMetrics.flare)
+            top = barTop + EdgeBarMetrics.flare
+        } else {
+            size = CGSize(
+                width: EdgeBarMetrics.capsuleLength(slots: content.closedSlots),
+                height: EdgeBarMetrics.capsuleHeight
+            )
+            top = restTop + EdgeBarMetrics.capsuleTop
+        }
+        let x = side == .left ? anchorInset : canvasWidth - anchorInset - size.width
+        return CGRect(origin: CGPoint(x: x, y: top), size: size)
+    }
+
+    /// The hover/hit rect follows the body's target.
+    private func updateBodyRect() {
+        hosting?.bodyRect = bodyRect
+    }
+
+    /// Usage cut to the room the open body has: under a docked bar's top; a
+    /// capsule's panel rises to fit, so the canvas height.
     private func fitUsage() {
-        let room = canvasHeight - barTop - EdgeBarMetrics.gutter
+        let room = isFloating
+            ? canvasHeight - 2 * (EdgeBarMetrics.gutter - EdgeBarMetrics.flare)
+            : canvasHeight - restTop - EdgeBarMetrics.gutter
         let fitted = EdgeBarUsage.fitting(rawUsageLines, rows: content.rows.count, maxLength: room)
         setIfChanged(\.usageLines, fitted)
     }
@@ -275,9 +357,11 @@ final class EdgeBarController: NSObject {
         }
     }
 
-    /// Canvas point → bar coordinates (x from the edge, y from the bar's top).
+    /// Canvas point → bar coordinates (x from the anchored side, y from the
+    /// bar's top).
     private func barPoint(_ point: CGPoint) -> CGPoint {
-        CGPoint(x: point.x, y: point.y - barTop)
+        let anchor = side == .left ? anchorInset : canvasWidth - anchorInset
+        return CGPoint(x: (point.x - anchor) * side.sign, y: point.y - barTop)
     }
 
     private func row(at bar: CGPoint) -> String? {
@@ -355,7 +439,9 @@ final class EdgeBarController: NSObject {
         // Whole points: through its transition the frame moves by fractions
         // every frame, and each change rebuilds the tracking areas.
         var hoverRect = rect.integral
-        hoverRect.origin.x -= EdgeBarMetrics.cardGap
+        if side == .left {
+            hoverRect.origin.x -= EdgeBarMetrics.cardGap
+        }
         hoverRect.size.width += EdgeBarMetrics.cardGap
         hosting?.cardRect = hoverRect
     }
@@ -364,17 +450,14 @@ final class EdgeBarController: NSObject {
         buttonRects[button] = rect
     }
 
-    // MARK: - Drag (move the bar along the edge)
+    // MARK: - Drag (slide along the edge, or carry the capsule anywhere)
 
     /// Past this many points of travel a press on the body is a drag.
     static let dragThreshold: CGFloat = 4
-    private static let topFractionKey = "edgeBarTopFraction"
+    /// Pulled this far off its edge, a docked bar comes away as a capsule.
+    static let tearOff: CGFloat = 48
 
     @ObservationIgnored private var isDragging = false
-
-    private static var storedTopFraction: CGFloat? {
-        (UserDefaults.standard.object(forKey: topFractionKey) as? Double).map { CGFloat($0) }
-    }
 
     /// Kept where the OPEN body still fits below it — the longest list
     /// (7.5 rows and the summary); the usage block fits itself to what room
@@ -385,33 +468,48 @@ final class EdgeBarController: NSObject {
         return min(max(EdgeBarMetrics.gutter, top), max(EdgeBarMetrics.gutter, lowest))
     }
 
-    /// A press on the bar: on the body (not a card button) it may become a
-    /// drag that slides the bar along the edge; a press that never travels
-    /// is a click. The tracking loop runs the event-tracking runloop, so the
-    /// bar redraws while it follows the cursor.
+    /// A press on the body (not a card button) may become a drag. A docked
+    /// bar slides along its edge until pulled off it; a capsule — or a bar
+    /// pulled off — follows the cursor anywhere, across screens, and on
+    /// release docks to an edge it is near or floats where it is. A press
+    /// that never travels is a click. The tracking loop runs the
+    /// event-tracking runloop, so the bar redraws while it follows the cursor.
     private func mouseDown(at point: CGPoint) -> Bool {
-        let bar = barPoint(point)
-        let width = isOpen ? openWidth : EdgeBarMetrics.barWidth
-        guard let window, button(at: point) == nil,
-              CGRect(x: 0, y: 0, width: width, height: bodyLength).contains(bar)
+        guard let window, let hosting, button(at: point) == nil, hosting.bodyRect.contains(point)
         else { return click(at: point) }
 
         let start = NSEvent.mouseLocation
-        let startTop = barTop
+        let startTop = restTop
+        // A closed capsule is carried by the point pressed on it (from its
+        // anchored end's top corner); a docked bar or an opened panel by
+        // the head, the capsule's anchored end.
+        let body = hosting.bodyRect
+        let grab = isFloating && !isOpen
+            ? CGPoint(x: (point.x - (side == .left ? body.minX : body.maxX)) * side.sign, y: point.y - body.minY)
+            : CGPoint(x: EdgeBarMetrics.barWidth / 2, y: EdgeBarMetrics.capsuleHeight / 2)
         var dragging = false
+        var carrying = isFloating
         while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
             if next.type == .leftMouseUp {
                 break
             }
+            let cursor = NSEvent.mouseLocation
             // Screen y grows upward; the bar's top is measured downward.
-            let dy = start.y - NSEvent.mouseLocation.y
-            if !dragging, abs(dy) > Self.dragThreshold {
+            let dx = cursor.x - start.x
+            let dy = start.y - cursor.y
+            if !dragging {
+                guard max(abs(dx), abs(dy)) > Self.dragThreshold else { continue }
                 dragging = true
                 isDragging = true
                 hover.closeNow()
             }
-            if dragging {
-                setIfChanged(\.barTop, clampedTop(startTop + dy, canvasHeight: canvasHeight))
+            if !carrying, abs(dx) > Self.tearOff {
+                carrying = true
+            }
+            if carrying {
+                carry(to: cursor, grab: grab)
+            } else {
+                setIfChanged(\.restTop, clampedTop(startTop + dy, canvasHeight: canvasHeight))
                 updateBodyRect()
             }
         }
@@ -422,11 +520,69 @@ final class EdgeBarController: NSObject {
             return true
         }
         isDragging = false
-        UserDefaults.standard.set(Double(barTop / canvasHeight), forKey: Self.topFractionKey)
-        fitUsage()
-        updateBodyRect()
-        LogService.info("Edge bar moved to top \(Int(barTop)) / \(Int(canvasHeight))", category: "EdgeBar")
+        if carrying {
+            settle()
+        } else {
+            placement.top = restTop / canvasHeight
+        }
+        placement.save(to: .standard)
+        applyDock()
+        LogService.info(
+            "Edge bar placed: \(placement.mode.rawValue) \(placement.side.rawValue), top \(Int(restTop)) / \(Int(canvasHeight))",
+            category: "EdgeBar"
+        )
         return true
+    }
+
+    /// The capsule under the cursor, held by `grab`, on whichever screen the
+    /// cursor is over. Its anchored end follows the room: the left end while
+    /// the opened list and card fit to its right, else the right end.
+    private func carry(to cursor: CGPoint, grab: CGPoint) {
+        guard let window, let screen = NSScreen.screen(containing: cursor) ?? dockScreen() else { return }
+        let visible = screen.visibleFrame
+        let side = EdgeBarPlacement.floatingSide(
+            leftEnd: cursor.x - grab.x,
+            visible: visible,
+            reach: EdgeBarMetrics.reach,
+            current: isFloating ? side : .left
+        )
+        let anchor = cursor.x - side.sign * grab.x
+        setIfChanged(\.placement, EdgeBarPlacement(
+            mode: .floating,
+            side: side,
+            screen: screen.displayUUID,
+            top: placement.top,
+            anchor: (anchor - visible.minX) / max(1, visible.width)
+        ))
+        setIfChanged(\.canvasHeight, visible.height)
+        let capsuleTop = visible.maxY - cursor.y - grab.y
+        setIfChanged(\.restTop, clampedCapsuleTop(capsuleTop - EdgeBarMetrics.capsuleTop))
+        placement.top = restTop / visible.height
+        window.setFrame(envelope(on: visible), display: true)
+        setIfChanged(\.openWidth, measuredOpenWidth(content))
+        updateBodyRect()
+    }
+
+    /// Released: docked to an edge it was released near, else floating
+    /// where it is.
+    private func settle() {
+        guard let window, let screen = dockScreen() else { return }
+        let visible = screen.visibleFrame
+        let body = bodyRect
+        // Canvas (top-down) → screen (bottom-up).
+        let capsule = CGRect(
+            x: window.frame.minX + body.minX,
+            y: visible.maxY - body.maxY,
+            width: body.width,
+            height: body.height
+        )
+        setIfChanged(\.placement, EdgeBarPlacement.dropped(
+            capsule: capsule,
+            visible: visible,
+            side: side,
+            top: restTop / canvasHeight,
+            screen: screen.displayUUID
+        ))
     }
 
     // MARK: - Clicks and scroll
