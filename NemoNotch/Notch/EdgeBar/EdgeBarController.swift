@@ -173,7 +173,7 @@ final class EdgeBarController: NSObject {
                 .environment(self)
         ))
         hosting.onPointer = { [weak self] in self?.pointer($0) }
-        hosting.onClick = { [weak self] in self?.click(at: $0) ?? false }
+        hosting.onMouseDown = { [weak self] point, _ in self?.mouseDown(at: point) ?? false }
         hosting.onScroll = { [weak self] in self?.scroll(at: $0, deltaY: $1, precise: $2) ?? false }
         let window = EdgeBarWindow(frame: .zero, hosting: hosting)
         self.hosting = hosting
@@ -190,10 +190,18 @@ final class EdgeBarController: NSObject {
     /// Frame, bar position and order: the envelope spans the visible height,
     /// the bar's head sits where a full bar centred on the screen would start.
     func applyDock() {
-        guard appSettings.aiStatusFabEnabled, let window, let screen = dockScreen() else { return }
+        // A screen change landing mid-drag would yank the bar back.
+        guard !isDragging, appSettings.aiStatusFabEnabled, let window, let screen = dockScreen() else { return }
         let visible = screen.visibleFrame
-        let headScreenY = screen.frame.midY + EdgeBarMetrics.anchorLength / 2
-        let top = min(max(EdgeBarMetrics.gutter, visible.maxY - headScreenY), visible.height / 3)
+        let top: CGFloat
+        if let fraction = Self.storedTopFraction {
+            // Where the user dragged it, as a share of the height: survives a
+            // resolution change or another screen.
+            top = clampedTop(fraction * visible.height, canvasHeight: visible.height)
+        } else {
+            let headScreenY = screen.frame.midY + EdgeBarMetrics.anchorLength / 2
+            top = min(max(EdgeBarMetrics.gutter, visible.maxY - headScreenY), visible.height / 3)
+        }
         if top != barTop {
             barTop = top
         }
@@ -241,6 +249,10 @@ final class EdgeBarController: NSObject {
     // MARK: - Pointer
 
     private func pointer(_ pointer: EdgeBarHostingView.Pointer) {
+        // Mid-drag the cursor rides the bar: no opening, no rows.
+        if isDragging {
+            return
+        }
         switch pointer {
         case .entered:
             hover.pointerEntered()
@@ -350,6 +362,71 @@ final class EdgeBarController: NSObject {
 
     func buttonFrameChanged(_ button: CardButton, _ rect: CGRect?) {
         buttonRects[button] = rect
+    }
+
+    // MARK: - Drag (move the bar along the edge)
+
+    /// Past this many points of travel a press on the body is a drag.
+    static let dragThreshold: CGFloat = 4
+    private static let topFractionKey = "edgeBarTopFraction"
+
+    @ObservationIgnored private var isDragging = false
+
+    private static var storedTopFraction: CGFloat? {
+        (UserDefaults.standard.object(forKey: topFractionKey) as? Double).map { CGFloat($0) }
+    }
+
+    /// Kept where the OPEN body still fits below it — the longest list
+    /// (7.5 rows and the summary); the usage block fits itself to what room
+    /// is left (`fitUsage`), and the card clamps itself to the canvas.
+    private func clampedTop(_ top: CGFloat, canvasHeight: CGFloat) -> CGFloat {
+        let longest = EdgeBarMetrics.openLength(rows: Int(EdgeBarMetrics.visibleRows.rounded(.up)))
+        let lowest = canvasHeight - longest - EdgeBarMetrics.gutter
+        return min(max(EdgeBarMetrics.gutter, top), max(EdgeBarMetrics.gutter, lowest))
+    }
+
+    /// A press on the bar: on the body (not a card button) it may become a
+    /// drag that slides the bar along the edge; a press that never travels
+    /// is a click. The tracking loop runs the event-tracking runloop, so the
+    /// bar redraws while it follows the cursor.
+    private func mouseDown(at point: CGPoint) -> Bool {
+        let bar = barPoint(point)
+        let width = isOpen ? openWidth : EdgeBarMetrics.barWidth
+        guard let window, button(at: point) == nil,
+              CGRect(x: 0, y: 0, width: width, height: bodyLength).contains(bar)
+        else { return click(at: point) }
+
+        let start = NSEvent.mouseLocation
+        let startTop = barTop
+        var dragging = false
+        while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            if next.type == .leftMouseUp {
+                break
+            }
+            // Screen y grows upward; the bar's top is measured downward.
+            let dy = start.y - NSEvent.mouseLocation.y
+            if !dragging, abs(dy) > Self.dragThreshold {
+                dragging = true
+                isDragging = true
+                hover.closeNow()
+            }
+            if dragging {
+                setIfChanged(\.barTop, clampedTop(startTop + dy, canvasHeight: canvasHeight))
+                updateBodyRect()
+            }
+        }
+        // The loop consumed the mouse-up: whatever click() says, the press
+        // is ours (handing SwiftUI a down with no up would leave it stuck).
+        guard dragging else {
+            _ = click(at: point)
+            return true
+        }
+        isDragging = false
+        UserDefaults.standard.set(Double(barTop / canvasHeight), forKey: Self.topFractionKey)
+        fitUsage()
+        updateBodyRect()
+        LogService.info("Edge bar moved to top \(Int(barTop)) / \(Int(canvasHeight))", category: "EdgeBar")
+        return true
     }
 
     // MARK: - Clicks and scroll

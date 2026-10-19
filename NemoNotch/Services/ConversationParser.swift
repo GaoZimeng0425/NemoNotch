@@ -45,6 +45,20 @@ enum ConversationParser: ConversationParserProtocol {
         parseIncremental(filePath: filePath, fromOffset: 0)
     }
 
+    /// An offset `tailBytes` before the end, moved forward to just past the
+    /// next newline so parsing starts on a whole line; 0 for a short file.
+    static func lineAlignedOffset(filePath: String, tailBytes: UInt64) -> UInt64 {
+        guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return 0 }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd(), size > tailBytes else { return 0 }
+        let start = size - tailBytes
+        try? handle.seek(toOffset: start)
+        guard let data = try? handle.read(upToCount: Int(tailBytes)),
+              let newline = data.firstIndex(of: UInt8(ascii: "\n"))
+        else { return size }
+        return start + UInt64(newline - data.startIndex) + 1
+    }
+
     static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
         var result = ParseResult(
             messages: [],

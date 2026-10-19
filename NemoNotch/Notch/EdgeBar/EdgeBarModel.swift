@@ -71,24 +71,23 @@ enum EdgeBarModel {
         }
     }
 
-    /// Fold the store's sessions into bar content. Only engaged sessions
-    /// appear; attention-ordered (approval > running > input, ties by
-    /// recency) so the worst state is the first ring.
+    /// Fold the store's sessions into bar content: every session that has
+    /// not ended, idle ones included (grey, last).
+    ///
+    /// Order is evlat's: by layer — approval, running, parked at the prompt,
+    /// idle — and NEVER by an event stamp that moves while the phase holds
+    /// (every tool call refreshed it, so two running sessions swapped places
+    /// at event rate). Running and approval rows tie by session id (stable);
+    /// a parked or idle row by the moment it got there (it holds still),
+    /// newest first.
     static func content(of sessions: [AISessionState]) -> Content {
         let rows = sessions
-            .filter(\.phase.isEngaged)
-            .sorted { left, right in
-                let l = rank(left.phase)
-                let r = rank(right.phase)
-                if l != r {
-                    return l < r
-                }
-                return left.lastEventTime > right.lastEventTime
-            }
+            .filter { $0.phase != .ended }
+            .sorted(by: precedes)
             .map { session in
                 EdgeBarRow(
                     id: session.id,
-                    name: session.projectFolder ?? session.displayTitle,
+                    name: session.recordName ?? session.projectFolder ?? session.displayTitle,
                     source: session.source,
                     phase: session.phase,
                     // A tab link alone can jump (AppActivator tries it first).
@@ -100,18 +99,34 @@ enum EdgeBarModel {
         guard !rows.isEmpty else { return .empty }
 
         let waiting = rows.filter(\.phase.isWaitingForApproval).count
+        let running = rows.filter { layer($0.phase) == 1 }.count
         let summary = String(
             format: String(localized: "edge_bar.summary"),
-            rows.count, waiting, rows.count - waiting
+            rows.count, waiting, running
         )
         let slots = EdgeBarMetrics.slotCount
         let closed = rows.count > slots ? Array(rows.prefix(slots - 1)) : rows
         return Content(rows: rows, closedRows: closed, overflow: rows.count - closed.count, summary: summary)
     }
 
-    /// Sort key: waiting (approval) first, then running, then parked at the
-    /// prompt. Same priority the AI tab and the notch badges use.
-    private static func rank(_ phase: SessionPhase) -> Int {
+    static func precedes(_ left: AISessionState, _ right: AISessionState) -> Bool {
+        let l = layer(left.phase)
+        let r = layer(right.phase)
+        if l != r {
+            return l < r
+        }
+        if l >= 2 {
+            let lt = left.phaseChangedAt ?? left.lastEventTime
+            let rt = right.phaseChangedAt ?? right.lastEventTime
+            if lt != rt {
+                return lt > rt
+            }
+        }
+        return left.id < right.id
+    }
+
+    /// Approval, running, parked at the prompt, idle.
+    static func layer(_ phase: SessionPhase) -> Int {
         switch phase {
         case .waitingForApproval: 0
         case .processing, .compacting: 1

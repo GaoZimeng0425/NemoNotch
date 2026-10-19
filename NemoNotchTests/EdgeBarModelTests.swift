@@ -30,12 +30,29 @@ struct EdgeBarModelTests {
         #expect(content.overflow == 0)
     }
 
-    @Test func samePhaseBreaksTiesByRecency() {
+    @Test func runningRowsKeepTheirPlaceWhateverTheEventStamp() {
+        // "b" just ran a tool (newer stamp): it must not jump above "a".
         let content = EdgeBarModel.content(of: [
-            session("old", phase: .processing, at: 100),
-            session("new", phase: .processing, at: 200),
+            session("b", phase: .processing, at: 900),
+            session("a", phase: .processing, at: 100),
         ])
-        #expect(content.rows.map(\.id) == ["new", "old"])
+        #expect(content.rows.map(\.id) == ["a", "b"])
+    }
+
+    @Test func parkedAndIdleRowsAreNewestFinishFirstAndIdleLast() {
+        var parkedOld = session("p-old", phase: .waitingForInput)
+        parkedOld.phaseChangedAt = Date(timeIntervalSince1970: 10)
+        var parkedNew = session("p-new", phase: .waitingForInput)
+        parkedNew.phaseChangedAt = Date(timeIntervalSince1970: 20)
+        let idle = session("idle", phase: .idle)
+        let content = EdgeBarModel.content(of: [idle, parkedOld, parkedNew])
+        #expect(content.rows.map(\.id) == ["p-new", "p-old", "idle"])
+    }
+
+    @Test func recordNameWinsOverTheFolder() {
+        var s = session("a", phase: .idle, name: "proj")
+        s.recordName = "nemonotch-23"
+        #expect(EdgeBarModel.content(of: [s]).rows.first?.name == "nemonotch-23")
     }
 
     @Test func closedBarFoldsPastTheSlotsIntoACount() {
@@ -86,7 +103,18 @@ struct EdgeBarModelTests {
 
     @Test func emptyStoreGivesEmptyContent() {
         #expect(EdgeBarModel.content(of: []) == .empty)
-        #expect(EdgeBarModel.content(of: [session("idle", phase: .idle)]).rows.isEmpty)
+        #expect(EdgeBarModel.content(of: [session("gone", phase: .ended)]).rows.isEmpty)
+        #expect(EdgeBarModel.content(of: [session("idle", phase: .idle)]).rows.map(\.id) == ["idle"])
+    }
+
+    @Test func parkedAndIdleSessionsAreNotCountedAsRunning() {
+        let content = EdgeBarModel.content(of: [
+            session("a", phase: .waitingForApproval(.placeholder)),
+            session("b", phase: .processing),
+            session("c", phase: .waitingForInput),
+            session("d", phase: .idle),
+        ])
+        #expect(content.summary == String(format: String(localized: "edge_bar.summary"), 4, 1, 1))
     }
 
     @Test func summaryCountsWaitingAndRunning() {

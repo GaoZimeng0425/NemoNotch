@@ -62,8 +62,9 @@ final class EdgeBarHostingView: NSHostingView<AnyView> {
         set { relay.handler = newValue }
     }
 
-    /// A left click at a point; `true` = taken.
-    var onClick: ((CGPoint) -> Bool)?
+    /// A left mouse-down at a point, with its event (the controller may run
+    /// a drag from it); `true` = taken.
+    var onMouseDown: ((CGPoint, NSEvent) -> Bool)?
     /// A scroll at a point: `scrollingDeltaY`, and whether it is precise
     /// (trackpad points) or a notched wheel (lines). `true` = taken.
     var onScroll: ((CGPoint, CGFloat, Bool) -> Bool)?
@@ -115,7 +116,7 @@ final class EdgeBarHostingView: NSHostingView<AnyView> {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if event.buttonNumber == 0, !event.modifierFlags.contains(.control), onClick?(point) == true {
+        if event.buttonNumber == 0, !event.modifierFlags.contains(.control), onMouseDown?(point, event) == true {
             return
         }
         super.mouseDown(with: event)
