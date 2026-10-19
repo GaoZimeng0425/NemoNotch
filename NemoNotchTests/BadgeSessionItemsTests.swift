@@ -27,7 +27,7 @@ struct BadgeSessionItemsTests {
         ]
     }
 
-    @Test("Approval and working sessions get badges — unless the edge bar is up on this screen")
+    @Test("Approval and working sessions get badges — unless the edge bar is on")
     func badgesStepAsideForTheEdgeBar() {
         let shown = BadgeItem.sessionItems(all, edgeBarShown: false) { _ in true }
         #expect(shown.map(\.id).sorted() == [
