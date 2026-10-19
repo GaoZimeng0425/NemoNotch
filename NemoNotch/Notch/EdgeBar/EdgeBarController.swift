@@ -80,6 +80,9 @@ final class EdgeBarController: NSObject {
     private(set) var overflow = 0
     private(set) var summary = ""
     private(set) var cardRowId: String?
+    /// Height of the canvas the view draws into — set by the dock cycle, so
+    /// view and window can never disagree after a display change.
+    private(set) var canvasHeight: CGFloat = 900
 
     private let store: AISessionStore
     private let appSettings: AppSettings
@@ -109,14 +112,54 @@ final class EdgeBarController: NSObject {
         guard !started else { return }
         started = true
         observe()
-        show()
+        applyDock()
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.redock() }
+            Task { @MainActor [weak self] in self?.applyDock() }
         }
+        // Display sleep/wake cycles and unlock can leave the bar's window
+        // without a rendered surface or parked at a stale origin (flapping
+        // external displays do this every cycle) — re-assert the dock.
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.applyDock() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.applyDock() }
+        }
+    }
+
+    /// The bar pins to the BUILT-IN screen's left edge (the laptop's — the
+    /// external displays here flap, and a docked bar on a dropped display is
+    /// simply gone).
+    private func dockScreen() -> NSScreen? {
+        NSScreen.screens.first(where: { CGDisplayIsBuiltin($0.displayID) != 0 }) ?? NSScreen.main
+    }
+
+    /// Reset the window onto the dock screen: origin, size AND draw height,
+    /// then re-assert order (re-creates the rendered surface after display
+    /// reconfigurations).
+    func applyDock() {
+        show()
+        guard let window, let screen = dockScreen() else { return }
+        let vf = screen.visibleFrame
+        canvasHeight = vf.height
+        window.setFrame(NSRect(
+            origin: vf.origin,
+            size: CGSize(width: EdgeBarWindow.canvasWidth, height: vf.height)
+        ), display: true)
+        window.orderFrontRegardless()
+        updateHitRects()
     }
 
     // MARK: - Store observation
@@ -160,7 +203,7 @@ final class EdgeBarController: NSObject {
             window?.orderFrontRegardless()
             return
         }
-        guard let screen = NSScreen.main else { return }
+        guard let screen = dockScreen() else { return }
         let w = EdgeBarWindow(visibleFrame: screen.visibleFrame)
         let hit = EdgeBarHitView(frame: NSRect(origin: .zero, size: w.frame.size))
         hit.wantsLayer = true
@@ -179,14 +222,6 @@ final class EdgeBarController: NSObject {
         window = w
         w.orderFrontRegardless()
         updateHitRects()
-    }
-
-    private func redock() {
-        guard let window, let screen = NSScreen.main else { return }
-        window.setFrame(NSRect(
-            origin: screen.visibleFrame.origin,
-            size: window.frame.size
-        ), display: true)
     }
 
     /// Store read-through for the view (card content needs session detail
