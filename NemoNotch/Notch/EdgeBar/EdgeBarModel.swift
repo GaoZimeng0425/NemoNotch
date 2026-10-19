@@ -136,8 +136,11 @@ enum EdgeBarModel {
     /// longest name or status line (at its widest form, so the body doesn't
     /// move as minutes pass), or the summary line if wider — capped. With no
     /// row there is nothing to open for: the closed width.
-    static func openWidth(of content: Content) -> CGFloat {
-        guard !content.rows.isEmpty else { return EdgeBarMetrics.barWidth }
+    static func openWidth(of content: Content, usage: [EdgeBarUsageLine] = []) -> CGFloat {
+        let usageWidth = min(EdgeBarUsage.minWidth(usage), EdgeBarMetrics.maxOpenWidth)
+        guard !content.rows.isEmpty else {
+            return usage.isEmpty ? EdgeBarMetrics.barWidth : max(EdgeBarMetrics.minOpenWidth, usageWidth)
+        }
         let widest = content.rows.map { row in
             max(
                 textWidth(row.name, font: nameFont),
@@ -147,7 +150,7 @@ enum EdgeBarModel {
         let names = EdgeBarMetrics.openWidth(namesWidth: min(ceil(widest), EdgeBarMetrics.nameMaxWidth))
         let summary = ceil(textWidth(content.summary, font: summaryFont))
             + EdgeBarMetrics.ringLead + EdgeBarMetrics.nameInset
-        return min(max(names, summary), EdgeBarMetrics.maxOpenWidth)
+        return min(max(names, summary, usageWidth), EdgeBarMetrics.maxOpenWidth)
     }
 
     private static func textWidth(_ text: String, font: NSFont) -> CGFloat {

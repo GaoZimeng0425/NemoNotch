@@ -112,8 +112,13 @@ enum EdgeBarMetrics {
         return head + ringTopGap + CGFloat(slots) * ringSize + CGFloat(slots - 1) * ringSpacing
     }
 
-    /// The open body: the head, the visible list and the summary line.
-    static func openLength(rows: Int) -> CGFloat {
+    /// The open body: the head, the visible list and the summary line, the
+    /// usage block under them, closed by the same margin the head opens with.
+    /// With no session the block hangs under the head.
+    static func openLength(rows: Int, usageLines: Int = 0) -> CGFloat {
+        if usageLines > 0 {
+            return EdgeBarUsage.top(rows: rows) + EdgeBarUsage.height(lines: usageLines) + headTop
+        }
         guard rows > 0 else { return closedLength(slots: 0) }
         return summaryTop(rows: rows) + summaryHeight + headTop
     }

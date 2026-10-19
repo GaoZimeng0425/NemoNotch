@@ -159,6 +159,7 @@ struct AppDependencies {
         let edgeBar = EdgeBarController(
             store: aiMonitor.store,
             appSettings: settings,
+            usageQuota: usageQuota,
             aiMonitor: aiMonitor,
             chatBubble: chatBubble
         )

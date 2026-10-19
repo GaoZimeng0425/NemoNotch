@@ -28,6 +28,17 @@ struct EdgeBarView: View {
                     .padding(.top, EdgeBarMetrics.listTop)
                     .transition(.opacity.animation(EdgeBarMotion.namesOut))
             }
+            // Only while open (its minute tick never runs on the closed bar);
+            // comes and goes with the names, follows the list's length.
+            if bar.isOpen, !bar.usageLines.isEmpty {
+                EdgeBarUsageBlock(lines: bar.usageLines, width: bar.openWidth)
+                    .padding(.top, EdgeBarUsage.top(rows: bar.content.rows.count))
+                    .animation(EdgeBarMotion.length, value: bar.content.rows.count)
+                    .transition(.asymmetric(
+                        insertion: .opacity.animation(EdgeBarMotion.namesIn),
+                        removal: .opacity.animation(EdgeBarMotion.namesOut)
+                    ))
+            }
         }
     }
 
