@@ -62,6 +62,11 @@ struct AISessionState: Identifiable {
     /// PID reuse after the host quits. Both nil for plugin-based emitters
     /// (opencode) and CLI runs with no GUI ancestor (tmux/ssh).
     var launchingAppPID: Int32?
+    /// Set when the session is backed by a live Claude Code record
+    /// (`ClaudeSessionRecords`): its process, and the name Claude gave it.
+    /// Such a session lives exactly as long as that process.
+    var recordPID: Int32?
+    var recordName: String?
     var launchingAppBundleId: String?
     /// Tab-reveal URL captured from the CLI's inherited environment at event
     /// time (`TabLink`): terminals that publish one (iTerm2, Warp, …) let a

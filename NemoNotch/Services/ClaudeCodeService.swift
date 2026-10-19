@@ -10,6 +10,11 @@ final class ClaudeProvider: AIProvider {
     private let watcherManager = InterruptWatcherManager()
     private let agentWatcherManager = AgentFileWatcherManager()
     private var timeoutTimer: Timer?
+    private var recordTimer: Timer?
+    private var recordScanInFlight = false
+    /// Sessions a SessionEnd hook closed: their process may linger a beat
+    /// with its record still on disk — a poll must not bring them back.
+    private var endedSessionIds: Set<String> = []
     private weak var hookServer: HookServer?
     /// 每会话串行解析链:见 parseConversation 的说明。随会话回收(SessionEnd /
     /// stale 超时)清理,防止按会话 id 无界增长。
@@ -50,6 +55,101 @@ final class ClaudeProvider: AIProvider {
             LogService.info("Claude: discovered \(discovered.count) existing session(s)", category: "ClaudeProvider")
             scheduleTimeoutCleanup()
         }
+        startRecordPolling()
+    }
+
+    // MARK: - Session records (~/.claude/sessions)
+
+    static let recordPollInterval: TimeInterval = 3
+
+    /// Every live `claude` process, from its own record — idle ones and ones
+    /// started before NemoNotch included. A few small files every 3s, read
+    /// off the main actor.
+    private func startRecordPolling() {
+        guard recordTimer == nil, !UITestMode.isTestHost, !UITestMode.isActive else { return }
+        pollRecords()
+        let timer = Timer(timeInterval: Self.recordPollInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollRecords() }
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        recordTimer = timer
+    }
+
+    private func pollRecords() {
+        guard !recordScanInFlight else { return }
+        recordScanInFlight = true
+        Task { [weak self] in
+            let records = await Task.detached(priority: .utility) {
+                ClaudeSessionRecords.scanLive()
+            }.value
+            guard let self else { return }
+            recordScanInFlight = false
+            applyRecords(records)
+        }
+    }
+
+    /// Records → store: new live sessions appear, record-backed ones whose
+    /// process is gone leave, and the coarse status corrects an impossible
+    /// phase (`ClaudeRecordMerge`).
+    func applyRecords(_ records: [ClaudeSessionRecords.Record], now: Date = Date()) {
+        let live = Set(records.map(\.sessionId))
+        endedSessionIds.formIntersection(live)
+        for record in records where !endedSessionIds.contains(record.sessionId) {
+            let existing = store.get(record.sessionId)
+            let next = ClaudeRecordMerge.phase(
+                current: existing?.phase,
+                busy: record.busy,
+                silentFor: existing.map { now.timeIntervalSince($0.lastEventTime) } ?? .infinity
+            )
+            let isNew = existing == nil
+            let needsWrite = isNew || next != nil || existing?.recordPID != record.pid
+                || existing?.recordName != record.name
+            guard needsWrite else { continue }
+            store.mutateOrCreate(record.sessionId, source: .claude) { session in
+                session.recordPID = record.pid
+                session.recordName = record.name
+                if session.cwd == nil {
+                    session.cwd = record.cwd
+                }
+                if let next {
+                    session.phase = session.phase.transition(to: next)
+                }
+                if isNew {
+                    session.lastEventTime = now
+                }
+                AppActivator.recordHost(cliPID: record.pid, on: &session)
+            }
+            if isNew {
+                if let cwd = record.cwd {
+                    watcherManager.startWatching(sessionId: record.sessionId, cwd: cwd)
+                }
+                parseConversation(for: record.sessionId)
+                LogService.info(
+                    "Claude record: session \(record.sessionId.prefix(8)) (pid \(record.pid), \(record.name ?? "-"))",
+                    category: "ClaudeProvider"
+                )
+            }
+        }
+        // A record-backed session whose process is gone has ended.
+        for session in store.sessions(for: .claude) where session.recordPID != nil && !live.contains(session.id) {
+            endSession(session.id)
+            LogService.info(
+                "Claude record: session \(session.id.prefix(8)) ended (process gone)",
+                category: "ClaudeProvider"
+            )
+        }
+        if !records.isEmpty {
+            scheduleTimeoutCleanup()
+        }
+    }
+
+    private func endSession(_ sessionId: String) {
+        hookServer?.cancelPendingPermissions(sessionId: sessionId)
+        watcherManager.stopWatching(sessionId: sessionId)
+        agentWatcherManager.stopAll(sessionId: sessionId)
+        parseChains.removeValue(forKey: sessionId)
+        store.remove(sessionId)
     }
 
     /// 纯磁盘扫描 + 解析,不触碰任何 actor 隔离状态,可运行在任意线程。
@@ -244,11 +344,8 @@ final class ClaudeProvider: AIProvider {
             parseConversation(for: sessionId)
 
         case "SessionEnd":
-            hookServer?.cancelPendingPermissions(sessionId: sessionId)
-            watcherManager.stopWatching(sessionId: sessionId)
-            agentWatcherManager.stopAll(sessionId: sessionId)
-            parseChains.removeValue(forKey: sessionId)
-            store.remove(sessionId)
+            endedSessionIds.insert(sessionId)
+            endSession(sessionId)
 
         default:
             break
@@ -423,7 +520,10 @@ final class ClaudeProvider: AIProvider {
         let demoteCutoff = now.addingTimeInterval(-Self.silentDemoteThreshold)
         let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
 
-        for session in store.sessions(for: .claude) where session.lastEventTime < demoteCutoff {
+        // A record-backed session lives as long as its process; its record's
+        // status (`applyRecords`) is what corrects a stale phase.
+        for session in store.sessions(for: .claude)
+            where session.lastEventTime < demoteCutoff && session.recordPID == nil {
             // Demote ANY active phase, not just .waitingForInput — an aborted or
             // Stop-missed session stuck in .processing would otherwise spin for
             // up to 30 min (removeStaleThreshold).
@@ -444,7 +544,8 @@ final class ClaudeProvider: AIProvider {
             )
         }
 
-        for session in store.sessions(for: .claude) where session.lastEventTime < removeCutoff {
+        for session in store.sessions(for: .claude)
+            where session.lastEventTime < removeCutoff && session.recordPID == nil {
             watcherManager.stopWatching(sessionId: session.id)
             parseChains.removeValue(forKey: session.id)
             store.remove(session.id)
