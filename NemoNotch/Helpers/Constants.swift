@@ -197,7 +197,7 @@ enum NotchConstants {
     // Tab content
     static let tabContentPadding: CGFloat = 16
     static let tabBarTopPadding: CGFloat = 10
-    /// Notch shape corner radii (`NotchShape`). The top radius is the concave
+    /// Notch shape corner radii (`BezelShape`, `.top`). The top radius is the concave
     /// flare from the full-width top edge into the body — the shell's frame
     /// is `bodyWidth + 2 * topRadius` wide; the bottom radius is the body's
     /// convex corner. Both animate independently across open/close: the top
