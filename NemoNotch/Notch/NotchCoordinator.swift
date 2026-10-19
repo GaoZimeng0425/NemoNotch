@@ -19,7 +19,8 @@ final class NotchCoordinator {
     private var closeGraceTask: Task<Void, Never>?
     private var lastCloseAt: Date = .distantPast
     private var escMonitor: Any?
-    var autoSelectTab: (() -> Tab?)?
+    /// The tab to open on when none is asked for, given the screen opening.
+    var autoSelectTab: ((NSScreen) -> Tab?)?
     var appSettings: AppSettings?
     var restoreSuppressionCheck: (() -> Bool)?
     /// Fired every time the notch transitions from closed to opened, before the
@@ -193,7 +194,7 @@ final class NotchCoordinator {
         onOpen?()
         if let tab {
             selectedTab = tab
-        } else if let auto = autoSelectTab?() {
+        } else if let auto = autoSelectTab?(target) {
             selectedTab = auto
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)

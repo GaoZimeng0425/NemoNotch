@@ -29,7 +29,8 @@ struct BadgeDebounceTests {
                 appSettings: AppSettings(),
                 permissionMonitor: nil
             ),
-            appSettings: AppSettings()
+            appSettings: AppSettings(),
+            displayID: 0
         )
         vm.initialize()
         return vm

@@ -59,6 +59,39 @@ enum BadgeItem: Identifiable, Equatable {
         }
     }
 
+    /// The collapsed notch's AI-session badges: one per session of an enabled
+    /// provider that awaits approval or is working. None on the screen the
+    /// edge bar is up on — its rings already carry these sessions, so that
+    /// notch would only repeat them (and with no AI badge, its expanded glow
+    /// follows only agents). Other screens, or the bar switched off, keep them.
+    static func sessionItems(
+        _ sessions: [AISessionState],
+        edgeBarShown: Bool,
+        isEnabled: (AISource) -> Bool
+    ) -> [BadgeItem] {
+        guard !edgeBarShown else { return [] }
+        return sessions.compactMap { session in
+            guard isEnabled(session.source) else { return nil }
+            if session.phase.isWaitingForApproval {
+                return .ai(
+                    source: session.source,
+                    status: .waiting,
+                    tool: session.phase.approvalToolName,
+                    waitingApproval: true,
+                    sessionID: session.id
+                )
+            }
+            guard session.status == .working else { return nil }
+            return .ai(
+                source: session.source,
+                status: session.status,
+                tool: session.currentTool,
+                waitingApproval: false,
+                sessionID: session.id
+            )
+        }
+    }
+
     /// Decides the expanded-notch glow from the currently active badge set.
     /// Approval wins over running work; media / calendar / notification /
     /// pomodoro never glow. Pure function — input is the already
