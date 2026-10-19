@@ -1,28 +1,34 @@
-import Foundation
+import AppKit
 import SwiftUI
 
 /// Pure model of the edge bar's content: one row per engaged AI session,
-/// attention-ordered, plus the summary line. Drawn by `EdgeBarView`; decided
-/// here, unit-tested, no store or UI.
+/// attention-ordered, plus the closed bar's slots and the summary line.
+/// Drawn by `EdgeBarView`; decided here, unit-tested, no store or UI.
 struct EdgeBarRow: Identifiable, Equatable {
     let id: String
     let name: String
     let source: AISource
     let phase: SessionPhase
     let hasHost: Bool
-    /// Seconds the session has sat in its current phase.
-    let waited: TimeInterval
+    /// When the session entered its current phase (the status line's clock).
+    let since: Date
 }
 
 /// evlat's phase palette: idle grey, working white, waiting amber, review
-/// (waiting-for-input) green, failed red. NemoNotch has no failed phase.
+/// (waiting-for-input) green. NemoNotch has no failed phase.
 enum EdgeBarPalette {
+    static let body = Color.black
+    static let textPrimary = Color.white
+    static let textSecondary = Color(red: 0.5, green: 0.5, blue: 0.5)
+    static let amber = Color(red: 1.0, green: 0.72, blue: 0.18)
+    static let green = Color(red: 0.30, green: 0.85, blue: 0.45)
+
     static func phase(_ phase: SessionPhase) -> Color {
         switch phase {
-        case .processing, .compacting: Color(red: 0.95, green: 0.95, blue: 0.95) // working — white
-        case .waitingForApproval: Color(red: 1.0, green: 0.72, blue: 0.18) // waiting — amber
-        case .waitingForInput: Color(red: 0.36, green: 0.85, blue: 0.45) // review — green
-        case .idle, .ended: Color(red: 0.5, green: 0.5, blue: 0.5) // idle — grey
+        case .processing, .compacting: textPrimary
+        case .waitingForApproval: amber
+        case .waitingForInput: green
+        case .idle, .ended: textSecondary
         }
     }
 
@@ -48,22 +54,28 @@ enum EdgeBarPalette {
 
 enum EdgeBarModel {
     struct Content: Equatable {
+        /// Every engaged session, attention-ordered (the open list).
         var rows: [EdgeBarRow]
-        /// Sessions folded into "+N" (closed bar shows at most `cap` rings).
+        /// What the closed bar draws as rings (at most `slotCount`, the last
+        /// slot giving way to "+N" when more are folded).
+        var closedRows: [EdgeBarRow]
+        /// Sessions folded into "+N" on the closed bar.
         var overflow: Int
         var summary: String
 
-        static let empty = Content(rows: [], overflow: 0, summary: "")
-    }
+        static let empty = Content(rows: [], closedRows: [], overflow: 0, summary: "")
 
-    /// The closed bar shows at most this many rings (evlat's slotCount).
-    static let visibleCap = 4
+        /// Slots the closed bar uses: its rings, plus one for "+N".
+        var closedSlots: Int {
+            closedRows.count + (overflow > 0 ? 1 : 0)
+        }
+    }
 
     /// Fold the store's sessions into bar content. Only engaged sessions
     /// appear; attention-ordered (approval > running > input, ties by
     /// recency) so the worst state is the first ring.
-    static func content(of sessions: [AISessionState], now: Date = Date()) -> Content {
-        let ordered = sessions
+    static func content(of sessions: [AISessionState]) -> Content {
+        let rows = sessions
             .filter(\.phase.isEngaged)
             .sorted { left, right in
                 let l = rank(left.phase)
@@ -73,32 +85,26 @@ enum EdgeBarModel {
                 }
                 return left.lastEventTime > right.lastEventTime
             }
-
-        let rows = ordered.map { session in
-            EdgeBarRow(
-                id: session.id,
-                name: session.displayTitle,
-                source: session.source,
-                phase: session.phase,
-                hasHost: session.launchingAppPID != nil,
-                waited: now.timeIntervalSince(session.phaseChangedAt ?? session.lastEventTime)
-            )
-        }
+            .map { session in
+                EdgeBarRow(
+                    id: session.id,
+                    name: session.projectFolder ?? session.displayTitle,
+                    source: session.source,
+                    phase: session.phase,
+                    hasHost: session.launchingAppPID != nil || session.launchingAppBundleId != nil,
+                    since: session.phaseChangedAt ?? session.lastEventTime
+                )
+            }
+        guard !rows.isEmpty else { return .empty }
 
         let waiting = rows.filter(\.phase.isWaitingForApproval).count
-        let running = rows.count - waiting
-        var summary = ""
-        if !rows.isEmpty {
-            summary = String(
-                format: String(localized: "edge_bar.summary"),
-                rows.count, waiting, running
-            )
-        }
-
-        guard rows.count > visibleCap else {
-            return Content(rows: rows, overflow: 0, summary: summary)
-        }
-        return Content(rows: Array(rows.prefix(visibleCap)), overflow: rows.count - visibleCap, summary: summary)
+        let summary = String(
+            format: String(localized: "edge_bar.summary"),
+            rows.count, waiting, rows.count - waiting
+        )
+        let slots = EdgeBarMetrics.slotCount
+        let closed = rows.count > slots ? Array(rows.prefix(slots - 1)) : rows
+        return Content(rows: rows, closedRows: closed, overflow: rows.count - closed.count, summary: summary)
     }
 
     /// Sort key: waiting (approval) first, then running, then parked at the
@@ -110,5 +116,41 @@ enum EdgeBarModel {
         case .waitingForInput: 2
         case .idle, .ended: 3
         }
+    }
+
+    // MARK: - Measured open width
+
+    static var nameFont: NSFont {
+        .systemFont(ofSize: 11, weight: .medium)
+    }
+
+    static var statusFont: NSFont {
+        .monospacedDigitSystemFont(ofSize: 9, weight: .regular)
+    }
+
+    static var summaryFont: NSFont {
+        .systemFont(ofSize: 9, weight: .medium)
+    }
+
+    /// The open body's width, measured from the text it will hold: the
+    /// longest name or status line (at its widest form, so the body doesn't
+    /// move as minutes pass), or the summary line if wider — capped. With no
+    /// row there is nothing to open for: the closed width.
+    static func openWidth(of content: Content) -> CGFloat {
+        guard !content.rows.isEmpty else { return EdgeBarMetrics.barWidth }
+        let widest = content.rows.map { row in
+            max(
+                textWidth(row.name, font: nameFont),
+                textWidth(EdgeBarPalette.statusLine(row.phase, waited: 99 * 60), font: statusFont)
+            )
+        }.max() ?? 0
+        let names = EdgeBarMetrics.openWidth(namesWidth: min(ceil(widest), EdgeBarMetrics.nameMaxWidth))
+        let summary = ceil(textWidth(content.summary, font: summaryFont))
+            + EdgeBarMetrics.ringLead + EdgeBarMetrics.nameInset
+        return min(max(names, summary), EdgeBarMetrics.maxOpenWidth)
+    }
+
+    private static func textWidth(_ text: String, font: NSFont) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: font]).width
     }
 }

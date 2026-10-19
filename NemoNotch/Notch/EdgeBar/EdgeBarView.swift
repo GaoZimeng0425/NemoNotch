@@ -1,288 +1,231 @@
 import AppKit
 import SwiftUI
 
-/// The edge bar's drawing. Pure SwiftUI for pixels; every interaction is an
-/// NSView overlay (`BarInteractView`) — SwiftUI gestures and Buttons never
-/// fire in this non-activating panel.
+/// The edge bar's drawing. Takes no events (the hosting view routes them by
+/// geometry); every layout here is pinned to the screen edge and the bar's
+/// top, so the window never moves anything — opening is the shape's inner
+/// edge travelling into the screen while names fade in beside rings that
+/// never move.
 struct EdgeBarView: View {
-    @Environment(EdgeBarController.self) var controller
-
-    /// Canvas height: set by the controller's dock cycle (window and view
-    /// can never disagree after a display change).
-    private var canvasHeight: CGFloat {
-        controller.canvasHeight
-    }
-
-    private var slots: Int {
-        min(controller.rows.count, EdgeBarModel.visibleCap) + (controller.overflow > 0 ? 1 : 0)
-    }
-
-    private var bodyWidth: CGFloat {
-        EdgeBarMetrics.bodyWidth(isOpen: controller.isOpen)
-    }
-
-    private var bodyLength: CGFloat {
-        EdgeBarMetrics.drawnLength(slots: slots)
-    }
+    @Environment(EdgeBarController.self) private var bar
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            barLayer
+                .padding(.top, bar.barTop)
+            EdgeBarCardLayer()
+        }
+        .frame(width: EdgeBarMetrics.canvasWidth, height: bar.canvasHeight, alignment: .topLeading)
+    }
+
+    private var barLayer: some View {
+        ZStack(alignment: .topLeading) {
             bodyShape
-            barContent
-            if controller.cardRowId != nil {
-                card
+            head
+                .padding(.top, EdgeBarMetrics.headTop)
+            if !bar.content.rows.isEmpty {
+                EdgeBarColumn()
+                    .padding(.top, EdgeBarMetrics.listTop)
+                    .transition(.opacity.animation(EdgeBarMotion.namesOut))
             }
         }
-        .frame(
-            width: EdgeBarWindow.canvasWidth,
-            height: canvasHeight,
-            alignment: .topLeading
-        )
     }
 
     // MARK: - Body
 
-    private var bodyShape: some View {
-        let shape = EdgeBarShape(width: bodyWidth, length: bodyLength)
-        return shape
-            .fill(Color.black.opacity(0.92))
-            .overlay(shape.outline.stroke(Color.white.opacity(0.14), lineWidth: 0.8))
-            .frame(width: bodyWidth, height: bodyLength)
-            .overlay(
-                BarInteractView(onHover: { controller.bodyHover($0) })
-            )
-            .shadow(color: .black.opacity(0.5), radius: 10)
+    private var shapeSize: CGSize {
+        CGSize(width: bar.isOpen ? bar.openWidth : EdgeBarMetrics.barWidth, height: bar.bodyLength)
     }
 
-    /// What the body holds: the head (app icon), then rings (closed) or the
-    /// names list (open).
-    private var barContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            head
-                .padding(.top, EdgeBarMetrics.headTop)
-            if controller.isOpen {
-                openList
-                    .padding(.top, EdgeBarMetrics.ringTopGap)
-                    .transition(.opacity.animation(EdgeBarMotion.namesIn))
-            } else {
-                rings
-                    .padding(.top, EdgeBarMetrics.ringTopGap)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, EdgeBarMetrics.bodyMargin)
-        .frame(width: bodyWidth, alignment: .topLeading)
+    private var bodyShape: some View {
+        let shape = EdgeBarShape()
+        return shape
+            .fill(EdgeBarPalette.body)
+            // A thin inner edge separates the body from a dark wall behind
+            // it and makes the flare readable. `outline` leaves out the
+            // segment on the screen edge (no hairline on the bezel).
+            .overlay(shape.outline.stroke(Color.white.opacity(0.10), lineWidth: 1))
+            // Cast into the screen: the shadow sells "growing out of the bezel".
+            .shadow(color: .black.opacity(0.35), radius: 10, x: 3, y: 0)
+            // Opening widens and lengthens on one curve: `isOpen`'s animation
+            // is innermost, so it wins over the length's.
+            .frame(width: shapeSize.width, height: shapeSize.height)
+            .animation(EdgeBarMotion.body, value: bar.isOpen)
+            .animation(EdgeBarMotion.body, value: bar.openWidth)
+            .animation(EdgeBarMotion.length, value: bar.bodyLength)
     }
+
+    // MARK: - Head
 
     private var head: some View {
         Image(nsImage: NSApplication.shared.applicationIconImage)
             .resizable()
+            .interpolation(.high)
             .frame(width: EdgeBarMetrics.headSize, height: EdgeBarMetrics.headSize)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 0.6)
+            .scaleEffect(bar.isOverHead ? 1.08 : 1)
+            .brightness(bar.isOverHead ? 0.06 : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: bar.isOverHead)
+            .frame(width: EdgeBarMetrics.barWidth)
+            .allowsHitTesting(false)
+    }
+}
+
+/// The column under the head. Closed: one ring per slot and "+N". Open:
+/// every session, each ring's name as an OVERLAY on its ring — it takes no
+/// room, so no ring moves when the bar opens. A view of its own so a scroll
+/// or a hover re-evaluates the column, not the shape and head.
+struct EdgeBarColumn: View {
+    @Environment(EdgeBarController.self) private var bar
+
+    private var rows: [EdgeBarRow] {
+        bar.isOpen ? bar.content.rows : bar.content.closedRows
+    }
+
+    /// The visible area: the open list's, or the closed slots'.
+    private var clipHeight: CGFloat {
+        bar.isOpen
+            ? EdgeBarMetrics.listHeight(rows: bar.content.rows.count)
+            : CGFloat(bar.content.closedSlots) * EdgeBarMetrics.rowPitch
+    }
+
+    var body: some View {
+        column
+            // Opening/closing changes which rows are in the tree; they are
+            // uncovered by the growing cut, not a transition of their own.
+            .transaction(value: bar.isOpen) { $0.animation = nil }
+            .padding(.top, EdgeBarMetrics.ringSpacing / 2)
+            // Scroll follows the finger: written unanimated. Hit-testing is
+            // geometry-based, so an offset is safe here.
+            .offset(y: -bar.scrollOffset)
+            .frame(
+                width: bar.isOpen ? bar.openWidth : EdgeBarMetrics.barWidth,
+                height: clipHeight,
+                alignment: .topLeading
             )
-            .overlay(
-                BarInteractView(
-                    onTap: { controller.headTapped() },
-                    isDraggingEnabled: true,
-                    onDrag: { controller.beginWindowDrag($0) }
-                )
-            )
+            .clipped()
+            .overlay(alignment: .top) { fade(top: true) }
+            .overlay(alignment: .bottom) { fade(top: false) }
+            .overlay(alignment: .bottomLeading) { summary }
+            .animation(EdgeBarMotion.body, value: bar.isOpen)
+            .animation(EdgeBarMotion.length, value: bar.content.rows.count)
+            .allowsHitTesting(false)
     }
 
-    private var rings: some View {
+    private var column: some View {
         VStack(alignment: .leading, spacing: EdgeBarMetrics.ringSpacing) {
-            ForEach(Array(controller.rows.enumerated()), id: \.element.id) { _, row in
-                ring(row)
+            // Identity is the session: a reorder travels on the spring
+            // instead of rings snapping into each other's places.
+            ForEach(rows) { row in
+                EdgeBarRing(phase: row.phase, source: row.source, beat: bar.beat)
+                    .frame(width: EdgeBarMetrics.barWidth)
+                    .background(alignment: .leading) { ground(row.id) }
+                    .overlay(alignment: .leading) { EdgeBarRowLabel(row: row, isOpen: bar.isOpen) }
+                    .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
             }
-            if controller.overflow > 0 {
-                overflowBadge(controller.overflow)
-            }
-        }
-    }
-
-    private func ring(_ row: EdgeBarRow) -> some View {
-        ZStack {
-            Circle()
-                .stroke(EdgeBarPalette.phase(row.phase), lineWidth: 2)
-            sourceIcon(row.source)
-        }
-        .frame(width: EdgeBarMetrics.ringSize, height: EdgeBarMetrics.ringSize)
-    }
-
-    private func overflowBadge(_ count: Int) -> some View {
-        Text("+\(count)")
-            .font(.system(size: 10, weight: .bold, design: .rounded))
-            .monospacedDigit()
-            .foregroundStyle(Color.white.opacity(0.7))
-            .frame(width: EdgeBarMetrics.ringSize, height: EdgeBarMetrics.ringSize)
-    }
-
-    // MARK: - Open list
-
-    private var openList: some View {
-        VStack(alignment: .leading, spacing: EdgeBarMetrics.ringSpacing) {
-            ForEach(controller.rows) { row in
-                openRow(row)
-            }
-            if controller.overflow > 0 {
-                Text("+\(controller.overflow)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+            if !bar.isOpen, bar.content.overflow > 0 {
+                Text(verbatim: "+\(bar.content.overflow)")
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(0.7))
-            }
-            if !controller.summary.isEmpty {
-                Text(controller.summary)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.45))
+                    .foregroundStyle(EdgeBarPalette.textSecondary)
                     .lineLimit(1)
-                    .padding(.top, 6)
+                    .fixedSize()
+                    .frame(width: EdgeBarMetrics.barWidth, height: EdgeBarMetrics.ringSize)
+                    .transition(.opacity)
             }
+        }
+        .animation(EdgeBarMotion.rows, value: rows)
+        .animation(EdgeBarMotion.rows, value: bar.content.overflow)
+    }
+
+    /// Behind the selected row (the one the card speaks for), half as strong
+    /// under the cursor alone — a row shows it answers to pointing before
+    /// its card comes.
+    private func ground(_ id: String) -> some View {
+        let selected = bar.isOpen && bar.selectedRow == id
+        let hovered = bar.isOpen && bar.hoveredRow == id
+        return RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.white.opacity(0.09))
+            .frame(
+                width: max(0, bar.openWidth - 2 * EdgeBarMetrics.groundInset),
+                height: EdgeBarMetrics.groundHeight
+            )
+            .offset(x: EdgeBarMetrics.groundInset, y: 1)
+            .opacity(selected ? 1 : hovered ? 0.5 : 0)
+            .animation(EdgeBarMotion.namesOut, value: selected)
+            .animation(EdgeBarMotion.namesOut, value: hovered)
+    }
+
+    /// The body's own black over the list's scrolled edges: same as fading
+    /// the rows, without an offscreen mask pass.
+    @ViewBuilder private func fade(top: Bool) -> some View {
+        let maxOffset = EdgeBarMetrics.maxScrollOffset(rows: bar.content.rows.count)
+        let distance = top ? bar.scrollOffset : maxOffset - bar.scrollOffset
+        let strength = bar.isOpen && maxOffset > 0 ? min(1, max(0, distance / min(24, maxOffset))) : 0
+        if strength > 0 {
+            LinearGradient(
+                colors: [EdgeBarPalette.body.opacity(0), EdgeBarPalette.body],
+                startPoint: top ? .bottom : .top,
+                endPoint: top ? .top : .bottom
+            )
+            .frame(height: 24)
+            .padding(.trailing, 1)
+            .opacity(strength)
         }
     }
 
-    private func openRow(_ row: EdgeBarRow) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            ZStack {
-                Circle()
-                    .stroke(EdgeBarPalette.phase(row.phase), lineWidth: 2)
-                sourceIcon(row.source)
-            }
-            .frame(width: EdgeBarMetrics.ringSize, height: EdgeBarMetrics.ringSize)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.name)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white)
+    /// "5 sessions · 1 waiting · 4 running" under the list; comes and goes
+    /// with the names.
+    private var summary: some View {
+        Text(verbatim: bar.content.summary)
+            .font(Font(EdgeBarModel.summaryFont))
+            .foregroundStyle(EdgeBarPalette.textSecondary)
+            .lineLimit(1)
+            .fixedSize()
+            .frame(height: EdgeBarMetrics.summaryHeight)
+            .padding(.leading, EdgeBarMetrics.ringLead)
+            .offset(y: EdgeBarMetrics.summaryGap + EdgeBarMetrics.summaryHeight)
+            .opacity(bar.isOpen ? 1 : 0)
+            .animation(bar.isOpen ? EdgeBarMotion.namesIn : EdgeBarMotion.namesOut, value: bar.isOpen)
+    }
+}
+
+/// A row's name and status line, beside its ring. Comes in from under the
+/// ring (`nameTravel`) just after the body starts to open, leaves before it
+/// starts to close — so no name is ever drawn past the body's edge.
+struct EdgeBarRowLabel: View {
+    let row: EdgeBarRow
+    let isOpen: Bool
+
+    private var lead: CGFloat {
+        EdgeBarMetrics.barWidth - EdgeBarMetrics.ringLead + EdgeBarMetrics.nameGap
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(verbatim: row.name)
+                .font(Font(EdgeBarModel.nameFont))
+                .foregroundStyle(row.phase.isEngaged ? EdgeBarPalette.textPrimary : EdgeBarPalette.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if isOpen {
+                // Ticks once a minute, and only while open.
+                TimelineView(.everyMinute) { context in
+                    Text(verbatim: EdgeBarPalette.statusLine(
+                        row.phase,
+                        waited: context.date.timeIntervalSince(row.since)
+                    ))
+                    .font(Font(EdgeBarModel.statusFont))
+                    .foregroundStyle(row.phase.isWaitingForApproval ? EdgeBarPalette.amber : EdgeBarPalette
+                        .textSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(EdgeBarPalette.statusLine(row.phase, waited: row.waited))
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(EdgeBarPalette.phase(row.phase).opacity(0.9))
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .overlay(
-            BarInteractView(onHover: { inside in
-                controller.rowHover(row.id, inside: inside)
-            })
-        )
-    }
-
-    private func sourceIcon(_ source: AISource) -> some View {
-        Group {
-            switch source {
-            case .claude: Text("C")
-            case .gemini: Image(systemName: "sparkles")
-            case .opencode: Text("O")
-            case .zcode: Text("Z")
-            }
-        }
-        .font(.system(size: 9, weight: .heavy, design: .rounded))
-        .foregroundStyle(Color.white.opacity(0.85))
-    }
-
-    // MARK: - Detail card
-
-    /// Level with the hovered row, clamped inside the canvas.
-    private var cardTop: CGFloat {
-        guard let cardRowId = controller.cardRowId,
-              let index = controller.rows.firstIndex(where: { $0.id == cardRowId })
-        else { return EdgeBarMetrics.gutter }
-        let level = EdgeBarMetrics.ringTop(index) - 10
-        return min(max(level, EdgeBarMetrics.gutter), canvasHeight - 320)
-    }
-
-    @ViewBuilder
-    private var card: some View {
-        if let row = controller.rows.first(where: { $0.id == controller.cardRowId }),
-           controller.cardRowId != nil,
-           let session = controllerStoreSession(row.id) {
-            cardContent(row, session)
-                .frame(width: EdgeBarMetrics.cardWidth, alignment: .topLeading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.98))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
-                )
-                .shadow(color: .black.opacity(0.45), radius: 14)
-                .offset(x: bodyWidth + EdgeBarMetrics.cardGap, y: cardTop)
-                .transition(.opacity.combined(with: .move(edge: .leading)))
-        }
-    }
-
-    private func cardContent(_ row: EdgeBarRow, _ session: AISessionState) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(EdgeBarPalette.phase(row.phase))
-                    .frame(width: 8, height: 8)
-                Text(row.name)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            Text(EdgeBarPalette.statusLine(row.phase, waited: row.waited))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(EdgeBarPalette.phase(row.phase))
-            if let tool = session.currentTool, !tool.isEmpty {
-                Text(tool)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.75))
-            }
-            if row.phase.isWaitingForApproval || row.hasHost {
-                HStack(spacing: 6) {
-                    if row.phase.isWaitingForApproval {
-                        cardButton("edge_bar.deny", tint: Color(red: 1.0, green: 0.72, blue: 0.18)) {
-                            controller.respondToPermission(sessionId: row.id, approved: false)
-                        }
-                        cardButton("edge_bar.allow", tint: Color(red: 0.36, green: 0.85, blue: 0.45)) {
-                            controller.respondToPermission(sessionId: row.id, approved: true)
-                        }
-                    }
-                    if row.hasHost {
-                        cardButton("edge_bar.jump", tint: Color.white.opacity(0.85)) {
-                            controller.jump(to: row)
-                        }
-                    }
                 }
+                .transition(.opacity)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            BarInteractView(onHover: { inside in
-                controller.rowHover(row.id, inside: inside)
-            })
-        )
-    }
-
-    private func cardButton(_ titleKey: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Text(LocalizedStringKey(titleKey))
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(tint.opacity(0.16))
-            .clipShape(Capsule(style: .continuous))
-            .overlay(
-                BarInteractView(onTap: action)
-            )
-    }
-
-    // MARK: - Store access
-
-    /// Sessions live in the store; the controller owns it. Read through the
-    /// environment-injected controller to keep one source of truth.
-    private func controllerStoreSession(_ id: String) -> AISessionState? {
-        controller.session(id)
+        .frame(width: EdgeBarMetrics.nameMaxWidth, height: EdgeBarMetrics.labelHeight, alignment: .topLeading)
+        .offset(x: lead - (isOpen ? 0 : EdgeBarMetrics.nameTravel))
+        .opacity(isOpen ? 1 : 0)
+        .animation(isOpen ? EdgeBarMotion.namesIn : EdgeBarMotion.namesOut, value: isOpen)
     }
 }

@@ -7,29 +7,27 @@ import SwiftUI
 /// hardware notch). The control point of each end curve sits on the edge
 /// corner: that wraps the curve around the edge and carves the gap inward.
 ///
-/// Drawn canonically for the LEFT edge (the edge side is x == 0); `length`
-/// runs along the edge, `width` into the screen.
+/// Fills its rect (x == 0 is the screen edge), so animating the frame
+/// animates the body — opening is the frame's width growing.
 struct EdgeBarShape: Shape {
-    var width: CGFloat
-    var length: CGFloat
     /// Inner corner radius (the side away from the edge).
-    var corner: CGFloat = 18
+    var corner: CGFloat = EdgeBarMetrics.corner
     /// The inverse curve radius at the ends: the body gets shorter by this
     /// much and the reach at the edge gets longer by the same.
-    var flare: CGFloat = 20
+    var flare: CGFloat = EdgeBarMetrics.flare
     /// Filling needs the segment along the edge; stroking must not have it
     /// (a hairline on the outermost pixel column). Stroke `outline`.
     var closed: Bool = true
 
     var outline: EdgeBarShape {
-        EdgeBarShape(width: width, length: length, corner: corner, flare: flare, closed: false)
+        EdgeBarShape(corner: corner, flare: flare, closed: false)
     }
 
     func path(in rect: CGRect) -> Path {
-        let w = min(width, rect.width)
-        let h = min(length, rect.height)
+        let w = rect.width
+        let h = rect.height
         let f = min(flare, h / 2)
-        let c = min(corner, (h - 2 * f) / 2, w)
+        let c = max(0, min(corner, (h - 2 * f) / 2, w - f))
         let top = f
         let bottom = h - f
 
@@ -45,6 +43,6 @@ struct EdgeBarShape: Shape {
         if closed {
             p.closeSubpath()
         }
-        return p
+        return p.offsetBy(dx: rect.minX, dy: rect.minY)
     }
 }
