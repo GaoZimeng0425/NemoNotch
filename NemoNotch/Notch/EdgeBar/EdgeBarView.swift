@@ -171,6 +171,9 @@ struct EdgeBarFloatingBody: View {
                         .transition(.opacity.animation(EdgeBarMotion.namesOut))
                 }
             }
+            // Framed like the fill before clipping: clipped at its content's
+            // size, the cap would shave the last ring's stroke and glow.
+            .frame(width: size.width, height: size.height, alignment: bar.side.topAlignment)
             .clipShape(shape)
         }
         .frame(width: size.width, height: size.height, alignment: bar.side.topAlignment)
@@ -209,7 +212,7 @@ struct EdgeBarFloatingBody: View {
                 .foregroundStyle(EdgeBarPalette.textSecondary)
                 .lineLimit(1)
                 .fixedSize()
-                .frame(height: EdgeBarMetrics.ringSize)
+                .frame(width: EdgeBarMetrics.ringSize, height: EdgeBarMetrics.ringSize)
         }
     }
 }

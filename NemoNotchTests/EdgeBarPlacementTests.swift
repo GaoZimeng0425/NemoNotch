@@ -39,12 +39,40 @@ struct EdgeBarPlacementTests {
     }
 
     @Test func floatingSideFollowsTheRoom() {
-        // 600 of room to the right of x = 500 in a frame ending at 1100.
-        #expect(EdgeBarPlacement.floatingSide(leftEnd: 500, visible: visible, reach: 600, current: .left) == .left)
-        #expect(EdgeBarPlacement.floatingSide(leftEnd: 501, visible: visible, reach: 600, current: .left) == .right)
+        /// reach 400, a 150-long capsule, the frame spanning 100…1100.
+        func side(_ leftEnd: CGFloat, _ current: EdgeBarSide, in frame: CGRect? = nil) -> EdgeBarSide {
+            EdgeBarPlacement.floatingSide(
+                leftEnd: leftEnd, length: 150, visible: frame ?? visible, reach: 400, current: current
+            )
+        }
+        #expect(side(700, .left) == .left) // 400 of room to the right
+        #expect(side(701, .left) == .right) // 399: anchors right, 751 to the left
         // Back to the left only past the hysteresis.
-        #expect(EdgeBarPlacement.floatingSide(leftEnd: 490, visible: visible, reach: 600, current: .right) == .right)
-        #expect(EdgeBarPlacement.floatingSide(leftEnd: 476, visible: visible, reach: 600, current: .right) == .left)
+        #expect(side(690, .right) == .right)
+        #expect(side(676, .right) == .left)
+        // Neither side has the room: the roomier one.
+        let narrow = CGRect(x: 100, y: 0, width: 500, height: 800)
+        #expect(side(250, .left, in: narrow) == .left) // 350 right vs 300 left
+        #expect(side(300, .left, in: narrow) == .right) // 300 right vs 350 left
+    }
+
+    @Test func refittingKeepsTheCapsuleAndGivesItsPanelRoom() {
+        // Anchored left at x = 900: only 200 of room to the right → the
+        // right end (1050) becomes the anchor; the capsule doesn't move.
+        let placement = EdgeBarPlacement(mode: .floating, side: .left, top: 0.5, anchor: 0.8)
+        let fitted = placement.refitted(visible: visible, length: 150, reach: 400)
+        #expect(fitted.side == .right)
+        #expect(fitted.anchor == 0.95)
+        // Neither side has the room (250 right, 400 left of a 450 reach):
+        // the roomier side, its anchor pulled in until the panel fits —
+        // the right end from 500 out to 550.
+        let narrow = CGRect(x: 100, y: 0, width: 500, height: 800)
+        let pulled = EdgeBarPlacement(mode: .floating, side: .left, anchor: 0.5)
+            .refitted(visible: narrow, length: 150, reach: 450)
+        #expect(pulled.side == .right)
+        #expect(pulled.anchor == 0.9)
+        // Docked placements are left alone.
+        #expect(EdgeBarPlacement.standard.refitted(visible: visible, length: 150, reach: 400) == .standard)
     }
 
     @Test func persistsAndMigratesTheLeftOnlyTop() throws {
@@ -61,6 +89,10 @@ struct EdgeBarPlacementTests {
         let floating = EdgeBarPlacement(mode: .floating, side: .right, screen: "S", top: 0.3, anchor: 0.8)
         floating.save(to: defaults)
         #expect(EdgeBarPlacement.load(from: defaults) == floating)
+        // A save missing the optional fields (or carrying unknown ones) still
+        // decodes — never "forget where the user put the bar".
+        defaults.set(Data(#"{"mode":"floating","side":"left","future":1}"#.utf8), forKey: EdgeBarPlacement.defaultsKey)
+        #expect(EdgeBarPlacement.load(from: defaults) == EdgeBarPlacement(mode: .floating, side: .left))
     }
 }
 
@@ -79,6 +111,40 @@ struct EdgeBarCapsuleMetricsTests {
         #expect(Geo.capsuleLength(slots: 0) == 54.0)
         // Margin 10 + head 34 + gap 18 + 4 rings of 20 + 3 gaps of 10 + 17.
         #expect(Geo.capsuleLength(slots: 4) == 189.0)
+    }
+
+    /// The closed capsule must lie inside the panel it opens wherever it
+    /// may rest — else a cursor on the part outside folds the panel at once,
+    /// and the next move opens it again.
+    @Test func aRestingCapsuleLiesInsideThePanelItOpens() {
+        for canvas: CGFloat in [600, 948] {
+            let range = Geo.capsuleRestRange(canvasHeight: canvas)
+            let lengths = [
+                Geo.closedLength(slots: 0),
+                Geo.openLength(rows: 2),
+                canvas - 2 * (Geo.gutter - Geo.flare), // the longest that fits
+            ]
+            for rest in stride(from: range.lowerBound, through: range.upperBound, by: 7) {
+                for length in lengths {
+                    let top = Geo.floatingOpenTop(rest: rest, length: length, canvasHeight: canvas)
+                    let panel = Geo.panelSpan(top: top, length: length)
+                    let capsule = Geo.capsuleSpan(rest: rest)
+                    #expect(
+                        panel.contains(capsule.lowerBound) && panel.contains(capsule.upperBound),
+                        "rest \(rest), length \(length), canvas \(canvas)"
+                    )
+                    // And the panel stays a gutter inside the canvas.
+                    #expect(panel.lowerBound >= Geo.gutter && panel.upperBound <= canvas - Geo.gutter)
+                }
+            }
+        }
+        // Flush to the top (the old clamp let it rest at −capsuleTop) it would not.
+        let flush = Geo.capsuleSpan(rest: -Geo.capsuleTop)
+        let opened = Geo.panelSpan(
+            top: Geo.floatingOpenTop(rest: -Geo.capsuleTop, length: 200, canvasHeight: 948),
+            length: 200
+        )
+        #expect(!opened.contains(flush.lowerBound))
     }
 
     @Test func anOpenedCapsuleAlwaysFitsItsEnvelope() {

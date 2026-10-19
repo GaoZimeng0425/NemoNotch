@@ -163,6 +163,31 @@ enum EdgeBarMetrics {
         return capsuleRingStart + CGFloat(slots) * ringSize + CGFloat(slots - 1) * ringSpacing + ringLead
     }
 
+    /// Where a capsule's top may rest: where the closed capsule lies inside
+    /// the band an opened panel keeps to (a gutter off both canvas edges).
+    /// Past it, part of the capsule is outside the panel it opens, and a
+    /// cursor there folds the panel at once — over and over.
+    static func capsuleRestRange(canvasHeight: CGFloat) -> ClosedRange<CGFloat> {
+        let low = gutter - flare
+        return low ... max(low, canvasHeight - gutter - capsuleTop - capsuleHeight)
+    }
+
+    /// An opened capsule's top: where it rests, risen just enough for a
+    /// panel `length` long to fit the canvas.
+    static func floatingOpenTop(rest: CGFloat, length: CGFloat, canvasHeight: CGFloat) -> CGFloat {
+        max(gutter - flare, min(rest, canvasHeight - gutter - length + flare))
+    }
+
+    /// The closed capsule's span down the canvas, resting at `rest`.
+    static func capsuleSpan(rest: CGFloat) -> ClosedRange<CGFloat> {
+        (rest + capsuleTop) ... (rest + capsuleTop + capsuleHeight)
+    }
+
+    /// An opened panel's span down the canvas: the body inside the flares.
+    static func panelSpan(top: CGFloat, length: CGFloat) -> ClosedRange<CGFloat> {
+        (top + flare) ... (top + length - flare)
+    }
+
     // MARK: Card
 
     static let cardWidth: CGFloat = 320

@@ -60,25 +60,74 @@ struct EdgeBarPlacement: Codable, Equatable, Sendable {
         )
     }
 
-    /// The side a floating capsule anchors on: its left end while the
-    /// opened list and card (`reach`) fit to the right of it, else its
-    /// right end. `hysteresis` keeps a capsule dragged along the line from
-    /// flipping back and forth.
+    /// The side a floating capsule (`length` long) anchors on: its left end
+    /// while the opened list and card (`reach`) fit to the right of it, else
+    /// its right end while they fit to the left, else whichever side has
+    /// more room. `hysteresis` keeps a right-anchored capsule from flipping
+    /// back the moment it fits.
     static func floatingSide(
         leftEnd: CGFloat,
+        length: CGFloat,
         visible: CGRect,
         reach: CGFloat,
         current: EdgeBarSide,
         hysteresis: CGFloat = 24
     ) -> EdgeBarSide {
-        let room = visible.maxX - leftEnd
-        switch current {
-        case .left: return room >= reach ? .left : .right
-        case .right: return room >= reach + hysteresis ? .left : .right
+        let roomRight = visible.maxX - leftEnd
+        let roomLeft = leftEnd + length - visible.minX
+        if roomRight >= (current == .left ? reach : reach + hysteresis) {
+            return .left
         }
+        if roomLeft >= reach {
+            return .right
+        }
+        return roomRight >= roomLeft ? .left : .right
+    }
+
+    /// A floating placement fitted to a screen (on release, after a
+    /// resolution change or a moved Dock): its side re-chosen for the room,
+    /// its anchored end kept where the opened list and card fit on the
+    /// screen. The capsule stays where it is unless the screen is too
+    /// narrow for it to; only which end is anchored may change.
+    func refitted(visible: CGRect, length: CGFloat, reach: CGFloat) -> EdgeBarPlacement {
+        guard mode == .floating else { return self }
+        let anchorX = visible.minX + anchor * visible.width
+        let leftEnd = side == .left ? anchorX : anchorX - length
+        let side = Self.floatingSide(leftEnd: leftEnd, length: length, visible: visible, reach: reach, current: side)
+        let x = side == .left
+            ? min(max(leftEnd, visible.minX), max(visible.minX, visible.maxX - reach))
+            : max(min(leftEnd + length, visible.maxX), min(visible.maxX, visible.minX + reach))
+        var fitted = self
+        fitted.side = side
+        fitted.anchor = (x - visible.minX) / max(1, visible.width)
+        return fitted
     }
 
     // MARK: Persistence
+
+    private enum CodingKeys: String, CodingKey {
+        case mode, side, screen, top, anchor
+    }
+
+    init(mode: Mode, side: EdgeBarSide, screen: String? = nil, top: CGFloat? = nil, anchor: CGFloat = 0) {
+        self.mode = mode
+        self.side = side
+        self.screen = screen
+        self.top = top
+        self.anchor = anchor
+    }
+
+    /// Lenient: a field this version doesn't know is ignored, one it adds
+    /// later is optional here — an older or newer save never decodes to
+    /// "forget where the user put the bar".
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try c.decode(Mode.self, forKey: .mode)
+        side = try c.decode(EdgeBarSide.self, forKey: .side)
+        screen = try c.decodeIfPresent(String.self, forKey: .screen)
+        top = try c.decodeIfPresent(CGFloat.self, forKey: .top)
+        anchor = try c.decodeIfPresent(CGFloat.self, forKey: .anchor) ?? 0
+    }
 
     static let defaultsKey = "edgeBarPlacement"
     /// What the left-only bar kept: its top as a share of the height.
