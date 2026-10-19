@@ -102,9 +102,10 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 }
 
 /// 设置窗外壳(Atoll 同构):标准 `NavigationSplitView` 双栏 + 侧栏顶搜索条
-/// + 整窗玻璃背景。侧栏开关用 SwiftUI 自带的标准工具栏按钮,不手装
-/// NSToolbar。各页内容在 `Pages/` 下,共享视觉组件在
-/// `SettingsComponents.swift`,搜索索引/过滤在 `SettingsSearchIndex.swift`。
+/// + 整窗玻璃背景。不手装 NSToolbar;侧栏开关是详情栏的一个 SwiftUI
+/// `ToolbarItem`(为什么不用自带的,见 `sidebarToggle`)。各页内容在
+/// `Pages/` 下,共享视觉组件在 `SettingsComponents.swift`,搜索索引/过滤在
+/// `SettingsSearchIndex.swift`。
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(NotificationService.self) var notificationService
@@ -120,15 +121,17 @@ struct SettingsView: View {
             detailView
                 // 各页 Form/ScrollView/List 不铺自己的底,透出整窗玻璃。
                 .scrollContentBackground(.hidden)
+                .toolbar { sidebarToggle }
         }
         .navigationSplitViewStyle(.balanced)
+        // 工具栏不铺自己的底:否则详情栏顶上压一条浅色带,和整窗玻璃接缝。
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         // 整窗玻璃(Atoll 同款):两栏共同浮在一块 macOS 26 玻璃上。
         .background(windowGlass.ignoresSafeArea())
         // min/ideal 而非固定 frame:固定 frame 在用户把窗口调小后会被居中
         // 裁切(侧栏首项消失、按钮错位全是它造成的)。
         .frame(minWidth: 620, idealWidth: 680, minHeight: 440, idealHeight: 540)
         .onAppear {
-            SettingsWindowChrome.install()
             // 模型跨窗口会话存活:重开窗口时搜索从空词开始,别让看不见的
             // 旧词继续过滤侧栏。
             SettingsSearchModel.shared.query = ""
@@ -172,7 +175,28 @@ struct SettingsView: View {
             Divider()
             pageList
         }
+        // 自带开关要在侧栏列上摘(挂在 split view 上不生效),换成 `sidebarToggle`。
+        .toolbar(removing: .sidebarToggle)
         .navigationSplitViewColumnWidth(min: 200, ideal: 210, max: 240)
+    }
+
+    /// 侧栏开关,放在详情栏那段工具栏的最前(收起时贴着红绿灯,展开时贴着侧栏)。
+    /// 不用自带的:展开动画一开始它就被移进侧栏那段工具栏,而那段要跟着侧栏
+    /// 从 0 宽长出来、红绿灯又先占掉一截,放不下的一百多毫秒里 AppKit 把它塞进
+    /// 「更多」溢出菜单,右侧闪一个 »(2026-10-19 AX 逐帧实测,每次展开必现)。
+    /// 详情栏那段全程够宽,不会溢出。
+    private var sidebarToggle: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation {
+                    columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                }
+            } label: {
+                Label("settings.sidebar.toggle", systemImage: "sidebar.leading")
+                    .labelStyle(.iconOnly)
+            }
+            .help("settings.sidebar.toggle")
+        }
     }
 
     private var pageList: some View {

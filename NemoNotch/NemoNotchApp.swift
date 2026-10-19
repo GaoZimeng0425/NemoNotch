@@ -8,22 +8,29 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(appSettings: appDelegate.deps?.settings)
-                .environment(appDelegate.deps?.media ?? MediaService())
-                .environment(appDelegate.deps?.aiMonitor ?? AICLIMonitorService())
-                .environment(appDelegate.deps?.keepAwake ?? KeepAwakeService())
+            MenuRoot()
         } label: {
             MenuBarLabel()
         }
         .menuBarExtraStyle(.menu)
 
-        Settings {
+        // A plain Window, not the `Settings` scene: that one forces a
+        // preference-style toolbar (the sidebar toggle alone on a second row
+        // under the title) and a non-resizable window, and re-imposes both on
+        // every toolbar change — each sidebar collapse made the window
+        // un-resizable again, and patching it back fought SwiftUI every frame
+        // of the collapse animation (2026-10-19).
+        Window("settings.title", id: SettingsWindow.id) {
             SettingsSceneRoot(appDelegate: appDelegate)
         }
-        // Settings 场景不认内容根视图的 ideal 尺寸(实测被无视、开成 900 宽),
-        // 默认宽高必须在 scene 级声明;内容侧保留 frame(minWidth:minHeight:)
-        // 作为拖拽下限的 auto-layout 约束。
         .defaultSize(width: 680, height: 540)
+        // Opened from the menu / notch / ⌘, only — never at launch. (Not
+        // `.restorationBehavior(.disabled)`: that also drops the frame
+        // autosave, so a resized window reopened at the default size.)
+        .defaultLaunchBehavior(.suppressed)
+        .commands {
+            CommandGroup(replacing: .appSettings) { SettingsCommand() }
+        }
     }
 
     init() {
@@ -32,7 +39,7 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    let appSettings: AppSettings?
+    let appSettings: AppSettings
 
     var body: some View {
         Group {
@@ -41,7 +48,57 @@ struct MenuContent: View {
             KeepAwakeSection()
             AppSection()
         }
-        .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
+        .environment(\.locale, appSettings.currentLocale)
+    }
+}
+
+/// The app's dependencies, observable: the scenes' bodies run before
+/// `applicationDidFinishLaunching` builds them, and a view reading this
+/// re-renders once they exist — instead of the old `?? Service()` fallbacks,
+/// each of which built a throwaway service (a second AI monitor that scanned
+/// sessions, a second MediaService that spawned its perl daemon, …).
+@MainActor
+@Observable
+final class AppDependencyBox {
+    static let shared = AppDependencyBox()
+    fileprivate(set) var deps: AppDependencies?
+    private init() {}
+}
+
+/// The menu bar menu, once the services exist (empty for the launch instant
+/// before that).
+struct MenuRoot: View {
+    var body: some View {
+        if let deps = AppDependencyBox.shared.deps {
+            MenuContent(appSettings: deps.settings)
+                .environment(deps.media)
+                .environment(deps.aiMonitor)
+                .environment(deps.keepAwake)
+        }
+    }
+}
+
+enum SettingsWindow {
+    static let id = "settings"
+
+    /// Opens the settings window, or brings it forward. An accessory app
+    /// doesn't come to the front by opening a window, so activate too.
+    @MainActor
+    static func open(with openWindow: OpenWindowAction) {
+        openWindow(id: id)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// The app menu's "Settings…" ⌘, — the `Settings` scene used to provide it.
+private struct SettingsCommand: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("menu.preferences") {
+            SettingsWindow.open(with: openWindow)
+        }
+        .keyboardShortcut(",", modifiers: .command)
     }
 }
 
@@ -50,7 +107,7 @@ struct SettingsSceneRoot: View {
 
     var body: some View {
         Group {
-            if let deps = appDelegate.deps {
+            if let deps = AppDependencyBox.shared.deps {
                 SettingsView()
                     .environment(deps.settings)
                     .environment(deps.aiMonitor)
@@ -66,6 +123,8 @@ struct SettingsSceneRoot: View {
                     .frame(width: 680, height: 480)
             }
         }
+        // A settings window has no business going full screen.
+        .windowFullScreenBehavior(.disabled)
         .onAppear { appDelegate.handleSettingsAppear() }
         .onDisappear { appDelegate.handleSettingsDisappear() }
     }
@@ -74,7 +133,7 @@ struct SettingsSceneRoot: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressRestoreUntil: Date = .distantPast
-    /// 设置窗当前是否在场(由 Settings scene 的 onAppear/onDisappear 维护)。
+    /// 设置窗当前是否在场(由设置窗 Window scene 的 onAppear/onDisappear 维护)。
     private var isSettingsVisible = false
     private var isRestoringSleepForQuit = false
 
@@ -84,9 +143,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Every service, assembled in `AppDependencies.build()` — one non-optional
     /// table instead of 25 optional fields. nil only before
-    /// `applicationDidFinishLaunching` runs (the SwiftUI scenes' `??`
-    /// fallbacks cover that window).
-    private(set) var deps: AppDependencies?
+    /// `applicationDidFinishLaunching` runs; the scenes wait on
+    /// `AppDependencyBox` for that window instead of building stand-ins.
+    var deps: AppDependencies? {
+        AppDependencyBox.shared.deps
+    }
+
     private(set) var coordinator: NotchCoordinator?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
@@ -127,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let deps = AppDependencies.build()
-        self.deps = deps
+        AppDependencyBox.shared.deps = deps
 
         let notchCoordinator = NotchCoordinator(content: deps.notchContent())
         notchCoordinator.autoSelectTab = { [weak self] in

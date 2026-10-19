@@ -15,7 +15,7 @@ struct NotchView: View {
     @Environment(HUDService.self) var hudService
     @Environment(PomodoroTimerService.self) var pomodoroService
     @Environment(BluetoothService.self) var bluetoothService
-    @Environment(\.openSettings) private var openSettingsAction
+    @Environment(\.openWindow) private var openWindow
 
     private var hardwareNotchSize: NSSize {
         coordinator.notchSize
@@ -238,7 +238,7 @@ struct NotchView: View {
         .environment(\.locale, appSettings.currentLocale)
         .contextMenu {
             // 走和齿轮按钮同一条路径:先开设置窗,再带 suppressAppRestore 收起刘海。
-            // 直接用 SettingsLink 会让刘海留在 opened 状态,等用户下一次挪鼠标才
+            // 只开窗不收刘海会让刘海留在 opened 状态,等用户下一次挪鼠标才
             // 关闭 —— 那一刻 restorePreviousApp() 会把右键前的前台 app 拉回来,
             // 刚打开的设置窗就被压到它后面(见 openSettings 的注释)。
             Button("notch.context.settings") {
@@ -543,7 +543,7 @@ struct NotchView: View {
     /// flag ensures focus stays on Settings instead of bouncing to the
     /// previously-active app.
     private func openSettings() {
-        openSettingsAction()
+        SettingsWindow.open(with: openWindow)
         coordinator.notchClose(suppressAppRestore: true)
     }
 }
