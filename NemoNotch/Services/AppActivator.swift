@@ -89,8 +89,7 @@ enum AppActivator {
                 category: "AppActivator"
             )
         }
-        guard let host = hostAppPID(of: cliPID) else { return }
-        guard session.launchingAppPID != host else { return }
+        guard let host = hostAppPID(of: cliPID), session.launchingAppPID != host else { return }
         session.launchingAppPID = host
         session.launchingAppBundleId = bundleId(forPid: host)
         LogService.info(
@@ -124,7 +123,7 @@ enum AppActivator {
 
     /// Parent PID lookup via `sysctl(KERN_PROC_PID)` — public BSD interface,
     /// no permission and no subprocess. Returns nil for exited/recycled pids.
-    private static func parentPID(of pid: pid_t) -> pid_t? {
+    static func parentPID(of pid: pid_t) -> pid_t? {
         var info = kinfo_proc()
         var size = 0
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
