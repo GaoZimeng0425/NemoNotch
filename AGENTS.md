@@ -210,6 +210,8 @@ The AI status surface is now a **vertical bar docked to the main screen's LEFT e
 
 **Palette** (evlat's): working white, waiting amber (1.0, 0.72, 0.18), review green, idle grey; body opaque black, names white, secondary #808080. Rows come from the pure `EdgeBarModel.content(of:)` (unit-tested): engaged sessions only, attention-ordered (approval > running > input, ties by recency), summary line "N sessions · W waiting · R running".
 
+**Usage block (2026-10-19).** While open, under the summary (or under the head with no session), evlat's usage block: a hairline, then per provider with a readable quota (`status == .valid`, tiers non-empty — the AI tab's card owns the not-logged-in / Authorize states) a spaced-capitals heading over its windows: label · meter · percent · reset countdown, amber at ≥ 80%. Pure `EdgeBarUsage.lines(from: UsageQuotaService.quotas)` (unit-tested); the open length and width make room for it (`EdgeBarMetrics.openLength(rows:usageLines:)`, measured `EdgeBarUsage.minWidth`). No timer on the bar: one silent refresh at launch, then every opening calls `refresh(force: false)` (the service's 60s throttle applies); the controller observes `quotas`, so a reading that lands while open grows the block in place.
+
 **Window.** `EdgeBarWindow` — borderless non-activating panel, `.statusBar` level, canJoinAllSpaces + stationary, fixed envelope on the built-in screen's left edge (spans the visible height), never resized at interaction time. `EdgeBarHostingView.hitTest` passes everything outside the body/card rects through. Re-docked (async) on screen-parameter changes, wake and unlock. Toggle: Settings → AI 与 Agent, `aiStatusFabEnabled` (key retained).
 
 ### Waiting Reminder (2026-10-16)

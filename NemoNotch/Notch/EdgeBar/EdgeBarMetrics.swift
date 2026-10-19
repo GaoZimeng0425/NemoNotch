@@ -112,8 +112,13 @@ enum EdgeBarMetrics {
         return head + ringTopGap + CGFloat(slots) * ringSize + CGFloat(slots - 1) * ringSpacing
     }
 
-    /// The open body: the head, the visible list and the summary line.
-    static func openLength(rows: Int) -> CGFloat {
+    /// The open body: the head, the visible list and the summary line, the
+    /// usage block under them, closed by the same margin the head opens with.
+    /// With no session the block hangs under the head.
+    static func openLength(rows: Int, usageLines: Int = 0) -> CGFloat {
+        if usageLines > 0 {
+            return EdgeBarUsage.top(rows: rows) + EdgeBarUsage.height(lines: usageLines) + headTop
+        }
         guard rows > 0 else { return closedLength(slots: 0) }
         return summaryTop(rows: rows) + summaryHeight + headTop
     }
@@ -193,6 +198,8 @@ enum EdgeBarMotion {
     static let rowSwitch: TimeInterval = 0.12
     /// How long a pressed button shows it before its action runs.
     static let pressFeedback: TimeInterval = 0.12
+    /// The usage refresh waits out the opening's curve.
+    static let usageRefreshDelay: TimeInterval = 0.3
     /// Seconds between beats (a waiting ring's wave).
     static let beatInterval: TimeInterval = 3
 

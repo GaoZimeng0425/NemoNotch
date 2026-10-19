@@ -21,6 +21,15 @@ struct EdgeBarView: View {
     private var barLayer: some View {
         ZStack(alignment: .topLeading) {
             bodyShape
+            bodyContent
+        }
+    }
+
+    /// Everything the body holds, clipped to the body's own animating shape
+    /// — so nothing (a fading usage line, a name) can ever draw past the
+    /// outline while the body narrows or shortens on close.
+    private var bodyContent: some View {
+        ZStack(alignment: .topLeading) {
             head
                 .padding(.top, EdgeBarMetrics.headTop)
             if !bar.content.rows.isEmpty {
@@ -28,7 +37,23 @@ struct EdgeBarView: View {
                     .padding(.top, EdgeBarMetrics.listTop)
                     .transition(.opacity.animation(EdgeBarMotion.namesOut))
             }
+            // Only while open (its minute tick never runs on the closed bar);
+            // comes and goes with the names, follows the list's length.
+            if bar.isOpen, !bar.usageLines.isEmpty {
+                EdgeBarUsageBlock(lines: bar.usageLines, width: bar.openWidth)
+                    .padding(.top, EdgeBarUsage.top(rows: bar.content.rows.count))
+                    .animation(EdgeBarMotion.length, value: bar.content.rows.count)
+                    .transition(.asymmetric(
+                        insertion: .opacity.animation(EdgeBarMotion.namesIn),
+                        removal: .opacity.animation(EdgeBarMotion.namesOut)
+                    ))
+            }
         }
+        .frame(width: shapeSize.width, height: shapeSize.height, alignment: .topLeading)
+        .clipShape(EdgeBarShape())
+        .animation(EdgeBarMotion.body, value: bar.isOpen)
+        .animation(EdgeBarMotion.body, value: bar.openWidth)
+        .animation(EdgeBarMotion.length, value: bar.bodyLength)
     }
 
     // MARK: - Body
