@@ -124,13 +124,10 @@ struct NotchView: View {
         }
     }
 
-    /// Open gets a lively spring with a hint of bounce; close runs fully
-    /// damped so the collapse lands crisply without a terminal jiggle.
+    /// The shell's curve for the current direction (`NotchMotion`): one
+    /// critically damped curve each way, shared with the coordinator.
     private var notchStateAnimation: Animation {
-        switch effectiveStatus {
-        case .opened: .spring(duration: NotchConstants.openSpringDuration, bounce: 0.1)
-        case .closed: .spring(duration: NotchConstants.closeSpringDuration)
-        }
+        NotchMotion.state(opened: effectiveStatus == .opened)
     }
 
     var body: some View {
@@ -475,16 +472,14 @@ struct NotchView: View {
             bottomCornerRadius: notchBottomCornerRadius,
             glow: notchGlow
         ) {
-            // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
-            // .transition 承担：新插入的视图不会对绑定 effectiveStatus 的
-            // scaleEffect/opacity 做动画（没有上一个值可插值），只有 transition
-            // 才描述得了进出过程。收起时内容在被裁掉的形状内同步缩回刘海。
+            // 折叠后卸载整棵 tab 树（见 contentMounted）。进出由 .transition
+            // 承担（新插入的视图没有上一个值可插值，只有 transition 描述得了
+            // 进出）：展开时外壳先动，内容晚 0.06s 从 0.95 倍淡入；收起时内容
+            // 0.1s 先淡出，外壳再收拢 —— 见 NotchMotion。
             if contentMounted {
                 contentPanel
                     .allowsHitTesting(effectiveStatus == .opened)
-                    .transition(
-                        .scale(scale: 0.2, anchor: .top).combined(with: .opacity)
-                    )
+                    .transition(NotchMotion.contentTransition)
             }
 
             chinBar

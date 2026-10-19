@@ -197,7 +197,7 @@ final class NotchCoordinator {
             selectedTab = auto
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
+        withAnimation(NotchMotion.open) {
             activeScreen = target
             status = .opened
         }
@@ -206,6 +206,10 @@ final class NotchCoordinator {
             startHotkeyAutoCloseTimer()
         }
         slot.passThrough.isBlocking = true
+        // Same turn as the state change, on purpose: an animation's clock
+        // starts when its transaction commits, so work done BEFORE the commit
+        // only delays the start — deferring it to the next turn would land it
+        // mid-curve and skip frames.
         slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
@@ -218,7 +222,7 @@ final class NotchCoordinator {
         lastCloseAt = Date()
         uninstallEscMonitor()
         let openedScreen = activeScreen
-        withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
+        withAnimation(NotchMotion.close) {
             status = .closed
         }
         activeScreen = nil
@@ -244,8 +248,7 @@ final class NotchCoordinator {
             // 之前误用 openSpringDuration,今天不漏点击纯属 0.314 > 0.236 的巧合,
             // 调大关闭时长后点击就会穿透到刘海后面的 app)。
             try? await Task.sleep(for: .seconds(NotchConstants.closeSpringDuration))
-            guard let self else { return }
-            guard !(status == .opened && activeScreen?.displayID == displayID) else { return }
+            guard let self, !(status == .opened && activeScreen?.displayID == displayID) else { return }
             slot.passThrough.isBlocking = false
             if slot.window.isKeyWindow {
                 slot.window.resignKey()
