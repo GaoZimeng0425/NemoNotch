@@ -10,6 +10,7 @@ struct EdgeBarCardLayer: View {
 
     var body: some View {
         EdgeBarCardLayout(
+            side: bar.side,
             slot: bar.cardSlot,
             offset: bar.scrollOffset,
             barTop: bar.barTop,
@@ -23,10 +24,11 @@ struct EdgeBarCardLayer: View {
                         bar.cardFrameChanged(rect)
                     }
                     .onDisappear { bar.cardFrameChanged(nil) }
-                    .transition(EdgeBarMotion.cardTransition)
+                    .transition(EdgeBarMotion.cardTransition(bar.side))
             }
         }
-        .padding(.leading, bar.openWidth + EdgeBarMetrics.cardGap)
+        // Beside the open body, on its open side.
+        .padding(bar.side.edge, bar.anchorInset + bar.openWidth + EdgeBarMetrics.cardGap)
         .animation(EdgeBarMotion.length, value: bar.cardSlot)
     }
 }
@@ -35,6 +37,7 @@ struct EdgeBarCardLayer: View {
 /// has **in the same pass** — real layout, not `.offset` (an offset moves
 /// pixels only; the card's frame reports and hover rect would lag or lie).
 struct EdgeBarCardLayout: Layout {
+    let side: EdgeBarSide
     let slot: Int
     let offset: CGFloat
     let barTop: CGFloat
@@ -52,8 +55,8 @@ struct EdgeBarCardLayout: Layout {
                 barTop: barTop, canvasHeight: canvasHeight
             )
             card.place(
-                at: CGPoint(x: bounds.minX, y: bounds.minY + top),
-                anchor: .topLeading,
+                at: CGPoint(x: side == .left ? bounds.minX : bounds.maxX, y: bounds.minY + top),
+                anchor: side == .left ? .topLeading : .topTrailing,
                 proposal: ProposedViewSize(size)
             )
         }

@@ -2,24 +2,39 @@ import AppKit
 import SwiftUI
 
 /// The edge bar's drawing. Takes no events (the hosting view routes them by
-/// geometry); every layout here is pinned to the screen edge and the bar's
-/// top, so the window never moves anything — opening is the shape's inner
-/// edge travelling into the screen while names fade in beside rings that
-/// never move.
+/// geometry); every layout here is pinned to the anchored side and the
+/// bar's top, so the window never moves anything — opening is the shape's
+/// inner edge travelling into the screen while names fade in beside rings
+/// that never move. Docked right, it is the left bar mirrored (text still
+/// reads left to right); floating, the closed bar is a capsule on its side.
 struct EdgeBarView: View {
     @Environment(EdgeBarController.self) private var bar
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            barLayer
-                .padding(.top, bar.barTop)
+        ZStack(alignment: bar.side.topAlignment) {
+            Group {
+                // A new form appears where it is (the window moved with it);
+                // the old one goes at once rather than ghost at its old spot.
+                if bar.isFloating {
+                    EdgeBarFloatingBody()
+                        .transition(.asymmetric(insertion: .opacity.animation(EdgeBarMotion.form), removal: .identity))
+                } else {
+                    barLayer
+                        .transition(.asymmetric(insertion: .opacity.animation(EdgeBarMotion.form), removal: .identity))
+                }
+            }
+            .padding(.top, bar.barTop)
+            .padding(bar.side.edge, bar.anchorInset)
+            // An opened capsule rising to fit rises on the opening's curve
+            // (a drag moves it unanimated: no `isOpen` change).
+            .animation(EdgeBarMotion.body, value: bar.isOpen)
             EdgeBarCardLayer()
         }
-        .frame(width: EdgeBarMetrics.canvasWidth, height: bar.canvasHeight, alignment: .topLeading)
+        .frame(width: bar.canvasWidth, height: bar.canvasHeight, alignment: bar.side.topAlignment)
     }
 
     private var barLayer: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: bar.side.topAlignment) {
             bodyShape
             bodyContent
         }
@@ -29,31 +44,12 @@ struct EdgeBarView: View {
     /// — so nothing (a fading usage line, a name) can ever draw past the
     /// outline while the body narrows or shortens on close.
     private var bodyContent: some View {
-        ZStack(alignment: .topLeading) {
-            head
-                .padding(.top, EdgeBarMetrics.headTop)
-            if !bar.content.rows.isEmpty {
-                EdgeBarColumn()
-                    .padding(.top, EdgeBarMetrics.listTop)
-                    .transition(.opacity.animation(EdgeBarMotion.namesOut))
-            }
-            // Only while open (its minute tick never runs on the closed bar);
-            // comes and goes with the names, follows the list's length.
-            if bar.isOpen, !bar.usageLines.isEmpty {
-                EdgeBarUsageBlock(lines: bar.usageLines, width: bar.openWidth)
-                    .padding(.top, EdgeBarUsage.top(rows: bar.content.rows.count))
-                    .animation(EdgeBarMotion.length, value: bar.content.rows.count)
-                    .transition(.asymmetric(
-                        insertion: .opacity.animation(EdgeBarMotion.namesIn),
-                        removal: .opacity.animation(EdgeBarMotion.namesOut)
-                    ))
-            }
-        }
-        .frame(width: shapeSize.width, height: shapeSize.height, alignment: .topLeading)
-        .clipShape(EdgeBarMetrics.shape)
-        .animation(EdgeBarMotion.body, value: bar.isOpen)
-        .animation(EdgeBarMotion.body, value: bar.openWidth)
-        .animation(EdgeBarMotion.length, value: bar.bodyLength)
+        EdgeBarBodyItems()
+            .frame(width: shapeSize.width, height: shapeSize.height, alignment: bar.side.topAlignment)
+            .clipShape(EdgeBarMetrics.shape(bar.side))
+            .animation(EdgeBarMotion.body, value: bar.isOpen)
+            .animation(EdgeBarMotion.body, value: bar.openWidth)
+            .animation(EdgeBarMotion.length, value: bar.bodyLength)
     }
 
     // MARK: - Body
@@ -63,7 +59,7 @@ struct EdgeBarView: View {
     }
 
     private var bodyShape: some View {
-        let shape = EdgeBarMetrics.shape
+        let shape = EdgeBarMetrics.shape(bar.side)
         return shape
             .fill(EdgeBarPalette.body)
             // A thin inner edge separates the body from a dark wall behind
@@ -71,7 +67,7 @@ struct EdgeBarView: View {
             // segment on the screen edge (no hairline on the bezel).
             .overlay(shape.outline.stroke(Color.white.opacity(0.10), lineWidth: 1))
             // Cast into the screen: the shadow sells "growing out of the bezel".
-            .shadow(color: .black.opacity(0.35), radius: 10, x: 3, y: 0)
+            .shadow(color: .black.opacity(0.35), radius: 10, x: 3 * bar.side.sign, y: 0)
             // Opening widens and lengthens on one curve: `isOpen`'s animation
             // is innermost, so it wins over the length's.
             .frame(width: shapeSize.width, height: shapeSize.height)
@@ -79,10 +75,45 @@ struct EdgeBarView: View {
             .animation(EdgeBarMotion.body, value: bar.openWidth)
             .animation(EdgeBarMotion.length, value: bar.bodyLength)
     }
+}
 
-    // MARK: - Head
+/// What a body holds — the head, the column, the usage block — laid out
+/// from the anchored side and the bar's top; the docked bar and the opened
+/// capsule each clip it to their own shape.
+struct EdgeBarBodyItems: View {
+    @Environment(EdgeBarController.self) private var bar
 
-    private var head: some View {
+    var body: some View {
+        ZStack(alignment: bar.side.topAlignment) {
+            EdgeBarHead()
+                .padding(.top, EdgeBarMetrics.headTop)
+            // A closed capsule holds its rings in a row of its own.
+            if !bar.content.rows.isEmpty, bar.isOpen || !bar.isFloating {
+                EdgeBarColumn()
+                    .padding(.top, EdgeBarMetrics.listTop)
+                    .transition(.opacity.animation(bar.isOpen ? EdgeBarMotion.namesIn : EdgeBarMotion.namesOut))
+            }
+            // Only while open (its minute tick never runs on the closed bar);
+            // comes and goes with the names, follows the list's length.
+            if bar.isOpen, !bar.usageLines.isEmpty {
+                EdgeBarUsageBlock(lines: bar.usageLines, width: bar.openWidth, side: bar.side)
+                    .padding(.top, EdgeBarUsage.top(rows: bar.content.rows.count))
+                    .animation(EdgeBarMotion.length, value: bar.content.rows.count)
+                    .transition(.asymmetric(
+                        insertion: .opacity.animation(EdgeBarMotion.namesIn),
+                        removal: .opacity.animation(EdgeBarMotion.namesOut)
+                    ))
+            }
+        }
+    }
+}
+
+/// The app icon at the top of the bar (the capsule's anchored end): the
+/// chat bubble's button.
+struct EdgeBarHead: View {
+    @Environment(EdgeBarController.self) private var bar
+
+    var body: some View {
         Image(nsImage: NSApplication.shared.applicationIconImage)
             .resizable()
             .interpolation(.high)
@@ -92,6 +123,122 @@ struct EdgeBarView: View {
             .animation(.spring(response: 0.28, dampingFraction: 0.7), value: bar.isOverHead)
             .frame(width: EdgeBarMetrics.barWidth)
             .allowsHitTesting(false)
+    }
+}
+
+/// The floating form. Closed: a capsule — the closed bar on its side, the
+/// head at the anchored end, the rings in a row. Open: a panel holding what
+/// the docked bar holds open, grown from the capsule (the head stays put;
+/// the rings give way to the list). One rounded shape morphs between the
+/// two and clips both.
+struct EdgeBarFloatingBody: View {
+    @Environment(EdgeBarController.self) private var bar
+
+    private var shape: EdgeBarFloatingShape {
+        bar.isOpen
+            ? EdgeBarFloatingShape(
+                top: EdgeBarMetrics.flare,
+                height: bar.bodyLength - 2 * EdgeBarMetrics.flare,
+                corner: EdgeBarMetrics.corner
+            )
+            : EdgeBarFloatingShape(
+                top: EdgeBarMetrics.capsuleTop,
+                height: EdgeBarMetrics.capsuleHeight,
+                corner: EdgeBarMetrics.capsuleHeight / 2
+            )
+    }
+
+    private var size: CGSize {
+        bar.isOpen
+            ? CGSize(width: bar.openWidth, height: bar.bodyLength)
+            : CGSize(
+                width: EdgeBarMetrics.capsuleLength(slots: bar.content.closedSlots),
+                height: EdgeBarMetrics.capsuleTop + EdgeBarMetrics.capsuleHeight
+            )
+    }
+
+    var body: some View {
+        let shape = shape
+        ZStack(alignment: bar.side.topAlignment) {
+            shape
+                .fill(EdgeBarPalette.body)
+                .overlay(shape.stroke(Color.white.opacity(0.10), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 3)
+            ZStack(alignment: bar.side.topAlignment) {
+                EdgeBarBodyItems()
+                if !bar.isOpen {
+                    capsuleRings
+                        .transition(.opacity.animation(EdgeBarMotion.namesOut))
+                }
+            }
+            // Framed like the fill before clipping: clipped at its content's
+            // size, the cap would shave the last ring's stroke and glow.
+            .frame(width: size.width, height: size.height, alignment: bar.side.topAlignment)
+            .clipShape(shape)
+        }
+        .frame(width: size.width, height: size.height, alignment: bar.side.topAlignment)
+        .animation(EdgeBarMotion.body, value: bar.isOpen)
+        .animation(EdgeBarMotion.body, value: bar.openWidth)
+        .animation(EdgeBarMotion.length, value: bar.bodyLength)
+        .animation(EdgeBarMotion.length, value: bar.content.closedSlots)
+    }
+
+    /// The closed rings in a row from the head, the first (most urgent)
+    /// nearest it; "+N" at the far end.
+    private var capsuleRings: some View {
+        HStack(spacing: EdgeBarMetrics.ringSpacing) {
+            if bar.side == .right {
+                overflow
+            }
+            ForEach(bar.side == .left ? bar.content.closedRows : bar.content.closedRows.reversed()) { row in
+                EdgeBarRing(phase: row.phase, source: row.source, beat: bar.beat)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
+            if bar.side == .left {
+                overflow
+            }
+        }
+        .animation(EdgeBarMotion.rows, value: bar.content)
+        .padding(.top, EdgeBarMetrics.headTop + (EdgeBarMetrics.headSize - EdgeBarMetrics.ringSize) / 2)
+        .padding(bar.side.edge, EdgeBarMetrics.capsuleRingStart)
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder private var overflow: some View {
+        if bar.content.overflow > 0 {
+            Text(verbatim: "+\(bar.content.overflow)")
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(EdgeBarPalette.textSecondary)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: EdgeBarMetrics.ringSize, height: EdgeBarMetrics.ringSize)
+        }
+    }
+}
+
+/// A rounded rect at `top`, `height` tall, across the frame's width: the
+/// capsule and the panel are one shape at two settings, so the morph
+/// between them is one interpolation (top, height, corner; the width rides
+/// the frame).
+struct EdgeBarFloatingShape: Shape {
+    var top: CGFloat
+    var height: CGFloat
+    var corner: CGFloat
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat> {
+        get { AnimatablePair(AnimatablePair(top, height), corner) }
+        set {
+            top = newValue.first.first
+            height = newValue.first.second
+            corner = newValue.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let body = CGRect(x: rect.minX, y: rect.minY + top, width: rect.width, height: max(0, height))
+        let radius = max(0, min(corner, body.height / 2, body.width / 2))
+        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: body)
     }
 }
 
@@ -125,27 +272,29 @@ struct EdgeBarColumn: View {
             .frame(
                 width: bar.isOpen ? bar.openWidth : EdgeBarMetrics.barWidth,
                 height: clipHeight,
-                alignment: .topLeading
+                alignment: bar.side.topAlignment
             )
             .clipped()
             .overlay(alignment: .top) { fade(top: true) }
             .overlay(alignment: .bottom) { fade(top: false) }
-            .overlay(alignment: .bottomLeading) { summary }
+            .overlay(alignment: bar.side.bottomAlignment) { summary }
             .animation(EdgeBarMotion.body, value: bar.isOpen)
             .animation(EdgeBarMotion.length, value: bar.content.rows.count)
             .allowsHitTesting(false)
     }
 
     private var column: some View {
-        VStack(alignment: .leading, spacing: EdgeBarMetrics.ringSpacing) {
+        VStack(alignment: bar.side.horizontal, spacing: EdgeBarMetrics.ringSpacing) {
             // Identity is the session: a reorder travels on the spring
             // instead of rings snapping into each other's places.
             ForEach(rows) { row in
                 EdgeBarRing(phase: row.phase, source: row.source, beat: bar.beat)
                     .frame(width: EdgeBarMetrics.barWidth)
-                    .background(alignment: .leading) { ground(row.id) }
-                    .overlay(alignment: .leading) { EdgeBarRowLabel(row: row, isOpen: bar.isOpen) }
-                    .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
+                    .background(alignment: bar.side.alignment) { ground(row.id) }
+                    .overlay(alignment: bar.side.alignment) {
+                        EdgeBarRowLabel(row: row, isOpen: bar.isOpen, side: bar.side)
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: bar.side.unitPoint)))
             }
             if !bar.isOpen, bar.content.overflow > 0 {
                 Text(verbatim: "+\(bar.content.overflow)")
@@ -175,7 +324,7 @@ struct EdgeBarColumn: View {
                 width: max(0, bar.openWidth - 2 * EdgeBarMetrics.groundInset),
                 height: EdgeBarMetrics.groundHeight
             )
-            .offset(x: EdgeBarMetrics.groundInset, y: 1)
+            .offset(x: bar.side.sign * EdgeBarMetrics.groundInset, y: 1)
             .opacity(selected ? 1 : hovered ? 0.5 : 0)
             .animation(EdgeBarMotion.namesOut, value: selected)
             .animation(EdgeBarMotion.namesOut, value: hovered)
@@ -194,7 +343,7 @@ struct EdgeBarColumn: View {
                 endPoint: top ? .top : .bottom
             )
             .frame(height: 24)
-            .padding(.trailing, 1)
+            .padding(bar.side.farEdge, 1)
             .opacity(strength)
         }
     }
@@ -208,26 +357,28 @@ struct EdgeBarColumn: View {
             .lineLimit(1)
             .fixedSize()
             .frame(height: EdgeBarMetrics.summaryHeight)
-            .padding(.leading, EdgeBarMetrics.ringLead)
+            .padding(bar.side.edge, EdgeBarMetrics.ringLead)
             .offset(y: EdgeBarMetrics.summaryGap + EdgeBarMetrics.summaryHeight)
             .opacity(bar.isOpen ? 1 : 0)
             .animation(bar.isOpen ? EdgeBarMotion.namesIn : EdgeBarMotion.namesOut, value: bar.isOpen)
     }
 }
 
-/// A row's name and status line, beside its ring. Comes in from under the
-/// ring (`nameTravel`) just after the body starts to open, leaves before it
-/// starts to close — so no name is ever drawn past the body's edge.
+/// A row's name and status line, beside its ring (on the open side; text
+/// hugs the ring). Comes in from under the ring (`nameTravel`) just after
+/// the body starts to open, leaves before it starts to close — so no name
+/// is ever drawn past the body's edge.
 struct EdgeBarRowLabel: View {
     let row: EdgeBarRow
     let isOpen: Bool
+    let side: EdgeBarSide
 
     private var lead: CGFloat {
         EdgeBarMetrics.barWidth - EdgeBarMetrics.ringLead + EdgeBarMetrics.nameGap
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: side.horizontal, spacing: 1) {
             Text(verbatim: row.name)
                 .font(Font(EdgeBarModel.nameFont))
                 .foregroundStyle(row.phase.isEngaged ? EdgeBarPalette.textPrimary : EdgeBarPalette.textSecondary)
@@ -249,8 +400,8 @@ struct EdgeBarRowLabel: View {
                 .transition(.opacity)
             }
         }
-        .frame(width: EdgeBarMetrics.nameMaxWidth, height: EdgeBarMetrics.labelHeight, alignment: .topLeading)
-        .offset(x: lead - (isOpen ? 0 : EdgeBarMetrics.nameTravel))
+        .frame(width: EdgeBarMetrics.nameMaxWidth, height: EdgeBarMetrics.labelHeight, alignment: side.topAlignment)
+        .offset(x: side.sign * (lead - (isOpen ? 0 : EdgeBarMetrics.nameTravel)))
         .opacity(isOpen ? 1 : 0)
         .animation(isOpen ? EdgeBarMotion.namesIn : EdgeBarMotion.namesOut, value: isOpen)
     }

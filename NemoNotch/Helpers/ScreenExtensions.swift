@@ -35,6 +35,13 @@ extension NSScreen {
         return screenNumber.uint32Value
     }
 
+    /// The display's UUID: stable across reboots and reconnects, unlike its
+    /// `displayID` — what a remembered "this screen" must be keyed on.
+    var displayUUID: String? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
+    }
+
     var isBuiltInDisplay: Bool {
         let key = NSDeviceDescriptionKey("NSScreenNumber")
         guard let id = deviceDescription[key],

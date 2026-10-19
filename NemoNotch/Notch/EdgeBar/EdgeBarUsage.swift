@@ -190,6 +190,8 @@ enum EdgeBarUsage {
 struct EdgeBarUsageBlock: View {
     let lines: [EdgeBarUsageLine]
     let width: CGFloat
+    /// The anchored side: the rings' inset there, the names' inset across.
+    let side: EdgeBarSide
 
     private static let track = Color.white.opacity(0.15)
     private static let fill = Color.white.opacity(0.55)
@@ -213,8 +215,8 @@ struct EdgeBarUsageBlock: View {
                 }
             }
         }
-        .padding(.leading, EdgeBarMetrics.ringLead)
-        .padding(.trailing, EdgeBarMetrics.nameInset)
+        .padding(side.edge, EdgeBarMetrics.ringLead)
+        .padding(side.farEdge, EdgeBarMetrics.nameInset)
         .frame(width: width, alignment: .leading)
         .allowsHitTesting(false)
     }

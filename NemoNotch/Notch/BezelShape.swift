@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The one silhouette every bezel-docked surface draws — the notch shell
-/// (shell fill/clip, activity glow, transient capsule) and the left-edge AI
+/// (shell fill/clip, activity glow, transient capsule) and the docked AI
 /// bar. A body that grows OUT of a screen edge:
 ///
 /// - the segment along the docked edge spans the rect's full length;
@@ -15,11 +15,12 @@ import SwiftUI
 /// frame to `bodyLength + 2 × flare` along the edge.
 ///
 /// One path, drawn canonically for the TOP edge; `.leading` is its transpose
-/// (x ↔ y), so the left bar and the notch can never drift apart in topology.
+/// (x ↔ y) and `.trailing` that mirrored, so the side bars and the notch can
+/// never drift apart in topology.
 /// Both radii animate, so open/close morphs (notch 6/8 → 19/24).
 struct BezelShape: Shape {
     enum Edge {
-        case top, leading
+        case top, leading, trailing
     }
 
     var edge: Edge = .top
@@ -54,6 +55,11 @@ struct BezelShape: Shape {
             let transpose = CGAffineTransform(a: 0, b: 1, c: 1, d: 0, tx: rect.minX, ty: rect.minY)
             return Self.canonical(length: rect.height, depth: rect.width, flare: flare, corner: corner, closed: closed)
                 .applying(transpose)
+        case .trailing:
+            // Transposed and mirrored: the canonical top edge lands on x == maxX.
+            let mirror = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: rect.maxX, ty: rect.minY)
+            return Self.canonical(length: rect.height, depth: rect.width, flare: flare, corner: corner, closed: closed)
+                .applying(mirror)
         }
     }
 

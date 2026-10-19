@@ -95,6 +95,24 @@ struct BezelShapeTests {
         #expect(!p.contains(CGPoint(x: tall.maxX - 2, y: tall.minY + 19 + 2)))
     }
 
+    @Test func trailingIsLeadingMirrored() {
+        // A point inside the leading path at distance d from the left edge is
+        // inside the trailing path at distance d from the right edge.
+        let left = leading()
+        let right = BezelShape(edge: .trailing, flare: 19, corner: 24).path(in: tall)
+        for d in stride(from: 1.0, to: tall.width, by: 7) {
+            for y in stride(from: tall.minY + 1, to: tall.maxY, by: 7) {
+                let inLeft = left.contains(CGPoint(x: tall.minX + d, y: y))
+                let inRight = right.contains(CGPoint(x: tall.maxX - d, y: y))
+                #expect(inLeft == inRight, "mismatch at (\(d), \(y))")
+            }
+        }
+        // Hugging the right edge mid-body: inside; the far (left) side's
+        // corners round off.
+        #expect(right.contains(CGPoint(x: tall.maxX - 1, y: tall.midY)))
+        #expect(!right.contains(CGPoint(x: tall.minX + 2, y: tall.minY + 19 + 2)))
+    }
+
     @Test func outlineLeavesTheEdgeSegmentOut() {
         let open = BezelShape(edge: .leading, flare: 19, corner: 24).outline.path(in: tall)
         // The open outline ends where the closed one would start drawing
