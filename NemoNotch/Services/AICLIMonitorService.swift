@@ -61,10 +61,9 @@ final class AICLIMonitorService {
     }
 
     /// The disk scans and Claude's session-record polling. Not in `init`:
-    /// the menu bar scene builds a throwaway instance as its `??` fallback
-    /// before the real dependencies exist, and every one of those used to
-    /// scan transcripts too (and, with record polling, would have polled
-    /// forever). Only `AppDependencies.build()` calls this.
+    /// tests build bare instances, and only the app's one instance may scan
+    /// transcripts and poll records forever. Only `AppDependencies.build()`
+    /// calls this.
     func startSessionDiscovery() {
         claudeProvider.scanExistingSessions()
         geminiProvider.scanExistingSessions()

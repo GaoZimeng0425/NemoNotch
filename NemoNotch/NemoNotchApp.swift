@@ -14,19 +14,19 @@ struct NemoNotchApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        Settings {
+        // A plain Window, not the `Settings` scene: that one forces a
+        // preference-style toolbar (the sidebar toggle alone on a second row
+        // under the title) and a non-resizable window, and re-imposes both on
+        // every toolbar change — each sidebar collapse made the window
+        // un-resizable again, and patching it back fought SwiftUI every frame
+        // of the collapse animation (2026-10-19).
+        Window("settings.title", id: SettingsWindow.id) {
             SettingsSceneRoot(appDelegate: appDelegate)
         }
-        // One row: traffic lights, the sidebar toggle and the title share the
-        // title bar. The Settings scene's default (preference-style) puts the
-        // toolbar on a SECOND row under the title — the toggle floated alone
-        // there as a round button, pushed the sidebar's search bar down a
-        // row and left an empty band over the detail column.
-        .windowToolbarStyle(.unified(showsTitle: true))
-        // Settings 场景不认内容根视图的 ideal 尺寸(实测被无视、开成 900 宽),
-        // 默认宽高必须在 scene 级声明;内容侧保留 frame(minWidth:minHeight:)
-        // 作为拖拽下限的 auto-layout 约束。
         .defaultSize(width: 680, height: 540)
+        // Opened from the menu / notch only — never at launch, never restored.
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
     }
 
     init() {
@@ -35,7 +35,7 @@ struct NemoNotchApp: App {
 }
 
 struct MenuContent: View {
-    let appSettings: AppSettings?
+    let appSettings: AppSettings
 
     var body: some View {
         Group {
@@ -44,7 +44,7 @@ struct MenuContent: View {
             KeepAwakeSection()
             AppSection()
         }
-        .environment(\.locale, appSettings?.currentLocale ?? Locale.current)
+        .environment(\.locale, appSettings.currentLocale)
     }
 }
 
@@ -57,7 +57,8 @@ struct MenuContent: View {
 @Observable
 final class AppDependencyBox {
     static let shared = AppDependencyBox()
-    var deps: AppDependencies?
+    fileprivate(set) var deps: AppDependencies?
+    private init() {}
 }
 
 /// The menu bar menu, once the services exist (empty for the launch instant
@@ -70,6 +71,18 @@ struct MenuRoot: View {
                 .environment(deps.aiMonitor)
                 .environment(deps.keepAwake)
         }
+    }
+}
+
+enum SettingsWindow {
+    static let id = "settings"
+
+    /// Opens the settings window, or brings it forward. An accessory app
+    /// doesn't come to the front by opening a window, so activate too.
+    @MainActor
+    static func open(with openWindow: OpenWindowAction) {
+        openWindow(id: id)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
@@ -114,7 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// table instead of 25 optional fields. nil only before
     /// `applicationDidFinishLaunching` runs; the scenes wait on
     /// `AppDependencyBox` for that window instead of building stand-ins.
-    private(set) var deps: AppDependencies?
+    var deps: AppDependencies? {
+        AppDependencyBox.shared.deps
+    }
+
     private(set) var coordinator: NotchCoordinator?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
@@ -155,7 +171,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let deps = AppDependencies.build()
-        self.deps = deps
         AppDependencyBox.shared.deps = deps
 
         let notchCoordinator = NotchCoordinator(content: deps.notchContent())

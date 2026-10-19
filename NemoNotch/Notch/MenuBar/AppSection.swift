@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct AppSection: View {
+    @Environment(\.openWindow) private var openWindow
+
     var body: some View {
-        SettingsLink {
-            Text("menu.preferences")
+        Button("menu.preferences") {
+            SettingsWindow.open(with: openWindow)
         }
         .keyboardShortcut(",", modifiers: .command)
 

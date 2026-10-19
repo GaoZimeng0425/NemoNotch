@@ -6232,6 +6232,22 @@
           }
         }
       }
+    },
+    "settings.sidebar.toggle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle Sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示/隐藏边栏"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
