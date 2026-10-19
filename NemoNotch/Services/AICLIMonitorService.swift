@@ -30,8 +30,6 @@ final class AICLIMonitorService {
         gemini.setHookServer(hookServer)
         opencode.setHookServer(hookServer)
         zcode.setHookServer(hookServer)
-        claude.scanExistingSessions()
-        gemini.scanExistingSessions()
 
         // Refresh hook-sender.sh on launch when hooks are installed, so socket
         // path / script version migrations take effect without requiring the
@@ -60,6 +58,16 @@ final class AICLIMonitorService {
 
     func startServer() {
         hookServer.start()
+    }
+
+    /// The disk scans and Claude's session-record polling. Not in `init`:
+    /// the menu bar scene builds a throwaway instance as its `??` fallback
+    /// before the real dependencies exist, and every one of those used to
+    /// scan transcripts too (and, with record polling, would have polled
+    /// forever). Only `AppDependencies.build()` calls this.
+    func startSessionDiscovery() {
+        claudeProvider.scanExistingSessions()
+        geminiProvider.scanExistingSessions()
     }
 
     var activeSession: AISessionState? {
