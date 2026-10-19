@@ -8,10 +8,7 @@ struct NemoNotchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(appSettings: appDelegate.deps?.settings)
-                .environment(appDelegate.deps?.media ?? MediaService())
-                .environment(appDelegate.deps?.aiMonitor ?? AICLIMonitorService())
-                .environment(appDelegate.deps?.keepAwake ?? KeepAwakeService())
+            MenuRoot()
         } label: {
             MenuBarLabel()
         }
@@ -20,6 +17,12 @@ struct NemoNotchApp: App {
         Settings {
             SettingsSceneRoot(appDelegate: appDelegate)
         }
+        // One row: traffic lights, the sidebar toggle and the title share the
+        // title bar. The Settings scene's default (preference-style) puts the
+        // toolbar on a SECOND row under the title — the toggle floated alone
+        // there as a round button, pushed the sidebar's search bar down a
+        // row and left an empty band over the detail column.
+        .windowToolbarStyle(.unified(showsTitle: true))
         // Settings 场景不认内容根视图的 ideal 尺寸(实测被无视、开成 900 宽),
         // 默认宽高必须在 scene 级声明;内容侧保留 frame(minWidth:minHeight:)
         // 作为拖拽下限的 auto-layout 约束。
@@ -45,12 +48,37 @@ struct MenuContent: View {
     }
 }
 
+/// The app's dependencies, observable: the scenes' bodies run before
+/// `applicationDidFinishLaunching` builds them, and a view reading this
+/// re-renders once they exist — instead of the old `?? Service()` fallbacks,
+/// each of which built a throwaway service (a second AI monitor that scanned
+/// sessions, a second MediaService that spawned its perl daemon, …).
+@MainActor
+@Observable
+final class AppDependencyBox {
+    static let shared = AppDependencyBox()
+    var deps: AppDependencies?
+}
+
+/// The menu bar menu, once the services exist (empty for the launch instant
+/// before that).
+struct MenuRoot: View {
+    var body: some View {
+        if let deps = AppDependencyBox.shared.deps {
+            MenuContent(appSettings: deps.settings)
+                .environment(deps.media)
+                .environment(deps.aiMonitor)
+                .environment(deps.keepAwake)
+        }
+    }
+}
+
 struct SettingsSceneRoot: View {
     let appDelegate: AppDelegate
 
     var body: some View {
         Group {
-            if let deps = appDelegate.deps {
+            if let deps = AppDependencyBox.shared.deps {
                 SettingsView()
                     .environment(deps.settings)
                     .environment(deps.aiMonitor)
@@ -84,8 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Every service, assembled in `AppDependencies.build()` — one non-optional
     /// table instead of 25 optional fields. nil only before
-    /// `applicationDidFinishLaunching` runs (the SwiftUI scenes' `??`
-    /// fallbacks cover that window).
+    /// `applicationDidFinishLaunching` runs; the scenes wait on
+    /// `AppDependencyBox` for that window instead of building stand-ins.
     private(set) var deps: AppDependencies?
     private(set) var coordinator: NotchCoordinator?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
@@ -128,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let deps = AppDependencies.build()
         self.deps = deps
+        AppDependencyBox.shared.deps = deps
 
         let notchCoordinator = NotchCoordinator(content: deps.notchContent())
         notchCoordinator.autoSelectTab = { [weak self] in
