@@ -1,11 +1,26 @@
-import Testing
+import Foundation
 @testable import NemoNotch
+import Testing
 
 @MainActor
 struct AppActivatorTests {
     /// 1_234_567 is far above any allocatable pid (kern.pid_max tops out well
     /// below), so the walk is guaranteed to dead-end immediately.
     private static let bogusPID: Int32 = 1_234_567
+
+    /// The walk's one step: a live process's parent. A CLI in a terminal is
+    /// never a GUI app itself, so the host is only found by climbing — if
+    /// this returns nil the session never gets Go-to-session.
+    /// (A child we spawn, not this process: the test host is launched by
+    /// launchd, ppid 1, which the walk deliberately treats as "no parent".)
+    @Test func parentPIDOfAChildIsThisProcess() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["5"]
+        try child.run()
+        defer { child.terminate() }
+        #expect(AppActivator.parentPID(of: child.processIdentifier) == getpid())
+    }
 
     @Test func hostAppPIDIsNilForDeadPID() {
         #expect(AppActivator.hostAppPID(of: Self.bogusPID) == nil)
