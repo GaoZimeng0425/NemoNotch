@@ -116,6 +116,18 @@ enum AppActivator {
         return nil
     }
 
+    /// The hosting app's display name ("Zap", "iTerm2") for the card's
+    /// "Open in …" button: the running process first, else the bundle's.
+    static func appName(pid: Int32?, bundleId: String?) -> String? {
+        if let pid, let name = NSRunningApplication(processIdentifier: pid)?.localizedName {
+            return name
+        }
+        guard let bundleId, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+            return nil
+        }
+        return url.deletingPathExtension().lastPathComponent
+    }
+
     /// Resolve the bundle id of a running process by PID.
     static func bundleId(forPid pid: Int32) -> String? {
         NSRunningApplication(processIdentifier: pid)?.bundleIdentifier

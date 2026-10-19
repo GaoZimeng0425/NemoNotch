@@ -73,6 +73,7 @@ final class OpencodeProvider: AIProvider {
         case "UserPromptSubmit":
             store.mutateOrCreate(sessionId, source: .opencode) { s in
                 s.phase = s.phase.transition(to: .processing)
+                s.beginTurn()
                 self.applyContext(to: &s, event: event)
                 s.lastEventTime = now
             }
@@ -81,6 +82,7 @@ final class OpencodeProvider: AIProvider {
             store.mutateOrCreate(sessionId, source: .opencode) { s in
                 s.phase = s.phase.transition(to: .processing)
                 s.currentTool = event.toolName
+                s.recordTool(event)
                 s.isPreToolUse = true
                 self.applyContext(to: &s, event: event)
                 s.lastEventTime = now
@@ -106,7 +108,7 @@ final class OpencodeProvider: AIProvider {
                 let ctx = PermissionContext(
                     toolUseId: event.toolUseId ?? UUID().uuidString,
                     toolName: event.toolName ?? "permission",
-                    toolInput: event.message,
+                    toolInput: event.toolInput ?? event.message,
                     receivedAt: now
                 )
                 s.phase = s.phase.transition(to: .waitingForApproval(ctx))

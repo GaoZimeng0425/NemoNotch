@@ -104,8 +104,8 @@ extension AIChatTab {
                 Text("ai.awaiting_approval \(ctx.toolName)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(NotchTheme.accent)
-                if let input = ctx.toolInput, !input.isEmpty {
-                    Text(input)
+                if !ctx.displayInput.isEmpty {
+                    Text(verbatim: ctx.displayInput)
                         .font(.system(size: 9))
                         .foregroundStyle(NotchTheme.textTertiary)
                         .lineLimit(1)
@@ -426,8 +426,8 @@ extension AIChatTab {
                 Text(ctx.toolName)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(.orange.opacity(0.9))
-                if let input = ctx.toolInput, !input.isEmpty {
-                    Text(input)
+                if !ctx.displayInput.isEmpty {
+                    Text(verbatim: ctx.displayInput)
                         .font(.system(size: 9))
                         .foregroundStyle(NotchTheme.textTertiary)
                         .lineLimit(1)

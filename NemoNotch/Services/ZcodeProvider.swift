@@ -74,6 +74,7 @@ final class ZcodeProvider: AIProvider {
         case "UserPromptSubmit":
             store.mutateOrCreate(sessionId, source: .zcode) { s in
                 s.phase = s.phase.transition(to: .processing)
+                s.beginTurn()
                 self.applyContext(to: &s, event: event)
                 s.lastEventTime = now
             }
@@ -82,6 +83,7 @@ final class ZcodeProvider: AIProvider {
             store.mutateOrCreate(sessionId, source: .zcode) { s in
                 s.phase = s.phase.transition(to: .processing)
                 s.currentTool = event.toolName
+                s.recordTool(event)
                 s.isPreToolUse = true
                 self.applyContext(to: &s, event: event)
                 s.lastEventTime = now
@@ -139,9 +141,11 @@ final class ZcodeProvider: AIProvider {
         Task.detached(priority: .utility) { [weak self] in
             guard let usage = ZcodeUsageReader.readSessionUsage(sessionId: sessionId) else { return }
             await MainActor.run { [weak self] in
-                guard let self, self.store.sessions.contains(where: { $0.key == sessionId }) else { return }
-                self.store.mutate(sessionId) { s in
-                    if let model = usage.model { s.model = model }
+                guard let self, store.sessions.contains(where: { $0.key == sessionId }) else { return }
+                store.mutate(sessionId) { s in
+                    if let model = usage.model {
+                        s.model = model
+                    }
                     s.lastContextTokens = usage.contextTokens
                     s.inputTokens = usage.inputTokens
                     s.outputTokens = usage.outputTokens
@@ -153,9 +157,15 @@ final class ZcodeProvider: AIProvider {
     }
 
     private func applyContext(to session: inout AISessionState, event: HookEvent) {
-        if let cwd = event.cwd { session.cwd = cwd }
-        if let model = event.model, !model.isEmpty { session.model = model }
-        if let msg = event.message, !msg.isEmpty { session.lastMessage = msg }
+        if let cwd = event.cwd {
+            session.cwd = cwd
+        }
+        if let model = event.model, !model.isEmpty {
+            session.model = model
+        }
+        if let msg = event.message, !msg.isEmpty {
+            session.lastMessage = msg
+        }
         session.lastEventName = event.hookEventName
     }
 
@@ -187,8 +197,12 @@ final class ZcodeProvider: AIProvider {
             // SessionEnd event, and a manually-aborted or Stop-missed session is
             // left in .processing with no signal to clear it — without this, the
             // notch badge would spin for up to 30 min (removeStaleThreshold).
-            if case .idle = session.phase { continue }
-            if case .ended = session.phase { continue }
+            if case .idle = session.phase {
+                continue
+            }
+            if case .ended = session.phase {
+                continue
+            }
             store.mutate(session.id) { s in
                 s.phase = s.phase.transition(to: .idle)
                 s.currentTool = nil

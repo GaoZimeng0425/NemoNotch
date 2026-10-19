@@ -34,7 +34,7 @@ final class ClaudeProvider: AIProvider {
     // MARK: - Startup Scan
 
     func scanExistingSessions() {
-        let store = self.store
+        let store = store
         // 启动扫描的全部文件 I/O 与解析(1 小时内的会话动辄数 MB)挪到后台,
         // store 写入回到主线程;应用前重查 contains,迟到的扫描不会覆盖期间
         // 由 hook 事件创建的活跃会话。
@@ -64,9 +64,8 @@ final class ClaudeProvider: AIProvider {
         for dir in projectDirs {
             let fullDir = "\(projectsDir)/\(dir)"
             var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: fullDir, isDirectory: &isDir), isDir.boolValue else { continue }
-
-            guard let files = try? fm.contentsOfDirectory(atPath: fullDir) else { continue }
+            guard fm.fileExists(atPath: fullDir, isDirectory: &isDir), isDir.boolValue,
+                  let files = try? fm.contentsOfDirectory(atPath: fullDir) else { continue }
             for file in files where file.hasSuffix(".jsonl") {
                 let filePath = "\(fullDir)/\(file)"
                 guard let attrs = try? fm.attributesOfItem(atPath: filePath),
@@ -93,12 +92,23 @@ final class ClaudeProvider: AIProvider {
                 session.outputTokens = result.outputTokens
                 session.cacheReadTokens = result.cacheReadTokens
                 session.cacheCreationTokens = result.cacheCreationTokens
-                if result.lastContextTokens > 0 { session.lastContextTokens = result.lastContextTokens }
-                if let model = result.lastModel { session.model = model }
+                if result.lastContextTokens > 0 {
+                    session.lastContextTokens = result.lastContextTokens
+                }
+                if let model = result.lastModel {
+                    session.model = model
+                }
+                if let branch = result.lastGitBranch {
+                    session.gitBranch = branch
+                }
 
                 let userMessages = result.messages.filter { $0.role == .user }
-                if let first = userMessages.first { session.firstUserMessage = String(first.content.prefix(80)) }
-                if let last = userMessages.last { session.lastUserMessage = String(last.content.prefix(80)) }
+                if let first = userMessages.first {
+                    session.firstUserMessage = String(first.content.prefix(80))
+                }
+                if let last = userMessages.last {
+                    session.lastUserMessage = String(last.content.prefix(80))
+                }
 
                 session.phase = .idle
                 found.append(session)
@@ -153,6 +163,7 @@ final class ClaudeProvider: AIProvider {
         case "UserPromptSubmit":
             store.mutateOrCreate(sessionId, source: .claude) { session in
                 session.phase = session.phase.transition(to: .processing)
+                session.beginTurn()
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
             }
@@ -162,6 +173,7 @@ final class ClaudeProvider: AIProvider {
             store.mutateOrCreate(sessionId, source: .claude) { session in
                 session.phase = session.phase.transition(to: .processing)
                 session.currentTool = event.toolName
+                session.recordTool(event)
                 session.isPreToolUse = true
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
@@ -207,7 +219,7 @@ final class ClaudeProvider: AIProvider {
             let ctx = PermissionContext(
                 toolUseId: event.toolUseId ?? event.toolName ?? "unknown",
                 toolName: event.toolName ?? "unknown",
-                toolInput: event.message,
+                toolInput: event.toolInput ?? event.message,
                 receivedAt: now
             )
             store.mutateOrCreate(sessionId, source: .claude) { session in
@@ -248,8 +260,12 @@ final class ClaudeProvider: AIProvider {
     // MARK: - Helpers
 
     private func applyContext(to session: inout AISessionState, event: HookEvent) {
-        if let cwd = event.cwd { session.cwd = cwd }
-        if let msg = event.message, !msg.isEmpty { session.lastMessage = msg }
+        if let cwd = event.cwd {
+            session.cwd = cwd
+        }
+        if let msg = event.message, !msg.isEmpty {
+            session.lastMessage = msg
+        }
         session.lastEventName = event.hookEventName
     }
 
@@ -330,16 +346,18 @@ final class ClaudeProvider: AIProvider {
         let previous = parseChains[sessionId]
         let task = Task { [weak self] in
             await previous?.value
-            guard let self, self.store.contains(sessionId),
-                  let current = self.store.get(sessionId) else { return }
+            guard let self, store.contains(sessionId),
+                  let current = store.get(sessionId) else { return }
             let offset = current.lastParsedOffset
             let result = await Task.detached(priority: .userInitiated) {
                 ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
             }.value
 
-            guard self.store.contains(sessionId) else { return }
-            self.store.mutate(sessionId) { session in
-                if result.cleared { session.messages = [] }
+            guard store.contains(sessionId) else { return }
+            store.mutate(sessionId) { session in
+                if result.cleared {
+                    session.messages = []
+                }
                 for message in result.messages {
                     session.upsertMessage(message)
                 }
@@ -348,8 +366,15 @@ final class ClaudeProvider: AIProvider {
                 session.outputTokens += result.outputTokens
                 session.cacheReadTokens += result.cacheReadTokens
                 session.cacheCreationTokens += result.cacheCreationTokens
-                if result.lastContextTokens > 0 { session.lastContextTokens = result.lastContextTokens }
-                if let model = result.lastModel { session.model = model }
+                if result.lastContextTokens > 0 {
+                    session.lastContextTokens = result.lastContextTokens
+                }
+                if let model = result.lastModel {
+                    session.model = model
+                }
+                if let branch = result.lastGitBranch {
+                    session.gitBranch = branch
+                }
 
                 let userMessages = result.messages.filter { $0.role == .user }
                 if let first = userMessages.first, session.firstUserMessage == nil {
@@ -361,7 +386,7 @@ final class ClaudeProvider: AIProvider {
             }
 
             if result.interrupted {
-                self.handleInterrupt(sessionId: sessionId)
+                handleInterrupt(sessionId: sessionId)
             }
         }
         parseChains[sessionId] = task
@@ -402,8 +427,12 @@ final class ClaudeProvider: AIProvider {
             // Demote ANY active phase, not just .waitingForInput — an aborted or
             // Stop-missed session stuck in .processing would otherwise spin for
             // up to 30 min (removeStaleThreshold).
-            if case .idle = session.phase { continue }
-            if case .ended = session.phase { continue }
+            if case .idle = session.phase {
+                continue
+            }
+            if case .ended = session.phase {
+                continue
+            }
             store.mutate(session.id) { s in
                 s.phase = s.phase.transition(to: .idle)
                 s.currentTool = nil
