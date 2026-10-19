@@ -73,6 +73,7 @@ struct AppDependencies {
         let media = MediaService(disableLiveUpdates: UITestMode.isActive)
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
+        aiMonitor.startSessionDiscovery()
         let launcher = LauncherService(settings: settings)
 
         if !UITestMode.isActive {
