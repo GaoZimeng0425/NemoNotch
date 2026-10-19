@@ -42,8 +42,12 @@ enum JSONValue: Decodable, Equatable {
 
     /// Compact JSON text (what `PermissionContext.displayInput` parses).
     var jsonString: String? {
-        guard JSONSerialization.isValidJSONObject(foundation),
-              let data = try? JSONSerialization.data(withJSONObject: foundation, options: [.sortedKeys])
+        Self.jsonString(of: foundation)
+    }
+
+    static func jsonString(of object: Any) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         else { return nil }
         return String(data: data, encoding: .utf8)
     }
@@ -60,18 +64,24 @@ enum ToolSubject {
     static func subject(of input: [String: Any]?) -> String? {
         guard let input else { return nil }
         for key in keys {
-            guard let value = input[key] as? String, let line = lines(of: value).first else { continue }
+            guard let value = input[key] as? String, let line = lines(of: head(value)).first else { continue }
             return capped(line)
         }
         if let questions = input["questions"] as? [[String: Any]],
            let text = questions.first?["question"] as? String,
-           let line = lines(of: text).first {
+           let line = lines(of: head(text)).first {
             return capped(line)
         }
         return nil
     }
 
-    private static func lines(of value: String) -> [String] {
+    /// Enough of a value to find its first line: a heredoc command can be
+    /// megabytes and only its start is ever said.
+    private static func head(_ value: String) -> Substring {
+        value.prefix(4 * limit)
+    }
+
+    private static func lines(of value: Substring) -> [String] {
         var joined: [String] = []
         var pending = ""
         for raw in value.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {

@@ -46,6 +46,10 @@ struct HookEvent: Codable, Sendable {
     /// One line about the tool call (`ToolSubject`): the command, the path.
     let toolSubject: String?
 
+    /// Events whose `tool_input` is read: the card's tool subject
+    /// (PreToolUse / Gemini's BeforeTool) and the approval detail.
+    static let readsToolInput: Set<String> = ["PreToolUse", "BeforeTool", "PermissionRequest"]
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         hookEventName = try container.decode(String.self, forKey: .hookEventName)
@@ -63,10 +67,18 @@ struct HookEvent: Codable, Sendable {
         // Tolerant on purpose: a foreign emitter may send a non-numeric value
         // here, and one bad field must not drop the whole event.
         cliPID = (try? container.decodeIfPresent(Int.self, forKey: .cliPID)) ?? nil
-        // Same tolerance: a malformed input loses the detail, not the event.
-        let input = (try? container.decodeIfPresent(JSONValue.self, forKey: .toolInput)) ?? nil
-        toolInput = input?.jsonString
-        toolSubject = ToolSubject.subject(of: input?.foundation as? [String: Any])
+        // Only the events that use it pay for it: a PostToolUse carries a
+        // Write's whole file here, decoded on the main actor. Same tolerance
+        // as above — a malformed input loses the detail, not the event.
+        if Self.readsToolInput.contains(hookEventName),
+           let input = (try? container.decodeIfPresent(JSONValue.self, forKey: .toolInput)) ?? nil {
+            let object = input.foundation
+            toolInput = JSONValue.jsonString(of: object)
+            toolSubject = ToolSubject.subject(of: object as? [String: Any])
+        } else {
+            toolInput = nil
+            toolSubject = nil
+        }
     }
 
     init(

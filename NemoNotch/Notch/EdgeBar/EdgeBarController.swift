@@ -50,6 +50,7 @@ final class EdgeBarController: NSObject {
     @ObservationIgnored private var beatTimer: Timer?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var usagePrimed = false
+    @ObservationIgnored private var hostNames: [String: String?] = [:]
     /// Every readable line, before fitting to the window.
     @ObservationIgnored private var rawUsageLines: [EdgeBarUsageLine] = []
 
@@ -152,8 +153,16 @@ final class EdgeBarController: NSObject {
     }
 
     /// The app the session runs in, named for the card's "Open in …".
+    /// Cached per host: the card's body re-evaluates on every button hover,
+    /// and a gone pid falls back to a synchronous LaunchServices lookup.
     func hostName(of session: AISessionState) -> String? {
-        AppActivator.appName(pid: session.launchingAppPID, bundleId: session.launchingAppBundleId)
+        let key = "\(session.launchingAppPID.map(String.init) ?? "-")|\(session.launchingAppBundleId ?? "-")"
+        if let cached = hostNames[key] {
+            return cached
+        }
+        let name = AppActivator.appName(pid: session.launchingAppPID, bundleId: session.launchingAppBundleId)
+        hostNames[key] = .some(name)
+        return name
     }
 
     // MARK: - Window

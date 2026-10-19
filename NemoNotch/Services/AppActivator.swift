@@ -125,7 +125,7 @@ enum AppActivator {
         guard let bundleId, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
             return nil
         }
-        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        return url.deletingPathExtension().lastPathComponent
     }
 
     /// Resolve the bundle id of a running process by PID.

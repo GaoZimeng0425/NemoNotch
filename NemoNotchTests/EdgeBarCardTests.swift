@@ -25,6 +25,13 @@ struct EdgeBarCardTests {
         #expect(ToolSubject.subject(of: ["command": long])?.count == ToolSubject.limit)
     }
 
+    @Test func toolInputIsOnlyDecodedWhereItIsUsed() throws {
+        let json = #"{"hook_event_name":"PostToolUse","session_id":"s","tool_name":"Write","tool_input":{"file_path":"/a"}}"#
+        let event = try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
+        #expect(event.toolInput == nil)
+        #expect(event.toolSubject == nil)
+    }
+
     @Test func malformedToolInputKeepsTheEvent() throws {
         let json = #"{"hook_event_name":"PreToolUse","session_id":"s","tool_name":"Bash","tool_input":"just text"}"#
         let event = try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
