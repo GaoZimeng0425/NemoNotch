@@ -3,7 +3,9 @@
 # Pulls latest first: if local develop is purely behind origin/develop, fast-
 # forwards the primary checkout's develop (--autostash shields any in-flight
 # dirty files), then creates feature/<name> off the refreshed develop in a
-# sibling worktree at ../<repo>-worktrees/<name>.
+# worktree nested inside the primary checkout at .worktree/<name> (the folder
+# is git-ignored and excluded from swiftlint/swiftformat so the nested copy is
+# never linted, formatted or staged from the primary checkout).
 set -e
 
 name="$1"
@@ -13,9 +15,7 @@ if [ -z "$name" ]; then
 fi
 
 main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
-repo=$(basename "$main_wt")
-parent=$(dirname "$main_wt")
-wt="$parent/${repo}-worktrees/$name"
+wt="$main_wt/.worktree/$name"
 branch="feature/$name"
 
 if git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then

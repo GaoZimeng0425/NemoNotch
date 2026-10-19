@@ -96,6 +96,8 @@ if [ -n "$wt" ]; then
     *)
       git worktree remove "$wt"
       git -C "$main_wt" branch -d "$branch"
+      # The last feature leaves an empty .worktree/ behind; don't let it linger.
+      rmdir "$main_wt/.worktree" 2>/dev/null || true
       echo "🧹 worktree 已移除,分支已删除" ;;
   esac
 fi
