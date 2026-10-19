@@ -50,7 +50,7 @@ struct EdgeBarView: View {
             }
         }
         .frame(width: shapeSize.width, height: shapeSize.height, alignment: .topLeading)
-        .clipShape(EdgeBarShape())
+        .clipShape(EdgeBarMetrics.shape)
         .animation(EdgeBarMotion.body, value: bar.isOpen)
         .animation(EdgeBarMotion.body, value: bar.openWidth)
         .animation(EdgeBarMotion.length, value: bar.bodyLength)
@@ -63,7 +63,7 @@ struct EdgeBarView: View {
     }
 
     private var bodyShape: some View {
-        let shape = EdgeBarShape()
+        let shape = EdgeBarMetrics.shape
         return shape
             .fill(EdgeBarPalette.body)
             // A thin inner edge separates the body from a dark wall behind

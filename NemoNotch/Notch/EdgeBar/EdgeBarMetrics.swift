@@ -22,6 +22,11 @@ enum EdgeBarMetrics {
     /// Transparent room on the inner side for the shadow and around the card.
     static let gutter: CGFloat = 18
 
+    /// The body's silhouette: the notch shell's shape, docked left.
+    static var shape: BezelShape {
+        BezelShape(edge: .leading, flare: flare, corner: corner)
+    }
+
     // MARK: Head
 
     static let headSize: CGFloat = 34

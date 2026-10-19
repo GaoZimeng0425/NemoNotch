@@ -327,7 +327,7 @@ struct NotchView: View {
             Spacer(minLength: 0)
         }
         .frame(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
-        // No own clip: the shell's single NotchShape clip owns the silhouette
+        // No own clip: the shell's single BezelShape clip owns the silhouette
         // (bottom corners included) — content lives inside it structurally.
     }
 

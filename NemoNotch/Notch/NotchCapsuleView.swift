@@ -16,7 +16,7 @@ import SwiftUI
 /// hit-testing lives in `NotchCoordinator` and only reads the physical notch
 /// rect, so the widened black area stays click/hover-inert.
 ///
-/// The silhouette is the shared `NotchShape` with the collapsed shell's
+/// The silhouette is the shared `BezelShape` with the collapsed shell's
 /// radii (top flare 6 / bottom corner 8), so the capsule reads as the notch
 /// itself widening rather than a foreign pill hovering over it; the frame
 /// carries the flare overhang (`+ topRadius * 2`) on top of the body width.
@@ -33,10 +33,11 @@ struct NotchCapsuleView: View {
     @State private var measuredContentWidth: CGFloat?
 
     /// The collapsed-shell silhouette, shared with `NotchBackgroundView`.
-    private var capsuleShape: NotchShape {
-        NotchShape(
-            topCornerRadius: NotchConstants.cornerRadiusTopClosed,
-            bottomCornerRadius: NotchConstants.cornerRadiusBottomClosed
+    private var capsuleShape: BezelShape {
+        BezelShape(
+            edge: .top,
+            flare: NotchConstants.cornerRadiusTopClosed,
+            corner: NotchConstants.cornerRadiusBottomClosed
         )
     }
 
