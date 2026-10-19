@@ -133,8 +133,9 @@ struct EdgeBarColumn: View {
                     .transition(.opacity)
             }
         }
-        .animation(EdgeBarMotion.rows, value: rows)
-        .animation(EdgeBarMotion.rows, value: bar.content.overflow)
+        // Keyed on the store's content, not the derived `rows` (which also
+        // flips on open/close — those changes are the growing clip's).
+        .animation(EdgeBarMotion.rows, value: bar.content)
     }
 
     /// Behind the selected row (the one the card speaks for), half as strong

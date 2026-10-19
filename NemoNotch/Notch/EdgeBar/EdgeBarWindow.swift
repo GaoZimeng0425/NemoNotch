@@ -251,10 +251,13 @@ final class EdgeBarHostingView: NSHostingView<AnyView> {
 
         /// Areas that are gone send no exit; forgetting the last one the
         /// cursor was in is leaving.
+        /// Also when nothing was counted inside: an area installed under the
+        /// cursor never says "entered" (the bar can still open from moves),
+        /// and a repeated exit is harmless to the hover intent.
         func keep(_ regions: Set<Region>) {
-            let wasInside = !inside.isEmpty
             inside.formIntersection(regions)
-            if wasInside, inside.isEmpty {
+            if regions.isEmpty {
+                doubted.removeAll()
                 handler?(.exited)
             }
         }

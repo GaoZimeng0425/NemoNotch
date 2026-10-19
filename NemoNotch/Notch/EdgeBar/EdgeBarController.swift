@@ -119,11 +119,11 @@ final class EdgeBarController: NSObject {
         if width != openWidth {
             openWidth = width
         }
-        scrollOffset = min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count))
+        setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
         if let selectedRow, !next.rows.contains(where: { $0.id == selectedRow }) {
             deselect()
         } else if let selectedRow, let slot = next.rows.firstIndex(where: { $0.id == selectedRow }) {
-            cardSlot = slot
+            setIfChanged(\.cardSlot, slot)
         }
         updateBodyRect()
         updateBeat()
@@ -197,7 +197,6 @@ final class EdgeBarController: NSObject {
     private func pointer(_ pointer: EdgeBarHostingView.Pointer) {
         switch pointer {
         case .entered:
-            guard !chatBubble.isVisible else { return }
             hover.pointerEntered()
         case .exited:
             rowSwitch.cancel()
@@ -208,7 +207,6 @@ final class EdgeBarController: NSObject {
         case let .moved(point):
             let bar = barPoint(point)
             setIfChanged(\.isOverHead, EdgeBarMetrics.isOverHead(x: bar.x, y: bar.y))
-            guard !chatBubble.isVisible else { return }
             // A move is only reported inside the bar, so it also says "still
             // here" — cancelling a close left pending by a missed enter.
             hover.pointerEntered()
