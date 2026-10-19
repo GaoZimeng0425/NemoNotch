@@ -7,9 +7,10 @@ import SwiftUI
 struct EdgeBarView: View {
     @Environment(EdgeBarController.self) var controller
 
-    /// Canvas height: the window spans the screen's visible height.
+    /// Canvas height: set by the controller's dock cycle (window and view
+    /// can never disagree after a display change).
     private var canvasHeight: CGFloat {
-        NSScreen.main?.visibleFrame.height ?? 900
+        controller.canvasHeight
     }
 
     private var slots: Int {
