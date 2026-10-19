@@ -183,15 +183,21 @@ final class EdgeBarController: NSObject {
 
     /// The bar pins to the BUILT-IN screen's left edge (external displays
     /// here flap, and a bar on a dropped display is simply gone).
-    private func dockScreen() -> NSScreen? {
+    static func dockScreen() -> NSScreen? {
         NSScreen.screens.first(where: { CGDisplayIsBuiltin($0.displayID) != 0 }) ?? NSScreen.screens.first
+    }
+
+    /// Whether the bar is up on this display. That screen's notch leaves AI
+    /// sessions to the bar; other screens' notches still show them.
+    static func isShown(on displayID: CGDirectDisplayID, settings: AppSettings) -> Bool {
+        settings.aiStatusFabEnabled && dockScreen()?.displayID == displayID
     }
 
     /// Frame, bar position and order: the envelope spans the visible height,
     /// the bar's head sits where a full bar centred on the screen would start.
     func applyDock() {
         // A screen change landing mid-drag would yank the bar back.
-        guard !isDragging, appSettings.aiStatusFabEnabled, let window, let screen = dockScreen() else { return }
+        guard !isDragging, appSettings.aiStatusFabEnabled, let window, let screen = Self.dockScreen() else { return }
         let visible = screen.visibleFrame
         let top: CGFloat
         if let fraction = Self.storedTopFraction {

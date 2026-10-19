@@ -3650,13 +3650,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show floating AI-status button while sessions run"
+            "value" : "Show the AI status bar on the screen's left edge"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会话运行时显示悬浮 AI 状态按钮"
+            "value" : "在屏幕左边缘显示 AI 状态栏"
           }
         }
       }

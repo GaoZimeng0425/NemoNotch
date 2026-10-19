@@ -60,10 +60,10 @@ enum BadgeItem: Identifiable, Equatable {
     }
 
     /// The collapsed notch's AI-session badges: one per session of an enabled
-    /// provider that awaits approval or is working. None while the edge bar
-    /// is shown — its rings already carry these sessions, so the notch would
-    /// only repeat them (and with no AI badge, the expanded glow follows only
-    /// agents). Switch the bar off and they come back.
+    /// provider that awaits approval or is working. None on the screen the
+    /// edge bar is up on — its rings already carry these sessions, so that
+    /// notch would only repeat them (and with no AI badge, its expanded glow
+    /// follows only agents). Other screens, or the bar switched off, keep them.
     static func sessionItems(
         _ sessions: [AISessionState],
         edgeBarShown: Bool,

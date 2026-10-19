@@ -10,6 +10,8 @@ final class BadgeViewModel {
     private let agentRegistry: AgentMonitorRegistry
     private let pomodoroService: PomodoroTimerService
     private let appSettings: AppSettings
+    /// The screen this notch is on (one view model per screen).
+    private let displayID: CGDirectDisplayID
 
     var shownHasActiveBadge: Bool = false
     var displayedBadgeItems: [BadgeItem] = []
@@ -23,7 +25,8 @@ final class BadgeViewModel {
         notificationService: NotificationService,
         agentRegistry: AgentMonitorRegistry,
         pomodoroService: PomodoroTimerService,
-        appSettings: AppSettings
+        appSettings: AppSettings,
+        displayID: CGDirectDisplayID
     ) {
         self.mediaService = mediaService
         self.calendarService = calendarService
@@ -32,6 +35,7 @@ final class BadgeViewModel {
         self.agentRegistry = agentRegistry
         self.pomodoroService = pomodoroService
         self.appSettings = appSettings
+        self.displayID = displayID
     }
 
     // MARK: - Computed
@@ -39,8 +43,8 @@ final class BadgeViewModel {
     var activeBadgeItems: [BadgeItem] {
         var items = BadgeItem.sessionItems(
             aiService.store.sortedSessions,
-            edgeBarShown: appSettings.aiStatusFabEnabled
-        ) { [appSettings] source in
+            edgeBarShown: EdgeBarController.isShown(on: displayID, settings: appSettings)
+        ) { source in
             switch source {
             case .claude: appSettings.claudeEnabled
             case .gemini: appSettings.geminiEnabled
