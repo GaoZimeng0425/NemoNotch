@@ -192,11 +192,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDependencyBox.shared.deps = deps
 
         let notchCoordinator = NotchCoordinator(content: deps.notchContent())
-        notchCoordinator.autoSelectTab = { [weak self] screen in
+        notchCoordinator.autoSelectTab = { [weak self] in
             guard let deps = self?.deps else { return nil }
-            // On the edge bar's screen, running sessions are already in view
-            // there — opening that notch doesn't need to land on them.
-            if !EdgeBarController.isShown(on: screen.displayID, settings: deps.settings),
+            // With the edge bar on, running sessions are already in view there —
+            // opening the notch doesn't need to land on them.
+            if !deps.settings.aiStatusFabEnabled,
                let session = deps.aiMonitor.activeSession, session.status == .working {
                 return .claude
             }
@@ -222,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if UITestMode.isActive {
             if UITestMode.flash {
                 // 只填一个工作中的 Claude 会话,收起的刘海只显示 Claude Code 一行徽标
-                // (侧边栏开着时,它所在那块屏的刘海不显示 AI 徽标)。
+                // (侧边栏开着时刘海不显示 AI 徽标)。
                 UITestSeeder.seedFlash(aiStore: deps.aiMonitor.store)
             } else {
                 UITestSeeder.seed(
