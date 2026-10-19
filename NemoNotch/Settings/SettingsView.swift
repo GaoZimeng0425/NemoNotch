@@ -192,7 +192,8 @@ struct SettingsView: View {
                     columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
                 }
             } label: {
-                Image(systemName: "sidebar.leading")
+                Label("settings.sidebar.toggle", systemImage: "sidebar.leading")
+                    .labelStyle(.iconOnly)
             }
             .help("settings.sidebar.toggle")
         }

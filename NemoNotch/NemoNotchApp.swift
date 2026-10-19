@@ -24,9 +24,13 @@ struct NemoNotchApp: App {
             SettingsSceneRoot(appDelegate: appDelegate)
         }
         .defaultSize(width: 680, height: 540)
-        // Opened from the menu / notch only — never at launch, never restored.
+        // Opened from the menu / notch / ⌘, only — never at launch. (Not
+        // `.restorationBehavior(.disabled)`: that also drops the frame
+        // autosave, so a resized window reopened at the default size.)
         .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
+        .commands {
+            CommandGroup(replacing: .appSettings) { SettingsCommand() }
+        }
     }
 
     init() {
@@ -86,6 +90,18 @@ enum SettingsWindow {
     }
 }
 
+/// The app menu's "Settings…" ⌘, — the `Settings` scene used to provide it.
+private struct SettingsCommand: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("menu.preferences") {
+            SettingsWindow.open(with: openWindow)
+        }
+        .keyboardShortcut(",", modifiers: .command)
+    }
+}
+
 struct SettingsSceneRoot: View {
     let appDelegate: AppDelegate
 
@@ -107,6 +123,8 @@ struct SettingsSceneRoot: View {
                     .frame(width: 680, height: 480)
             }
         }
+        // A settings window has no business going full screen.
+        .windowFullScreenBehavior(.disabled)
         .onAppear { appDelegate.handleSettingsAppear() }
         .onDisappear { appDelegate.handleSettingsDisappear() }
     }
@@ -115,7 +133,7 @@ struct SettingsSceneRoot: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressRestoreUntil: Date = .distantPast
-    /// 设置窗当前是否在场(由 Settings scene 的 onAppear/onDisappear 维护)。
+    /// 设置窗当前是否在场(由设置窗 Window scene 的 onAppear/onDisappear 维护)。
     private var isSettingsVisible = false
     private var isRestoringSleepForQuit = false
 
