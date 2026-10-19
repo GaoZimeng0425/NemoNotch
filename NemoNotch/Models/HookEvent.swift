@@ -40,6 +40,11 @@ struct HookEvent: Codable, Sendable {
     /// session can jump back to it. Absent for plugin-based emitters
     /// (opencode's TS plugin has no shell parent to report).
     let cliPID: Int?
+    /// The tool call's input as JSON text (Claude-shaped `tool_input`), for
+    /// the approval card's detail.
+    let toolInput: String?
+    /// One line about the tool call (`ToolSubject`): the command, the path.
+    let toolSubject: String?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -58,6 +63,10 @@ struct HookEvent: Codable, Sendable {
         // Tolerant on purpose: a foreign emitter may send a non-numeric value
         // here, and one bad field must not drop the whole event.
         cliPID = (try? container.decodeIfPresent(Int.self, forKey: .cliPID)) ?? nil
+        // Same tolerance: a malformed input loses the detail, not the event.
+        let input = (try? container.decodeIfPresent(JSONValue.self, forKey: .toolInput)) ?? nil
+        toolInput = input?.jsonString
+        toolSubject = ToolSubject.subject(of: input?.foundation as? [String: Any])
     }
 
     init(
@@ -70,7 +79,9 @@ struct HookEvent: Codable, Sendable {
         source: String? = nil,
         cliSource: String? = nil,
         model: String? = nil,
-        cliPID: Int? = nil
+        cliPID: Int? = nil,
+        toolInput: String? = nil,
+        toolSubject: String? = nil
     ) {
         self.hookEventName = hookEventName
         self.sessionId = sessionId
@@ -82,6 +93,8 @@ struct HookEvent: Codable, Sendable {
         self.cliSource = cliSource
         self.model = model
         self.cliPID = cliPID
+        self.toolInput = toolInput
+        self.toolSubject = toolSubject
     }
 
     enum CodingKeys: String, CodingKey {
@@ -95,5 +108,6 @@ struct HookEvent: Codable, Sendable {
         case cliSource = "cli_source"
         case model
         case cliPID = "cli_pid"
+        case toolInput = "tool_input"
     }
 }

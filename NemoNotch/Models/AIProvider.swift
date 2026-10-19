@@ -31,6 +31,15 @@ struct AISessionState: Identifiable {
     /// phase.
     var phaseChangedAt: Date?
     var currentTool: String?
+    /// The turn's last tool and its one-line subject (`ToolSubject`) —
+    /// kept after the tool finishes, cleared by the next prompt, so the
+    /// edge bar's card can say what the session last did.
+    var lastToolName: String?
+    var lastToolSubject: String?
+    /// Tools run this turn (`PreToolUse`s since the last prompt).
+    var turnToolCount: Int = 0
+    /// The git branch the session works on (Claude: from its transcript).
+    var gitBranch: String?
     var cwd: String?
     var lastMessage: String?
     var lastEventName: String?
@@ -222,4 +231,21 @@ enum ClaudeStatus: Equatable {
     case idle
     case working
     case waiting
+}
+
+extension AISessionState {
+    /// A new prompt starts a turn: its tools are counted afresh.
+    mutating func beginTurn() {
+        turnToolCount = 0
+        lastToolName = nil
+        lastToolSubject = nil
+    }
+
+    /// A `PreToolUse`: the turn's newest tool, and one more counted.
+    mutating func recordTool(_ event: HookEvent) {
+        guard let name = event.toolName else { return }
+        lastToolName = name
+        lastToolSubject = event.toolSubject
+        turnToolCount += 1
+    }
 }

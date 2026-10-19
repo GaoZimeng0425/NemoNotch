@@ -151,6 +151,11 @@ final class EdgeBarController: NSObject {
         store.get(id)
     }
 
+    /// The app the session runs in, named for the card's "Open in …".
+    func hostName(of session: AISessionState) -> String? {
+        AppActivator.appName(pid: session.launchingAppPID, bundleId: session.launchingAppBundleId)
+    }
+
     // MARK: - Window
 
     private func makeWindow() {
