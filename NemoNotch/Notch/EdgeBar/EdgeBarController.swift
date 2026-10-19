@@ -49,6 +49,9 @@ final class EdgeBarController: NSObject {
     @ObservationIgnored private var buttonRects: [CardButton: CGRect] = [:]
     @ObservationIgnored private var beatTimer: Timer?
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var usagePrimed = false
+    /// Every readable line, before fitting to the window.
+    @ObservationIgnored private var rawUsageLines: [EdgeBarUsageLine] = []
 
     init(
         store: AISessionStore,
@@ -73,9 +76,6 @@ final class EdgeBarController: NSObject {
         }
         rowSwitch.onSelect = { [weak self] id in self?.select(id) }
         observe()
-        // One silent read at launch so the first opening isn't empty; after
-        // that, every opening refreshes (throttled by the service).
-        Task { await usageQuota.refresh(force: false) }
         // Display reconfigurations, wake and unlock can leave the window
         // parked at a stale origin or without a rendered surface: re-dock.
         // Async (the Task hop) — never touch windows inside the screen
@@ -124,11 +124,16 @@ final class EdgeBarController: NSObject {
         if next != content {
             content = next
         }
-        let usage = EdgeBarUsage.lines(from: usageQuota.quotas)
-        if usage != usageLines {
-            usageLines = usage
+        // One read at launch so the first opening isn't empty — only when the
+        // bar is on (guarded above) and never in a test host / UI-test run
+        // (real APIs, credential files, possibly the Keychain).
+        if !usagePrimed, Self.mayReadUsage {
+            usagePrimed = true
+            Task { await usageQuota.refresh(force: false) }
         }
-        let width = EdgeBarModel.openWidth(of: next, usage: usage)
+        rawUsageLines = EdgeBarUsage.lines(from: usageQuota.quotas, previous: rawUsageLines)
+        fitUsage()
+        let width = EdgeBarModel.openWidth(of: next, usage: usageLines)
         if width != openWidth {
             openWidth = width
         }
@@ -188,6 +193,9 @@ final class EdgeBarController: NSObject {
             height: visible.height
         ), display: true)
         window.orderFrontRegardless()
+        // The room under the bar may have changed: refit the usage block.
+        fitUsage()
+        setIfChanged(\.openWidth, EdgeBarModel.openWidth(of: content, usage: usageLines))
         updateBodyRect()
     }
 
@@ -197,6 +205,17 @@ final class EdgeBarController: NSObject {
     private func updateBodyRect() {
         let width = isOpen ? openWidth : EdgeBarMetrics.barWidth
         hosting?.bodyRect = CGRect(x: 0, y: barTop, width: width, height: bodyLength)
+    }
+
+    /// Usage cut to the room under the bar's top in the window.
+    private func fitUsage() {
+        let room = canvasHeight - barTop - EdgeBarMetrics.gutter
+        let fitted = EdgeBarUsage.fitting(rawUsageLines, rows: content.rows.count, maxLength: room)
+        setIfChanged(\.usageLines, fitted)
+    }
+
+    private static var mayReadUsage: Bool {
+        !UITestMode.isActive && !UITestMode.isTestHost
     }
 
     var bodyLength: CGFloat {
@@ -254,8 +273,16 @@ final class EdgeBarController: NSObject {
 
     private func openBar() {
         // The one moment the usage reading is about to be seen: refresh it
-        // here (the service throttles to once a minute) — no timer on the bar.
-        Task { await usageQuota.refresh(force: false) }
+        // (the service throttles to once a minute) — no timer on the bar.
+        // After the opening's curve: credential reads run on the main actor
+        // and must not land on the animation's first frames.
+        if Self.mayReadUsage {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(EdgeBarMotion.usageRefreshDelay))
+                guard let self, isOpen else { return }
+                await usageQuota.refresh(force: false)
+            }
+        }
         isOpen = true
         updateBodyRect()
         updateBeat()

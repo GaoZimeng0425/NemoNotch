@@ -49,9 +49,19 @@ enum EdgeBarUsage {
     /// `QuotaProvider` order. A provider without data (not logged in, needs
     /// authorization, fetch failed) is left out — the AI tab's card is where
     /// those states are explained and fixed.
-    static func lines(from quotas: [QuotaProvider: ProviderUsageQuota]) -> [EdgeBarUsageLine] {
+    ///
+    /// A fetch that failed transiently (still `.valid`, no tiers, an error
+    /// message) keeps that provider's `previous` lines, so an open block
+    /// doesn't collapse under the cursor over a network blip.
+    static func lines(
+        from quotas: [QuotaProvider: ProviderUsageQuota],
+        previous: [EdgeBarUsageLine] = []
+    ) -> [EdgeBarUsageLine] {
         QuotaProvider.allCases.flatMap { provider -> [EdgeBarUsageLine] in
-            guard let quota = quotas[provider], quota.status == .valid, !quota.tiers.isEmpty else { return [] }
+            guard let quota = quotas[provider], quota.status == .valid else { return [] }
+            guard !quota.tiers.isEmpty else {
+                return quota.errorMessage == nil ? [] : section(of: provider, in: previous)
+            }
             let windows = quota.tiers.map { tier in
                 EdgeBarUsageLine.window(.init(
                     provider: provider,
@@ -62,6 +72,36 @@ enum EdgeBarUsage {
             }
             return [.header(provider)] + windows
         }
+    }
+
+    /// One provider's heading and windows out of `lines`.
+    static func section(of provider: QuotaProvider, in lines: [EdgeBarUsageLine]) -> [EdgeBarUsageLine] {
+        lines.filter { line in
+            switch line {
+            case let .header(p): p == provider
+            case let .window(window): window.provider == provider
+            }
+        }
+    }
+
+    /// The block cut to what fits: whole provider sections are dropped from
+    /// the end until the open body is no longer than `maxLength` (a tall
+    /// list plus many quota windows would otherwise run past the window).
+    static func fitting(_ lines: [EdgeBarUsageLine], rows: Int, maxLength: CGFloat) -> [EdgeBarUsageLine] {
+        var kept = lines
+        while !kept.isEmpty, EdgeBarMetrics.openLength(rows: rows, usageLines: kept.count) > maxLength {
+            guard let lastHeader = kept.lastIndex(where: {
+                if case .header = $0 {
+                    true
+                } else {
+                    false
+                }
+            }) else {
+                return []
+            }
+            kept.removeSubrange(lastHeader...)
+        }
+        return kept
     }
 
     static func label(_ window: QuotaWindow) -> String {
@@ -117,7 +157,7 @@ enum EdgeBarUsage {
             return window.label
         }
         // The widest forms, so the block doesn't move as the countdown runs.
-        let tails = ["6d23h", "23h59m", String(localized: "quota.reset")]
+        let tails = ["29d23h", "6d23h", "23h59m", String(localized: "quota.reset")]
         return Columns(
             label: labels.map { width($0, lineFont) }.max() ?? 0,
             percent: width("100%", lineFont),

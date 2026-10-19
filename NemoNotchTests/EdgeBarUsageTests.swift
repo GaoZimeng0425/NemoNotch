@@ -42,7 +42,7 @@ struct EdgeBarUsageTests {
         let now = Date(timeIntervalSince1970: 10000 - (4 * 3600 + 12 * 60))
         #expect(EdgeBarUsage.tail(reset, now: now) == "4h12m")
         #expect(EdgeBarUsage.tail(nil, now: now) == "--")
-        #expect(EdgeBarUsage.tail(reset, now: reset.addingTimeInterval(1)) != "--")
+        #expect(EdgeBarUsage.tail(reset, now: reset.addingTimeInterval(1)) == String(localized: "quota.reset"))
     }
 
     @Test func openLengthMakesRoomForTheBlock() {
@@ -64,5 +64,33 @@ struct EdgeBarUsageTests {
         #expect(width > EdgeBarMetrics.barWidth)
         #expect(width >= EdgeBarUsage.minWidth(usage))
         #expect(EdgeBarModel.openWidth(of: .empty) == EdgeBarMetrics.barWidth)
+    }
+}
+
+@Suite("EdgeBarUsage fitting")
+struct EdgeBarUsageFittingTests {
+    private func section(_ provider: QuotaProvider, _ count: Int) -> [EdgeBarUsageLine] {
+        [.header(provider)] + (0 ..< count).map {
+            .window(.init(provider: provider, label: "w\($0)", percent: 10, resetsAt: nil))
+        }
+    }
+
+    @Test func transientFailureKeepsThePreviousSection() {
+        let previous = section(.claude, 2) + section(.codex, 1)
+        let lines = EdgeBarUsage.lines(from: [
+            .claude: ProviderUsageQuota(provider: .claude, status: .valid, tiers: [], errorMessage: "timeout"),
+            .codex: ProviderUsageQuota(provider: .codex, status: .valid, tiers: []),
+        ], previous: previous)
+        // Claude failed with a message: kept. Codex has no data and no error: gone.
+        #expect(lines == section(.claude, 2))
+    }
+
+    @Test func fittingDropsWholeSectionsFromTheEnd() {
+        let lines = section(.claude, 2) + section(.codex, 2) + section(.zcode, 1)
+        let roomForTwoSections = EdgeBarMetrics.openLength(rows: 3, usageLines: 6)
+        let fitted = EdgeBarUsage.fitting(lines, rows: 3, maxLength: roomForTwoSections)
+        #expect(fitted == section(.claude, 2) + section(.codex, 2))
+        #expect(EdgeBarUsage.fitting(lines, rows: 3, maxLength: 10).isEmpty)
+        #expect(EdgeBarUsage.fitting(lines, rows: 3, maxLength: 10000) == lines)
     }
 }

@@ -198,6 +198,8 @@ enum EdgeBarMotion {
     static let rowSwitch: TimeInterval = 0.12
     /// How long a pressed button shows it before its action runs.
     static let pressFeedback: TimeInterval = 0.12
+    /// The usage refresh waits out the opening's curve.
+    static let usageRefreshDelay: TimeInterval = 0.3
     /// Seconds between beats (a waiting ring's wave).
     static let beatInterval: TimeInterval = 3
 
