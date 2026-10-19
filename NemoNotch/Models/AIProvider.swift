@@ -67,6 +67,9 @@ struct AISessionState: Identifiable {
     /// Such a session lives exactly as long as that process.
     var recordPID: Int32?
     var recordName: String?
+    /// The record carries a busy/idle status — then it, not the silence
+    /// timer, corrects a stale phase.
+    var recordStatusKnown = false
     var launchingAppBundleId: String?
     /// Tab-reveal URL captured from the CLI's inherited environment at event
     /// time (`TabLink`): terminals that publish one (iTerm2, Warp, …) let a

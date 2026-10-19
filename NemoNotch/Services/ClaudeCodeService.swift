@@ -85,30 +85,42 @@ final class ClaudeProvider: AIProvider {
             }.value
             guard let self else { return }
             recordScanInFlight = false
+            // An unreadable directory is not "every session ended".
+            guard let records else { return }
             applyRecords(records)
         }
     }
 
-    /// Records → store: new live sessions appear, record-backed ones whose
-    /// process is gone leave, and the coarse status corrects an impossible
-    /// phase (`ClaudeRecordMerge`).
-    func applyRecords(_ records: [ClaudeSessionRecords.Record], now: Date = Date()) {
+    /// Records → store: new live sessions appear, record-backed ones end on
+    /// positive evidence only, and a newer coarse status corrects an
+    /// impossible phase (`ClaudeRecordMerge`).
+    ///
+    /// A session merely MISSING from one scan is kept: a record caught
+    /// half-written fails to parse, and ending the session would deny the
+    /// approval it may be holding. It ends when its process is gone (or its
+    /// pid now belongs to a stranger), or when that process's record names
+    /// another session (`/clear`, `/resume` moved it on).
+    func applyRecords(
+        _ records: [ClaudeSessionRecords.Record],
+        now: Date = Date(),
+        isAlive: (Int32) -> Bool = { ClaudeSessionRecords.isAlive($0) }
+    ) {
         let live = Set(records.map(\.sessionId))
         endedSessionIds.formIntersection(live)
         for record in records where !endedSessionIds.contains(record.sessionId) {
             let existing = store.get(record.sessionId)
-            let next = ClaudeRecordMerge.phase(
-                current: existing?.phase,
-                busy: record.busy,
-                silentFor: existing.map { now.timeIntervalSince($0.lastEventTime) } ?? .infinity
-            )
+            let newer = existing.map { session in
+                record.statusUpdatedAt.map { $0 > session.lastEventTime } ?? false
+            } ?? true
+            let next = ClaudeRecordMerge.phase(current: existing?.phase, busy: record.busy, recordIsNewer: newer)
             let isNew = existing == nil
             let needsWrite = isNew || next != nil || existing?.recordPID != record.pid
-                || existing?.recordName != record.name
+                || existing?.recordName != record.name || existing?.recordStatusKnown != (record.busy != nil)
             guard needsWrite else { continue }
             store.mutateOrCreate(record.sessionId, source: .claude) { session in
                 session.recordPID = record.pid
                 session.recordName = record.name
+                session.recordStatusKnown = record.busy != nil
                 if session.cwd == nil {
                     session.cwd = record.cwd
                 }
@@ -124,18 +136,23 @@ final class ClaudeProvider: AIProvider {
                 if let cwd = record.cwd {
                     watcherManager.startWatching(sessionId: record.sessionId, cwd: cwd)
                 }
-                parseConversation(for: record.sessionId)
+                // Only the transcript's tail: a session idle for days can
+                // carry megabytes; the card needs its branch and last reply.
+                parseConversation(for: record.sessionId, tailBytes: Self.discoveredTailBytes)
                 LogService.info(
                     "Claude record: session \(record.sessionId.prefix(8)) (pid \(record.pid), \(record.name ?? "-"))",
                     category: "ClaudeProvider"
                 )
             }
         }
-        // A record-backed session whose process is gone has ended.
-        for session in store.sessions(for: .claude) where session.recordPID != nil && !live.contains(session.id) {
+        let sessionByPID = Dictionary(records.map { ($0.pid, $0.sessionId) }, uniquingKeysWith: { first, _ in first })
+        for session in store.sessions(for: .claude) {
+            guard let pid = session.recordPID, !live.contains(session.id) else { continue }
+            let movedOn = sessionByPID[pid].map { $0 != session.id } ?? false
+            guard movedOn || !isAlive(pid) else { continue }
             endSession(session.id)
             LogService.info(
-                "Claude record: session \(session.id.prefix(8)) ended (process gone)",
+                "Claude record: session \(session.id.prefix(8)) ended (\(movedOn ? "process moved on" : "process gone"))",
                 category: "ClaudeProvider"
             )
         }
@@ -143,6 +160,8 @@ final class ClaudeProvider: AIProvider {
             scheduleTimeoutCleanup()
         }
     }
+
+    static let discoveredTailBytes: UInt64 = 256 * 1024
 
     private func endSession(_ sessionId: String) {
         hookServer?.cancelPendingPermissions(sessionId: sessionId)
@@ -252,6 +271,12 @@ final class ClaudeProvider: AIProvider {
         switch event.hookEventName {
         case "SessionStart":
             var session = AISessionState(sessionId: sessionId, source: .claude)
+            if let previous = store.get(sessionId) {
+                // A record may have found it first: keep what it knows.
+                session.recordPID = previous.recordPID
+                session.recordName = previous.recordName
+                session.recordStatusKnown = previous.recordStatusKnown
+            }
             session.phase = .idle
             applyContext(to: &session, event: event)
             store.upsert(session)
@@ -432,7 +457,10 @@ final class ClaudeProvider: AIProvider {
 
     // MARK: - Conversation Parsing
 
-    private func parseConversation(for sessionId: String) {
+    /// `tailBytes`: on a first parse (offset 0), start that far from the end,
+    /// at a line boundary, at utility priority — a discovered session's
+    /// history is read for its last facts, not in full.
+    private func parseConversation(for sessionId: String, tailBytes: UInt64? = nil) {
         guard let session = store.get(sessionId),
               let cwd = session.cwd,
               let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
@@ -445,9 +473,12 @@ final class ClaudeProvider: AIProvider {
             await previous?.value
             guard let self, store.contains(sessionId),
                   let current = store.get(sessionId) else { return }
-            let offset = current.lastParsedOffset
-            let result = await Task.detached(priority: .userInitiated) {
-                ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
+            let startOffset = current.lastParsedOffset
+            let tail = startOffset == 0 ? tailBytes : nil
+            let result = await Task.detached(priority: tail == nil ? .userInitiated : .utility) {
+                let offset = tail.map { ConversationParser.lineAlignedOffset(filePath: filePath, tailBytes: $0) }
+                    ?? startOffset
+                return ConversationParser.parseIncremental(filePath: filePath, fromOffset: offset)
             }.value
 
             guard store.contains(sessionId) else { return }
@@ -523,7 +554,7 @@ final class ClaudeProvider: AIProvider {
         // A record-backed session lives as long as its process; its record's
         // status (`applyRecords`) is what corrects a stale phase.
         for session in store.sessions(for: .claude)
-            where session.lastEventTime < demoteCutoff && session.recordPID == nil {
+            where session.lastEventTime < demoteCutoff && !session.recordStatusKnown {
             // Demote ANY active phase, not just .waitingForInput — an aborted or
             // Stop-missed session stuck in .processing would otherwise spin for
             // up to 30 min (removeStaleThreshold).

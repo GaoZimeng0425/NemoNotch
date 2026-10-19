@@ -190,7 +190,8 @@ final class EdgeBarController: NSObject {
     /// Frame, bar position and order: the envelope spans the visible height,
     /// the bar's head sits where a full bar centred on the screen would start.
     func applyDock() {
-        guard appSettings.aiStatusFabEnabled, let window, let screen = dockScreen() else { return }
+        // A screen change landing mid-drag would yank the bar back.
+        guard !isDragging, appSettings.aiStatusFabEnabled, let window, let screen = dockScreen() else { return }
         let visible = screen.visibleFrame
         let top: CGFloat
         if let fraction = Self.storedTopFraction {
@@ -375,9 +376,12 @@ final class EdgeBarController: NSObject {
         (UserDefaults.standard.object(forKey: topFractionKey) as? Double).map { CGFloat($0) }
     }
 
-    /// Kept wholly on the edge: the closed body (all slots) fits below it.
+    /// Kept where the OPEN body still fits below it — the longest list
+    /// (7.5 rows and the summary); the usage block fits itself to what room
+    /// is left (`fitUsage`), and the card clamps itself to the canvas.
     private func clampedTop(_ top: CGFloat, canvasHeight: CGFloat) -> CGFloat {
-        let lowest = canvasHeight - EdgeBarMetrics.anchorLength - EdgeBarMetrics.gutter
+        let longest = EdgeBarMetrics.openLength(rows: Int(EdgeBarMetrics.visibleRows.rounded(.up)))
+        let lowest = canvasHeight - longest - EdgeBarMetrics.gutter
         return min(max(EdgeBarMetrics.gutter, top), max(EdgeBarMetrics.gutter, lowest))
     }
 
@@ -411,7 +415,12 @@ final class EdgeBarController: NSObject {
                 updateBodyRect()
             }
         }
-        guard dragging else { return click(at: point) }
+        // The loop consumed the mouse-up: whatever click() says, the press
+        // is ours (handing SwiftUI a down with no up would leave it stuck).
+        guard dragging else {
+            _ = click(at: point)
+            return true
+        }
         isDragging = false
         UserDefaults.standard.set(Double(barTop / canvasHeight), forKey: Self.topFractionKey)
         fitUsage()
