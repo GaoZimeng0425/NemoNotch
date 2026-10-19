@@ -33,8 +33,12 @@ final class EdgeBarController: NSObject {
     /// The beat counter: runs only while a drawn ring is waiting.
     private(set) var beat = 0
     /// Where the bar lives: docked to a screen's left or right edge, or a
-    /// floating capsule anywhere.
+    /// floating capsule anywhere — the user's choice fitted to the screen
+    /// it is on now.
     private(set) var placement = EdgeBarPlacement.load(from: .standard)
+    /// The user's choice, as saved: what `placement` is fitted from, never
+    /// rewritten by a fit (a fallback screen's must not stick).
+    @ObservationIgnored private var chosenPlacement = EdgeBarPlacement.load(from: .standard)
     /// Where the bar's top rests in the canvas, and the canvas height — set
     /// by the dock cycle and the drag so view and window never disagree.
     private(set) var restTop: CGFloat = 200
@@ -233,11 +237,13 @@ final class EdgeBarController: NSObject {
         }
         setIfChanged(\.restTop, isFloating ? clampedCapsuleTop(top) : clampedTop(top, canvasHeight: visible.height))
         // The screen may have changed under a capsule: room for its panel.
-        setIfChanged(\.placement, placement.refitted(
+        setIfChanged(\.placement, chosenPlacement.refitted(
             visible: visible,
             length: EdgeBarMetrics.capsuleLength(slots: content.closedSlots),
             reach: EdgeBarMetrics.reach
         ))
+        // Laid out before the window moves (see `carry`): a drop changes form.
+        hosting?.layoutSubtreeIfNeeded()
         window.setFrame(envelope(on: visible), display: true)
         window.orderFrontRegardless()
         // The room under the bar may have changed: refit the usage block.
@@ -247,29 +253,23 @@ final class EdgeBarController: NSObject {
     }
 
     /// The window: the visible height; across, from the docked edge, or
-    /// around a capsule's anchored end.
+    /// around a capsule's anchored end (kept on the screen; `refitted`
+    /// gives its panel room).
     private func envelope(on visible: CGRect) -> NSRect {
         let x: CGFloat = switch (placement.mode, side) {
         case (.docked, .left):
             visible.minX
         case (.docked, .right):
             visible.maxX - canvasWidth
-        case (.floating, .left):
-            clampedAnchor(visible.minX + placement.anchor * visible.width, visible: visible) - anchorInset
-        case (.floating, .right):
-            clampedAnchor(visible.minX + placement.anchor * visible.width, visible: visible) + anchorInset - canvasWidth
+        case (.floating, _):
+            EdgeBarPlacement.clampedAnchor(
+                visible.minX + placement.anchor * visible.width,
+                side: side,
+                length: EdgeBarMetrics.capsuleLength(slots: content.closedSlots),
+                visible: visible
+            ) - side.sign * anchorInset - (side == .left ? 0 : canvasWidth)
         }
         return NSRect(x: x, y: visible.minY, width: canvasWidth, height: visible.height)
-    }
-
-    /// A capsule's anchored end, kept where the whole capsule (at its
-    /// longest) stays on the screen — mid-drag the only bound (the panel's
-    /// room is `refitted`'s, on release).
-    private func clampedAnchor(_ x: CGFloat, visible: CGRect) -> CGFloat {
-        let longest = EdgeBarMetrics.capsuleLength(slots: EdgeBarMetrics.slotCount)
-        return side == .left
-            ? min(max(visible.minX, x), visible.maxX - longest)
-            : min(max(visible.minX + longest, x), visible.maxX)
     }
 
     private func clampedCapsuleTop(_ top: CGFloat) -> CGFloat {
@@ -550,7 +550,8 @@ final class EdgeBarController: NSObject {
         } else {
             placement.top = restTop / canvasHeight
         }
-        placement.save(to: .standard)
+        chosenPlacement = placement
+        chosenPlacement.save(to: .standard)
         applyDock()
         LogService.info(
             "Edge bar placed: \(placement.mode.rawValue) \(placement.side.rawValue), top \(Int(restTop)) / \(Int(canvasHeight))",

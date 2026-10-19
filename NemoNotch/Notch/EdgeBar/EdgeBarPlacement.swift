@@ -60,22 +60,26 @@ struct EdgeBarPlacement: Codable, Equatable, Sendable {
         )
     }
 
-    /// The side a floating capsule (`length` long) anchors on: its left end
-    /// while the opened list and card (`reach`) fit to the right of it, else
-    /// its right end while they fit to the left, else whichever side has
-    /// more room. `hysteresis` keeps a right-anchored capsule from flipping
-    /// back the moment it fits.
+    /// The side a floating capsule (`length` long) anchors on: the one it
+    /// has while the opened list and card (`reach`) still fit beside it —
+    /// a head never swaps ends while it needn't — else its left end while
+    /// they fit to the right, else its right end while they fit to the
+    /// left, else whichever side has more room.
     static func floatingSide(
         leftEnd: CGFloat,
         length: CGFloat,
         visible: CGRect,
         reach: CGFloat,
-        current: EdgeBarSide,
-        hysteresis: CGFloat = 24
+        current: EdgeBarSide
     ) -> EdgeBarSide {
         let roomRight = visible.maxX - leftEnd
         let roomLeft = leftEnd + length - visible.minX
-        if roomRight >= (current == .left ? reach : reach + hysteresis) {
+        switch current {
+        case .left where roomRight >= reach: return .left
+        case .right where roomLeft >= reach: return .right
+        default: break
+        }
+        if roomRight >= reach {
             return .left
         }
         if roomLeft >= reach {
@@ -84,11 +88,20 @@ struct EdgeBarPlacement: Codable, Equatable, Sendable {
         return roomRight >= roomLeft ? .left : .right
     }
 
+    /// A carried capsule's anchored end, kept where the capsule (`length`
+    /// long, as it is now) stays on the screen — and reaches either edge,
+    /// to dock there.
+    static func clampedAnchor(_ x: CGFloat, side: EdgeBarSide, length: CGFloat, visible: CGRect) -> CGFloat {
+        side == .left
+            ? min(max(visible.minX, x), visible.maxX - length)
+            : min(max(visible.minX + length, x), visible.maxX)
+    }
+
     /// A floating placement fitted to a screen (on release, after a
-    /// resolution change or a moved Dock): its side re-chosen for the room,
-    /// its anchored end kept where the opened list and card fit on the
-    /// screen. The capsule stays where it is unless the screen is too
-    /// narrow for it to; only which end is anchored may change.
+    /// resolution change or a moved Dock): its side kept while its panel
+    /// still has room, else re-chosen; its anchored end kept where the
+    /// opened list and card fit on the screen. The capsule stays where it
+    /// is unless the screen is too narrow for it to.
     func refitted(visible: CGRect, length: CGFloat, reach: CGFloat) -> EdgeBarPlacement {
         guard mode == .floating else { return self }
         let anchorX = visible.minX + anchor * visible.width

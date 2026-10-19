@@ -47,9 +47,10 @@ struct EdgeBarPlacementTests {
         }
         #expect(side(700, .left) == .left) // 400 of room to the right
         #expect(side(701, .left) == .right) // 399: anchors right, 751 to the left
-        // Back to the left only past the hysteresis.
-        #expect(side(690, .right) == .right)
-        #expect(side(676, .right) == .left)
+        // A side that still fits is kept: the head never swaps ends needlessly.
+        #expect(side(600, .right) == .right) // 650 to the left: kept, though the right has 500 too
+        // One that doesn't is given up: 350 left of the right end, 800 right.
+        #expect(side(300, .right) == .left)
         // Neither side has the room: the roomier one.
         let narrow = CGRect(x: 100, y: 0, width: 500, height: 800)
         #expect(side(250, .left, in: narrow) == .left) // 350 right vs 300 left
@@ -73,6 +74,22 @@ struct EdgeBarPlacementTests {
         #expect(pulled.anchor == 0.9)
         // Docked placements are left alone.
         #expect(EdgeBarPlacement.standard.refitted(visible: visible, length: 150, reach: 400) == .standard)
+    }
+
+    /// Carried hard against the far edge, a capsule of any length gets
+    /// within the snap distance and docks there.
+    @Test func aCarriedCapsuleReachesEitherEdgeToDock() {
+        for slots in 0 ... EdgeBarMetrics.slotCount {
+            let length = EdgeBarMetrics.capsuleLength(slots: slots)
+            // Anchored left, pushed past the right edge.
+            let leftEnd = EdgeBarPlacement.clampedAnchor(5000, side: .left, length: length, visible: visible)
+            let right = drop(CGRect(x: leftEnd, y: 400, width: length, height: 54))
+            #expect(right.mode == .docked && right.side == .right, "\(slots) slots")
+            // Anchored right, pushed past the left edge.
+            let rightEnd = EdgeBarPlacement.clampedAnchor(-5000, side: .right, length: length, visible: visible)
+            let left = drop(CGRect(x: rightEnd - length, y: 400, width: length, height: 54), side: .right)
+            #expect(left.mode == .docked && left.side == .left, "\(slots) slots")
+        }
     }
 
     @Test func persistsAndMigratesTheLeftOnlyTop() throws {
