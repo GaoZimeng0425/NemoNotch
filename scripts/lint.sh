@@ -114,7 +114,7 @@ if [ "$sf_status" != 0 ]; then
   echo "   修复:sh scripts/lint.sh --fix(全仓)或 sh scripts/lint.sh --staged --fix(仅暂存文件)" >&2
   if [ "$had_partial" = 1 ]; then
     echo "   ⚠️  部分暂存的文件未被自动格式化(暂存与工作区不一致,避免把未暂存改动带进提交):$checkonly" >&2
-    echo "      先完整暂存(git add <file>)再提交,或手动执行:swiftformat$checkonly" >&2
+    echo "      先完整暂存(git add <file>)再提交,或手动执行:swiftformat --config .swiftformat$checkonly" >&2
   fi
 fi
 if [ "$sl_status" != 0 ]; then

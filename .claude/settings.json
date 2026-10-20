@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; if echo \"$f\" | grep -qE '\\.swift$'; then swiftformat \"$f\" 2>/dev/null; fi; } || true",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; if echo \"$f\" | grep -qE '\\.swift$'; then root=$(git -C \"$(dirname \"$f\")\" rev-parse --show-toplevel 2>/dev/null); swiftformat ${root:+--config \"$root/.swiftformat\"} \"$f\" 2>/dev/null; fi; } || true",
             "timeout": 10,
             "statusMessage": "Running swiftformat..."
           }
