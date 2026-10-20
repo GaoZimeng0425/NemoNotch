@@ -11,7 +11,7 @@ struct HUDOverlayView: View {
         switch type {
         case .volume: volumeIcon
         case .brightness: brightnessIcon
-        case .battery(let charging):
+        case let .battery(charging):
             charging ? "bolt.fill" : batteryIconName
         }
     }
@@ -36,9 +36,9 @@ struct HUDOverlayView: View {
     private var batteryIconName: String {
         switch value {
         case ..<0.13: "battery.0"
-        case 0.13..<0.38: "battery.25"
-        case 0.38..<0.63: "battery.50"
-        case 0.63..<0.88: "battery.75"
+        case 0.13 ..< 0.38: "battery.25"
+        case 0.38 ..< 0.63: "battery.50"
+        case 0.63 ..< 0.88: "battery.75"
         default: "battery.100"
         }
     }
@@ -75,7 +75,7 @@ struct HUDOverlayView: View {
 
     private var segmentedBar: some View {
         HStack(spacing: NotchConstants.hudSegmentSpacing) {
-            ForEach(0..<Self.segmentCount, id: \.self) { index in
+            ForEach(0 ..< Self.segmentCount, id: \.self) { index in
                 let threshold = Float(index + 1) / Float(Self.segmentCount)
                 RoundedRectangle(cornerRadius: NotchConstants.hudSegmentCornerRadius)
                     .fill(

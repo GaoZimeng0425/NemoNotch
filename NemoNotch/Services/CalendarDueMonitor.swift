@@ -71,7 +71,7 @@ final class CalendarDueMonitor {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(NotchConstants.calendarDueTickInterval))
                 guard let self, !Task.isCancelled else { return }
-                self.tick()
+                tick()
             }
         }
         LogService.info("Calendar due monitor started", category: "CalendarDueMonitor")

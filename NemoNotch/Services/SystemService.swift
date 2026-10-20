@@ -75,7 +75,9 @@ final class SystemService: LifecycleAware {
 
     func update() {
         // uitest 下保留 UITestSeeder 注入的假数据,禁止实时采样覆盖。
-        if UITestMode.isActive { return }
+        if UITestMode.isActive {
+            return
+        }
         let probe = PerfProbe.begin()
         defer { PerfProbe.end("SystemService.update@2s", probe) }
         updateCPU()
@@ -121,7 +123,9 @@ final class SystemService: LifecycleAware {
         prevIdle = idle
 
         cpuHistory.append(cpuUsage)
-        if cpuHistory.count > maxHistory { cpuHistory.removeFirst() }
+        if cpuHistory.count > maxHistory {
+            cpuHistory.removeFirst()
+        }
 
         let size = vm_size_t(numCPUInfo) * vm_size_t(MemoryLayout<integer_t>.size)
         vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo), size)
@@ -145,12 +149,14 @@ final class SystemService: LifecycleAware {
         memoryUsed = (UInt64(stats.active_count) + UInt64(stats.wire_count)) * pageSize
 
         memoryHistory.append(Double(memoryUsed))
-        if memoryHistory.count > maxHistory { memoryHistory.removeFirst() }
+        if memoryHistory.count > maxHistory {
+            memoryHistory.removeFirst()
+        }
     }
 
     private func updateBattery() {
-        guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue() else { return }
-        guard let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
+        guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
         for source in sources {
             guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
@@ -192,12 +198,10 @@ final class SystemService: LifecycleAware {
             let addr = ptr.pointee
             let name = String(cString: addr.ifa_name)
 
-            if name != "lo0", addr.ifa_addr.pointee.sa_family == AF_LINK {
-                if let data = addr.ifa_data {
-                    let networkData = data.assumingMemoryBound(to: if_data.self)
-                    totalIBytes += UInt64(networkData.pointee.ifi_ibytes)
-                    totalOBytes += UInt64(networkData.pointee.ifi_obytes)
-                }
+            if name != "lo0", addr.ifa_addr.pointee.sa_family == AF_LINK, let data = addr.ifa_data {
+                let networkData = data.assumingMemoryBound(to: if_data.self)
+                totalIBytes += UInt64(networkData.pointee.ifi_ibytes)
+                totalOBytes += UInt64(networkData.pointee.ifi_obytes)
             }
 
             guard let next = addr.ifa_next else { break }
@@ -223,9 +227,13 @@ final class SystemService: LifecycleAware {
         uploadSpeed = Double(deltaO) / elapsed
 
         uploadHistory.append(uploadSpeed)
-        if uploadHistory.count > maxHistory { uploadHistory.removeFirst() }
+        if uploadHistory.count > maxHistory {
+            uploadHistory.removeFirst()
+        }
         downloadHistory.append(downloadSpeed)
-        if downloadHistory.count > maxHistory { downloadHistory.removeFirst() }
+        if downloadHistory.count > maxHistory {
+            downloadHistory.removeFirst()
+        }
 
         lastTotalIBytes = totalIBytes
         lastTotalOBytes = totalOBytes

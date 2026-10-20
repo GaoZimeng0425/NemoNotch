@@ -1,14 +1,12 @@
 import Foundation
+@testable import NemoNotch
 import SQLite3
 import Testing
-
-@testable import NemoNotch
 
 /// Builds a throwaway sqlite database with zcode's `model_usage` table and a
 /// minimal column subset, then verifies the reader's day-boundary and 7-day
 /// aggregation.
 struct ZcodeUsageReaderTests {
-
     private func makeFixture(inserting rows: [(startedAt: Double, tokens: Int)]) -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("zcode-usage-test-\(UUID().uuidString).sqlite")
@@ -118,9 +116,9 @@ struct ZcodeUsageReaderTests {
     @Test func sessionUsageAggregatesAndContextUsesLatestRequest() {
         // GLM semantics: input_tokens already includes cache reads.
         let url = makeSessionFixture([
-            ("sess_a", "GLM-5.3", 100_000, 500, 90_000, 0),
-            ("sess_a", "GLM-5.3", 150_000, 1_000, 140_000, 0),
-            ("sess_b", "GLM-5.3-Flash", 10_000, 100, 0, 2_000),
+            ("sess_a", "GLM-5.3", 100_000, 500, 90000, 0),
+            ("sess_a", "GLM-5.3", 150_000, 1000, 140_000, 0),
+            ("sess_b", "GLM-5.3-Flash", 10000, 100, 0, 2000),
         ])
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -130,12 +128,12 @@ struct ZcodeUsageReaderTests {
         #expect(a?.contextTokens == 150_000)
         // Totals span every request.
         #expect(a?.inputTokens == 250_000)
-        #expect(a?.outputTokens == 1_500)
+        #expect(a?.outputTokens == 1500)
         #expect(a?.cacheReadTokens == 230_000)
         #expect(a?.requestCount == 2)
 
         let b = ZcodeUsageReader.readSessionUsage(sessionId: "sess_b", databaseURL: url)
-        #expect(b?.contextTokens == 12_000)
+        #expect(b?.contextTokens == 12000)
     }
 
     @Test func sessionUsageNilForUnknownSession() {

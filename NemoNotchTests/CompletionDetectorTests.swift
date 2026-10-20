@@ -1,5 +1,5 @@
-@testable import NemoNotch
 import Foundation
+@testable import NemoNotch
 import Testing
 
 @Suite("CompletionDetector")
@@ -106,12 +106,26 @@ struct CompletionDetectorTests {
     @Test("completion item carries rich fields from the candidate")
     func richFieldsCarriedThrough() {
         var d = CompletionDetector()
-        _ = d.step([rich("ai:1", "NemoNotch", true,
-                          subtitle: "fix auth bug", tool: "Edit",
-                          model: "Sonnet 4.5", tokenDisplay: "12.4k", duration: 134)])
-        let result = d.step([rich("ai:1", "NemoNotch", false,
-                                  subtitle: "fix auth bug", tool: "Edit",
-                                  model: "Sonnet 4.5", tokenDisplay: "12.4k", duration: 134)])
+        _ = d.step([rich(
+            "ai:1",
+            "NemoNotch",
+            true,
+            subtitle: "fix auth bug",
+            tool: "Edit",
+            model: "Sonnet 4.5",
+            tokenDisplay: "12.4k",
+            duration: 134
+        )])
+        let result = d.step([rich(
+            "ai:1",
+            "NemoNotch",
+            false,
+            subtitle: "fix auth bug",
+            tool: "Edit",
+            model: "Sonnet 4.5",
+            tokenDisplay: "12.4k",
+            duration: 134
+        )])
         #expect(result.count == 1)
         let item = result[0]
         #expect(item.subtitle == "fix auth bug")
@@ -151,7 +165,7 @@ struct CompletionDetectorTests {
     func mergeKeepsExistingOnNil() {
         var existing = item("A")
         existing.subtitle = "kept"
-        var incoming = item("A")  // subtitle nil
+        var incoming = item("A") // subtitle nil
         incoming.tool = "Edit"
         let merged = CompletionFlashNames.merge(existing: [existing], new: [incoming])
         #expect(merged[0].subtitle == "kept")

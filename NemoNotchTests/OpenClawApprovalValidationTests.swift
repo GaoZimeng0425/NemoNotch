@@ -7,7 +7,9 @@ import Testing
 struct OpenClawApprovalValidationTests {
     private static func payload(requestId: String?, deviceId: String = "dev-1234") -> Any? {
         var details: [String: Any] = ["deviceId": deviceId, "remediationHint": "hint"]
-        if let requestId { details["requestId"] = requestId }
+        if let requestId {
+            details["requestId"] = requestId
+        }
         return ["code": "NOT_PAIRED", "details": details] as [String: Any]
     }
 
@@ -26,9 +28,11 @@ struct OpenClawApprovalValidationTests {
 
     @Test func malformedIDsRejected() {
         #expect(OpenClawService.parsePendingApproval(from: Self.payload(requestId: "")) == nil)
-        #expect(OpenClawService.parsePendingApproval(from: Self.payload(requestId: String(repeating: "a", count: 129))) == nil)
+        #expect(OpenClawService
+            .parsePendingApproval(from: Self.payload(requestId: String(repeating: "a", count: 129))) == nil)
         // deviceId 同一道闸门
-        #expect(OpenClawService.parsePendingApproval(from: Self.payload(requestId: "ok", deviceId: "d; rm -rf ~")) == nil)
+        #expect(OpenClawService
+            .parsePendingApproval(from: Self.payload(requestId: "ok", deviceId: "d; rm -rf ~")) == nil)
     }
 
     @Test func missingOrWrongShapeRejected() {

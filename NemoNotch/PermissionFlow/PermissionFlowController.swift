@@ -80,10 +80,14 @@ final class PermissionFlowController {
 
     /// Tears the guide down immediately.
     func retire() {
-        followTimer?.invalidate(); followTimer = nil
-        grantTimer?.invalidate(); grantTimer = nil
-        bootstrapTimer?.invalidate(); bootstrapTimer = nil
-        successWorkItem?.cancel(); successWorkItem = nil
+        followTimer?.invalidate()
+        followTimer = nil
+        grantTimer?.invalidate()
+        grantTimer = nil
+        bootstrapTimer?.invalidate()
+        bootstrapTimer = nil
+        successWorkItem?.cancel()
+        successWorkItem = nil
         if let terminateObserver {
             NotificationCenter.default.removeObserver(terminateObserver)
             self.terminateObserver = nil
@@ -151,7 +155,7 @@ final class PermissionFlowController {
         panel.setContentSize(controller.view.fittingSize)
 
         self.panel = panel
-        self.hosting = controller
+        hosting = controller
         panel.onEscape = { [weak self] in
             LogService.info("dismissed with ESC", category: "PermissionFlow")
             self?.retire()
@@ -322,7 +326,7 @@ final class PermissionFlowController {
         ) { [weak self] notification in
             guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
                 as? NSRunningApplication,
-                  app.bundleIdentifier == SystemSettingsWindowTracker.bundleIdentifier
+                app.bundleIdentifier == SystemSettingsWindowTracker.bundleIdentifier
             else { return }
             MainActor.assumeIsolated { self?.retire() }
         }

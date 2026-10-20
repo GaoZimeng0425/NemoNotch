@@ -39,8 +39,13 @@ final class LockScreenAIPanelWindow: NSWindow {
         animationBehavior = .none
     }
 
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeKey: Bool {
+        false
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
 
     /// Card bottom sits this far above the screen's bottom edge — just clear
     /// of the lock-screen password field. The card is bottom-aligned in the
@@ -92,8 +97,8 @@ final class LockScreenAIPanelController: NSObject {
         } onChange: {
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.observe() // re-arm before evaluating
-                self.evaluate()
+                observe() // re-arm before evaluating
+                evaluate()
             }
         }
     }
@@ -142,11 +147,13 @@ final class LockScreenAIPanelController: NSObject {
         ensureTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(LockScreenMonitor.pollInterval))
-                guard let self, !Task.isCancelled else { return }
-                guard self.monitor.isLocked else { return }
-                if self.window?.isVisible != true || self.window?.contentView == nil {
-                    LogService.info("lock screen panel vanished while locked, re-presenting", category: "LockScreenAIPanel")
-                    self.show()
+                guard let self, !Task.isCancelled, monitor.isLocked else { return }
+                if window?.isVisible != true || window?.contentView == nil {
+                    LogService.info(
+                        "lock screen panel vanished while locked, re-presenting",
+                        category: "LockScreenAIPanel"
+                    )
+                    show()
                     return
                 }
             }

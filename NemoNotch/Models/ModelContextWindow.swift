@@ -41,10 +41,14 @@ enum ModelContextWindow {
 
     static func limit(for model: String) -> Int {
         // 1. Curated exact match (never overridden by the catalog).
-        if let exact = limits[model] { return exact }
+        if let exact = limits[model] {
+            return exact
+        }
         // 2. OpenRouter catalog overlay (auto-discovered, fills gaps).
         let key = normalize(model)
-        if let fetched = overlay.withLock({ $0[key] }) { return fetched }
+        if let fetched = overlay.withLock({ $0[key] }) {
+            return fetched
+        }
         // 3. Claude family fallback (dated/dot-versioned ids).
         let lowered = model.lowercased()
         if lowered.contains("opus") || lowered.contains("sonnet") {
@@ -149,7 +153,9 @@ enum ModelContextWindow {
             let fetchedAt = (json["fetchedAt"] as? NSNumber)?.doubleValue,
             let limits = json["limits"] as? [String: Int]
         else { return false }
-        if Date().timeIntervalSince1970 - fetchedAt > cacheTTL { return false }
+        if Date().timeIntervalSince1970 - fetchedAt > cacheTTL {
+            return false
+        }
         overlay.withLock { $0 = limits }
         return true
     }

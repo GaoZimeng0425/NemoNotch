@@ -1,5 +1,5 @@
-@testable import NemoNotch
 import Foundation
+@testable import NemoNotch
 import Testing
 
 @Suite("LockScreenAIPanelModel")
@@ -37,7 +37,7 @@ struct LockScreenAIPanelModelTests {
 
     @Test("waitingForInput does not count as an active process")
     func waitingForInputNotActive() {
-        let sessions = [self.session("a", phase: .waitingForInput, age: 60, now: now)]
+        let sessions = [session("a", phase: .waitingForInput, age: 60, now: now)]
         #expect(!LockScreenAIPanelModel.shouldShow(sessions: sessions, isLocked: true, enabled: true))
         #expect(LockScreenAIPanelModel.makeItems(from: sessions, now: now).isEmpty)
     }
@@ -47,11 +47,11 @@ struct LockScreenAIPanelModelTests {
     @Test("keeps running, compacting, and awaiting-approval; drops idle and ended")
     func filtersPhases() {
         let sessions = [
-            self.session("idle", phase: .idle, age: 10, now: now),
-            self.session("ended", phase: .ended, age: 20, now: now),
-            self.session("run", phase: .processing, age: 30, now: now),
-            self.session("comp", phase: .compacting, age: 40, now: now),
-            self.session(
+            session("idle", phase: .idle, age: 10, now: now),
+            session("ended", phase: .ended, age: 20, now: now),
+            session("run", phase: .processing, age: 30, now: now),
+            session("comp", phase: .compacting, age: 40, now: now),
+            session(
                 "appr",
                 phase: .waitingForApproval(
                     PermissionContext(toolUseId: "t1", toolName: "Bash", toolInput: nil, receivedAt: now)
@@ -71,8 +71,8 @@ struct LockScreenAIPanelModelTests {
     @Test("awaiting approval sorts ahead of longer-running sessions")
     func approvalFirst() {
         let sessions = [
-            self.session("long", phase: .processing, age: 3600, now: now),
-            self.session(
+            session("long", phase: .processing, age: 3600, now: now),
+            session(
                 "appr",
                 phase: .waitingForApproval(
                     PermissionContext(toolUseId: "t2", toolName: "Edit", toolInput: nil, receivedAt: now)
@@ -89,8 +89,8 @@ struct LockScreenAIPanelModelTests {
     @Test("ties break by longer runtime")
     func ordersByRuntime() {
         let sessions = [
-            self.session("short", phase: .processing, age: 60, now: now),
-            self.session("long", phase: .processing, age: 600, now: now),
+            session("short", phase: .processing, age: 60, now: now),
+            session("long", phase: .processing, age: 600, now: now),
         ]
 
         #expect(LockScreenAIPanelModel.makeItems(from: sessions, now: now).map(\.id) == ["long", "short"])
@@ -100,8 +100,8 @@ struct LockScreenAIPanelModelTests {
 
     @Test("caps at maxRows")
     func capsRows() {
-        let sessions = (0..<9).map {
-            self.session("s\($0)", phase: .processing, age: TimeInterval($0 + 1), now: now)
+        let sessions = (0 ..< 9).map {
+            session("s\($0)", phase: .processing, age: TimeInterval($0 + 1), now: now)
         }
 
         let items = LockScreenAIPanelModel.makeItems(from: sessions, now: now)
@@ -132,7 +132,7 @@ struct LockScreenAIPanelModelTests {
         #expect(LockScreenAIPanelModel.elapsedText(45) == "45s")
         #expect(LockScreenAIPanelModel.elapsedText(60) == "1m")
         #expect(LockScreenAIPanelModel.elapsedText(754) == "12m")
-        #expect(LockScreenAIPanelModel.elapsedText(11_520) == "3.2h")
+        #expect(LockScreenAIPanelModel.elapsedText(11520) == "3.2h")
     }
 
     // MARK: - running seconds

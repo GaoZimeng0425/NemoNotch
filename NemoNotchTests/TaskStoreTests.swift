@@ -124,7 +124,7 @@ struct TaskStoreTests {
     @Test func loadsV1JSONWithoutTagsAndDueDate() throws {
         let url = tempURL()
         // v1 JSON shape: no `tags`, no `dueDate` keys
-        let v1JSON = """
+        let v1JSON = try #require("""
         [
           {
             "id": "11111111-1111-1111-1111-111111111111",
@@ -137,7 +137,7 @@ struct TaskStoreTests {
             "sortIndex": 1.0
           }
         ]
-        """.data(using: .utf8)!
+        """.data(using: .utf8))
         try v1JSON.write(to: url)
 
         let store = TaskStore(fileURL: url)

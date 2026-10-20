@@ -51,7 +51,9 @@ final class DraggableAppIconView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var intrinsicContentSize: NSSize { NSSize(width: side, height: side) }
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: side, height: side)
+    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .openHand)

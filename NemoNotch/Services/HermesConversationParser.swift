@@ -9,14 +9,18 @@ enum HermesConversationParser: ConversationParserProtocol {
 
         // Default profile
         let defaultPath = "\(hermesDir)/sessions/session_\(sessionId).json"
-        if fm.fileExists(atPath: defaultPath) { return defaultPath }
+        if fm.fileExists(atPath: defaultPath) {
+            return defaultPath
+        }
 
         // Named profiles
         let profilesDir = "\(hermesDir)/profiles"
         guard let profiles = try? fm.contentsOfDirectory(atPath: profilesDir) else { return nil }
         for name in profiles {
             let path = "\(profilesDir)/\(name)/sessions/session_\(sessionId).json"
-            if fm.fileExists(atPath: path) { return path }
+            if fm.fileExists(atPath: path) {
+                return path
+            }
         }
 
         return nil
@@ -37,11 +41,17 @@ enum HermesConversationParser: ConversationParserProtocol {
             guard let role = msg["role"] as? String else { continue }
             switch role {
             case "user":
-                if let m = parseUserMessage(msg, index: index) { messages.append(m) }
+                if let m = parseUserMessage(msg, index: index) {
+                    messages.append(m)
+                }
             case "assistant":
-                if let m = parseAssistantMessage(msg, index: index) { messages.append(m) }
+                if let m = parseAssistantMessage(msg, index: index) {
+                    messages.append(m)
+                }
             case "tool":
-                if let m = parseToolMessage(msg, index: index) { messages.append(m) }
+                if let m = parseToolMessage(msg, index: index) {
+                    messages.append(m)
+                }
             default:
                 break
             }

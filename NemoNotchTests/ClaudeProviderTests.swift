@@ -7,7 +7,9 @@ import Testing
 struct ClaudeProviderTests {
     private static func event(_ name: String, sessionId: String, tool: String? = nil) throws -> HookEvent {
         var fields = ["\"hook_event_name\":\"\(name)\"", "\"session_id\":\"\(sessionId)\""]
-        if let tool { fields.append("\"tool_name\":\"\(tool)\"") }
+        if let tool {
+            fields.append("\"tool_name\":\"\(tool)\"")
+        }
         let json = "{\(fields.joined(separator: ","))}"
         return try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
     }

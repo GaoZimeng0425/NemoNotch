@@ -223,7 +223,9 @@ final class NotificationService {
     // MARK: - App Icon
 
     private func appIcon(for bundleID: String) -> NSImage {
-        if let cached = iconCache[bundleID] { return cached }
+        if let cached = iconCache[bundleID] {
+            return cached
+        }
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             let icon = NSWorkspace.shared.icon(forFile: url.path)
             iconCache[bundleID] = icon

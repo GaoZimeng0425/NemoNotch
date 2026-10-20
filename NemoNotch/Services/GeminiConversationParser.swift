@@ -236,7 +236,11 @@ enum GeminiConversationParser: ConversationParserProtocol {
         )
     }
 
-    private static func parseGeminiMessageLine(_ json: [String: Any], result: inout IncrementalResult, fallbackID: String) -> ChatMessage? {
+    private static func parseGeminiMessageLine(
+        _ json: [String: Any],
+        result: inout IncrementalResult,
+        fallbackID: String
+    ) -> ChatMessage? {
         let content = extractTextFromLine(json)
 
         if let tokens = json["tokens"] as? [String: Any] {
@@ -321,7 +325,9 @@ enum GeminiConversationParser: ConversationParserProtocol {
     }
 
     private static func extractTextFromLine(_ json: [String: Any]) -> String {
-        if let contentStr = json["content"] as? String { return contentStr }
+        if let contentStr = json["content"] as? String {
+            return contentStr
+        }
         if let contentArr = json["content"] as? [[String: Any]] {
             return contentArr.compactMap { $0["text"] as? String }.joined(separator: "\n")
         }
@@ -407,7 +413,9 @@ enum GeminiConversationParser: ConversationParserProtocol {
                     lastContextTokens = input + cached
                 }
 
-                if let model = msg.model { lastModel = model }
+                if let model = msg.model {
+                    lastModel = model
+                }
 
                 if let toolCalls = msg.toolCalls {
                     for tc in toolCalls {

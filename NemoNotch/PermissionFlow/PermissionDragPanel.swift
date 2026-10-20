@@ -28,8 +28,13 @@ final class PermissionDragPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
     }
 
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
 
     /// ESC dismisses the guide. The panel has no title bar, so without this a
     /// user who changes their mind has to hunt for the close button.

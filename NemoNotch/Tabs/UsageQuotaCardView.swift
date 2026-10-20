@@ -11,10 +11,18 @@ struct UsageQuotaCardView: View {
     /// exists.
     private var visibleProviders: [QuotaProvider] {
         var result: [QuotaProvider] = []
-        if appSettings.claudeEnabled { result.append(.claude) }
-        if service.hasCodexCredential { result.append(.codex) }
-        if appSettings.geminiEnabled, service.hasGeminiCredential { result.append(.gemini) }
-        if appSettings.zcodeEnabled, service.hasZcodeCredential { result.append(.zcode) }
+        if appSettings.claudeEnabled {
+            result.append(.claude)
+        }
+        if service.hasCodexCredential {
+            result.append(.codex)
+        }
+        if appSettings.geminiEnabled, service.hasGeminiCredential {
+            result.append(.gemini)
+        }
+        if appSettings.zcodeEnabled, service.hasZcodeCredential {
+            result.append(.zcode)
+        }
         return result
     }
 
@@ -185,8 +193,12 @@ struct UsageQuotaCardView: View {
     }
 
     private func color(for utilization: Double) -> Color {
-        if utilization >= 90 { return .red }
-        if utilization >= 70 { return .orange }
+        if utilization >= 90 {
+            return .red
+        }
+        if utilization >= 70 {
+            return .orange
+        }
         return .green
     }
 
@@ -221,10 +233,18 @@ struct UsageQuotaCompactView: View {
     /// exists.
     private var visibleProviders: [QuotaProvider] {
         var result: [QuotaProvider] = []
-        if appSettings.claudeEnabled { result.append(.claude) }
-        if service.hasCodexCredential { result.append(.codex) }
-        if appSettings.geminiEnabled, service.hasGeminiCredential { result.append(.gemini) }
-        if appSettings.zcodeEnabled, service.hasZcodeCredential { result.append(.zcode) }
+        if appSettings.claudeEnabled {
+            result.append(.claude)
+        }
+        if service.hasCodexCredential {
+            result.append(.codex)
+        }
+        if appSettings.geminiEnabled, service.hasGeminiCredential {
+            result.append(.gemini)
+        }
+        if appSettings.zcodeEnabled, service.hasZcodeCredential {
+            result.append(.zcode)
+        }
         return result
     }
 
@@ -241,7 +261,7 @@ struct UsageQuotaCompactView: View {
     }
 
     var body: some View {
-        if visibleProviders.isEmpty && zcodeStats == nil {
+        if visibleProviders.isEmpty, zcodeStats == nil {
             EmptyView()
         } else {
             content.activates(service)
@@ -433,8 +453,12 @@ struct UsageQuotaCompactView: View {
     }
 
     private func color(for utilization: Double) -> Color {
-        if utilization >= 90 { return .red }
-        if utilization >= 70 { return .orange }
+        if utilization >= 90 {
+            return .red
+        }
+        if utilization >= 70 {
+            return .orange
+        }
         return .green
     }
 }

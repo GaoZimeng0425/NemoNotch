@@ -25,16 +25,22 @@ struct CompletionItem: Equatable {
     init(name: String, source: CompletionSource) {
         self.name = name
         self.source = source
-        self.subtitle = nil
-        self.tool = nil
-        self.model = nil
-        self.tokenDisplay = nil
-        self.duration = nil
+        subtitle = nil
+        tool = nil
+        model = nil
+        tokenDisplay = nil
+        duration = nil
     }
 
-    init(name: String, source: CompletionSource,
-         subtitle: String?, tool: String?, model: String?,
-         tokenDisplay: String?, duration: TimeInterval?) {
+    init(
+        name: String,
+        source: CompletionSource,
+        subtitle: String?,
+        tool: String?,
+        model: String?,
+        tokenDisplay: String?,
+        duration: TimeInterval?
+    ) {
         self.name = name
         self.source = source
         self.subtitle = subtitle
@@ -68,16 +74,24 @@ struct CompletionCandidate: Equatable {
         self.name = name
         self.isActive = isActive
         self.source = source
-        self.subtitle = nil
-        self.tool = nil
-        self.model = nil
-        self.tokenDisplay = nil
-        self.duration = nil
+        subtitle = nil
+        tool = nil
+        model = nil
+        tokenDisplay = nil
+        duration = nil
     }
 
-    init(key: String, name: String, isActive: Bool, source: CompletionSource,
-         subtitle: String?, tool: String?, model: String?,
-         tokenDisplay: String?, duration: TimeInterval?) {
+    init(
+        key: String,
+        name: String,
+        isActive: Bool,
+        source: CompletionSource,
+        subtitle: String?,
+        tool: String?,
+        model: String?,
+        tokenDisplay: String?,
+        duration: TimeInterval?
+    ) {
         self.key = key
         self.name = name
         self.isActive = isActive
@@ -130,11 +144,21 @@ enum CompletionFlashNames {
         for item in new {
             if let idx = result.firstIndex(where: { $0.name == item.name }) {
                 // Field-level merge: newer non-nil values win.
-                if let v = item.subtitle { result[idx].subtitle = v }
-                if let v = item.tool { result[idx].tool = v }
-                if let v = item.model { result[idx].model = v }
-                if let v = item.tokenDisplay { result[idx].tokenDisplay = v }
-                if let v = item.duration { result[idx].duration = v }
+                if let v = item.subtitle {
+                    result[idx].subtitle = v
+                }
+                if let v = item.tool {
+                    result[idx].tool = v
+                }
+                if let v = item.model {
+                    result[idx].model = v
+                }
+                if let v = item.tokenDisplay {
+                    result[idx].tokenDisplay = v
+                }
+                if let v = item.duration {
+                    result[idx].duration = v
+                }
             } else {
                 result.append(item)
             }

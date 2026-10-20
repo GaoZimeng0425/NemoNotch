@@ -17,7 +17,9 @@ enum MarkdownRenderer {
                     codeBlockContent = ""
                     inCodeBlock = false
                 } else {
-                    if !codeBlockContent.isEmpty { result = Text("\(result)\n") }
+                    if !codeBlockContent.isEmpty {
+                        result = Text("\(result)\n")
+                    }
                     inCodeBlock = true
                 }
                 continue

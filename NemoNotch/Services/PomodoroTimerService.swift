@@ -202,8 +202,11 @@ final class PomodoroTimerService {
 
     /// Test hook: start in an arbitrary phase.
     func startForTesting(phase: PomodoroPhase, taskID: UUID?, duration: TimeInterval, autoFlow: Bool) {
-        if case .running = state { completeEarly() }
-        else if case .paused = state { completeEarly() }
+        if case .running = state {
+            completeEarly()
+        } else if case .paused = state {
+            completeEarly()
+        }
         lastAutoFlow = autoFlow
         let ctx = RunningContext(
             phase: phase,
@@ -281,12 +284,7 @@ final class PomodoroTimerService {
     func advance() {
         guard case let .justFinished(ctx) = state else { return }
 
-        guard ctx.outcome == .completed else {
-            state = .idle
-            return
-        }
-
-        guard lastAutoFlow else {
+        guard ctx.outcome == .completed, lastAutoFlow else {
             state = .idle
             return
         }

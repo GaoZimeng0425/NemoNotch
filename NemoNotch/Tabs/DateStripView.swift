@@ -29,7 +29,10 @@ struct DateStripView: View {
                 }
             }
             .onChange(of: selectedDate) { _, _ in
-                withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+                withAnimation(.spring(
+                    duration: NotchConstants.tabSwitchSpringDuration,
+                    bounce: NotchConstants.tabSwitchSpringBounce
+                )) {
                     proxy.scrollTo(selectedDateId, anchor: .center)
                 }
             }
@@ -53,8 +56,8 @@ struct DateStripView: View {
                     .font(.system(size: 14, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(
                         isToday ? NotchTheme.accent
-                        : isSelected ? NotchTheme.textPrimary
-                        : NotchTheme.textSecondary
+                            : isSelected ? NotchTheme.textPrimary
+                            : NotchTheme.textSecondary
                     )
 
                 Circle()

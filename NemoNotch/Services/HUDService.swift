@@ -19,11 +19,10 @@ struct ChargingCapsuleEvent: Equatable {
     /// Capsule label, e.g. "正在充电 · 87%". Keys are format strings in the
     /// String Catalog (managed via scripts/xcstrings.py, not extracted).
     var text: String {
-        let key: String
-        if externalConnected {
-            key = isCharging ? "charging.connected %d%%" : "charging.plugged %d%%"
+        let key: String = if externalConnected {
+            isCharging ? "charging.connected %d%%" : "charging.plugged %d%%"
         } else {
-            key = "charging.disconnected %d%%"
+            "charging.disconnected %d%%"
         }
         return String(format: String(localized: String.LocalizationValue(key)), percent)
     }
@@ -76,7 +75,9 @@ final class HUDService {
     deinit {
         MainActor.assumeIsolated {
             brightnessTimer?.invalidate()
-            if let handle = displayServicesHandle { dlclose(handle) }
+            if let handle = displayServicesHandle {
+                dlclose(handle)
+            }
             chargingCapsuleDismissTask?.cancel()
 
             if let source = batteryRunLoopSource {
@@ -246,18 +247,17 @@ final class HUDService {
             }
             brightnessTimer = timer
             RunLoop.main.add(timer, forMode: .common)
-        } else if lastBrightness >= 0 {
-            // No change — slow back down
-            if let timer = brightnessTimer, timer.timeInterval < 1.0 {
-                timer.invalidate()
-                let slowTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-                    DispatchQueue.main.async {
-                        self?.readBrightness()
-                    }
+        } else if lastBrightness >= 0,
+                  // No change — slow back down
+                  let timer = brightnessTimer, timer.timeInterval < 1.0 {
+            timer.invalidate()
+            let slowTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.readBrightness()
                 }
-                brightnessTimer = slowTimer
-                RunLoop.main.add(slowTimer, forMode: .common)
             }
+            brightnessTimer = slowTimer
+            RunLoop.main.add(slowTimer, forMode: .common)
         }
 
         lastBrightness = brightness
@@ -360,7 +360,7 @@ final class HUDService {
         chargingCapsuleDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(NotchConstants.notchCapsuleDwell))
             guard let self, !Task.isCancelled else { return }
-            self.chargingCapsule = nil
+            chargingCapsule = nil
         }
     }
 

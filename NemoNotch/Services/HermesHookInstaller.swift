@@ -170,7 +170,9 @@ enum HermesHookInstaller {
             }
         } else {
             // No hooks section — append at the end
-            if lines.last?.isEmpty == true { lines.removeLast() }
+            if lines.last?.isEmpty == true {
+                lines.removeLast()
+            }
             lines.append("hooks:")
             lines.append(contentsOf: ourLines)
         }
@@ -232,7 +234,7 @@ enum HermesHookInstaller {
         let autoAcceptMarker = "# hooks_auto_accept: managed by NemoNotch"
         if let m = cleaned.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == autoAcceptMarker }) {
             if cleaned[safe: m + 1]?.trimmingCharacters(in: .whitespaces) == "hooks_auto_accept: true" {
-                cleaned.removeSubrange(m...m + 1)
+                cleaned.removeSubrange(m ... m + 1)
             } else {
                 cleaned.remove(at: m)
             }

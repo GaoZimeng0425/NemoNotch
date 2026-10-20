@@ -21,8 +21,8 @@ enum KeepAwakeEventLog {
 
     /// 失控增长的兜底。正常使用远远够不到 —— 但万一 clamshell 消息风暴(驱动
     /// 异常、外接坞反复抖动),不设上限会把磁盘写满。超限时保留后半,丢最老的。
-    private static let maxBytes = 1_024 * 1_024
-    private static let trimToBytes = 512 * 1_024
+    private static let maxBytes = 1024 * 1024
+    private static let trimToBytes = 512 * 1024
 
     /// 串行化写入。事件来自 @MainActor(LidMonitor / KeepAwakeService),但
     /// `record` 本身是 nonisolated,不该依赖调用方的隔离域。

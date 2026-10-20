@@ -29,15 +29,25 @@ struct TaskContext: Identifiable, Equatable {
     var tools: [SubagentToolCall]
     let startTime: Date
 
-    var activeToolCount: Int { tools.filter { !$0.isCompleted }.count }
-    var completedToolCount: Int { tools.filter { $0.isCompleted }.count }
-    var totalToolCount: Int { tools.count }
+    var activeToolCount: Int {
+        tools.filter { !$0.isCompleted }.count
+    }
+
+    var completedToolCount: Int {
+        tools.filter(\.isCompleted).count
+    }
+
+    var totalToolCount: Int {
+        tools.count
+    }
 }
 
 struct SubagentState: Equatable {
     var activeTasks: [String: TaskContext] = [:]
 
-    var hasActiveTasks: Bool { !activeTasks.isEmpty }
+    var hasActiveTasks: Bool {
+        !activeTasks.isEmpty
+    }
 
     mutating func startTask(taskToolId: String, description: String?) {
         activeTasks[taskToolId] = TaskContext(

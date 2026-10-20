@@ -18,7 +18,7 @@ struct CalendarEvent: Identifiable {
         calendarColor: CGColor, isAllDay: Bool,
         url: URL? = nil, location: String? = nil, notes: String? = nil
     ) {
-        self.id = UUID().uuidString
+        id = UUID().uuidString
         self.title = title
         self.startDate = startDate
         self.endDate = endDate
@@ -29,7 +29,9 @@ struct CalendarEvent: Identifiable {
         self.notes = notes
     }
 
-    var isPast: Bool { endDate < Date() }
+    var isPast: Bool {
+        endDate < Date()
+    }
 
     var meetingURL: URL? {
         // Collect every link we can see — the event's URL field, then every
@@ -37,11 +39,13 @@ struct CalendarEvent: Identifiable {
         // meeting platform win. A Meet link buried mid-notes should beat a
         // doc link that merely appears first; ties keep the earlier source.
         var candidates: [URL] = []
-        if let url { candidates.append(url) }
+        if let url {
+            candidates.append(url)
+        }
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
             return candidates.first
         }
-        for field in [location, notes].compactMap({ $0 }) {
+        for field in [location, notes].compactMap(\.self) {
             let range = NSRange(field.startIndex..., in: field)
             candidates.append(contentsOf: detector.matches(in: field, range: range).compactMap(\.url))
         }
@@ -62,9 +66,15 @@ struct CalendarEvent: Identifiable {
 
     static func platform(for url: URL) -> MeetingPlatform {
         guard let host = url.host?.lowercased() else { return .generic }
-        if host.contains("meet.google.com") { return .googleMeet }
-        if host.contains("zoom.us") { return .zoom }
-        if host.contains("teams.microsoft.com") { return .teams }
+        if host.contains("meet.google.com") {
+            return .googleMeet
+        }
+        if host.contains("zoom.us") {
+            return .zoom
+        }
+        if host.contains("teams.microsoft.com") {
+            return .teams
+        }
         return .generic
     }
 

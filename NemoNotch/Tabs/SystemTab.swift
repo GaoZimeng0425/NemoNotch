@@ -155,7 +155,9 @@ struct SystemTab: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var isCharging: Bool { systemService.isCharging }
+    private var isCharging: Bool {
+        systemService.isCharging
+    }
 
     private var batteryIcon: String {
         switch systemService.batteryLevel {
@@ -168,8 +170,12 @@ struct SystemTab: View {
     }
 
     private func loadColor(_ usage: Double) -> Color {
-        if usage > 80 { return .red }
-        if usage > 50 { return .yellow }
+        if usage > 80 {
+            return .red
+        }
+        if usage > 50 {
+            return .yellow
+        }
         return NotchTheme.textPrimary
     }
 
@@ -318,8 +324,22 @@ private struct DualQuadrantGraph: View {
                     .frame(maxHeight: .infinity)
                     .frame(height: 0.6, alignment: .center)
 
-                quadrant(data: topData, color: topColor, isTop: true, geometry: geometry, centerY: centerY, maxValue: maxValue)
-                quadrant(data: bottomData, color: bottomColor, isTop: false, geometry: geometry, centerY: centerY, maxValue: maxValue)
+                quadrant(
+                    data: topData,
+                    color: topColor,
+                    isTop: true,
+                    geometry: geometry,
+                    centerY: centerY,
+                    maxValue: maxValue
+                )
+                quadrant(
+                    data: bottomData,
+                    color: bottomColor,
+                    isTop: false,
+                    geometry: geometry,
+                    centerY: centerY,
+                    maxValue: maxValue
+                )
             }
         }
     }

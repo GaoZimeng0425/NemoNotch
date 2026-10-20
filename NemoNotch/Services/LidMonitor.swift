@@ -166,11 +166,9 @@ final class LidMonitor {
 
     /// 读 `AppleClamshellState`。读不到(台式机、属性缺席)时返回 `nil`。
     func isLidClosed() -> Bool? {
-        guard rootDomain != IO_OBJECT_NULL else { return nil }
-        guard let property = IORegistryEntryCreateCFProperty(
+        guard rootDomain != IO_OBJECT_NULL, let property = IORegistryEntryCreateCFProperty(
             rootDomain, "AppleClamshellState" as CFString, kCFAllocatorDefault, 0
-        )?.takeRetainedValue() else { return nil }
-        guard CFGetTypeID(property) == CFBooleanGetTypeID() else { return nil }
+        )?.takeRetainedValue(), CFGetTypeID(property) == CFBooleanGetTypeID() else { return nil }
         // swiftlint:disable:next force_cast
         return CFBooleanGetValue((property as! CFBoolean))
     }
@@ -180,11 +178,9 @@ final class LidMonitor {
     /// 接着外接显示器的 clamshell 工作模式下它是 `false`:那时合盖是用户要的
     /// 工作状态,不该把机器睡下去。读不到时返回 `nil`,调用方按"不会"处理。
     func clamshellCausesSleep() -> Bool? {
-        guard rootDomain != IO_OBJECT_NULL else { return nil }
-        guard let property = IORegistryEntryCreateCFProperty(
+        guard rootDomain != IO_OBJECT_NULL, let property = IORegistryEntryCreateCFProperty(
             rootDomain, "AppleClamshellCausesSleep" as CFString, kCFAllocatorDefault, 0
-        )?.takeRetainedValue() else { return nil }
-        guard CFGetTypeID(property) == CFBooleanGetTypeID() else { return nil }
+        )?.takeRetainedValue(), CFGetTypeID(property) == CFBooleanGetTypeID() else { return nil }
         // swiftlint:disable:next force_cast
         return CFBooleanGetValue((property as! CFBoolean))
     }
