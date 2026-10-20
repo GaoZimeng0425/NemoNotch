@@ -221,7 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if UITestMode.isActive {
             if UITestMode.flash {
-                // 只填一个工作中的 Claude 会话,收起的刘海只显示 Claude Code 一行徽标
+                // 只填一个工作中的 Claude 会话:它出现在 AI 页与侧边栏里
                 // (侧边栏开着时刘海不显示 AI 徽标)。
                 UITestSeeder.seedFlash(aiStore: deps.aiMonitor.store)
             } else {

@@ -10,10 +10,6 @@ import SwiftUI
 /// service through the double-pulse curve). Purely visual — never intercepts events.
 struct CompletionFlashView: View {
     let service: CompletionFlashService
-    /// Only one screen renders the toast (the built-in/primary display) so a
-    /// multi-monitor setup doesn't show a duplicate capsule per screen. The
-    /// edge glow still flashes every screen.
-    var showsToast: Bool = true
 
     /// 首帧挂载闸门,见 `toast` 的注释 —— 重建窗口的入场动画依赖它。
     @State private var toastMounted = false
@@ -36,9 +32,9 @@ struct CompletionFlashView: View {
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
 
-            if showsToast {
-                toast
-            }
+            // Every screen: the toast is read where the user is looking,
+            // like the glow it comes with.
+            toast
         }
         .ignoresSafeArea()
     }
