@@ -13,8 +13,8 @@ final class BadgeViewModel {
 
     var shownHasActiveBadge: Bool = false
     var displayedBadgeItems: [BadgeItem] = []
-    /// The scheduled badge update, and its generation: a newer update
-    /// supersedes it even once it is dequeued (`cancel()` alone isn't).
+    /// The scheduled badge update, cancelled by a newer one (dispatch skips
+    /// a cancelled item); the generation is a second line of defence.
     @ObservationIgnored private var pendingUpdate: DispatchWorkItem?
     @ObservationIgnored private var updateGeneration = 0
     @ObservationIgnored private let schedule: DelayScheduler

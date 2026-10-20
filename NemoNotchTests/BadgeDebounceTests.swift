@@ -8,33 +8,39 @@ import Testing
 /// between tool calls) so the collapsed notch doesn't replay its layout
 /// animation.
 ///
-/// No wall clock: the view model's scheduler is injected and the test fires
-/// the pending update by hand (these tests used to sleep real time and failed
-/// whenever the host stalled for a few seconds).
+/// On a virtual clock: the view model's scheduler is injected and the test
+/// advances time by hand (these tests used to sleep real time and failed
+/// whenever the host stalled for a few seconds). The checks are the old
+/// wall-clock ones — held at +150ms, collapsed by +1000ms.
 @MainActor
 struct BadgeDebounceTests {
     private let media: [BadgeItem] = [.media]
     private let calendar: [BadgeItem] = [.calendar]
 
-    /// Collects scheduled updates; the test decides when they run.
-    private final class ManualScheduler {
-        var pending: [(delay: TimeInterval, item: DispatchWorkItem)] = []
+    /// A virtual clock: scheduled items run when `advance` passes their
+    /// deadline, earliest first. A cancelled item is skipped by dispatch
+    /// itself (`perform()` returns at once), as on the real queue.
+    private final class VirtualClock {
+        private(set) var now: TimeInterval = 0
+        private var pending: [(deadline: TimeInterval, order: Int, item: DispatchWorkItem)] = []
+        private var scheduled = 0
 
         var schedule: DelayScheduler {
-            { [unowned self] delay, item in pending.append((delay, item)) }
+            { [unowned self] delay, item in
+                scheduled += 1
+                pending.append((now + delay, scheduled, item))
+            }
         }
 
-        /// Runs everything scheduled so far in the order the clock would —
-        /// shortest delay first, ties in scheduling order — stale items
-        /// included, as a late dispatch would.
-        func fireAll() {
-            let due = pending.enumerated().sorted { ($0.element.delay, $0.offset) < ($1.element.delay, $1.offset) }
-            pending = []
-            due.forEach { $0.element.item.perform() }
+        func advance(by seconds: TimeInterval) {
+            now += seconds
+            let due = pending.filter { $0.deadline <= now }.sorted { ($0.deadline, $0.order) < ($1.deadline, $1.order) }
+            pending.removeAll { $0.deadline <= now }
+            due.forEach { $0.item.perform() }
         }
     }
 
-    private func makeViewModel(_ scheduler: ManualScheduler) -> BadgeViewModel {
+    private func makeViewModel(_ clock: VirtualClock) -> BadgeViewModel {
         let vm = BadgeViewModel(
             mediaService: MediaService(disableLiveUpdates: true),
             calendarService: CalendarService(),
@@ -48,60 +54,60 @@ struct BadgeDebounceTests {
                 permissionMonitor: nil
             ),
             appSettings: AppSettings(),
-            schedule: scheduler.schedule
+            schedule: clock.schedule
         )
         vm.initialize()
         return vm
     }
 
     /// The view model showing `items`, its update delivered.
-    private func showing(_ items: [BadgeItem], _ scheduler: ManualScheduler) -> BadgeViewModel {
-        let vm = makeViewModel(scheduler)
+    private func showing(_ items: [BadgeItem], _ clock: VirtualClock) -> BadgeViewModel {
+        let vm = makeViewModel(clock)
         vm.applyBadgeUpdate(newTypes: items)
-        scheduler.fireAll()
+        clock.advance(by: 0.15)
         return vm
     }
 
-    @Test func nonEmptyUpdateLandsOnTheCoalesceTick() {
-        let scheduler = ManualScheduler()
-        let vm = makeViewModel(scheduler)
+    /// Coalesced, not synchronous — and landed well within 150ms.
+    @Test func nonEmptyUpdateLandsAfterTheCoalesceTick() {
+        let clock = VirtualClock()
+        let vm = makeViewModel(clock)
         vm.applyBadgeUpdate(newTypes: media)
-        #expect(scheduler.pending.map(\.delay) == [NotchConstants.badgeCoalesceTick])
         #expect(vm.displayedBadgeItems != media)
-        scheduler.fireAll()
+        clock.advance(by: 0.15)
         #expect(vm.displayedBadgeItems == media)
         #expect(vm.shownHasActiveBadge)
     }
 
-    /// The discriminating grace assertion: dropping to empty waits out the
-    /// grace (not the tick), and until it runs the OLD set stays shown. An
-    /// implementation without the grace collapses on the tick and fails here.
-    @Test func emptyUpdateIsHeldForTheGrace() {
-        let scheduler = ManualScheduler()
-        let vm = showing(media, scheduler)
+    /// The discriminating grace assertion: at +150ms (past the tick, inside
+    /// the grace) the display must still show the OLD set. An implementation
+    /// without the grace — or with one shrunk to the tick — collapses by then.
+    @Test func emptyUpdateIsHeldDuringTheGraceWindow() {
+        let clock = VirtualClock()
+        let vm = showing(media, clock)
         vm.applyBadgeUpdate(newTypes: [])
-        #expect(scheduler.pending.map(\.delay) == [NotchConstants.badgeEmptyGrace])
+        clock.advance(by: 0.15)
         #expect(vm.displayedBadgeItems == media)
         #expect(vm.shownHasActiveBadge)
     }
 
-    /// A non-empty set inside the grace supersedes the pending collapse —
-    /// even if the stale collapse is dispatched anyway, after it.
+    /// A non-empty set inside the grace supersedes the pending collapse.
     @Test func nonEmptyWithinGraceCancelsTheCollapse() {
-        let scheduler = ManualScheduler()
-        let vm = showing(media, scheduler)
+        let clock = VirtualClock()
+        let vm = showing(media, clock)
         vm.applyBadgeUpdate(newTypes: [])
+        clock.advance(by: 0.1)
         vm.applyBadgeUpdate(newTypes: calendar)
-        scheduler.fireAll() // the calendar update on its tick, then the stale collapse
+        clock.advance(by: 1.0) // past where the collapse would have landed
         #expect(vm.displayedBadgeItems == calendar)
         #expect(vm.shownHasActiveBadge)
     }
 
     @Test func emptyPastGraceCollapses() {
-        let scheduler = ManualScheduler()
-        let vm = showing(media, scheduler)
+        let clock = VirtualClock()
+        let vm = showing(media, clock)
         vm.applyBadgeUpdate(newTypes: [])
-        scheduler.fireAll()
+        clock.advance(by: 1.0)
         #expect(vm.displayedBadgeItems.isEmpty)
         #expect(!vm.shownHasActiveBadge)
     }
