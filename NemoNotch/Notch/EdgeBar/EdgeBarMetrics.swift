@@ -301,9 +301,6 @@ enum EdgeBarMotion {
                 .animation(cardOut)
         )
     }
-
-    /// Docking, undocking: one form gives way to the other where it is.
-    static let form = Animation.easeOut(duration: 0.16)
 }
 
 /// The side, for layout: everything anchored on the left in the docked-left

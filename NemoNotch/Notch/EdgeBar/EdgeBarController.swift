@@ -46,6 +46,7 @@ final class EdgeBarController: NSObject {
     private static var initialPlacement: EdgeBarPlacement {
         UITestMode.isActive ? .standard : EdgeBarPlacement.load(from: .standard)
     }
+
     /// Where the bar's top rests in the canvas, and the canvas height — set
     /// by the dock cycle and the drag so view and window never disagree.
     private(set) var restTop: CGFloat = 200
@@ -481,6 +482,21 @@ final class EdgeBarController: NSObject {
 
     @ObservationIgnored private var isDragging = false
 
+    /// A drag moves the window with the cursor, every event. Anything the
+    /// drag changes in the view must land in that same frame — no fades, no
+    /// curves: an animated change keeps the old content on screen for its
+    /// duration at the window's NEW origin (an open panel and its card rode
+    /// along, stale, for ~4 frames at tear-off; docking showed a blank frame
+    /// and a 0.16s fade — screen-recorded 2026-10-20).
+    private static var instant: Transaction {
+        var transaction = Transaction(animation: nil)
+        // The line that matters: `animation: nil` alone leaves the views'
+        // `.animation(_:value:)` and a transition's attached `.animation(_:)`
+        // (the card's fade, the names') running.
+        transaction.disablesAnimations = true
+        return transaction
+    }
+
     /// Kept where the OPEN body still fits below it — the longest list
     /// (7.5 rows and the summary); the usage block fits itself to what room
     /// is left (`fitUsage`), and the card clamps itself to the canvas.
@@ -534,17 +550,21 @@ final class EdgeBarController: NSObject {
                     : abs(dy) > Self.dragThreshold || away > Self.tearOff
                 guard moved else { continue }
                 dragging = true
-                isDragging = true
-                hover.closeNow()
+                withTransaction(Self.instant) {
+                    isDragging = true
+                    hover.closeNow()
+                }
             }
             if !carrying, away > Self.tearOff {
                 carrying = true
             }
-            if carrying {
-                carry(to: cursor, grab: grab)
-            } else {
-                setIfChanged(\.restTop, clampedTop(startTop + dy, canvasHeight: canvasHeight))
-                updateBodyRect()
+            withTransaction(Self.instant) {
+                if carrying {
+                    carry(to: cursor, grab: grab)
+                } else {
+                    setIfChanged(\.restTop, clampedTop(startTop + dy, canvasHeight: canvasHeight))
+                    updateBodyRect()
+                }
             }
         }
         // The loop consumed the mouse-up: whatever click() says, the press
@@ -553,18 +573,20 @@ final class EdgeBarController: NSObject {
             _ = click(at: point)
             return true
         }
-        isDragging = false
-        if carrying {
-            settle(at: cursor)
-        } else {
-            placement.top = restTop / canvasHeight
+        withTransaction(Self.instant) {
+            isDragging = false
+            if carrying {
+                settle(at: cursor)
+            } else {
+                placement.top = restTop / canvasHeight
+            }
+            chosenPlacement = placement
+            // A UI-test run never writes over the machine user's placement.
+            if !UITestMode.isActive {
+                chosenPlacement.save(to: .standard)
+            }
+            applyDock()
         }
-        chosenPlacement = placement
-        // A UI-test run never writes over the machine user's placement.
-        if !UITestMode.isActive {
-            chosenPlacement.save(to: .standard)
-        }
-        applyDock()
         LogService.info(
             "Edge bar placed: \(placement.mode.rawValue) \(placement.side.rawValue), top \(Int(restTop)) / \(Int(canvasHeight))",
             category: "EdgeBar"

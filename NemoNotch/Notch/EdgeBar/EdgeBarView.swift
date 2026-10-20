@@ -13,14 +13,17 @@ struct EdgeBarView: View {
     var body: some View {
         ZStack(alignment: bar.side.topAlignment) {
             Group {
-                // A new form appears where it is (the window moved with it);
-                // the old one goes at once rather than ghost at its old spot.
+                // The form changes only under a drag, which moves the window
+                // in the same frame: swap at once. (The drag's no-animation
+                // transaction is what makes it instant — the opened bar used
+                // to ride along because closing it, outside any transaction,
+                // let the Group's `isOpen` animation hold its removal.)
                 if bar.isFloating {
                     EdgeBarFloatingBody()
-                        .transition(.asymmetric(insertion: .opacity.animation(EdgeBarMotion.form), removal: .identity))
+                        .transition(.identity)
                 } else {
                     barLayer
-                        .transition(.asymmetric(insertion: .opacity.animation(EdgeBarMotion.form), removal: .identity))
+                        .transition(.identity)
                 }
             }
             .padding(.top, bar.barTop)

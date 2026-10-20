@@ -61,6 +61,12 @@ else
   files="."
 fi
 
+# This checkout's own config, explicitly: in a nested worktree
+# (.worktree/<name>) SwiftFormat would otherwise also read the primary
+# checkout's .swiftformat up the tree, whose `--exclude .worktree` skips
+# every file here — "0 files formatted, 1 file skipped", a silent pass.
+sf_config="$root/.swiftformat"
+
 sf_status=0
 sl_status=0
 had_partial=0
@@ -70,7 +76,7 @@ if [ "$mode" = staged ]; then
   if [ "$fix" = 1 ]; then
     if [ -n "$fixable" ]; then
       # shellcheck disable=SC2086
-      swiftformat --quiet $fixable || sf_status=1
+      swiftformat --config "$sf_config" --quiet $fixable || sf_status=1
       # 重新暂存被格式化的文件;内容未变的文件 git add 是无操作
       # shellcheck disable=SC2086
       git add -- $fixable
@@ -78,17 +84,17 @@ if [ "$mode" = staged ]; then
     if [ -n "$checkonly" ]; then
       had_partial=1
       # shellcheck disable=SC2086
-      swiftformat --lint --quiet $checkonly || sf_status=1
+      swiftformat --config "$sf_config" --lint --quiet $checkonly || sf_status=1
     fi
   else
     # shellcheck disable=SC2086
-    swiftformat --lint --quiet $files || sf_status=1
+    swiftformat --config "$sf_config" --lint --quiet $files || sf_status=1
   fi
 else
   if [ "$fix" = 1 ]; then
-    swiftformat --quiet . || sf_status=1
+    swiftformat --config "$sf_config" --quiet . || sf_status=1
   else
-    swiftformat --lint --quiet . || sf_status=1
+    swiftformat --config "$sf_config" --lint --quiet . || sf_status=1
   fi
 fi
 
@@ -108,7 +114,7 @@ if [ "$sf_status" != 0 ]; then
   echo "   修复:sh scripts/lint.sh --fix(全仓)或 sh scripts/lint.sh --staged --fix(仅暂存文件)" >&2
   if [ "$had_partial" = 1 ]; then
     echo "   ⚠️  部分暂存的文件未被自动格式化(暂存与工作区不一致,避免把未暂存改动带进提交):$checkonly" >&2
-    echo "      先完整暂存(git add <file>)再提交,或手动执行:swiftformat$checkonly" >&2
+    echo "      先完整暂存(git add <file>)再提交,或手动执行:swiftformat --config .swiftformat$checkonly" >&2
   fi
 fi
 if [ "$sl_status" != 0 ]; then
