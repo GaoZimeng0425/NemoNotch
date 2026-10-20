@@ -18,7 +18,9 @@ enum NotchConstants {
     /// Grace delay before collapsing the compact badges when activity drops to
     /// empty. Absorbs momentary idle dips (e.g. an agent briefly returning to
     /// .idle between tool calls) so the right-edge badge doesn't slide in/out.
-    static let badgeEmptyGrace: Duration = .milliseconds(600)
+    static let badgeEmptyGrace: TimeInterval = 0.6
+    /// Non-empty badge updates coalesce on this tick.
+    static let badgeCoalesceTick: TimeInterval = 0.016
     /// Max badge groups shown collapsed; extras fold into a "+K" chip.
     static let badgeGroupCap: Int = 4
     /// Horizontal step between overlapping coins. Smaller than a coin diameter

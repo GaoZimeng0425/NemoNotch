@@ -13,7 +13,11 @@ final class BadgeViewModel {
 
     var shownHasActiveBadge: Bool = false
     var displayedBadgeItems: [BadgeItem] = []
-    private var badgeTypeUpdateTask: Task<Void, Never>?
+    /// The scheduled badge update, cancelled by a newer one (dispatch skips
+    /// a cancelled item); the generation is a second line of defence.
+    @ObservationIgnored private var pendingUpdate: DispatchWorkItem?
+    @ObservationIgnored private var updateGeneration = 0
+    @ObservationIgnored private let schedule: DelayScheduler
     private var wasWaitingForApproval = false
 
     init(
@@ -23,7 +27,8 @@ final class BadgeViewModel {
         notificationService: NotificationService,
         agentRegistry: AgentMonitorRegistry,
         pomodoroService: PomodoroTimerService,
-        appSettings: AppSettings
+        appSettings: AppSettings,
+        schedule: @escaping DelayScheduler = mainDelayScheduler
     ) {
         self.mediaService = mediaService
         self.calendarService = calendarService
@@ -32,6 +37,7 @@ final class BadgeViewModel {
         self.agentRegistry = agentRegistry
         self.pomodoroService = pomodoroService
         self.appSettings = appSettings
+        self.schedule = schedule
     }
 
     // MARK: - Computed
@@ -111,20 +117,25 @@ final class BadgeViewModel {
     /// tool calls) no longer flips `shownHasActiveBadge` false→true and replays
     /// the right-edge badge's slide/spread animation.
     func applyBadgeUpdate(newTypes: [BadgeItem]) {
-        badgeTypeUpdateTask?.cancel()
+        pendingUpdate?.cancel()
+        updateGeneration += 1
+        let token = updateGeneration
         let isEmpty = newTypes.isEmpty
-        let delay: Duration = isEmpty ? NotchConstants.badgeEmptyGrace : .milliseconds(16)
-        badgeTypeUpdateTask = Task { @MainActor in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            withAnimation(.spring(
-                duration: NotchConstants.badgeSpringDuration,
-                bounce: NotchConstants.badgeSpringBounce
-            )) {
-                displayedBadgeItems = newTypes
-                shownHasActiveBadge = !isEmpty
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.updateGeneration == token else { return }
+                self.pendingUpdate = nil
+                withAnimation(.spring(
+                    duration: NotchConstants.badgeSpringDuration,
+                    bounce: NotchConstants.badgeSpringBounce
+                )) {
+                    self.displayedBadgeItems = newTypes
+                    self.shownHasActiveBadge = !isEmpty
+                }
             }
         }
+        pendingUpdate = item
+        schedule(isEmpty ? NotchConstants.badgeEmptyGrace : NotchConstants.badgeCoalesceTick, item)
     }
 
     func checkApprovalSound(isOpen: Bool) {

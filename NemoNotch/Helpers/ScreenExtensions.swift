@@ -2,8 +2,7 @@ import AppKit
 
 extension NSScreen {
     static var screenWithMouse: NSScreen? {
-        let mouseLocation = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+        screen(containing: NSEvent.mouseLocation)
     }
 
     /// Returns the screen whose frame contains the given point (in global
