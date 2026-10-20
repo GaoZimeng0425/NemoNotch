@@ -88,9 +88,11 @@ jobs:
         with:
           languages: swift, actions
           # paths-ignore lives under `config:` (NOT a top-level init input).
-          # NemoNotchTests holds 27 of 143 Swift files (19%); test code is high
-          # in security-noisy patterns (stringly-typed input, mock fixtures)
-          # but low in real vulnerability value, so we exclude it from analysis.
+          # NemoNotchTests holds a large and growing share of the Swift files;
+          # test code is high in security-noisy patterns (stringly-typed input,
+          # mock fixtures) but low in real vulnerability value, so we exclude
+          # it from analysis. (Counts removed 2026-10-20: the "27 of 143"
+          # figure had gone stale at 56/233 — numbers in comments rot.)
           config: |
             paths-ignore:
               - NemoNotchTests

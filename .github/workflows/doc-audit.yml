@@ -1,0 +1,24 @@
+# doc-audit — 文档对账门禁(AGENTS.md / CI 注释 ↔ 代码的成对断言)。
+# 纯 grep,不需要 Xcode — 用最便宜的 runner。断言清单与漂移实例见
+# scripts/doc-audit.sh 头注释;CodeQL 的 paths-ignore 跳过 .sh/.md,
+# 所以本 workflow 与 CodeQL 互不触发对方的浪费。
+name: doc-audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# 与 CodeQL 同款:同一 ref 的新推送取消旧运行 — 检查虽便宜,没理由排队。
+concurrency:
+  group: doc-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Doc/code reconciliation
+        run: sh scripts/doc-audit.sh
