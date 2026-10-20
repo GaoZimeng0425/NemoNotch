@@ -22,6 +22,16 @@ if [ -f "$main_wt/.githooks/freshness.sh" ]; then
   nemonotch_check_fresh "$main_wt" || exit 1
 fi
 
+# 只许从主检出跑:worktree 内跑会让 stash 舞步走错地方(2026-10-20 实测:stash
+# 记到 feature 分支、checkout develop 报 'already used'、pop 把 develop 版内容
+# 灌回 worktree——旧记忆「feat-done 从 worktree 跑会失败」的机制化收口)。
+here=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+if [ "$here" != "$main_wt" ]; then
+  echo "✋ feat-done 只在主检出跑(当前在 $here)。" >&2
+  echo "   cd \"$main_wt\" && git feat-done $name" >&2
+  exit 1
+fi
+
 if ! git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
   echo "✋ 找不到分支 $branch。" >&2
   exit 1
