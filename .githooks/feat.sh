@@ -15,6 +15,13 @@ if [ -z "$name" ]; then
 fi
 
 main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+
+# 已安装副本过期自检(见 .githooks/freshness.sh):不一致则自动重装并中止本次
+if [ -f "$main_wt/.githooks/freshness.sh" ]; then
+  . "$main_wt/.githooks/freshness.sh"
+  nemonotch_check_fresh "$main_wt" || exit 1
+fi
+
 wt="$main_wt/.worktree/$name"
 branch="feature/$name"
 

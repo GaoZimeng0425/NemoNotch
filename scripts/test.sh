@@ -41,25 +41,45 @@ echo "   (耗时较长;想看实时输出可另开终端 tail -f \"$log\")"
 
 # 输出整体重定向到日志而不是 tee:POSIX sh 拿不到管道里 xcodebuild 的退出码,
 # 而退出码正是要交付的证据。摘要与失败详情在结尾从日志中提取。
-xcodebuild test \
-  -project NemoNotch.xcodeproj \
-  -scheme NemoNotch \
-  -destination 'platform=macOS' \
-  $only_flag \
-  CODE_SIGN_IDENTITY="-" \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_STYLE=Manual \
-  DEVELOPMENT_TEAM="" \
-  PROVISIONING_PROFILE_SPECIFIER="" \
-  > "$log" 2>&1
-status=$?
-
-echo "── 摘要 ──────────────────────────────"
+run_xcodebuild() {
+  xcodebuild test \
+    -project NemoNotch.xcodeproj \
+    -scheme NemoNotch \
+    -destination 'platform=macOS' \
+    $only_flag \
+    CODE_SIGN_IDENTITY="-" \
+    CODE_SIGNING_REQUIRED=NO \
+    CODE_SIGN_STYLE=Manual \
+    DEVELOPMENT_TEAM="" \
+    PROVISIONING_PROFILE_SPECIFIER="" \
+    > "$log" 2>&1
+}
 # xcodeformatted Swift Testing 输出是逐用例行("Test case 'X' passed on …"),
 # 没有单一的汇总行 — 用计数代替。带引号锚定("‘ passed on’")以免 display name
 # 里恰好含 " failed " 的用例把计数虚增。grep -c 零匹配时返回 1,吃掉它。
-passed=$(grep -c "' passed on" "$log" || true)
-failed=$(grep -c "' failed on" "$log" || true)
+count_cases() {
+  passed=$(grep -c "' passed on" "$log" || true)
+  failed=$(grep -c "' failed on" "$log" || true)
+}
+
+run_xcodebuild; status=$?
+count_cases
+
+# ── 冷启动宿主崩溃的有界重试(2026-10-20:把「冷 DerivedData 首跑可能崩,重试即可」
+# 的口口相传变成机制)。三条同时成立才重试,且只重试一次:非零退出 + 0 个用例被执行
+# + 日志含测试宿主崩溃特征。真失败(failed>0)不重试;编译错误(无崩溃特征)不重试
+# — 绝不给真失败擦粉。首次日志另存 *.crash1 供排查。特征词取自 xcodebuild 已知措辞,
+# 抓到真实崩溃日志后按需校准。逃生口:NEMONOTCH_TEST_NO_RETRY=1。
+crash_sig='Early unexpected exit|Test runner exited|Test runner never began|never finished bootstrapping|Restarting after unexpected exit|crashed'
+if [ "$status" != 0 ] && [ "${passed:-0}" -eq 0 ] && [ "${failed:-0}" -eq 0 ] \
+   && [ "${NEMONOTCH_TEST_NO_RETRY:-0}" != "1" ] && grep -qE "$crash_sig" "$log"; then
+  cp "$log" "$log.crash1"
+  echo "⚠️  测试宿主在执行任何用例前退出(疑似冷 DerivedData 首跑崩溃)— 重试一次;首次日志: $log.crash1"
+  run_xcodebuild; status=$?
+  count_cases
+fi
+
+echo "── 摘要 ──────────────────────────────"
 echo "   用例:通过 ${passed:-0} · 失败 ${failed:-0}"
 if [ "$status" != 0 ]; then
   echo ""

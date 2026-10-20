@@ -21,10 +21,13 @@ cp "$src/pre-merge-commit" "$hooks/pre-merge-commit"
 cp "$src/post-merge"       "$hooks/post-merge"
 cp "$src/feat.sh"          "$bin/feat.sh"
 cp "$src/feat-done.sh"     "$bin/feat-done.sh"
-chmod +x "$hooks/pre-commit" "$hooks/pre-merge-commit" "$hooks/post-merge" "$bin/feat.sh" "$bin/feat-done.sh"
+cp "$src/feat-gc.sh"       "$bin/feat-gc.sh"
+chmod +x "$hooks/pre-commit" "$hooks/pre-merge-commit" "$hooks/post-merge" "$bin/feat.sh" "$bin/feat-done.sh" "$bin/feat-gc.sh"
+# freshness.sh 刻意不复制:副本在启动时 source 主检出源目录里的它,检查器自身永不过期。
 
 git config alias.feat      "!sh \"$bin/feat.sh\""
 git config alias.feat-done "!sh \"$bin/feat-done.sh\""
+git config alias.feat-gc   "!sh \"$bin/feat-gc.sh\""
 git config alias.feat-list "worktree list"
 git config pull.ff only
 git config branch.develop.rebase true
@@ -32,7 +35,7 @@ git config branch.develop.mergeoptions "--no-ff"
 
 echo "✅ NemoNotch git guards installed"
 echo "   hooks   : $hooks/{pre-commit,pre-merge-commit,post-merge}"
-echo "   aliases : git feat <name> | git feat-done <name> | git feat-list"
+echo "   aliases : git feat <name> | git feat-done <name> | git feat-gc | git feat-list"
 echo "   config  : pull.ff=only · branch.develop.rebase=true · branch.develop.mergeoptions=--no-ff"
 
 # lint 门禁依赖 swiftlint + swiftformat;缺工具时 pre-commit 会拦截提交(防假绿)。

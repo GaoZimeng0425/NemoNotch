@@ -16,6 +16,12 @@ fi
 branch="feature/$name"
 main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 
+# 已安装副本过期自检(见 .githooks/freshness.sh):不一致则自动重装并中止本次
+if [ -f "$main_wt/.githooks/freshness.sh" ]; then
+  . "$main_wt/.githooks/freshness.sh"
+  nemonotch_check_fresh "$main_wt" || exit 1
+fi
+
 if ! git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
   echo "✋ 找不到分支 $branch。" >&2
   exit 1
@@ -24,6 +30,21 @@ fi
 # Locate the worktree checked out on this branch (if any).
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/$branch" '
   /^worktree /{p=$2} /^branch /{ if ($2==b) print p }')
+
+# ── 文档对账门禁:merge 前在 worktree 跑 doc-audit(纯 grep,秒级)──
+# 漂移要在部署前被抓住,而不是 push 之后等 CI 变红(socket 描述曾漂 5 个月)。
+# 纯文档 feature 也跑 — 那正是漂移进来的入口。逃生口:NEMONOTCH_SKIP_DOC_AUDIT=1。
+if [ "${NEMONOTCH_SKIP_DOC_AUDIT:-0}" = "1" ]; then
+  echo "⏭  NEMONOTCH_SKIP_DOC_AUDIT=1 — 跳过文档对账门禁" >&2
+elif [ -n "$wt" ] && [ -f "$wt/scripts/doc-audit.sh" ]; then
+  echo "📄 文档对账门禁:在 worktree 跑 doc-audit…"
+  if ! sh "$wt/scripts/doc-audit.sh"; then
+    echo "" >&2
+    echo "❌ 文档对账未过 — 中止合并,worktree 与分支原样保留。" >&2
+    echo "   修复后重试 git feat-done $name;应急跳过:NEMONOTCH_SKIP_DOC_AUDIT=1 git feat-done $name" >&2
+    exit 1
+  fi
+fi
 
 # ── 测试门禁:merge 前在 feature worktree 里跑单元测试 ──
 # 合并=自动部署到 /Applications,测试必须在部署之前。无 Swift/pbxproj 改动跳过

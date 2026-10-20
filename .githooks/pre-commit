@@ -26,6 +26,14 @@ esac
 # ── Worktree 强制:主检出只接收合并,不产生直提 ──
 primary=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 here=$(git rev-parse --show-toplevel)
+
+# 已安装副本过期自检(见 .githooks/freshness.sh):hooks 自己过期时不该继续当门禁;
+# 不一致则自动重装并中止本次提交,重新 git commit 即走新副本。
+if [ -f "$primary/.githooks/freshness.sh" ]; then
+  . "$primary/.githooks/freshness.sh"
+  nemonotch_check_fresh "$primary" || exit 1
+fi
+
 if [ "$here" = "$primary" ] && [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
   echo "" >&2
   echo "✋ 禁止在主检出直接 commit — 所有提交都在 feature worktree 里进行。" >&2
