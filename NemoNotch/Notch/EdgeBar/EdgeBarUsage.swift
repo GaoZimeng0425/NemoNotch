@@ -14,6 +14,13 @@ enum EdgeBarUsageLine: Equatable, Identifiable {
         /// 0...100.
         let percent: Int
         let resetsAt: Date?
+        /// The unrounded share used: what the level is read from, as the
+        /// card and the AI tab read it (69.5% shows "70%" yet isn't amber).
+        var utilization: Double?
+
+        var level: EdgeBarUsageLevel {
+            EdgeBarUsageLevel(percent: utilization ?? Double(percent))
+        }
     }
 
     var id: String {
@@ -25,9 +32,6 @@ enum EdgeBarUsageLine: Equatable, Identifiable {
 }
 
 enum EdgeBarUsage {
-    /// At or above this a window reads amber: it asks for attention.
-    static let hotPercent = 80
-
     static let gap: CGFloat = 10
     static let inset: CGFloat = 6
     static let lineHeight: CGFloat = 14
@@ -67,7 +71,8 @@ enum EdgeBarUsage {
                     provider: provider,
                     label: label(tier.window),
                     percent: Int(min(100, max(0, tier.utilization)).rounded()),
-                    resetsAt: tier.resetsAt
+                    resetsAt: tier.resetsAt,
+                    utilization: min(100, max(0, tier.utilization))
                 ))
             }
             return [.header(provider)] + windows
@@ -326,14 +331,17 @@ struct EdgeBarUsageBlock: View {
     }
 
     private func row(_ window: EdgeBarUsageLine.Window, columns: EdgeBarUsage.Columns, now: Date) -> some View {
-        let hot = window.percent >= EdgeBarUsage.hotPercent
+        // The usage card's levels (and the AI tab's): amber from 70%, red
+        // from 90% — a window reads the same in the block and its card.
+        let level = window.level
+        let alert: Color? = level == .normal ? nil : level.color
         return HStack(spacing: EdgeBarUsage.columnGap) {
             Text(verbatim: window.label)
                 .foregroundStyle(EdgeBarPalette.textSecondary)
                 .frame(width: columns.label, alignment: .leading)
-            meter(Double(window.percent) / 100, fill: hot ? EdgeBarPalette.amber : Self.fill)
+            meter(Double(window.percent) / 100, fill: alert ?? Self.fill)
             Text(verbatim: "\(window.percent)%")
-                .foregroundStyle(hot ? EdgeBarPalette.amber : Color.white.opacity(0.74))
+                .foregroundStyle(alert ?? Color.white.opacity(0.74))
                 .frame(width: columns.percent, alignment: .trailing)
             Text(verbatim: EdgeBarUsage.tail(window.resetsAt, now: now))
                 .foregroundStyle(EdgeBarPalette.textSecondary)
