@@ -35,6 +35,28 @@ VERSION="${VERSION:-0.0.0}"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 echo "==> Version: $VERSION (build $BUILD_NUMBER)"
 
+# ── Local-deploy signing (2026-10-20): stable self-signed identity ────────
+# ad-hoc 每次构建换 cdhash,「合并即部署」的重装在 TCC/Keychain 眼里都是陌生
+# app;自签证书让重装保持同一身份。fail-closed:身份解析不到就地失败,绝不
+# 静默回退 ad-hoc —— 证书丢失若被吞掉,后续只会表现为「授权莫名又丢了」
+# 这种无从排查的谜题。判据用 codesign 实签探针(find-identity -p codesigning
+# 对无信任设置的自签证书不显示,不能当存在性检查,实测 2026-10-20)。
+# 生成/重建证书:sh scripts/make-signing-cert.sh
+# 显式逃生口(临时 ad-hoc):NEMONOTCH_SIGNING_IDENTITY='-'
+SIGNING_IDENTITY="${NEMONOTCH_SIGNING_IDENTITY:-NemoNotch Local Code Signing}"
+if [ "$SIGNING_IDENTITY" != "-" ]; then
+  probe=$(mktemp) && printf 'probe' > "$probe"
+  if ! codesign -f -s "$SIGNING_IDENTITY" "$probe" >/dev/null 2>&1; then
+    echo "✋ 签名身份 '$SIGNING_IDENTITY' 解析不到 — 拒绝静默回退 ad-hoc。"
+    echo "   重建: sh scripts/make-signing-cert.sh"
+    echo "   临时显式回退: NEMONOTCH_SIGNING_IDENTITY=- ./build.sh"
+    rm -f "$probe"
+    exit 1
+  fi
+  rm -f "$probe"
+fi
+echo "==> Signing identity: $SIGNING_IDENTITY"
+
 # Clean previous build
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -62,8 +84,8 @@ xcodebuild -exportArchive \
   -exportPath "$BUILD_DIR/export" \
   -exportOptionsPlist ExportOptions.plist
 
-echo "==> Ad-hoc signing..."
-codesign --force --deep --sign - "$BUILD_DIR/export/$APP_NAME.app"
+echo "==> Signing ($SIGNING_IDENTITY)..."
+codesign --force --deep --sign "$SIGNING_IDENTITY" "$BUILD_DIR/export/$APP_NAME.app"
 
 echo "==> Creating DMG..."
 DMG_STAGING="$BUILD_DIR/dmg_staging"
