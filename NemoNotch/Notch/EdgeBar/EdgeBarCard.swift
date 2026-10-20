@@ -12,14 +12,13 @@ struct EdgeBarCardLayer: View {
         EdgeBarCardLayout(
             side: bar.side,
             slot: bar.cardSlot,
+            level: bar.cardLevel,
             offset: bar.scrollOffset,
             barTop: bar.barTop,
             canvasHeight: bar.canvasHeight
         ) {
-            if bar.isOpen, let id = bar.selectedRow,
-               let row = bar.content.rows.first(where: { $0.id == id }),
-               let session = bar.session(id) {
-                EdgeBarCard(row: row, session: session)
+            if bar.isOpen, let id = bar.selectedRow {
+                card(id)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { rect in
                         bar.cardFrameChanged(rect)
                     }
@@ -33,6 +32,18 @@ struct EdgeBarCardLayer: View {
         // Beside the open body, on its open side.
         .padding(bar.side.edge, bar.anchorInset + bar.openWidth + EdgeBarMetrics.cardGap)
         .animation(EdgeBarMotion.length, value: bar.cardSlot)
+        .animation(EdgeBarMotion.length, value: bar.cardLevel)
+    }
+
+    /// A usage section's card, or a session's.
+    @ViewBuilder private func card(_ id: String) -> some View {
+        if let provider = EdgeBarUsage.provider(ofCardID: id) {
+            if let detail = bar.usageDetail(provider) {
+                EdgeBarUsageCard(detail: detail)
+            }
+        } else if let row = bar.content.rows.first(where: { $0.id == id }), let session = bar.session(id) {
+            EdgeBarCard(row: row, session: session)
+        }
     }
 }
 
@@ -42,6 +53,8 @@ struct EdgeBarCardLayer: View {
 struct EdgeBarCardLayout: Layout {
     let side: EdgeBarSide
     let slot: Int
+    /// A usage section's top, when its card is the one placed.
+    let level: CGFloat?
     let offset: CGFloat
     let barTop: CGFloat
     let canvasHeight: CGFloat
@@ -53,10 +66,14 @@ struct EdgeBarCardLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         for card in subviews {
             let size = card.sizeThatFits(ProposedViewSize(width: EdgeBarMetrics.cardWidth, height: nil))
-            let top = EdgeBarMetrics.cardTop(
-                slot: slot, offset: offset, height: size.height,
-                barTop: barTop, canvasHeight: canvasHeight
-            )
+            let top = if let level {
+                EdgeBarMetrics.cardTop(level: level, height: size.height, barTop: barTop, canvasHeight: canvasHeight)
+            } else {
+                EdgeBarMetrics.cardTop(
+                    slot: slot, offset: offset, height: size.height,
+                    barTop: barTop, canvasHeight: canvasHeight
+                )
+            }
             card.place(
                 at: CGPoint(x: side == .left ? bounds.minX : bounds.maxX, y: bounds.minY + top),
                 anchor: side == .left ? .topLeading : .topTrailing,

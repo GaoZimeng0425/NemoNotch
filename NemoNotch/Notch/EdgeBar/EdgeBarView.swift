@@ -99,13 +99,17 @@ struct EdgeBarBodyItems: View {
             // Only while open (its minute tick never runs on the closed bar);
             // comes and goes with the names, follows the list's length.
             if bar.isOpen, !bar.usageLines.isEmpty {
-                EdgeBarUsageBlock(lines: bar.usageLines, width: bar.openWidth, side: bar.side)
-                    .padding(.top, EdgeBarUsage.top(rows: bar.content.rows.count))
-                    .animation(EdgeBarMotion.length, value: bar.content.rows.count)
-                    .transition(.asymmetric(
-                        insertion: .opacity.animation(EdgeBarMotion.namesIn),
-                        removal: .opacity.animation(EdgeBarMotion.namesOut)
-                    ))
+                EdgeBarUsageBlock(
+                    lines: bar.usageLines, width: bar.openWidth, side: bar.side,
+                    hovered: bar.hoveredRow.flatMap(EdgeBarUsage.provider(ofCardID:)),
+                    selected: bar.selectedRow.flatMap(EdgeBarUsage.provider(ofCardID:))
+                )
+                .padding(.top, EdgeBarUsage.top(rows: bar.content.rows.count))
+                .animation(EdgeBarMotion.length, value: bar.content.rows.count)
+                .transition(.asymmetric(
+                    insertion: .opacity.animation(EdgeBarMotion.namesIn),
+                    removal: .opacity.animation(EdgeBarMotion.namesOut)
+                ))
             }
         }
     }

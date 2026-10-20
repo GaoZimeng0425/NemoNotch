@@ -6246,6 +6246,118 @@
           }
         }
       }
+    },
+    "edge_bar.usage.updated_now" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated just now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刚刚更新"
+          }
+        }
+      }
+    },
+    "edge_bar.usage.updated_fmt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated %d min ago"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 分钟前更新"
+          }
+        }
+      }
+    },
+    "edge_bar.usage.resets_fmt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resets %1$@ · %2$@ left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 重置 · 还剩 %2$@"
+          }
+        }
+      }
+    },
+    "edge_bar.usage.pace_early" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too early in the window to project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口刚开始，暂无法预测"
+          }
+        }
+      }
+    },
+    "edge_bar.usage.exhausted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used up until the reset"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已用完，等待重置"
+          }
+        }
+      }
+    },
+    "edge_bar.usage.pace_runs_out_fmt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At this pace, runs out in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按当前速度，约 %@ 后用完"
+          }
+        }
+      }
+    },
+    "edge_bar.usage.pace_ends_fmt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At this pace, about %d%% by the reset"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按当前速度，重置时约用到 %d%%"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -26,6 +26,10 @@ final class EdgeBarController: NSObject {
     /// The selected row's slot; kept after deselect so a leaving card fades
     /// where it was.
     private(set) var cardSlot = 0
+    /// With a usage section selected, its top down the bar (the card sits
+    /// level with it); nil while a session's card is up. Kept after
+    /// deselect, like `cardSlot`.
+    private(set) var cardLevel: CGFloat?
     private(set) var scrollOffset: CGFloat = 0
     private(set) var isOverHead = false
     private(set) var hoveredButton: CardButton?
@@ -176,10 +180,19 @@ final class EdgeBarController: NSObject {
         fitUsage()
         setIfChanged(\.openWidth, measuredOpenWidth(next))
         setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
-        if let selectedRow, !next.rows.contains(where: { $0.id == selectedRow }) {
-            deselect()
-        } else if let selectedRow, let slot = next.rows.firstIndex(where: { $0.id == selectedRow }) {
-            setIfChanged(\.cardSlot, slot)
+        if let selectedRow {
+            if let provider = EdgeBarUsage.provider(ofCardID: selectedRow) {
+                // The block moves with the list's length; its card follows.
+                if let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: next.rows.count) {
+                    setIfChanged(\.cardLevel, level)
+                } else {
+                    deselect()
+                }
+            } else if let slot = next.rows.firstIndex(where: { $0.id == selectedRow }) {
+                setIfChanged(\.cardSlot, slot)
+            } else {
+                deselect()
+            }
         }
         updateBodyRect()
         updateBeat()
@@ -187,6 +200,11 @@ final class EdgeBarController: NSObject {
 
     func session(_ id: String) -> AISessionState? {
         store.get(id)
+    }
+
+    /// A provider's quota for the usage card (nil once it isn't readable).
+    func usageDetail(_ provider: QuotaProvider) -> EdgeBarUsageDetail? {
+        usageQuota.quotas[provider].flatMap(EdgeBarUsageDetail.init)
     }
 
     /// The app the session runs in, named for the card's "Open in …".
@@ -387,14 +405,20 @@ final class EdgeBarController: NSObject {
         return CGPoint(x: (point.x - anchor) * side.sign, y: point.y - barTop)
     }
 
+    /// The session row, or the usage section, under a point: both bring a
+    /// card up the same way (dwell, then move).
     private func row(at bar: CGPoint) -> String? {
-        guard isOpen,
-              let slot = EdgeBarMetrics.slot(
-                  x: bar.x, y: bar.y, width: openWidth,
-                  rows: content.rows.count, offset: scrollOffset
-              )
-        else { return nil }
-        return content.rows[slot].id
+        guard isOpen else { return nil }
+        if let slot = EdgeBarMetrics.slot(
+            x: bar.x, y: bar.y, width: openWidth,
+            rows: content.rows.count, offset: scrollOffset
+        ) {
+            return content.rows[slot].id
+        }
+        return EdgeBarUsage.provider(
+            x: bar.x, y: bar.y, width: openWidth,
+            rows: content.rows.count, lines: usageLines
+        ).map(EdgeBarUsage.cardID)
     }
 
     private func button(at point: CGPoint) -> CardButton? {
@@ -436,7 +460,16 @@ final class EdgeBarController: NSObject {
     }
 
     private func select(_ id: String) {
-        guard isOpen, let slot = content.rows.firstIndex(where: { $0.id == id }) else { return }
+        guard isOpen else { return }
+        if let provider = EdgeBarUsage.provider(ofCardID: id) {
+            guard let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count)
+            else { return }
+            cardLevel = level
+            selectedRow = id
+            return
+        }
+        guard let slot = content.rows.firstIndex(where: { $0.id == id }) else { return }
+        cardLevel = nil
         cardSlot = slot
         selectedRow = id
     }

@@ -143,6 +143,64 @@ enum EdgeBarUsage {
         lines > 0 ? inset + CGFloat(lines) * lineHeight : 0
     }
 
+    // MARK: - Sections (hover targets for the usage card)
+
+    /// A provider's section as a hover / selection id, kept apart from
+    /// session ids (which the bar's selection also carries).
+    static func cardID(_ provider: QuotaProvider) -> String {
+        "usage:\(provider.rawValue)"
+    }
+
+    static func provider(ofCardID id: String) -> QuotaProvider? {
+        guard id.hasPrefix("usage:") else { return nil }
+        return QuotaProvider(rawValue: String(id.dropFirst("usage:".count)))
+    }
+
+    /// A provider's section in `lines`: its heading's index and its line
+    /// count (heading and windows).
+    static func sectionRange(of provider: QuotaProvider, in lines: [EdgeBarUsageLine]) -> Range<Int>? {
+        guard let start = lines.firstIndex(of: .header(provider)) else { return nil }
+        let end = lines[(start + 1)...].firstIndex(where: {
+            if case .header = $0 {
+                true
+            } else {
+                false
+            }
+        }) ?? lines.endIndex
+        return start ..< end
+    }
+
+    /// The first line's top, under the hairline.
+    static func linesTop(rows: Int) -> CGFloat {
+        top(rows: rows) + inset
+    }
+
+    /// A provider's section top, from the bar's top.
+    static func sectionTop(of provider: QuotaProvider, in lines: [EdgeBarUsageLine], rows: Int) -> CGFloat? {
+        sectionRange(of: provider, in: lines).map { linesTop(rows: rows) + CGFloat($0.lowerBound) * lineHeight }
+    }
+
+    /// The provider whose section is under a point (bar coordinates: x from
+    /// the anchored side, y from the bar's top); nil off the block.
+    static func provider(
+        x: CGFloat,
+        y: CGFloat,
+        width: CGFloat,
+        rows: Int,
+        lines: [EdgeBarUsageLine]
+    ) -> QuotaProvider? {
+        let first = linesTop(rows: rows)
+        guard x >= 0, x <= width, y >= first else { return nil }
+        let index = Int((y - first) / lineHeight)
+        guard index < lines.count else { return nil }
+        for line in lines[...index].reversed() {
+            if case let .header(provider) = line {
+                return provider
+            }
+        }
+        return nil
+    }
+
     // MARK: - Measured columns
 
     struct Columns: Equatable {
@@ -192,6 +250,10 @@ struct EdgeBarUsageBlock: View {
     let width: CGFloat
     /// The anchored side: the rings' inset there, the names' inset across.
     let side: EdgeBarSide
+    /// The section under the cursor, and the one whose card is up — grounded
+    /// like a session row (half, then whole).
+    var hovered: QuotaProvider?
+    var selected: QuotaProvider?
 
     private static let track = Color.white.opacity(0.15)
     private static let fill = Color.white.opacity(0.55)
@@ -218,7 +280,25 @@ struct EdgeBarUsageBlock: View {
         .padding(side.edge, EdgeBarMetrics.ringLead)
         .padding(side.farEdge, EdgeBarMetrics.nameInset)
         .frame(width: width, alignment: .leading)
+        .background(alignment: side.topAlignment) { ground }
         .allowsHitTesting(false)
+    }
+
+    @ViewBuilder private var ground: some View {
+        if let provider = selected ?? hovered, let range = EdgeBarUsage.sectionRange(of: provider, in: lines) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.09))
+                .frame(
+                    width: max(0, width - 2 * EdgeBarMetrics.groundInset),
+                    height: CGFloat(range.count) * EdgeBarUsage.lineHeight + 6
+                )
+                .offset(
+                    x: side.sign * EdgeBarMetrics.groundInset,
+                    y: EdgeBarUsage.inset + CGFloat(range.lowerBound) * EdgeBarUsage.lineHeight - 3
+                )
+                .opacity(selected == provider ? 1 : 0.5)
+                .animation(EdgeBarMotion.namesOut, value: provider)
+        }
     }
 
     private func header(_ provider: QuotaProvider) -> some View {
