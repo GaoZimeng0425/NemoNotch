@@ -252,6 +252,8 @@ final class EdgeBarController: NSObject {
         // Laid out before the window moves (see `carry`): a drop changes form.
         hosting?.layoutSubtreeIfNeeded()
         window.setFrame(envelope(on: visible), display: true)
+        // Always re-fronted, even when already visible: the --flash UI-test
+        // backdrop shares the bar's level and relies on this to sit under it.
         window.orderFrontRegardless()
         // The room under the bar may have changed: refit the usage block.
         fitUsage()

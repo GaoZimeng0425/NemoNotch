@@ -27,10 +27,15 @@ restore() {
   fi
   if [ "$WAS_RUNNING" -eq 1 ] && ! pgrep -x NemoNotch >/dev/null; then
     echo "==> 恢复用户的运行实例"
-    open -a NemoNotch 2>/dev/null || open "/Applications/NemoNotch.app" 2>/dev/null || true
+    # 先按路径:同 bundle id 的 Debug 构建也注册在 LaunchServices 里,按名字可能解析到它。
+    open "/Applications/NemoNotch.app" 2>/dev/null || open -a NemoNotch 2>/dev/null || true
   fi
 }
-trap restore EXIT INT TERM
+trap restore EXIT
+# 中断即退出(EXIT 陷阱负责收尾):只挂 restore 的话 bash 跑完处理函数会接着往下执行,
+# 把用户的 app 拉起来之后又启动全屏 uitest 实例。
+trap 'exit 130' INT
+trap 'exit 143' TERM
 osascript -e 'tell application "NemoNotch" to quit' 2>/dev/null || true
 pkill -x NemoNotch 2>/dev/null || true
 wait_for 1
@@ -48,7 +53,7 @@ if ! xcodebuild build \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual \
   DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" >"$BUILD_LOG" 2>&1; then
   echo "构建失败,完整日志: $BUILD_LOG"
-  grep -E "error:" "$BUILD_LOG" | head -5
+  grep -m5 -E "error:" "$BUILD_LOG" || true
   exit 1
 fi
 test -d "$APP" || { echo "构建产物未找到: $APP"; exit 1; }
@@ -75,7 +80,6 @@ wait_for 0.4
 if command -v sips >/dev/null; then
   sips --resampleWidth 1600 "$OUT" >/dev/null
 fi
-
 
 echo "完成。输出:"
 ls -la "$OUT"
