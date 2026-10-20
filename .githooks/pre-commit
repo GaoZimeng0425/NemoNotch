@@ -29,7 +29,7 @@ here=$(git rev-parse --show-toplevel)
 if [ "$here" = "$primary" ] && [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
   echo "" >&2
   echo "✋ 禁止在主检出直接 commit — 所有提交都在 feature worktree 里进行。" >&2
-  echo "   开工:  git feat <name>  然后 cd ../NemoNotch-worktrees/<name>" >&2
+  echo "   开工:  git feat <name>  然后 cd .worktree/<name>" >&2
   echo "   收尾:  git feat-done <name>  (合并进 develop 并自动构建部署)" >&2
   echo "   (应急绕过: git commit --no-verify)" >&2
   echo "" >&2

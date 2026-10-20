@@ -76,6 +76,7 @@ final class GeminiProvider: AIProvider {
         case "BeforeAgent":
             store.mutateOrCreate(sessionId, source: .gemini) { session in
                 session.phase = session.phase.transition(to: .processing)
+                session.beginTurn()
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
             }
@@ -85,6 +86,7 @@ final class GeminiProvider: AIProvider {
             store.mutateOrCreate(sessionId, source: .gemini) { session in
                 session.phase = session.phase.transition(to: .processing)
                 session.currentTool = event.toolName
+                session.recordTool(event)
                 session.isPreToolUse = true
                 self.applyContext(to: &session, event: event)
                 session.lastEventTime = now
@@ -266,7 +268,9 @@ final class GeminiProvider: AIProvider {
             session.outputTokens = res.common.outputTokens
             session.thoughtTokens = res.thoughtTokens
             session.cacheReadTokens = res.cachedTokens
-            if let model = res.common.lastModel { session.model = model }
+            if let model = res.common.lastModel {
+                session.model = model
+            }
             session.lastContextTokens = res.lastContextTokens
             session.lastParsedOffset = res.newOffset
         } else {
@@ -277,7 +281,9 @@ final class GeminiProvider: AIProvider {
             session.thoughtTokens = result.thoughtTokens
             session.cacheReadTokens = result.cachedTokens
             session.lastContextTokens = result.lastContextTokens
-            if let model = result.common.lastModel { session.model = model }
+            if let model = result.common.lastModel {
+                session.model = model
+            }
         }
 
         let userMessages = session.messages.filter { $0.role == .user }
@@ -318,8 +324,12 @@ final class GeminiProvider: AIProvider {
     // MARK: - Helpers
 
     private func applyContext(to session: inout AISessionState, event: HookEvent) {
-        if let cwd = event.cwd { session.cwd = cwd }
-        if let msg = event.message, !msg.isEmpty { session.lastMessage = msg }
+        if let cwd = event.cwd {
+            session.cwd = cwd
+        }
+        if let msg = event.message, !msg.isEmpty {
+            session.lastMessage = msg
+        }
         session.lastEventName = event.hookEventName
     }
 
@@ -335,16 +345,18 @@ final class GeminiProvider: AIProvider {
         let previous = parseChains[sessionId]
         let task = Task { [weak self] in
             await previous?.value
-            guard let self, self.store.contains(sessionId),
-                  let current = self.store.get(sessionId) else { return }
+            guard let self, store.contains(sessionId),
+                  let current = store.get(sessionId) else { return }
             let offset = current.lastParsedOffset
             if filePath.hasSuffix(".jsonl") {
                 let result = await Task.detached(priority: .userInitiated) {
                     GeminiConversationParser.parseIncrementalJSONL(filePath: filePath, fromOffset: offset)
                 }.value
-                guard self.store.contains(sessionId) else { return }
-                self.store.mutate(sessionId) { session in
-                    if result.cleared { session.messages = [] }
+                guard store.contains(sessionId) else { return }
+                store.mutate(sessionId) { session in
+                    if result.cleared {
+                        session.messages = []
+                    }
                     for msg in result.common.messages {
                         session.upsertMessage(msg)
                     }
@@ -354,7 +366,9 @@ final class GeminiProvider: AIProvider {
                     session.thoughtTokens += result.thoughtTokens
                     session.cacheReadTokens += result.cachedTokens
                     session.lastContextTokens = result.lastContextTokens
-                    if let model = result.common.lastModel { session.model = model }
+                    if let model = result.common.lastModel {
+                        session.model = model
+                    }
 
                     let userMessages = result.common.messages.filter { $0.role == .user }
                     if let first = userMessages.first, session.firstUserMessage == nil {
@@ -369,15 +383,17 @@ final class GeminiProvider: AIProvider {
                 let parsed = await Task.detached(priority: .userInitiated) {
                     GeminiConversationParser.parseDetailed(filePath: filePath)
                 }.value
-                guard let result = parsed, self.store.contains(sessionId) else { return }
-                self.store.mutate(sessionId) { session in
+                guard let result = parsed, store.contains(sessionId) else { return }
+                store.mutate(sessionId) { session in
                     session.messages = result.common.messages
                     session.inputTokens = result.common.inputTokens
                     session.outputTokens = result.common.outputTokens
                     session.thoughtTokens = result.thoughtTokens
                     session.cacheReadTokens = result.cachedTokens
                     session.lastContextTokens = result.lastContextTokens
-                    if let model = result.common.lastModel { session.model = model }
+                    if let model = result.common.lastModel {
+                        session.model = model
+                    }
                 }
             }
         }
@@ -453,8 +469,8 @@ final class GeminiWatcher: @unchecked Sendable {
     }
 
     func start() {
-        guard FileManager.default.fileExists(atPath: filePath) else { return }
-        guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return }
+        guard FileManager.default.fileExists(atPath: filePath),
+              let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return }
         fileHandle = handle
 
         let fd = handle.fileDescriptor
@@ -484,8 +500,8 @@ final class GeminiWatcherManager {
     var onClear: ((String) -> Void)?
 
     func startWatching(sessionId: String, cwd: String) {
-        guard let filePath = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
-        guard watchers[sessionId] == nil else { return }
+        guard let filePath = GeminiConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd),
+              watchers[sessionId] == nil else { return }
         let watcher = GeminiWatcher(sessionId: sessionId, filePath: filePath)
         watcher.onChanged = { [weak self] sessionId in self?.onChanged?(sessionId) }
         watcher.onClear = { [weak self] sessionId in self?.onClear?(sessionId) }

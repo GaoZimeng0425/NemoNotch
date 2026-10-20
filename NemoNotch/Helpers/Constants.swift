@@ -18,7 +18,9 @@ enum NotchConstants {
     /// Grace delay before collapsing the compact badges when activity drops to
     /// empty. Absorbs momentary idle dips (e.g. an agent briefly returning to
     /// .idle between tool calls) so the right-edge badge doesn't slide in/out.
-    static let badgeEmptyGrace: Duration = .milliseconds(600)
+    static let badgeEmptyGrace: TimeInterval = 0.6
+    /// Non-empty badge updates coalesce on this tick.
+    static let badgeCoalesceTick: TimeInterval = 0.016
     /// Max badge groups shown collapsed; extras fold into a "+K" chip.
     static let badgeGroupCap: Int = 4
     /// Horizontal step between overlapping coins. Smaller than a coin diameter
@@ -159,6 +161,9 @@ enum NotchConstants {
     static let aiStatusFabQuotaStripHeight: CGFloat = 52
     // Collapsed capsule geometry — corner radius = height/2 yields a pill.
     static let aiStatusFabCapsuleHeight: CGFloat = 32
+    /// Per-session chips visible on the collapsed strip before the rest folds
+    /// into a "+N" overflow chip (FABSessionStrip).
+    static let aiStatusFabChipCap = 6
     // Open/close spring durations match NotchCoordinator's notch transitions.
     static let aiStatusFabOpenSpringDuration: Double = 0.314
     static let aiStatusFabCloseSpringDuration: Double = 0.24
@@ -194,7 +199,7 @@ enum NotchConstants {
     // Tab content
     static let tabContentPadding: CGFloat = 16
     static let tabBarTopPadding: CGFloat = 10
-    /// Notch shape corner radii (`NotchShape`). The top radius is the concave
+    /// Notch shape corner radii (`BezelShape`, `.top`). The top radius is the concave
     /// flare from the full-width top edge into the body — the shell's frame
     /// is `bodyWidth + 2 * topRadius` wide; the bottom radius is the body's
     /// convex corner. Both animate independently across open/close: the top

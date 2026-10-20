@@ -2,9 +2,9 @@ import SwiftUI
 
 /// The notch shell: one clip, everything inside. The material (gradients,
 /// highlights, glow) fills the frame, the caller's content (panel + chin)
-/// layers on top, and a single `NotchShape` clips the whole subtree — content
+/// layers on top, and a single `BezelShape` clips the whole subtree — content
 /// exceeding the silhouette is structurally impossible (boring.notch-style
-/// `content.background(.black).mask { NotchShape() }`).
+/// `content.background(.black).mask { BezelShape }`).
 ///
 /// Layers that must render OUTSIDE the silhouette stay siblings of this view
 /// in `NotchView`: the HUD (hangs below the notch), the transient capsules
@@ -27,7 +27,7 @@ struct NotchBackgroundView<Content: View>: View {
             content()
         }
         .frame(width: notchSize.width + topCornerRadius * 2, height: notchSize.height)
-        .clipShape(NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius))
+        .clipShape(BezelShape(edge: .top, flare: topCornerRadius, corner: bottomCornerRadius))
         .shadow(
             color: .black.opacity(showShadow ? NotchConstants.openedShadowOpacity : 0),
             radius: NotchConstants.openedShadowRadius
@@ -115,7 +115,7 @@ struct NotchBackgroundView<Content: View>: View {
 
 /// Blurred inner edge ring with a gentle ambient breathing.
 ///
-/// Strokes the same `NotchShape` the shell is clipped by, so the glow hugs
+/// Strokes the same `BezelShape` the shell is clipped by, so the glow hugs
 /// the exact silhouette (flares included) instead of an approximation; the
 /// parent's clip shape removes the outward blur spread so only an inner-edge
 /// glow remains. A vertical fade keeps it on the lower half (vanishing by the
@@ -131,7 +131,7 @@ private struct NotchGlowRing: View {
     @State private var breathe = false
 
     var body: some View {
-        NotchShape(topCornerRadius: topCornerRadius, bottomCornerRadius: bottomCornerRadius)
+        BezelShape(edge: .top, flare: topCornerRadius, corner: bottomCornerRadius)
             .stroke(
                 color.opacity(NotchConstants.glowRingOpacity),
                 lineWidth: NotchConstants.glowRingWidth

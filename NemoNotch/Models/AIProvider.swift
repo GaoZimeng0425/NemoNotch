@@ -25,7 +25,21 @@ struct AISessionState: Identifiable {
     /// `AISessionStore.mutateOrCreate`.
     var source: AISource
     var phase: SessionPhase = .idle
+    /// When `phase` last changed — stamped by `AISessionStore` on every
+    /// mutation that moves the phase. Time-in-phase readers (waiting
+    /// reminder) key off this; nil means the session never left its initial
+    /// phase.
+    var phaseChangedAt: Date?
     var currentTool: String?
+    /// The turn's last tool and its one-line subject (`ToolSubject`) —
+    /// kept after the tool finishes, cleared by the next prompt, so the
+    /// edge bar's card can say what the session last did.
+    var lastToolName: String?
+    var lastToolSubject: String?
+    /// Tools run this turn (`PreToolUse`s since the last prompt).
+    var turnToolCount: Int = 0
+    /// The git branch the session works on (Claude: from its transcript).
+    var gitBranch: String?
     var cwd: String?
     var lastMessage: String?
     var lastEventName: String?
@@ -48,7 +62,20 @@ struct AISessionState: Identifiable {
     /// PID reuse after the host quits. Both nil for plugin-based emitters
     /// (opencode) and CLI runs with no GUI ancestor (tmux/ssh).
     var launchingAppPID: Int32?
+    /// Set when the session is backed by a live Claude Code record
+    /// (`ClaudeSessionRecords`): its process, and the name Claude gave it.
+    /// Such a session lives exactly as long as that process.
+    var recordPID: Int32?
+    var recordName: String?
+    /// The record carries a busy/idle status — then it, not the silence
+    /// timer, corrects a stale phase.
+    var recordStatusKnown = false
     var launchingAppBundleId: String?
+    /// Tab-reveal URL captured from the CLI's inherited environment at event
+    /// time (`TabLink`): terminals that publish one (iTerm2, Warp, …) let a
+    /// jump land on the exact tab, not just the app. Never changes for the
+    /// process's lifetime, so it stays valid after the CLI exits.
+    var tabLinkURL: String?
     var lastParsedOffset: UInt64 = 0
     var subagentState = SubagentState()
 
@@ -73,8 +100,12 @@ struct AISessionState: Identifiable {
     }
 
     var displayTitle: String {
-        if let msg = firstUserMessage, !msg.isEmpty { return msg }
-        if let folder = projectFolder { return folder }
+        if let msg = firstUserMessage, !msg.isEmpty {
+            return msg
+        }
+        if let folder = projectFolder {
+            return folder
+        }
         return "Session \(id.prefix(8))"
     }
 
@@ -155,7 +186,9 @@ struct AISessionState: Identifiable {
 
     private func formatClaudeModel(_ model: String) -> String {
         var cleaned = model
-        if cleaned.hasPrefix("claude-") { cleaned = String(cleaned.dropFirst(6)) }
+        if cleaned.hasPrefix("claude-") {
+            cleaned = String(cleaned.dropFirst(6))
+        }
         if let range = cleaned.range(of: "-\\d{8,}$", options: .regularExpression) {
             cleaned = String(cleaned[..<range.lowerBound])
         }
@@ -171,7 +204,9 @@ struct AISessionState: Identifiable {
 
     private func formatGeminiModel(_ model: String) -> String {
         var cleaned = model
-        if cleaned.hasPrefix("gemini-") { cleaned = String(cleaned.dropFirst(6)) }
+        if cleaned.hasPrefix("gemini-") {
+            cleaned = String(cleaned.dropFirst(6))
+        }
         if let range = cleaned.range(of: "-\\d{8,}$", options: .regularExpression) {
             cleaned = String(cleaned[..<range.lowerBound])
         }
@@ -204,4 +239,21 @@ enum ClaudeStatus: Equatable {
     case idle
     case working
     case waiting
+}
+
+extension AISessionState {
+    /// A new prompt starts a turn: its tools are counted afresh.
+    mutating func beginTurn() {
+        turnToolCount = 0
+        lastToolName = nil
+        lastToolSubject = nil
+    }
+
+    /// A `PreToolUse`: the turn's newest tool, and one more counted.
+    mutating func recordTool(_ event: HookEvent) {
+        guard let name = event.toolName else { return }
+        lastToolName = name
+        lastToolSubject = event.toolSubject
+        turnToolCount += 1
+    }
 }

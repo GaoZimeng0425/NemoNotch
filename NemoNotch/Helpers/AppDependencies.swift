@@ -41,7 +41,8 @@ struct AppDependencies {
     // MARK: AI-derived events (cross-domain: consumes `aiMonitor.store` + `registry`)
 
     let completionFlash: CompletionFlashService
-    let aiStatus: AIStatusWindowController
+    let edgeBar: EdgeBarController
+    let chatBubble: ChatBubbleController
     let lockScreenMonitor: LockScreenMonitor
     let lockScreenAIPanel: LockScreenAIPanelController?
 
@@ -72,6 +73,7 @@ struct AppDependencies {
         let media = MediaService(disableLiveUpdates: UITestMode.isActive)
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
+        aiMonitor.startSessionDiscovery()
         let launcher = LauncherService(settings: settings)
 
         if !UITestMode.isActive {
@@ -118,11 +120,13 @@ struct AppDependencies {
 
         // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
         // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
-        // 全屏闪烁 + Toast。UI 测试与单测宿主不启动蓝牙:后者的 TCC 授权弹窗
-        // (进程模态)会挂起测试连接。
+        // 全屏闪烁 + Toast。bind() 让「蓝牙动效」设置开关成为唯一启动源 ——
+        // 开关不开就绝不碰 IOBluetooth,而碰它正是蓝牙 TCC 弹窗的触发时刻
+        // (重装 = 新 ad-hoc 签名 = TCC 视为陌生 app,启动即碰就每次重装都弹)。
+        // UI 测试与单测宿主连 bind 也不做:后者的进程模态授权弹窗会挂起测试连接。
         let bluetooth = BluetoothService(settings: settings)
         if !UITestMode.isActive, !UITestMode.isTestHost {
-            bluetooth.start()
+            bluetooth.bind()
         }
         let calendarDue = CalendarDueMonitor(
             calendar: calendar,
@@ -152,11 +156,15 @@ struct AppDependencies {
             appSettings: settings,
             notificationMonitor: notificationPermission
         )
-        let aiStatus = AIStatusWindowController(
+        let chatBubble = ChatBubbleController(store: aiMonitor.store, aiMonitor: aiMonitor)
+        let edgeBar = EdgeBarController(
             store: aiMonitor.store,
             appSettings: settings,
-            usageQuota: usageQuota
+            usageQuota: usageQuota,
+            aiMonitor: aiMonitor,
+            chatBubble: chatBubble
         )
+        edgeBar.start()
         // 锁屏 AI 面板:纯展示窗,压在锁屏 shielding 层上。UI 测试跑在无人
         // 值守的截图脚本里,绝不能有窗口盖在锁屏层。
         let lockMonitor = LockScreenMonitor()
@@ -177,6 +185,18 @@ struct AppDependencies {
             nil
         }
 
+        // 等待审批提醒:不发通知权限请求,只在已授权时投递,UI 测试下跳过。
+        let waitingReminder: WaitingReminderMonitor? = if !UITestMode.isActive {
+            WaitingReminderMonitor(
+                store: aiMonitor.store,
+                appSettings: settings,
+                permissionMonitor: notificationPermission
+            )
+        } else {
+            nil
+        }
+        waitingReminder?.start()
+
         return AppDependencies(
             settings: settings,
             media: media,
@@ -193,7 +213,8 @@ struct AppDependencies {
             system: system,
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
-            aiStatus: aiStatus,
+            edgeBar: edgeBar,
+            chatBubble: chatBubble,
             lockScreenMonitor: lockMonitor,
             lockScreenAIPanel: lockScreenAIPanel,
             bluetooth: bluetooth,
@@ -237,7 +258,6 @@ struct AppDependencies {
                     .environment(pomodoro)
                     .environment(notificationPermission)
                     .environment(\.quickStartController, quickStart)
-                    .environment(\.aiStatusController, aiStatus)
             )
         }
     }

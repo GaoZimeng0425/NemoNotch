@@ -9,6 +9,10 @@ enum ConversationParser: ConversationParserProtocol {
         var cacheCreationTokens: Int
         var lastContextTokens: Int
         var lastModel: String?
+        /// The branch Claude Code stamps on every transcript line — read here
+        /// rather than from the repo's HEAD, which may live in a protected
+        /// folder (~/Documents) and would raise a TCC prompt.
+        var lastGitBranch: String?
         var newOffset: UInt64
         var interrupted: Bool
         var cleared: Bool
@@ -39,6 +43,20 @@ enum ConversationParser: ConversationParserProtocol {
 
     static func parseFullResult(filePath: String) -> ParseResult {
         parseIncremental(filePath: filePath, fromOffset: 0)
+    }
+
+    /// An offset `tailBytes` before the end, moved forward to just past the
+    /// next newline so parsing starts on a whole line; 0 for a short file.
+    static func lineAlignedOffset(filePath: String, tailBytes: UInt64) -> UInt64 {
+        guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return 0 }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd(), size > tailBytes else { return 0 }
+        let start = size - tailBytes
+        try? handle.seek(toOffset: start)
+        guard let data = try? handle.read(upToCount: Int(tailBytes)),
+              let newline = data.firstIndex(of: UInt8(ascii: "\n"))
+        else { return size }
+        return start + UInt64(newline - data.startIndex) + 1
     }
 
     static func parseIncremental(filePath: String, fromOffset: UInt64) -> ParseResult {
@@ -95,6 +113,10 @@ enum ConversationParser: ConversationParserProtocol {
         // 行级稳定 id:消息行的 uuid 优先;meta/summary 行没有 uuid,退到内容
         // 哈希。同一行重复解析得到同一 id,跨增量块的 id 也不会再撞。
         let lineID = (json["uuid"] as? String) ?? JSONLFramer.stableLineID(lineData)
+
+        if let branch = json["gitBranch"] as? String, !branch.isEmpty {
+            result.lastGitBranch = branch
+        }
 
         if isInterruptLine(json) {
             result.interrupted = true
@@ -195,10 +217,12 @@ enum ConversationParser: ConversationParserProtocol {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let content = message["content"]
         var text = ""
-        if let str = content as? String { text = str }
-        else if let arr = content as? [[String: Any]] {
+        if let str = content as? String {
+            text = str
+        } else if let arr = content as? [[String: Any]] {
             for item in arr {
-                if item["type"] as? String == "text", let t = item["text"] as? String { text = t
+                if item["type"] as? String == "text", let t = item["text"] as? String {
+                    text = t
                     break
                 }
             }
@@ -215,7 +239,9 @@ enum ConversationParser: ConversationParserProtocol {
 
     private static func extractText(from message: [String: Any]) -> String {
         guard let content = message["content"] else { return "" }
-        if let str = content as? String { return str }
+        if let str = content as? String {
+            return str
+        }
         if let array = content as? [[String: Any]] {
             return array.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }
                 .joined(separator: "\n")

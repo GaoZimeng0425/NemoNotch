@@ -16,6 +16,9 @@ build.log
 .codegraph/
 .cursor/
 
+# git feat worktrees live nested in the repo (docs/git-worktree-workflow.md)
+/.worktree/
+
 # xcodebuild coverage artifact
 *.profraw
 
@@ -34,3 +37,5 @@ build.log
 /reference/
 /.scratch/
 /.zcode/
+
+__pycache__/

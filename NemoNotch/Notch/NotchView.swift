@@ -15,7 +15,7 @@ struct NotchView: View {
     @Environment(HUDService.self) var hudService
     @Environment(PomodoroTimerService.self) var pomodoroService
     @Environment(BluetoothService.self) var bluetoothService
-    @Environment(\.openSettings) private var openSettingsAction
+    @Environment(\.openWindow) private var openWindow
 
     private var hardwareNotchSize: NSSize {
         coordinator.notchSize
@@ -124,13 +124,10 @@ struct NotchView: View {
         }
     }
 
-    /// Open gets a lively spring with a hint of bounce; close runs fully
-    /// damped so the collapse lands crisply without a terminal jiggle.
+    /// The shell's curve for the current direction (`NotchMotion`): one
+    /// critically damped curve each way, shared with the coordinator.
     private var notchStateAnimation: Animation {
-        switch effectiveStatus {
-        case .opened: .spring(duration: NotchConstants.openSpringDuration, bounce: 0.1)
-        case .closed: .spring(duration: NotchConstants.closeSpringDuration)
-        }
+        NotchMotion.state(opened: effectiveStatus == .opened)
     }
 
     var body: some View {
@@ -241,7 +238,7 @@ struct NotchView: View {
         .environment(\.locale, appSettings.currentLocale)
         .contextMenu {
             // 走和齿轮按钮同一条路径:先开设置窗,再带 suppressAppRestore 收起刘海。
-            // 直接用 SettingsLink 会让刘海留在 opened 状态,等用户下一次挪鼠标才
+            // 只开窗不收刘海会让刘海留在 opened 状态,等用户下一次挪鼠标才
             // 关闭 —— 那一刻 restorePreviousApp() 会把右键前的前台 app 拉回来,
             // 刚打开的设置窗就被压到它后面(见 openSettings 的注释)。
             Button("notch.context.settings") {
@@ -327,7 +324,7 @@ struct NotchView: View {
             Spacer(minLength: 0)
         }
         .frame(width: coordinator.openedWidth, height: NotchConstants.openedHeight)
-        // No own clip: the shell's single NotchShape clip owns the silhouette
+        // No own clip: the shell's single BezelShape clip owns the silhouette
         // (bottom corners included) — content lives inside it structurally.
     }
 
@@ -475,16 +472,14 @@ struct NotchView: View {
             bottomCornerRadius: notchBottomCornerRadius,
             glow: notchGlow
         ) {
-            // 折叠后卸载整棵 tab 树（见 contentMounted）。放大 + 渐显由
-            // .transition 承担：新插入的视图不会对绑定 effectiveStatus 的
-            // scaleEffect/opacity 做动画（没有上一个值可插值），只有 transition
-            // 才描述得了进出过程。收起时内容在被裁掉的形状内同步缩回刘海。
+            // 折叠后卸载整棵 tab 树（见 contentMounted）。进出由 .transition
+            // 承担（新插入的视图没有上一个值可插值，只有 transition 描述得了
+            // 进出）：展开时外壳先动，内容晚 0.06s 从 0.95 倍淡入；收起时内容
+            // 0.1s 先淡出，外壳再收拢 —— 见 NotchMotion。
             if contentMounted {
                 contentPanel
                     .allowsHitTesting(effectiveStatus == .opened)
-                    .transition(
-                        .scale(scale: 0.2, anchor: .top).combined(with: .opacity)
-                    )
+                    .transition(NotchMotion.contentTransition)
             }
 
             chinBar
@@ -548,7 +543,7 @@ struct NotchView: View {
     /// flag ensures focus stays on Settings instead of bouncing to the
     /// previously-active app.
     private func openSettings() {
-        openSettingsAction()
+        SettingsWindow.open(with: openWindow)
         coordinator.notchClose(suppressAppRestore: true)
     }
 }

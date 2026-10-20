@@ -168,9 +168,8 @@ final class KeepAwakeService {
 
     /// 订阅合盖事件并做一次首轮对账。
     ///
-    /// 刻意不放在 `init` 里 —— `MenuBarExtra` 的 environment 注入需要一个非
-    /// optional 值,兜底构造出的实例不该去跑 `pmset` 和订阅 IOKit。只有
-    /// `AppDelegate` 持有的那一个会被 `start()`。
+    /// 刻意不放在 `init` 里 —— 测试会构造裸实例,它们不该去跑 `pmset` 和
+    /// 订阅 IOKit。只有 `AppDelegate` 持有的那一个会被 `start()`。
     func start() {
         do {
             try lidMonitor.start()

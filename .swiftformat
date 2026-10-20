@@ -1,6 +1,9 @@
 # NemoNotch SwiftFormat configuration
 --swiftversion 6.0
 
+# git feat worktrees are nested at .worktree/<name>; never format the copies
+--exclude .worktree
+
 # Indentation
 --indent 4
 --tabwidth 4

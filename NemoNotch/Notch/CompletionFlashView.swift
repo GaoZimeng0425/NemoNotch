@@ -10,21 +10,19 @@ import SwiftUI
 /// service through the double-pulse curve). Purely visual — never intercepts events.
 struct CompletionFlashView: View {
     let service: CompletionFlashService
-    /// Only one screen renders the toast (the built-in/primary display) so a
-    /// multi-monitor setup doesn't show a duplicate capsule per screen. The
-    /// edge glow still flashes every screen.
-    var showsToast: Bool = true
+
+    /// 首帧挂载闸门,见 `toast` 的注释 —— 重建窗口的入场动画依赖它。
+    @State private var toastMounted = false
 
     /// Warm near-white center — the "hot" core of the neon tube.
     private static let core = Color(red: 1.0, green: 0.93, blue: 0.82)
 
     var body: some View {
-        // 承载窗口在 makeWindow 里 orderFrontRegardless 之后从不 orderOut,
-        // 所以 flashLevel 为 0 时这个全屏层依然可见、依然参与合成。
-        // `.idle` 命中就是"没有任何东西要显示却仍在重绘"的那部分。
+        // 闲置时窗口已 orderOut,每次闪光重建;`.idle` 只剩淡出尾段 ——
+        // overlay 还在、glow 与 toast 都已归零的那几帧仍在重绘的部分。
         let _ = PerfProbe.hit(
             service.flashLevel == 0 && !service.toastVisible
-                ? "CompletionFlashView.body.idle(全屏窗口常驻可见但无内容)"
+                ? "CompletionFlashView.body.idle(overlay 仍在、内容已归零的淡出尾段)"
                 : "CompletionFlashView.body.active"
         )
         ZStack {
@@ -33,9 +31,9 @@ struct CompletionFlashView: View {
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
 
-            if showsToast {
-                toast
-            }
+            // Every screen: the toast is read where the user is looking,
+            // like the glow it comes with.
+            toast
         }
         .ignoresSafeArea()
     }
@@ -43,9 +41,15 @@ struct CompletionFlashView: View {
     /// The unified completion capsule, horizontally centered with its vertical
     /// center at `completionToastBottomFraction` of the screen height up from
     /// the bottom edge. Fades/slides in on `service.toastVisible`.
+    ///
+    /// `mounted` 延迟一帧才放行 toast:闪光窗口现在是**闪光时重建**的(具文窗口
+    /// 修复,见 CompletionFlashWindow.applyOverlayVisibility),全新 SwiftUI 树挂载
+    /// 时 `toastVisible` 往往已是 true —— 直接首渲染终态,入场弹簧/transition 不会
+    /// 播放。先以"无 toast"状态挂载、下一帧翻 `mounted`,插入动画两条路径
+    /// (新建窗/存活窗翻转)都照常播放。
     private var toast: some View {
         GeometryReader { geo in
-            if service.toastVisible, !service.toastItems.isEmpty {
+            if toastMounted, service.toastVisible, !service.toastItems.isEmpty {
                 CompletionToastView(items: service.toastItems)
                     .position(
                         x: geo.size.width / 2,
@@ -59,6 +63,14 @@ struct CompletionFlashView: View {
             .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
             value: service.toastVisible
         )
+        .animation(
+            .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
+            value: toastMounted
+        )
+        .onAppear {
+            guard !toastMounted else { return }
+            DispatchQueue.main.async { toastMounted = true }
+        }
     }
 
     private var glow: some View {

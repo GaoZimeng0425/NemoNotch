@@ -35,7 +35,9 @@ final class HookServer {
     private static let maxConcurrentConnections = 32
     private static let requestDeadlineSeconds: TimeInterval = 15
 
-    private static var tokenFilePath: String { NSHomeDirectory() + "/.NemoNotch/hook-token" }
+    private static var tokenFilePath: String {
+        NSHomeDirectory() + "/.NemoNotch/hook-token"
+    }
 
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: (() -> Void)?
@@ -167,8 +169,8 @@ final class HookServer {
         let id = ObjectIdentifier(connection)
         let item = DispatchWorkItem { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, self.connectionDeadlines[id] != nil else { return }
-                self.retireConnection(connection)
+                guard let self, connectionDeadlines[id] != nil else { return }
+                retireConnection(connection)
                 connection.cancel()
                 LogService.warn("HookServer: closed connection (request deadline)", category: "HookServer")
             }
@@ -186,26 +188,38 @@ final class HookServer {
         activeConnections.remove(id)
     }
 
-    private func receive(connection: NWConnection, accumulated: Data) {
+    /// Receive loop for one request. The accumulate/complete checks are pure
+    /// and run WITHOUT hopping to the main actor: if every chunk waited for a
+    /// MainActor turn, a busy main thread (long layout pass, dialog stall)
+    /// would stop the server reading, the sender's socket buffer would fill,
+    /// and a `--max-time`-capped curl (hook-sender.sh posts events with
+    /// `--max-time 2`) would abort mid-body — the truncated event then failed
+    /// to decode and was silently dropped (observed: a 65KB PostToolUse with
+    /// a base64 tool_response died exactly this way). Only the FINAL
+    /// processing needs the main actor.
+    private nonisolated func receive(connection: NWConnection, accumulated: Data) {
         connection
             .receive(minimumIncompleteLength: 1, maximumLength: 65536) {
                 [weak self] data, _, isComplete, error in
                 var buf = accumulated
-                if let data { buf.append(data) }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    // 请求体积硬上限:超限即断,不再继续累积。
-                    if buf.count > Self.maxRequestBytes {
-                        self.retireConnection(connection)
-                        self.sendHTTP(connection, status: "413 Payload Too Large", body: #"{"status":"error"}"#)
-                        return
+                if let data {
+                    buf.append(data)
+                }
+                // 请求体积硬上限:超限即断,不再继续累积。
+                if buf.count > Self.maxRequestBytes {
+                    Task { @MainActor [weak self] in
+                        self?.retireConnection(connection)
+                        self?.sendHTTP(connection, status: "413 Payload Too Large", body: #"{"status":"error"}"#)
                     }
-                    if Self.hasCompleteHTTPRequest(buf) || isComplete || error != nil {
-                        self.retireConnection(connection)
-                        self.processRequest(buf, connection: connection)
-                    } else {
-                        self.receive(connection: connection, accumulated: buf)
+                    return
+                }
+                if Self.hasCompleteHTTPRequest(buf) || isComplete || error != nil {
+                    Task { @MainActor [weak self] in
+                        self?.retireConnection(connection)
+                        self?.processRequest(buf, connection: connection)
                     }
+                } else {
+                    self?.receive(connection: connection, accumulated: buf)
                 }
             }
     }
@@ -258,16 +272,25 @@ final class HookServer {
             LogService.debug("Received hook message: \(bodyData.count) bytes", category: "HookServer")
 
             let decoder = JSONDecoder()
-            if let event = try? decoder.decode(HookEvent.self, from: bodyData) {
+            do {
+                let event = try decoder.decode(HookEvent.self, from: bodyData)
                 onEventReceived?(event)
                 if event.hookEventName == "PermissionRequest" {
                     handlePermissionRequest(event, connection: connection)
                     return
                 }
                 sendJSON(connection, payload: .ack)
-            } else {
-                let snippet = String(bodyString.prefix(2000))
-                LogService.error("Failed to decode HookEvent: \(snippet)", category: "HookServer")
+            } catch {
+                // Log the decode ERROR itself (a typeMismatch names the JSON
+                // path) plus the body size — a size below the request's
+                // Content-Length means the sender aborted mid-body (e.g. the
+                // hook script's --max-time), which is the signature of the
+                // silently-dropped 65KB PostToolUse incident.
+                let snippet = String(bodyString.prefix(500))
+                LogService.error(
+                    "Failed to decode HookEvent: \(error) — body \(bodyData.count)B, head: \(snippet)",
+                    category: "HookServer"
+                )
                 sendJSON(connection, payload: .ack)
             }
             return
@@ -287,14 +310,31 @@ final class HookServer {
         }
         pendingPermissions[waitKey] = connection
 
-        // Timeout fallback: deny after 120s of no user response.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
+        let timeout = Self.permissionHoldTimeout(cliSource: event.cliSource)
+        let timeoutPayload = Self.timeoutPayload(cliSource: event.cliSource)
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
             guard let self else { return }
             if let conn = pendingPermissions.removeValue(forKey: waitKey) {
-                self.pendingOrder.removeAll { $0 == waitKey }
-                sendJSON(conn, payload: .decision(.deny(reason: .timeout)))
+                pendingOrder.removeAll { $0 == waitKey }
+                sendJSON(conn, payload: timeoutPayload)
             }
         }
+    }
+
+    /// How long a held permission connection waits for the user. Claude's hook
+    /// waits with the CLI (short hold); the opencode plugin holds its bridge
+    /// while opencode's own TUI dialog can stay up much longer.
+    nonisolated static func permissionHoldTimeout(cliSource: String?) -> TimeInterval {
+        cliSource == "opencode" ? 600 : 120
+    }
+
+    /// What a held permission connection gets when the user never answers.
+    /// Claude fail-closes with a deny (an unanswered hook would block the CLI
+    /// forever). The opencode bridge MUST answer with no decision (ack): its
+    /// TUI dialog is still up and owns the call — a deny here would reject the
+    /// user's tool out from under them.
+    nonisolated static func timeoutPayload(cliSource: String?) -> HookResponse {
+        cliSource == "opencode" ? .ack : .decision(.deny(reason: .timeout))
     }
 
     /// 取最早插入且仍存活的等待连接(字典遍历顺序不确定,不能当作"第一个")。

@@ -69,17 +69,41 @@ struct AIChatTab: View {
             }
         }
 
-        var sortTime: Date {
+        /// The edge bar's layers (`EdgeBarModel.layer`): approval, running,
+        /// parked at the prompt, idle. An agent is running unless idle.
+        var layer: Int {
             switch self {
-            case let .session(session): session.lastEventTime
+            case let .session(session): EdgeBarModel.layer(session.phase)
+            case let .agent(entry): entry.agent.state == .idle ? 3 : 1
+            }
+        }
+
+        /// When a parked / idle item got there — a moment that holds still.
+        var settledAt: Date {
+            switch self {
+            case let .session(session): session.phaseChangedAt ?? session.lastEventTime
             case let .agent(entry): entry.agent.lastEventTime
             }
+        }
+
+        /// Stable order, the edge bar's: by layer, never by an event stamp
+        /// that every tool call refreshes (rows swapped places at event
+        /// rate). Approval / running items tie by id; parked / idle ones by
+        /// when they got there, newest first.
+        static func precedes(_ a: ConsoleItem, _ b: ConsoleItem) -> Bool {
+            if a.layer != b.layer {
+                return a.layer < b.layer
+            }
+            if a.layer >= 2, a.settledAt != b.settledAt {
+                return a.settledAt > b.settledAt
+            }
+            return a.id < b.id
         }
     }
 
     var consoleItems: [ConsoleItem] {
         (allSessions.map(ConsoleItem.session) + agentEntries.map(ConsoleItem.agent))
-            .sorted { $0.sortTime > $1.sortTime }
+            .sorted(by: ConsoleItem.precedes)
     }
 
     /// "OpenClaw 2" style summary parts for online monitors with non-idle agents.

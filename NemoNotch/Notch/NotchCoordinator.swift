@@ -33,6 +33,8 @@ final class NotchCoordinator {
 
     /// Per-screen window infrastructure, keyed by CGDirectDisplayID.
     private var slots: [UInt32: NotchWindowSlot] = [:]
+    /// L1:屏幕参数变化的重建立务是否已排队(同一次重配常连发多条通知,合并成一次)。
+    private var slotRebuildPending = false
     private let contentBuilder: (NotchCoordinator, NSScreen) -> AnyView
 
     private var previousApp: NSRunningApplication?
@@ -195,7 +197,7 @@ final class NotchCoordinator {
             selectedTab = auto
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        withAnimation(.interactiveSpring(duration: NotchConstants.openSpringDuration)) {
+        withAnimation(NotchMotion.open) {
             activeScreen = target
             status = .opened
         }
@@ -204,6 +206,10 @@ final class NotchCoordinator {
             startHotkeyAutoCloseTimer()
         }
         slot.passThrough.isBlocking = true
+        // Same turn as the state change, on purpose: an animation's clock
+        // starts when its transaction commits, so work done BEFORE the commit
+        // only delays the start — deferring it to the next turn would land it
+        // mid-curve and skip frames.
         slot.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
@@ -216,7 +222,7 @@ final class NotchCoordinator {
         lastCloseAt = Date()
         uninstallEscMonitor()
         let openedScreen = activeScreen
-        withAnimation(.spring(duration: NotchConstants.closeSpringDuration)) {
+        withAnimation(NotchMotion.close) {
             status = .closed
         }
         activeScreen = nil
@@ -242,8 +248,7 @@ final class NotchCoordinator {
             // 之前误用 openSpringDuration,今天不漏点击纯属 0.314 > 0.236 的巧合,
             // 调大关闭时长后点击就会穿透到刘海后面的 app)。
             try? await Task.sleep(for: .seconds(NotchConstants.closeSpringDuration))
-            guard let self else { return }
-            guard !(status == .opened && activeScreen?.displayID == displayID) else { return }
+            guard let self, !(status == .opened && activeScreen?.displayID == displayID) else { return }
             slot.passThrough.isBlocking = false
             if slot.window.isKeyWindow {
                 slot.window.resignKey()
@@ -277,7 +282,32 @@ final class NotchCoordinator {
         }
     }
 
+    /// L1:屏幕参数变化的窗口销毁/重建必须推迟到下一个 runloop turn。
+    ///
+    /// 本通知由 AppKit 在 `_NSCGSDisplayConfigurationDidReconfigureNotificationHandler`
+    /// 派发栈内同步调用;在栈内同步 `slot.close()`/建窗/`notchClose()` 会让 AppKit
+    /// 自己的重配布局栈过度释放窗口对象,autoreleasepool 排干时对僵尸对象
+    /// objc_release → 主线程 SIGSEGV(崩溃族 NemoNotch-2026-08-19/10-12/10-13
+    /// 三份 .ips,栈内无应用帧)。`DispatchQueue.main.async` 推迟一个 turn 即完全
+    /// 离开该派发栈。pending 标志把一次重配连发的多条通知合并成一次重建。
     @objc private func screenParametersChanged() {
+        guard !slotRebuildPending else { return }
+        slotRebuildPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            slotRebuildPending = false
+            performScreenParametersRebuild()
+        }
+    }
+
+    private func performScreenParametersRebuild() {
+        let screens = NSScreen.screens
+            .map { "\($0.displayID) \(Int($0.frame.width))x\(Int($0.frame.height))" }
+            .joined(separator: ", ")
+        LogService.info(
+            "screen parameters changed — rebuilding slots (screens: [\(screens)])\nwindows: \(MainThreadProbe.windowSnapshot())",
+            category: "NotchCoordinator"
+        )
         notchSize = Self.resolveUnifiedNotchSize()
         rebuildSlots()
         // If the active screen disappeared mid-session, gracefully collapse.

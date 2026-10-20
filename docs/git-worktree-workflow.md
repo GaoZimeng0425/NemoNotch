@@ -41,10 +41,12 @@ What it configures:
 git feat <name>        # pull latest first: ff-only --autostash develop to
                        #   origin/develop when purely behind (aborts the feat
                        #   if the pull fails), then feature/<name> off the
-                       #   refreshed develop, in ../NemoNotch-worktrees/<name>
+                       #   refreshed develop, in .worktree/<name> (nested
+                       #   inside the primary checkout; git-ignored, excluded
+                       #   from swiftlint/swiftformat)
                        #   (diverged → warns, stays on local develop;
                        #    primary not on develop → warns, skips the pull)
-cd ../NemoNotch-worktrees/<name>
+cd .worktree/<name>
 # ...work, commit freely on the feature branch (lint gate runs on commit)...
 
 git feat-done <name>   # auto-stash primary checkout → merge feature/<name> -> develop
