@@ -71,18 +71,24 @@ elif [ -n "$wt" ]; then
   if [ -z "$review_triggers" ]; then
     echo "📄 本 feature 无代码/脚本/hooks/CI 改动 — 跳过评审门禁" >&2
   else
-    note="$wt/.reviews/$name.md"
-    if [ ! -f "$note" ] || ! grep -q '^Verdict: APPROVED' "$note"; then
+    # 查「已提交」的记录内容(HEAD 里的 .reviews/<name>.md),不是工作区文件:
+    # 评审是证据链,未提交的 APPROVED 不算数;也避免未跟踪记录卡死 worktree 拆除
+    # (评审发现的实测点)。git show 失败(记录未提交)经 grep 落入拒绝分支 = fail-closed。
+    if ! git -C "$wt" show "HEAD:.reviews/$name.md" 2>/dev/null | grep -q '^Verdict: APPROVED'; then
       echo "" >&2
-      echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有 APPROVED 的评审记录。" >&2
-      echo "   流程:sh scripts/review.sh $name 生成模板 → 让未参与开发的会话/子代理" >&2
-      echo "         评审 diff 并填 Findings 与 Verdict → git add .reviews/$name.md 提交 → 重试。" >&2
+      echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
+      echo "   流程:sh scripts/review.sh $name 生成模板 → 让未参与开发的会话/子代理评审" >&2
+      echo "         diff、填 Findings 与 Verdict → git add .reviews/$name.md && git commit → 重试。" >&2
       echo "   应急跳过:NEMONOTCH_SKIP_REVIEW=1 git feat-done $name" >&2
       echo "" >&2
       exit 1
     fi
-    echo "🧑‍⚖️ 评审门禁:.reviews/$name.md = $(grep '^Verdict:' "$note" | head -1 | sed 's/^Verdict: *//')($(grep '^Reviewer:' "$note" | head -1 | sed 's/^Reviewer: *//'))"
+    verdict=$(git -C "$wt" show "HEAD:.reviews/$name.md" | grep '^Verdict:' | head -1 | sed 's/^Verdict: *//')
+    reviewer=$(git -C "$wt" show "HEAD:.reviews/$name.md" | grep '^Reviewer:' | head -1 | sed 's/^Reviewer: *//')
+    echo "🧑‍⚖️ 评审门禁:.reviews/$name.md — Verdict: $verdict(Reviewer: $reviewer)"
   fi
+else
+  echo "⚠️  分支没有 worktree — 评审门禁无法检查已提交的评审记录,请自行确保评审已完成" >&2
 fi
 
 # ── 测试门禁:merge 前在 feature worktree 里跑单元测试 ──

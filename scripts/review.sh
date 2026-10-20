@@ -49,10 +49,10 @@ files=$(git -C "$wt" diff --name-only "$base...HEAD")
 cat > "$note" <<EOF
 # Code Review — feature/$name
 
-- **Reviewer**: (填:评审会话/子代理标识。绝不能是写这段代码的那个——judge ≠ author)
-- **Date**: $(date +%F)
-- **Verdict**: (APPROVED | CHANGES_NEEDED)
-- **Scope**: ${stat:-无改动}
+Reviewer: (填:评审会话/子代理标识。绝不能是写这段代码的那个——judge ≠ author)
+Date: $(date +%F)
+Verdict: (填 APPROVED 或 CHANGES_NEEDED —— feat-done 门禁按行首「Verdict: APPROVED」匹配,保持行首裸格式)
+Scope: ${stat:-无改动}
 
 \`\`\`
 ${files:-(无文件)}
