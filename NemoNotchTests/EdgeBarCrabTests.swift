@@ -37,11 +37,15 @@ struct SourceLogoShapeTests {
     @Test func opencodeFrameIsHollowAndTheBlockFillsItsLowerHalf() {
         // 512 viewBox → fit by height: x' = (x − 128)·0.3125 + 10 + 10, y' = (y − 96)·0.3125 + 20.
         func at(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: (x - 128) * 0.3125 + 30, y: (y - 96) * 0.3125 + 20)
+            CGPoint(x: (x - 128) * 0.3125 + 20, y: (y - 96) * 0.3125 + 20)
         }
         let frame = OpencodeLogoShape(part: .frame).path(in: rect)
         #expect(frame.contains(at(140, 400), eoFill: true)) // the frame's bottom bar
         #expect(!frame.contains(at(256, 200), eoFill: true)) // the hole
+        // Near the edges, so a misplaced origin shows: just inside the left
+        // bar's inner edge, just outside the logo's left edge.
+        #expect(frame.contains(at(188, 300), eoFill: true))
+        #expect(!frame.contains(at(124, 300), eoFill: true))
         let block = OpencodeLogoShape(part: .block).path(in: rect)
         #expect(block.contains(at(256, 300)))
         #expect(!block.contains(at(256, 190)))
