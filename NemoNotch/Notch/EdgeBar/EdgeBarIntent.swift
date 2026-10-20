@@ -2,11 +2,7 @@ import Foundation
 
 /// How the bar's hover decisions are scheduled. Injected so tests fire the
 /// pending item by hand.
-typealias EdgeBarScheduler = (TimeInterval, DispatchWorkItem) -> Void
-
-private func edgeBarMainScheduler(_ delay: TimeInterval, _ item: DispatchWorkItem) {
-    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
-}
+typealias EdgeBarScheduler = DelayScheduler
 
 /// Decides when a cursor over the bar means "open", and when leaving means
 /// "close". Raw enter/exit is too eager both ways: a cursor brushing the edge
@@ -27,7 +23,7 @@ final class EdgeBarHoverIntent {
     private var pendingItem: DispatchWorkItem?
     private var generation = 0
 
-    init(schedule: @escaping EdgeBarScheduler = edgeBarMainScheduler) {
+    init(schedule: @escaping EdgeBarScheduler = mainDelayScheduler) {
         self.schedule = schedule
     }
 
@@ -99,7 +95,7 @@ final class EdgeBarRowSwitch {
     private var pendingItem: DispatchWorkItem?
     private var generation = 0
 
-    init(schedule: @escaping EdgeBarScheduler = edgeBarMainScheduler) {
+    init(schedule: @escaping EdgeBarScheduler = mainDelayScheduler) {
         self.schedule = schedule
     }
 

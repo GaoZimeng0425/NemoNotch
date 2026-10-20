@@ -25,10 +25,18 @@ struct ScreenExtensionsTests {
         #expect(NSScreen.screen(containing: inside) != nil)
     }
 
-    @Test("screenWithMouse resolves on a system with displays")
+    /// Every screen resolves to ITSELF at its centre and at its inclusive
+    /// (left and top) edges. `screenWithMouse` is this with the live cursor;
+    /// asserting on the live cursor itself made the test depend on where the
+    /// user's mouse happened to be during the run.
+    @Test("screen(containing:) resolves each screen to itself")
     @MainActor
-    func mouseScreenResolves() {
-        guard !NSScreen.screens.isEmpty else { return }
-        #expect(NSScreen.screenWithMouse != nil)
+    func eachScreenResolvesToItself() {
+        for screen in NSScreen.screens {
+            let f = screen.frame
+            for point in [CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.minX, y: f.midY), CGPoint(x: f.midX, y: f.maxY)] {
+                #expect(NSScreen.screen(containing: point)?.displayID == screen.displayID, "\(point) on \(f)")
+            }
+        }
     }
 }

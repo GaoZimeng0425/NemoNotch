@@ -1,22 +1,40 @@
+import Foundation
 @testable import NemoNotch
 import SwiftUI
 import Testing
 
-/// End-to-end timing guards for the badge debounce (`applyBadgeUpdate`) —
-/// the logic that absorbs momentary badge-set dips (e.g. an agent returning
-/// to `.idle` between tool calls) so the collapsed notch doesn't replay its
-/// layout animation.
+/// Guards for the badge debounce (`applyBadgeUpdate`) — the logic that
+/// absorbs momentary badge-set dips (e.g. an agent returning to `.idle`
+/// between tool calls) so the collapsed notch doesn't replay its layout
+/// animation.
 ///
-/// Real clocks, generous margins: assertions run ~10× past the 16ms
-/// coalesce tick and check the grace window from both sides (held at +150ms,
-/// collapsed at +1000ms against the 600ms grace). These margins hold unless
-/// the host stalls by hundreds of milliseconds mid-test.
+/// No wall clock: the view model's scheduler is injected and the test fires
+/// the pending update by hand (these tests used to sleep real time and failed
+/// whenever the host stalled for a few seconds).
 @MainActor
 struct BadgeDebounceTests {
     private let media: [BadgeItem] = [.media]
     private let calendar: [BadgeItem] = [.calendar]
 
-    private func makeViewModel() -> BadgeViewModel {
+    /// Collects scheduled updates; the test decides when they run.
+    private final class ManualScheduler {
+        var pending: [(delay: TimeInterval, item: DispatchWorkItem)] = []
+
+        var schedule: DelayScheduler {
+            { [unowned self] delay, item in pending.append((delay, item)) }
+        }
+
+        /// Runs everything scheduled so far in the order the clock would —
+        /// shortest delay first, ties in scheduling order — stale items
+        /// included, as a late dispatch would.
+        func fireAll() {
+            let due = pending.enumerated().sorted { ($0.element.delay, $0.offset) < ($1.element.delay, $1.offset) }
+            pending = []
+            due.forEach { $0.element.item.perform() }
+        }
+    }
+
+    private func makeViewModel(_ scheduler: ManualScheduler) -> BadgeViewModel {
         let vm = BadgeViewModel(
             mediaService: MediaService(disableLiveUpdates: true),
             calendarService: CalendarService(),
@@ -29,55 +47,61 @@ struct BadgeDebounceTests {
                 appSettings: AppSettings(),
                 permissionMonitor: nil
             ),
-            appSettings: AppSettings()
+            appSettings: AppSettings(),
+            schedule: scheduler.schedule
         )
         vm.initialize()
         return vm
     }
 
-    private func settle(_ ms: Double = 150) async {
-        try? await Task.sleep(for: .milliseconds(ms))
+    /// The view model showing `items`, its update delivered.
+    private func showing(_ items: [BadgeItem], _ scheduler: ManualScheduler) -> BadgeViewModel {
+        let vm = makeViewModel(scheduler)
+        vm.applyBadgeUpdate(newTypes: items)
+        scheduler.fireAll()
+        return vm
     }
 
-    @Test func nonEmptyUpdateLandsAfterTheCoalesceTick() async {
-        let vm = makeViewModel()
+    @Test func nonEmptyUpdateLandsOnTheCoalesceTick() {
+        let scheduler = ManualScheduler()
+        let vm = makeViewModel(scheduler)
         vm.applyBadgeUpdate(newTypes: media)
-        await settle()
+        #expect(scheduler.pending.map(\.delay) == [NotchConstants.badgeCoalesceTick])
+        #expect(vm.displayedBadgeItems != media)
+        scheduler.fireAll()
         #expect(vm.displayedBadgeItems == media)
         #expect(vm.shownHasActiveBadge)
     }
 
-    /// The discriminating grace assertion: at +150ms (past the 16ms tick,
-    /// inside the 600ms grace) the display must still show the OLD set. An
-    /// implementation without the grace collapses immediately and fails here.
-    @Test func emptyUpdateIsHeldDuringTheGraceWindow() async {
-        let vm = makeViewModel()
-        vm.applyBadgeUpdate(newTypes: media)
-        await settle()
+    /// The discriminating grace assertion: dropping to empty waits out the
+    /// grace (not the tick), and until it runs the OLD set stays shown. An
+    /// implementation without the grace collapses on the tick and fails here.
+    @Test func emptyUpdateIsHeldForTheGrace() {
+        let scheduler = ManualScheduler()
+        let vm = showing(media, scheduler)
         vm.applyBadgeUpdate(newTypes: [])
-        await settle()
+        #expect(scheduler.pending.map(\.delay) == [NotchConstants.badgeEmptyGrace])
         #expect(vm.displayedBadgeItems == media)
         #expect(vm.shownHasActiveBadge)
     }
 
-    @Test func nonEmptyWithinGraceCancelsTheCollapse() async {
-        let vm = makeViewModel()
-        vm.applyBadgeUpdate(newTypes: media)
-        await settle()
+    /// A non-empty set inside the grace supersedes the pending collapse —
+    /// even if the stale collapse is dispatched anyway, after it.
+    @Test func nonEmptyWithinGraceCancelsTheCollapse() {
+        let scheduler = ManualScheduler()
+        let vm = showing(media, scheduler)
         vm.applyBadgeUpdate(newTypes: [])
-        await settle(100)
         vm.applyBadgeUpdate(newTypes: calendar)
-        await settle()
+        scheduler.fireAll() // the calendar update on its tick, then the stale collapse
         #expect(vm.displayedBadgeItems == calendar)
         #expect(vm.shownHasActiveBadge)
     }
 
-    @Test func emptyPastGraceCollapses() async {
-        let vm = makeViewModel()
-        vm.applyBadgeUpdate(newTypes: media)
-        await settle()
+    @Test func emptyPastGraceCollapses() {
+        let scheduler = ManualScheduler()
+        let vm = showing(media, scheduler)
         vm.applyBadgeUpdate(newTypes: [])
-        await settle(1000)
+        scheduler.fireAll()
         #expect(vm.displayedBadgeItems.isEmpty)
         #expect(!vm.shownHasActiveBadge)
     }
