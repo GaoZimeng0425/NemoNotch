@@ -17,11 +17,41 @@ struct ModelContextWindowTests {
         ModelContextWindow.setOverlayForTests([:])
     }
 
-    @Test("Claude family fallback covers dated/dot-versioned ids")
-    func claudeFamilyFallback() {
-        #expect(ModelContextWindow.limit(for: "claude-opus-4-8-20250805") == 1_048_576)
-        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5-20250929") == 1_048_576)
-        #expect(ModelContextWindow.limit(for: "OPUS-something") == 1_048_576)
+    @Test("Claude ids resolve to Claude Code's window per family-version")
+    func claudeTable() {
+        #expect(ModelContextWindow.limit(for: "claude-opus-5-5") == 1_000_000)
+        #expect(ModelContextWindow.limit(for: "claude-opus-4-8-20250805") == 1_000_000)
+        #expect(ModelContextWindow.limit(for: "claude-opus-4-5-20251101") == 200_000)
+        #expect(ModelContextWindow.limit(for: "claude-opus-4-20250514") == 200_000)
+        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5-20250929") == 200_000)
+        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-6") == 1_000_000)
+        #expect(ModelContextWindow.limit(for: "claude-haiku-4-5-20251001") == 200_000)
+        // Dot-versioned and vendor-prefixed forms (opencode / OpenRouter ids).
+        #expect(ModelContextWindow.limit(for: "anthropic/claude-opus-4.8") == 1_000_000)
+        // Vertex (`@date`) and Bedrock (`region.anthropic.…-v1:0`) ids.
+        #expect(ModelContextWindow.limit(for: "claude-opus-4-6@20260101") == 1_000_000)
+        #expect(ModelContextWindow.limit(for: "us.anthropic.claude-sonnet-4-5-20250929-v1:0") == 200_000)
+        #expect(ModelContextWindow.limit(for: "anthropic.claude-opus-4-6-v1:0") == 1_000_000)
+        // Claude Code's own 1M alias.
+        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5[1m]") == 1_000_000)
+        // An unlisted Claude id is 200K until seen holding more.
+        #expect(ModelContextWindow.limit(for: "claude-newfamily-9") == 200_000)
+    }
+
+    @Test("The Claude table runs before the overlay")
+    func claudeBeatsOverlay() {
+        ModelContextWindow.setOverlayForTests(["claude-sonnet-4-5-20250929": 1_000_000])
+        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5-20250929") == 200_000)
+        ModelContextWindow.setOverlayForTests([:])
+    }
+
+    @Test("A Claude session seen past its listed window ran with 1M")
+    func observedUpgrade() {
+        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5", observed: 150_000) == 200_000)
+        #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5", observed: 230_000) == 1_000_000)
+        #expect(ModelContextWindow.limit(for: "claude-newfamily-9", observed: 400_000) == 1_000_000)
+        // Never for a non-Claude model: its listed window stands.
+        #expect(ModelContextWindow.limit(for: "glm-5.1", observed: 300_000) == 200_000)
     }
 
     @Test("Unknown model falls back to default")

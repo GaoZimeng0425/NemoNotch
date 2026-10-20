@@ -131,6 +131,12 @@ enum ConversationParser: ConversationParserProtocol {
 
         if json["type"] as? String == "assistant",
            let message = json["message"] as? [String: Any] {
+            // A sub-agent's call (older builds wrote them into the main log as
+            // `isSidechain`) and Claude Code's own `<synthetic>` notes count
+            // toward the totals but are not the session's model calls: they
+            // must not move its context or model.
+            let isMainCall = json["isSidechain"] as? Bool != true
+                && message["model"] as? String != "<synthetic>"
             if let usage = message["usage"] as? [String: Any] {
                 let input = usage["input_tokens"] as? Int ?? 0
                 let output = usage["output_tokens"] as? Int ?? 0
@@ -140,9 +146,11 @@ enum ConversationParser: ConversationParserProtocol {
                 result.outputTokens += output
                 result.cacheReadTokens += cacheRead
                 result.cacheCreationTokens += cacheCreation
-                result.lastContextTokens = input + cacheRead + cacheCreation
+                if isMainCall {
+                    result.lastContextTokens = input + cacheRead + cacheCreation
+                }
             }
-            if let model = message["model"] as? String {
+            if isMainCall, let model = message["model"] as? String {
                 result.lastModel = model
             }
         }

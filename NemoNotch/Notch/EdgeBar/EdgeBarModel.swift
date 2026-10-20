@@ -12,6 +12,70 @@ struct EdgeBarRow: Identifiable, Equatable {
     let hasHost: Bool
     /// When the session entered its current phase (the status line's clock).
     let since: Date
+    /// The latest call's context against its window; nil while unknown
+    /// (no call parsed yet, or a source that reports no tokens).
+    var context: EdgeBarContext?
+}
+
+/// A session's context: the latest model call's prompt (input + cache reads
+/// + cache writes) against the window that call ran in.
+struct EdgeBarContext: Equatable {
+    let tokens: Int
+    let limit: Int
+
+    /// At or above this the context reads amber: compaction is near.
+    static let hotPercent = 80
+
+    init?(_ session: AISessionState) {
+        guard session.lastContextTokens > 0 else { return nil }
+        tokens = session.lastContextTokens
+        limit = session.contextLimit
+    }
+
+    init(tokens: Int, limit: Int) {
+        self.tokens = tokens
+        self.limit = limit
+    }
+
+    /// 0...1.
+    var fraction: Double {
+        limit > 0 ? min(1, Double(tokens) / Double(limit)) : 0
+    }
+
+    /// Read off the same rounding the text shows, so "80%" is always amber.
+    var isHot: Bool {
+        Int((fraction * 100).rounded()) >= Self.hotPercent
+    }
+
+    /// "16%"; "<1%" for a context that is there but under a point.
+    var percentText: String {
+        let percent = fraction * 100
+        if percent > 0, percent < 1 {
+            return "<1%"
+        }
+        return "\(Int(percent.rounded()))%"
+    }
+
+    /// "161K / 1M".
+    var amountText: String {
+        "\(Self.compact(tokens)) / \(Self.compact(limit))"
+    }
+
+    /// 161_026 → "161K", 1_000_000 → "1M", 1_048_576 → "1M", 1_310_720 →
+    /// "1.3M", 950 → "950".
+    static func compact(_ value: Int) -> String {
+        if value >= 1_000_000 {
+            let millions = Double(value) / 1_000_000
+            let tenths = (millions * 10).rounded() / 10
+            return tenths == tenths.rounded() ? "\(Int(tenths))M" : String(format: "%.1fM", tenths)
+        }
+        if value >= 1000 {
+            let thousands = Int((Double(value) / 1000).rounded())
+            // 999_500… rounds to 1000K: that is 1M.
+            return thousands >= 1000 ? "1M" : "\(thousands)K"
+        }
+        return "\(value)"
+    }
 }
 
 /// evlat's phase palette: idle grey, working white, waiting amber, review
@@ -42,13 +106,15 @@ enum EdgeBarPalette {
         }
     }
 
-    /// Status line under a name: "waiting for approval · 14 min".
-    static func statusLine(_ phase: SessionPhase, waited: TimeInterval) -> String {
+    /// Status line under a name: "waiting for approval · 14 min", then the
+    /// context share when known: "running · 3 min · 16%".
+    static func statusLine(_ phase: SessionPhase, waited: TimeInterval, context: EdgeBarContext? = nil) -> String {
         let minutes = Int(waited / 60)
         let time = minutes >= 1
             ? String(format: String(localized: "edge_bar.min_fmt"), minutes)
             : String(localized: "edge_bar.moments")
-        return "\(label(phase)) · \(time)"
+        guard let context else { return "\(label(phase)) · \(time)" }
+        return "\(label(phase)) · \(time) · \(context.percentText)"
     }
 }
 
@@ -93,7 +159,8 @@ enum EdgeBarModel {
                     // A tab link alone can jump (AppActivator tries it first).
                     hasHost: session.launchingAppPID != nil || session.launchingAppBundleId != nil
                         || session.tabLinkURL != nil,
-                    since: session.phaseChangedAt ?? session.lastEventTime
+                    since: session.phaseChangedAt ?? session.lastEventTime,
+                    context: EdgeBarContext(session)
                 )
             }
         guard !rows.isEmpty else { return .empty }
@@ -161,7 +228,11 @@ enum EdgeBarModel {
         let widest = content.rows.map { row in
             max(
                 textWidth(row.name, font: nameFont),
-                textWidth(EdgeBarPalette.statusLine(row.phase, waited: 99 * 60), font: statusFont)
+                textWidth(EdgeBarPalette.statusLine(
+                    row.phase,
+                    waited: 99 * 60,
+                    context: row.context.map { _ in EdgeBarContext(tokens: 1, limit: 1) }
+                ), font: statusFont)
             )
         }.max() ?? 0
         let names = EdgeBarMetrics.openWidth(namesWidth: min(ceil(widest), EdgeBarMetrics.nameMaxWidth))

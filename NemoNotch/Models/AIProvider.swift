@@ -54,8 +54,18 @@ struct AISessionState: Identifiable {
     var thoughtTokens: Int = 0
     var cacheReadTokens: Int = 0
     var cacheCreationTokens: Int = 0
-    var lastContextTokens: Int = 0
-    var model: String?
+    var lastContextTokens: Int = 0 {
+        didSet { noteContextWindow() }
+    }
+
+    var model: String? {
+        didSet { noteContextWindow() }
+    }
+
+    /// The model this session was seen running with more than its listed
+    /// window (so with 1M). Kept after its context falls back — a `/compact`
+    /// shrinks the prompt, not the window.
+    private(set) var upgradedContextModel: String?
     /// Host terminal/IDE app of the session, resolved from the hook's
     /// `cli_pid` by walking the process tree up to the first GUI app
     /// (`AppActivator.recordHost`). Bundle id is cached alongside to detect
@@ -126,14 +136,30 @@ struct AISessionState: Identifiable {
         cacheReadTokens + cacheCreationTokens
     }
 
+    /// The window the latest call ran in (a Claude session seen past its
+    /// listed window ran with 1M).
+    var contextLimit: Int {
+        let model = model ?? ""
+        if upgradedContextModel == model {
+            return max(ModelContextWindow.limit(for: model), ModelContextWindow.claudeOneMillion)
+        }
+        return ModelContextWindow.limit(for: model, observed: lastContextTokens)
+    }
+
+    private mutating func noteContextWindow() {
+        let model = model ?? ""
+        if ModelContextWindow.limit(for: model, observed: lastContextTokens) > ModelContextWindow.limit(for: model) {
+            upgradedContextModel = model
+        }
+    }
+
     var contextPercent: Double {
         guard lastContextTokens > 0 else { return 0 }
-        let limit = ModelContextWindow.limit(for: model ?? "")
-        return min(Double(lastContextTokens) / Double(limit), 1.0)
+        return min(Double(lastContextTokens) / Double(contextLimit), 1.0)
     }
 
     var contextLimitDisplay: String {
-        let limit = ModelContextWindow.limit(for: model ?? "")
+        let limit = contextLimit
         if limit >= 1_000_000 {
             return String(format: "%.0fM", Double(limit) / 1_000_000)
         }

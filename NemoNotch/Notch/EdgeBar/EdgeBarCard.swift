@@ -98,6 +98,11 @@ struct EdgeBarCard: View {
             status
                 .padding(.horizontal, Self.padding)
                 .padding(.top, Self.blockGap)
+            if let context = row.context {
+                contextLine(context)
+                    .padding(.horizontal, Self.padding)
+                    .padding(.top, 10)
+            }
             section(content)
             if row.hasHost {
                 goButton
@@ -182,6 +187,43 @@ struct EdgeBarCard: View {
                 .foregroundStyle(Self.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+            }
+        }
+    }
+
+    /// "Context ▬▬▭▭ 161K / 1M · 16%", the model under it: the latest
+    /// call's prompt against the window it ran in.
+    private func contextLine(_ context: EdgeBarContext) -> some View {
+        let tint = context.isHot ? EdgeBarPalette.amber : EdgeBarPalette.textPrimary
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text("edge_bar.context")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Self.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                Capsule()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(height: 4)
+                    .overlay(alignment: .leading) {
+                        GeometryReader { geo in
+                            Capsule()
+                                .fill(tint.opacity(context.isHot ? 1 : 0.7))
+                                .frame(width: max(geo.size.width * context.fraction, 4))
+                        }
+                    }
+                Text(verbatim: "\(context.amountText) · \(context.percentText)")
+                    .font(Font(NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)))
+                    .foregroundStyle(context.isHot ? EdgeBarPalette.amber : EdgeBarPalette.textPrimary.opacity(0.85))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            if let model = session.displayModel {
+                Text(verbatim: model)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Self.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
     }

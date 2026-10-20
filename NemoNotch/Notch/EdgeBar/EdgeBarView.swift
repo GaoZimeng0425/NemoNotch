@@ -392,7 +392,8 @@ struct EdgeBarRowLabel: View {
                 TimelineView(.everyMinute) { context in
                     Text(verbatim: EdgeBarPalette.statusLine(
                         row.phase,
-                        waited: context.date.timeIntervalSince(row.since)
+                        waited: context.date.timeIntervalSince(row.since),
+                        context: row.context
                     ))
                     .font(Font(EdgeBarModel.statusFont))
                     .foregroundStyle(row.phase.isWaitingForApproval ? EdgeBarPalette.amber : EdgeBarPalette

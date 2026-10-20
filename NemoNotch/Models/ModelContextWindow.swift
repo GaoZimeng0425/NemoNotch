@@ -13,10 +13,14 @@ import Synchronization
 ///    to disk. Fills in models the curated table doesn't list yet (e.g. a
 ///    brand-new GLM/Gemini release), so new models show a real value without
 ///    a code change.
-/// 3. Claude family matcher (`opus`/`sonnet`) — Claude ids are versioned/
-///    dated (`claude-opus-4-8-20250805`) and OpenRouter keys them with dot
-///    versions (`claude-opus-4.8`), so neither an exact nor overlay match is
-///    reliable; both families support a 1M window.
+/// 3. Claude table (`claudeLimits`, before the overlay) — Claude ids are
+///    dated (`claude-opus-4-8-20250805`) or dot-versioned (`claude-opus-4.8`),
+///    so they match by family-version prefix. Claude Code runs a model with
+///    200K or 1M and its transcript never says which, so an unlisted Claude
+///    id is 200K, and `limit(for:observed:)` upgrades any Claude id to 1M
+///    once a call was seen holding more than its listed window (agent-hud's
+///    rule). OpenRouter's Claude windows are the API's, not Claude Code's —
+///    that is why this step runs before the overlay.
 /// 4. `defaultValue`.
 enum ModelContextWindow {
     static let limits: [String: Int] = [
@@ -44,18 +48,77 @@ enum ModelContextWindow {
         if let exact = limits[model] {
             return exact
         }
-        // 2. OpenRouter catalog overlay (auto-discovered, fills gaps).
+        // 2. Claude (dated/dot-versioned ids; Claude Code's windows, not the API's).
+        if let claude = claudeLimit(for: model) {
+            return claude
+        }
+        // 3. OpenRouter catalog overlay (auto-discovered, fills gaps).
         let key = normalize(model)
         if let fetched = overlay.withLock({ $0[key] }) {
             return fetched
         }
-        // 3. Claude family fallback (dated/dot-versioned ids).
-        let lowered = model.lowercased()
-        if lowered.contains("opus") || lowered.contains("sonnet") {
-            return 1_048_576
-        }
         // 4. Default.
         return defaultValue
+    }
+
+    /// The window a session's calls actually ran in: `limit(for:)`, except a
+    /// Claude session seen holding more than that ran with 1M.
+    static func limit(for model: String, observed: Int) -> Int {
+        let listed = limit(for: model)
+        guard observed > listed, claudeLimit(for: model) != nil else { return listed }
+        return max(listed, claudeOneMillion)
+    }
+
+    static let claudeOneMillion = 1_000_000
+    static let claudeDefault = 200_000
+
+    /// Claude Code's window per family-version (agent-hud-open's catalog),
+    /// matched as a prefix of the bare id with dots read as dashes. Longest
+    /// prefix wins (`claude-opus-4-5` before `claude-opus-4`).
+    static let claudeLimits: [String: Int] = [
+        "claude-fable-5": 1_000_000,
+        "claude-mythos-5": 1_000_000,
+        "claude-opus-5": 1_000_000,
+        "claude-opus-4-8": 1_000_000,
+        "claude-opus-4-7": 1_000_000,
+        "claude-opus-4-6": 1_000_000,
+        "claude-opus-4-5": 200_000,
+        "claude-opus-4-1": 200_000,
+        "claude-opus-4": 200_000,
+        "claude-sonnet-5": 1_000_000,
+        "claude-sonnet-4-6": 1_000_000,
+        "claude-sonnet-4-5": 200_000,
+        "claude-sonnet-4": 200_000,
+        "claude-haiku-4-5": 200_000,
+        "claude-3-5-haiku": 200_000,
+    ]
+
+    /// nil for a non-Claude id. A `[1m]` suffix (Claude Code's own model
+    /// alias) says 1M outright.
+    static func claudeLimit(for model: String) -> Int? {
+        guard let key = claudeKey(model) else { return nil }
+        if key.hasSuffix("[1m]") {
+            return claudeOneMillion
+        }
+        let match = claudeLimits.keys
+            .filter { key == $0 || key.hasPrefix($0 + "-") }
+            .max(by: { $0.count < $1.count })
+        return match.flatMap { claudeLimits[$0] } ?? claudeDefault
+    }
+
+    /// The bare `claude-…` id with dots read as dashes: a Bedrock id's region
+    /// and vendor (`us.anthropic.`) and version (`:0`) and a Vertex id's
+    /// `@date` are dropped. nil for a non-Claude id.
+    static func claudeKey(_ model: String) -> String? {
+        var key = normalize(model)
+        if let vendor = key.range(of: "anthropic.") {
+            key = String(key[vendor.upperBound...])
+        }
+        if let cut = key.firstIndex(where: { $0 == "@" || $0 == ":" }) {
+            key = String(key[..<cut])
+        }
+        key = key.replacingOccurrences(of: ".", with: "-")
+        return key.hasPrefix("claude-") ? key : nil
     }
 
     /// Normalize an id to a single lookup key: lowercase, and strip any
