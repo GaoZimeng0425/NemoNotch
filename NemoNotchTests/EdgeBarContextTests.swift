@@ -30,11 +30,14 @@ struct EdgeBarContextTests {
         #expect(EdgeBarContext(tokens: 950, limit: 200_000).amountText == "950 / 200K")
         #expect(EdgeBarContext.compact(1_048_576) == "1M")
         #expect(EdgeBarContext.compact(1_310_720) == "1.3M")
+        #expect(EdgeBarContext.compact(999_700) == "1M")
     }
 
     @Test func hotFromEightyPercent() {
-        #expect(!EdgeBarContext(tokens: 159_000, limit: 200_000).isHot)
+        #expect(!EdgeBarContext(tokens: 158_000, limit: 200_000).isHot)
         #expect(EdgeBarContext(tokens: 160_000, limit: 200_000).isHot)
+        // 79.6% reads "80%": it must be amber like the text says.
+        #expect(EdgeBarContext(tokens: 159_200, limit: 200_000).isHot)
     }
 
     @Test func statusLineEndsWithTheContextShare() {

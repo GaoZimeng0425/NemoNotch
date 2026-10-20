@@ -42,8 +42,9 @@ struct EdgeBarContext: Equatable {
         limit > 0 ? min(1, Double(tokens) / Double(limit)) : 0
     }
 
+    /// Read off the same rounding the text shows, so "80%" is always amber.
     var isHot: Bool {
-        fraction * 100 >= Double(Self.hotPercent)
+        Int((fraction * 100).rounded()) >= Self.hotPercent
     }
 
     /// "16%"; "<1%" for a context that is there but under a point.
@@ -69,7 +70,9 @@ struct EdgeBarContext: Equatable {
             return tenths == tenths.rounded() ? "\(Int(tenths))M" : String(format: "%.1fM", tenths)
         }
         if value >= 1000 {
-            return "\(Int((Double(value) / 1000).rounded()))K"
+            let thousands = Int((Double(value) / 1000).rounded())
+            // 999_500… rounds to 1000K: that is 1M.
+            return thousands >= 1000 ? "1M" : "\(thousands)K"
         }
         return "\(value)"
     }

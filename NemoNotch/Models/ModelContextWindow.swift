@@ -96,8 +96,7 @@ enum ModelContextWindow {
     /// nil for a non-Claude id. A `[1m]` suffix (Claude Code's own model
     /// alias) says 1M outright.
     static func claudeLimit(for model: String) -> Int? {
-        let key = normalize(model).replacingOccurrences(of: ".", with: "-")
-        guard key.hasPrefix("claude-") else { return nil }
+        guard let key = claudeKey(model) else { return nil }
         if key.hasSuffix("[1m]") {
             return claudeOneMillion
         }
@@ -105,6 +104,21 @@ enum ModelContextWindow {
             .filter { key == $0 || key.hasPrefix($0 + "-") }
             .max(by: { $0.count < $1.count })
         return match.flatMap { claudeLimits[$0] } ?? claudeDefault
+    }
+
+    /// The bare `claude-…` id with dots read as dashes: a Bedrock id's region
+    /// and vendor (`us.anthropic.`) and version (`:0`) and a Vertex id's
+    /// `@date` are dropped. nil for a non-Claude id.
+    static func claudeKey(_ model: String) -> String? {
+        var key = normalize(model)
+        if let vendor = key.range(of: "anthropic.") {
+            key = String(key[vendor.upperBound...])
+        }
+        if let cut = key.firstIndex(where: { $0 == "@" || $0 == ":" }) {
+            key = String(key[..<cut])
+        }
+        key = key.replacingOccurrences(of: ".", with: "-")
+        return key.hasPrefix("claude-") ? key : nil
     }
 
     /// Normalize an id to a single lookup key: lowercase, and strip any

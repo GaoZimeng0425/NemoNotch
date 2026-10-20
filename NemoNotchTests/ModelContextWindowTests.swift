@@ -28,6 +28,10 @@ struct ModelContextWindowTests {
         #expect(ModelContextWindow.limit(for: "claude-haiku-4-5-20251001") == 200_000)
         // Dot-versioned and vendor-prefixed forms (opencode / OpenRouter ids).
         #expect(ModelContextWindow.limit(for: "anthropic/claude-opus-4.8") == 1_000_000)
+        // Vertex (`@date`) and Bedrock (`region.anthropic.…-v1:0`) ids.
+        #expect(ModelContextWindow.limit(for: "claude-opus-4-6@20260101") == 1_000_000)
+        #expect(ModelContextWindow.limit(for: "us.anthropic.claude-sonnet-4-5-20250929-v1:0") == 200_000)
+        #expect(ModelContextWindow.limit(for: "anthropic.claude-opus-4-6-v1:0") == 1_000_000)
         // Claude Code's own 1M alias.
         #expect(ModelContextWindow.limit(for: "claude-sonnet-4-5[1m]") == 1_000_000)
         // An unlisted Claude id is 200K until seen holding more.

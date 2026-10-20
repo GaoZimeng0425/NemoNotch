@@ -49,6 +49,17 @@ struct ContextAccuracyTests {
         #expect(r.lastModel == "claude-opus-5-5")
     }
 
+    @Test func claudeSidechainCallStillCountsTowardTotals() throws {
+        let url = try write([
+            claudeAssistant(model: "claude-opus-5-5", input: 2, cacheRead: 150_000, cacheCreation: 3000),
+            claudeAssistant(model: "claude-haiku-4-5", input: 5, cacheRead: 9000, cacheCreation: 0, sidechain: true),
+        ], tag: "claude-sidechain-totals")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let r = ConversationParser.parseIncremental(filePath: url.path, fromOffset: 0)
+        #expect(r.inputTokens == 7)
+        #expect(r.cacheReadTokens == 159_000)
+    }
+
     @Test func claudeSyntheticNoteDoesNotMoveContextOrModel() throws {
         let url = try write([
             claudeAssistant(model: "claude-opus-5-5", input: 2, cacheRead: 150_000, cacheCreation: 3000),
@@ -80,5 +91,24 @@ struct ContextAccuracyTests {
         session.lastContextTokens = 250_000
         #expect(session.contextLimit == 1_000_000)
         #expect(session.contextPercent == 0.25)
+    }
+
+    @Test func oneMillionIsRememberedAfterTheContextFalls() {
+        var session = AISessionState(sessionId: "ctx", source: .claude)
+        session.model = "claude-sonnet-4-5-20250929"
+        session.lastContextTokens = 300_000
+        // `/compact`: the prompt shrinks, the window does not.
+        session.lastContextTokens = 150_000
+        #expect(session.contextLimit == 1_000_000)
+    }
+
+    @Test func rememberedWindowIsPerModel() {
+        var session = AISessionState(sessionId: "ctx", source: .claude)
+        session.model = "claude-sonnet-4-5-20250929"
+        session.lastContextTokens = 300_000
+        // The next call, in the providers' write order: tokens, then model.
+        session.lastContextTokens = 50000
+        session.model = "claude-haiku-4-5-20251001"
+        #expect(session.contextLimit == 200_000)
     }
 }
