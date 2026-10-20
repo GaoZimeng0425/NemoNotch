@@ -158,7 +158,9 @@ struct EdgeBarSourceMark: View {
     var body: some View {
         switch source {
         case .claude:
-            ClaudeCrabIcon(size: size, color: color)
+            EdgeBarCrab()
+                .fill(color, style: FillStyle(eoFill: true))
+                .frame(width: size * EdgeBarCrab.aspect, height: size)
                 .frame(width: size, height: size)
         case .gemini:
             Image(systemName: "sparkles")
@@ -178,6 +180,40 @@ struct EdgeBarSourceMark: View {
         case .opencode: "opencode"
         case .zcode: "zcode"
         }
+    }
+}
+
+/// Claude Code's crab as one even-odd path (the eyes are holes): the
+/// `ClaudeCrabIcon` drawing, in a 66 × 52 grid, as a vector shape. Not the
+/// `Canvas` icon: in the first ring, drawn above the working ring's arc
+/// (an NSView), the Canvas came out with its legs cut off — the bottom ~2pt
+/// missing at a fixed height in the window (2026-10-20, measured on the live
+/// bar; never reproduced outside it). And the icon carries a 0.15s timer per
+/// instance for leg animation the ring never uses.
+struct EdgeBarCrab: Shape {
+    /// Width over height.
+    static let aspect: CGFloat = 66.0 / 52.0
+
+    private static let parts: [CGRect] = [
+        CGRect(x: 6, y: 0, width: 54, height: 39), // body
+        CGRect(x: 12, y: 13, width: 6, height: 6.5), // eyes (holes)
+        CGRect(x: 48, y: 13, width: 6, height: 6.5),
+        CGRect(x: 0, y: 13, width: 6, height: 13), // arms
+        CGRect(x: 60, y: 13, width: 6, height: 13),
+        CGRect(x: 6, y: 39, width: 6, height: 13), // legs
+        CGRect(x: 18, y: 39, width: 6, height: 13),
+        CGRect(x: 42, y: 39, width: 6, height: 13),
+        CGRect(x: 54, y: 39, width: 6, height: 13),
+    ]
+
+    func path(in rect: CGRect) -> Path {
+        let scale = CGAffineTransform(translationX: rect.minX, y: rect.minY)
+            .scaledBy(x: rect.width / 66, y: rect.height / 52)
+        var path = Path()
+        for part in Self.parts {
+            path.addRect(part, transform: scale)
+        }
+        return path
     }
 }
 

@@ -10,10 +10,6 @@ import SwiftUI
 /// service through the double-pulse curve). Purely visual — never intercepts events.
 struct CompletionFlashView: View {
     let service: CompletionFlashService
-    /// Only one screen renders the toast (the built-in/primary display) so a
-    /// multi-monitor setup doesn't show a duplicate capsule per screen. The
-    /// edge glow still flashes every screen.
-    var showsToast: Bool = true
 
     /// 首帧挂载闸门,见 `toast` 的注释 —— 重建窗口的入场动画依赖它。
     @State private var toastMounted = false
@@ -22,12 +18,11 @@ struct CompletionFlashView: View {
     private static let core = Color(red: 1.0, green: 0.93, blue: 0.82)
 
     var body: some View {
-        // 承载窗口在 makeWindow 里 orderFrontRegardless 之后从不 orderOut,
-        // 所以 flashLevel 为 0 时这个全屏层依然可见、依然参与合成。
-        // `.idle` 命中就是"没有任何东西要显示却仍在重绘"的那部分。
+        // 闲置时窗口已 orderOut,每次闪光重建;`.idle` 只剩淡出尾段 ——
+        // overlay 还在、glow 与 toast 都已归零的那几帧仍在重绘的部分。
         let _ = PerfProbe.hit(
             service.flashLevel == 0 && !service.toastVisible
-                ? "CompletionFlashView.body.idle(全屏窗口常驻可见但无内容)"
+                ? "CompletionFlashView.body.idle(overlay 仍在、内容已归零的淡出尾段)"
                 : "CompletionFlashView.body.active"
         )
         ZStack {
@@ -36,9 +31,9 @@ struct CompletionFlashView: View {
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
 
-            if showsToast {
-                toast
-            }
+            // Every screen: the toast is read where the user is looking,
+            // like the glow it comes with.
+            toast
         }
         .ignoresSafeArea()
     }
