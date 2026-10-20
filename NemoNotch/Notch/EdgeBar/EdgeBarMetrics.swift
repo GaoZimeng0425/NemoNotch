@@ -231,6 +231,14 @@ enum EdgeBarMetrics {
         return max(gutter, min(level, lowest))
     }
 
+    /// The card's top for a target at `level` down the bar (the usage
+    /// block's sections): level with it, pushed up only as far as it must
+    /// to stay whole inside the canvas.
+    static func cardTop(level: CGFloat, height: CGFloat, barTop: CGFloat, canvasHeight: CGFloat) -> CGFloat {
+        let lowest = canvasHeight - height - gutter
+        return max(gutter, min(barTop + level - cardLead, lowest))
+    }
+
     // MARK: Hit-testing (bar coordinates: x from the edge, y from the bar's top)
 
     /// The row under a point while open; `nil` over the head, the summary,

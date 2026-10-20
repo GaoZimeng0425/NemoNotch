@@ -26,6 +26,10 @@ final class EdgeBarController: NSObject {
     /// The selected row's slot; kept after deselect so a leaving card fades
     /// where it was.
     private(set) var cardSlot = 0
+    /// With a usage section selected, its top down the bar (the card sits
+    /// level with it); nil while a session's card is up. Kept after
+    /// deselect, like `cardSlot`.
+    private(set) var cardLevel: CGFloat?
     private(set) var scrollOffset: CGFloat = 0
     private(set) var isOverHead = false
     private(set) var hoveredButton: CardButton?
@@ -91,6 +95,7 @@ final class EdgeBarController: NSObject {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var usagePrimed = false
     @ObservationIgnored private var hostNames: [String: String?] = [:]
+    @ObservationIgnored private var lastUsageDetails: [QuotaProvider: EdgeBarUsageDetail] = [:]
     /// Every readable line, before fitting to the window.
     @ObservationIgnored private var rawUsageLines: [EdgeBarUsageLine] = []
 
@@ -176,17 +181,43 @@ final class EdgeBarController: NSObject {
         fitUsage()
         setIfChanged(\.openWidth, measuredOpenWidth(next))
         setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
-        if let selectedRow, !next.rows.contains(where: { $0.id == selectedRow }) {
-            deselect()
-        } else if let selectedRow, let slot = next.rows.firstIndex(where: { $0.id == selectedRow }) {
-            setIfChanged(\.cardSlot, slot)
-        }
+        revalidateSelection()
         updateBodyRect()
         updateBeat()
     }
 
+    /// The selected card's target still there? Follow it (the usage block
+    /// moves with the list's length; a section may be cut by `fitUsage`),
+    /// else drop the card.
+    private func revalidateSelection() {
+        guard let selectedRow else { return }
+        if let provider = EdgeBarUsage.provider(ofCardID: selectedRow) {
+            if let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count) {
+                setIfChanged(\.cardLevel, level)
+            } else {
+                deselect()
+            }
+        } else if let slot = content.rows.firstIndex(where: { $0.id == selectedRow }) {
+            setIfChanged(\.cardSlot, slot)
+        } else {
+            deselect()
+        }
+    }
+
     func session(_ id: String) -> AISessionState? {
         store.get(id)
+    }
+
+    /// A provider's quota for the usage card. A fetch that failed
+    /// transiently keeps the last reading — as its section in the block does
+    /// (`EdgeBarUsage.lines(previous:)`), so the card never goes blank under
+    /// the cursor.
+    func usageDetail(_ provider: QuotaProvider) -> EdgeBarUsageDetail? {
+        if let fresh = usageQuota.quotas[provider].flatMap(EdgeBarUsageDetail.init) {
+            lastUsageDetails[provider] = fresh
+            return fresh
+        }
+        return EdgeBarUsage.section(of: provider, in: usageLines).isEmpty ? nil : lastUsageDetails[provider]
     }
 
     /// The app the session runs in, named for the card's "Open in …".
@@ -258,6 +289,7 @@ final class EdgeBarController: NSObject {
         window.orderFrontRegardless()
         // The room under the bar may have changed: refit the usage block.
         fitUsage()
+        revalidateSelection()
         setIfChanged(\.openWidth, measuredOpenWidth(content))
         updateBodyRect()
     }
@@ -387,14 +419,20 @@ final class EdgeBarController: NSObject {
         return CGPoint(x: (point.x - anchor) * side.sign, y: point.y - barTop)
     }
 
+    /// The session row, or the usage section, under a point: both bring a
+    /// card up the same way (dwell, then move).
     private func row(at bar: CGPoint) -> String? {
-        guard isOpen,
-              let slot = EdgeBarMetrics.slot(
-                  x: bar.x, y: bar.y, width: openWidth,
-                  rows: content.rows.count, offset: scrollOffset
-              )
-        else { return nil }
-        return content.rows[slot].id
+        guard isOpen else { return nil }
+        if let slot = EdgeBarMetrics.slot(
+            x: bar.x, y: bar.y, width: openWidth,
+            rows: content.rows.count, offset: scrollOffset
+        ) {
+            return content.rows[slot].id
+        }
+        return EdgeBarUsage.provider(
+            x: bar.x, y: bar.y, width: openWidth,
+            rows: content.rows.count, lines: usageLines
+        ).map(EdgeBarUsage.cardID)
     }
 
     private func button(at point: CGPoint) -> CardButton? {
@@ -436,7 +474,20 @@ final class EdgeBarController: NSObject {
     }
 
     private func select(_ id: String) {
-        guard isOpen, let slot = content.rows.firstIndex(where: { $0.id == id }) else { return }
+        guard isOpen else { return }
+        if let provider = EdgeBarUsage.provider(ofCardID: id) {
+            guard let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count)
+            else { return }
+            // A usage card has no buttons: none of a session card's may linger.
+            buttonRects = [:]
+            hoveredButton = nil
+            pressedButton = nil
+            cardLevel = level
+            selectedRow = id
+            return
+        }
+        guard let slot = content.rows.firstIndex(where: { $0.id == id }) else { return }
+        cardLevel = nil
         cardSlot = slot
         selectedRow = id
     }
@@ -672,6 +723,7 @@ final class EdgeBarController: NSObject {
     }
 
     private func perform(_ button: CardButton, sessionId: String) {
+        guard EdgeBarUsage.provider(ofCardID: sessionId) == nil else { return }
         switch button {
         case .allow:
             aiMonitor.respondToPermission(sessionId: sessionId, approved: true)
