@@ -100,6 +100,31 @@ else
   fail=1
 fi
 
+# ── 6. 手册引用的脚本必须存在(文档引用已删除/改名脚本的通用守卫,2026-10-20)──
+# scripts/ 与 .githooks/ 下的引用按路径精确检查;根目录裸名(build.sh、
+# release.sh、test.sh 简写)须存在于仓库根 / scripts/ / .githooks/,或是代码在
+# 运行时写出的产物(Swift 源码里出现该文件名即视为已知产物 — hook-sender.sh
+# 由 HookInstaller 生成、不在仓库里,实测 2026-10-20,没这条会误报)。
+refs_ok=1
+# 两处都要求 .sh/.py 之后是词边界:没有它,"CompletionFlashService.showCompletionToast"
+# 会被切出一个假的 "CompletionFlashService.sh"(2026-10-20 首跑即误报)。
+for ref in $(grep -oE '(scripts/[A-Za-z0-9_.-]+\.(sh|py)|\.githooks/[A-Za-z0-9_.-]+\.sh)([^A-Za-z0-9_]|$)' AGENTS.md | sed 's/[^A-Za-z0-9_.]*$//' | sort -u); do
+  if [ ! -e "$ref" ]; then
+    echo "❌ AGENTS.md 引用的脚本不存在: $ref(删了/改名了?手册要跟上)" >&2
+    refs_ok=0; fail=1
+  fi
+done
+for name in $(grep -oE '(^|[^A-Za-z0-9_./-])[A-Za-z0-9_-]+\.sh([^A-Za-z0-9_]|$)' AGENTS.md | sed 's/^[^A-Za-z0-9_-]*//; s/[^A-Za-z0-9_.]*$//' | sort -u); do
+  if [ ! -e "$name" ] && [ ! -e "scripts/$name" ] && [ ! -e ".githooks/$name" ] \
+     && ! grep -rqF "$name" NemoNotch --include='*.swift'; then
+    echo "❌ AGENTS.md 引用的脚本 $name 既不在仓库根 / scripts/ / .githooks/,也不是代码生成物" >&2
+    refs_ok=0; fail=1
+  fi
+done
+if [ "$refs_ok" = 1 ]; then
+  echo "✅ 手册引用的脚本全部存在(scripts/ .githooks/ 精确路径 + 根目录裸名)"
+fi
+
 echo "──────────────────────────────"
 if [ "$fail" = 0 ]; then
   echo "✅ 文档对账通过(退出码 0)"
