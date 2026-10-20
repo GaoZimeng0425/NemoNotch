@@ -88,6 +88,18 @@ else
   echo "✅ CLAUDE.md → AGENTS.md 符号链接在位"
 fi
 
+# ── 5. 本地部署签名身份:build.sh ↔ AGENTS.md(2026-10-20 起)──
+# 证书本体只活在开发机登录钥匙串,CI 上不存在 — 所以断言的是「同一身份名
+# 同时登记在 build.sh 与本手册」,不是证书存在性(那在 CI 会假红)。发布
+# DMG(release.yml)刻意保持 ad-hoc:无公证的自签在 Gatekeeper 面前与
+# ad-hoc 等价,稳定身份只对本地装机的 TCC/Keychain 有意义。
+if grep -q 'NemoNotch Local Code Signing' build.sh && grep -q 'NemoNotch Local Code Signing' AGENTS.md; then
+  echo "✅ 本地部署签名身份:build.sh 与 AGENTS.md 登记一致(NemoNotch Local Code Signing)"
+else
+  echo "❌ 本地部署签名身份漂移:build.sh 与 AGENTS.md 必须同时登记 'NemoNotch Local Code Signing'(改名要脚本、手册、证书三处一起换)" >&2
+  fail=1
+fi
+
 echo "──────────────────────────────"
 if [ "$fail" = 0 ]; then
   echo "✅ 文档对账通过(退出码 0)"
