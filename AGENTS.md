@@ -38,7 +38,7 @@ NemoNotch/
 4. post-merge 钩子在主检出对 develop 收到 feature/hotfix 合并时自动跑 `./build.sh`(=自动部署);`NEMONOTCH_HOOK_DEBUG=1` 干跑。构建失败响亮但不回滚合并。
 5. `git feat-list` 列 worktree;`git feat-gc` 清已合并进 develop 的本地 feature/hotfix 化石分支(只 `-d` 删已合并,未合并的列出不动;worktree 在用的跳过——**刚建未提交的分支与 develop 同指针,会被 `--merged` 列出**,靠这层过滤保住,实测踩过)。细节 `docs/git-worktree-workflow.md`。
 
-**Judge ≠ author**:`feat-done` 前的 feature diff 要独立评审(code-review subagent 或另一会话,绝不是写改动的那个)。CI 绿 / lint 绿 / 构建成功是**信号不是判决**。
+**Judge ≠ author(已机械化)**:改动触及代码/scripts/hooks/CI 的 feature,合并前必须有 `.reviews/<name>.md` 评审记录且 **Verdict: APPROVED**——由**未参与开发**的会话/子代理填写(`sh scripts/review.sh <name>` 生成模板与审查清单:判别剃刀/证据纪律/Swift 6 并发/最小改动/错误路径/坑总目录对照)。feat-done 的评审门禁检查记录(纯文档 feature 自动跳过;`NEMONOTCH_SKIP_REVIEW=1` 应急)。评审记录随分支提交 = 永久证据链。CI 绿 / lint 绿 / 构建成功是**信号不是判决**。
 
 **钩子(每 clone 跑一次 `sh .githooks/install.sh`;副本会自检——`git feat`/`feat-done`/`feat-gc`/`pre-commit` 启动时经 `.githooks/freshness.sh` 逐字节对比 `.githooks/` 源与已装副本,不一致自动重装并中止本次让你重跑;`freshness.sh` 自身不复制,检查器永不过期。改源不重装 = 静默跑旧代码、排障盯一份没在执行的源文件——这是它存在的理由。在 worktree 里开发 hooks 自身时 `NEMONOTCH_SKIP_FRESHNESS=1` 跳过):**
 - `pre-commit`:拦 main/master 直提;拦主检出直提(唯一例外:带着 `MERGE_HEAD` 收尾冲突合并);对 staged `*.swift` 跑 lint 门禁;对 staged `*.xcstrings` 跑 `scripts/xcstrings.py format` 归一化。
