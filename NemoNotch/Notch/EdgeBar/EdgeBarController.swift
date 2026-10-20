@@ -35,10 +35,17 @@ final class EdgeBarController: NSObject {
     /// Where the bar lives: docked to a screen's left or right edge, or a
     /// floating capsule anywhere — the user's choice fitted to the screen
     /// it is on now.
-    private(set) var placement = EdgeBarPlacement.load(from: .standard)
+    private(set) var placement = EdgeBarController.initialPlacement
     /// The user's choice, as saved: what `placement` is fitted from, never
     /// rewritten by a fit (a fallback screen's must not stick).
-    @ObservationIgnored private var chosenPlacement = EdgeBarPlacement.load(from: .standard)
+    @ObservationIgnored private var chosenPlacement = EdgeBarController.initialPlacement
+
+    /// The saved placement — except in a UI-test run, which always shows the
+    /// default (docked left on the built-in screen) so its screenshots don't
+    /// depend on where this machine's user dragged the bar.
+    private static var initialPlacement: EdgeBarPlacement {
+        UITestMode.isActive ? .standard : EdgeBarPlacement.load(from: .standard)
+    }
     /// Where the bar's top rests in the canvas, and the canvas height — set
     /// by the dock cycle and the drag so view and window never disagree.
     private(set) var restTop: CGFloat = 200
