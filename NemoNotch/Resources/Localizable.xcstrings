@@ -6230,6 +6230,22 @@
           }
         }
       }
+    },
+    "edge_bar.context" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上下文"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

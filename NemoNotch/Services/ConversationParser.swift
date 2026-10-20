@@ -129,8 +129,13 @@ enum ConversationParser: ConversationParserProtocol {
             return
         }
 
+        // A sub-agent's call (older builds wrote them into the main log as
+        // `isSidechain`) and Claude Code's own `<synthetic>` notes are not
+        // the session's model calls: they must not move its context or model.
         if json["type"] as? String == "assistant",
-           let message = json["message"] as? [String: Any] {
+           json["isSidechain"] as? Bool != true,
+           let message = json["message"] as? [String: Any],
+           message["model"] as? String != "<synthetic>" {
             if let usage = message["usage"] as? [String: Any] {
                 let input = usage["input_tokens"] as? Int ?? 0
                 let output = usage["output_tokens"] as? Int ?? 0

@@ -254,8 +254,9 @@ enum GeminiConversationParser: ConversationParserProtocol {
             result.cachedTokens += cached
             result.thoughtTokens += thoughts
 
-            // Current context size for progress bar
-            result.lastContextTokens = input + cached
+            // Current context size for progress bar. `input` is Gemini's
+            // promptTokenCount, which already includes the cached part.
+            result.lastContextTokens = input
         }
         if let model = json["model"] as? String {
             result.common.lastModel = model
@@ -410,7 +411,8 @@ enum GeminiConversationParser: ConversationParserProtocol {
                     toolTokens += tool
                     totalTokens += total
 
-                    lastContextTokens = input + cached
+                    // promptTokenCount already includes the cached part.
+                    lastContextTokens = input
                 }
 
                 if let model = msg.model {

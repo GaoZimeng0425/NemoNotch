@@ -126,14 +126,19 @@ struct AISessionState: Identifiable {
         cacheReadTokens + cacheCreationTokens
     }
 
+    /// The window the latest call ran in (a Claude session seen past its
+    /// listed window ran with 1M).
+    var contextLimit: Int {
+        ModelContextWindow.limit(for: model ?? "", observed: lastContextTokens)
+    }
+
     var contextPercent: Double {
         guard lastContextTokens > 0 else { return 0 }
-        let limit = ModelContextWindow.limit(for: model ?? "")
-        return min(Double(lastContextTokens) / Double(limit), 1.0)
+        return min(Double(lastContextTokens) / Double(contextLimit), 1.0)
     }
 
     var contextLimitDisplay: String {
-        let limit = ModelContextWindow.limit(for: model ?? "")
+        let limit = contextLimit
         if limit >= 1_000_000 {
             return String(format: "%.0fM", Double(limit) / 1_000_000)
         }
