@@ -245,6 +245,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // --flash:在面板/glow 之下铺一层暗色背景窗,让全屏 glow 在截图里清晰可见。
             if UITestMode.flash, let target {
                 uiTestFlashBackdrop = makeUITestFlashBackdrop(on: target)
+                // The backdrop shares the AI status bar's level; re-front the
+                // bar so it shows above it, as on a real desktop.
+                deps.edgeBar.applyDock()
             }
 
             NSApp.activate(ignoringOtherApps: true)
@@ -265,7 +268,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 截图专用:覆盖整屏的暗色渐变背景窗,层级压在 glow / 面板之下。
+    /// 截图专用:覆盖整屏的暗色渐变背景窗,层级压在 glow / 面板之下,
+    /// 也在 AI 状态栏之下(同为 .statusBar,栏随后再置前)——但仍盖住菜单栏(24)。
     private func makeUITestFlashBackdrop(on screen: NSScreen) -> NSWindow {
         let window = NSWindow(
             contentRect: screen.frame,
@@ -275,7 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.isOpaque = true
         window.hasShadow = false
-        window.level = .statusBar + 7 // 低于 glow / 面板(statusBar + 8)
+        window.level = .statusBar // 低于 glow / 面板(statusBar + 8),与 AI 状态栏同层
         window.ignoresMouseEvents = true
         window.collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
         let backdrop = LinearGradient(
