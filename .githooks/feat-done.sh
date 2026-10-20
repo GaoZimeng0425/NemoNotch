@@ -46,6 +46,35 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/doc-audit.sh" ]; then
   fi
 fi
 
+# ── 评审门禁:judge ≠ author 的机械化(2026-10-20)──
+# 判断不能机械化,评审的「发生」可以:改动触及代码/scripts/hooks/CI 的 feature,
+# 合并前必须有 .reviews/<name>.md 且 Verdict: APPROVED——由**未参与开发**的
+# 会话/子代理填写(sh scripts/review.sh <name> 生成模板与审查清单)。
+# 纯文档/格式 feature 自动跳过(触发集与测试门禁同判据扩到工程脚本)。
+# 逃生口:NEMONOTCH_SKIP_REVIEW=1(应急,与 SKIP_TESTS 同款约定)。
+if [ "${NEMONOTCH_SKIP_REVIEW:-0}" = "1" ]; then
+  echo "⏭  NEMONOTCH_SKIP_REVIEW=1 — 跳过评审门禁" >&2
+elif [ -n "$wt" ]; then
+  base=$(git -C "$main_wt" merge-base develop "$branch")
+  # 不接管道,同上——裸命令让 set -e 兜 fail-closed
+  review_triggers=$(git -C "$wt" diff --name-only "$base...HEAD" -- '*.swift' '*.xcodeproj/project.pbxproj' 'scripts/*' '.githooks/*' '.github/*')
+  if [ -z "$review_triggers" ]; then
+    echo "📄 本 feature 无代码/脚本/hooks/CI 改动 — 跳过评审门禁" >&2
+  else
+    note="$wt/.reviews/$name.md"
+    if [ ! -f "$note" ] || ! grep -q '^Verdict: APPROVED' "$note"; then
+      echo "" >&2
+      echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有 APPROVED 的评审记录。" >&2
+      echo "   流程:sh scripts/review.sh $name 生成模板 → 让未参与开发的会话/子代理" >&2
+      echo "         评审 diff 并填 Findings 与 Verdict → git add .reviews/$name.md 提交 → 重试。" >&2
+      echo "   应急跳过:NEMONOTCH_SKIP_REVIEW=1 git feat-done $name" >&2
+      echo "" >&2
+      exit 1
+    fi
+    echo "🧑‍⚖️ 评审门禁:.reviews/$name.md = $(grep '^Verdict:' "$note" | head -1 | sed 's/^Verdict: *//')($(grep '^Reviewer:' "$note" | head -1 | sed 's/^Reviewer: *//'))"
+  fi
+fi
+
 # ── 测试门禁:merge 前在 feature worktree 里跑单元测试 ──
 # 合并=自动部署到 /Applications,测试必须在部署之前。无 Swift/pbxproj 改动跳过
 # (pbxproj 在触发集里:INFOPLIST_KEY_* 等编译面改动不是"纯文档");
