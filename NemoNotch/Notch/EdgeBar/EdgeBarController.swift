@@ -558,7 +558,10 @@ final class EdgeBarController: NSObject {
             placement.top = restTop / canvasHeight
         }
         chosenPlacement = placement
-        chosenPlacement.save(to: .standard)
+        // A UI-test run never writes over the machine user's placement.
+        if !UITestMode.isActive {
+            chosenPlacement.save(to: .standard)
+        }
         applyDock()
         LogService.info(
             "Edge bar placed: \(placement.mode.rawValue) \(placement.side.rawValue), top \(Int(restTop)) / \(Int(canvasHeight))",
