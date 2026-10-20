@@ -75,6 +75,22 @@ struct EdgeBarUsageCardTests {
         #expect(EdgeBarUsageLevel(percent: 90) == .critical)
     }
 
+    @Test func blockReadsTheLevelFromTheUnroundedShare() {
+        let lines = EdgeBarUsage.lines(from: [.claude: ProviderUsageQuota(provider: .claude, status: .valid, tiers: [
+            QuotaTier(window: .fiveHour, utilization: 69.5, resetsAt: nil),
+            QuotaTier(window: .sevenDay, utilization: 89.6, resetsAt: nil),
+        ])])
+        let windows = lines.compactMap { line -> EdgeBarUsageLine.Window? in
+            if case let .window(window) = line {
+                return window
+            }
+            return nil
+        }
+        #expect(windows.map(\.percent) == [70, 90])
+        // Shown rounded, levelled like the card: 69.5 is not amber yet.
+        #expect(windows.map(\.level) == [.normal, .warning])
+    }
+
     // MARK: Detail
 
     @Test func detailKeepsEveryWindowInOrder() {

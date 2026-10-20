@@ -14,6 +14,13 @@ enum EdgeBarUsageLine: Equatable, Identifiable {
         /// 0...100.
         let percent: Int
         let resetsAt: Date?
+        /// The unrounded share used: what the level is read from, as the
+        /// card and the AI tab read it (69.5% shows "70%" yet isn't amber).
+        var utilization: Double?
+
+        var level: EdgeBarUsageLevel {
+            EdgeBarUsageLevel(percent: utilization ?? Double(percent))
+        }
     }
 
     var id: String {
@@ -64,7 +71,8 @@ enum EdgeBarUsage {
                     provider: provider,
                     label: label(tier.window),
                     percent: Int(min(100, max(0, tier.utilization)).rounded()),
-                    resetsAt: tier.resetsAt
+                    resetsAt: tier.resetsAt,
+                    utilization: min(100, max(0, tier.utilization))
                 ))
             }
             return [.header(provider)] + windows
@@ -325,7 +333,7 @@ struct EdgeBarUsageBlock: View {
     private func row(_ window: EdgeBarUsageLine.Window, columns: EdgeBarUsage.Columns, now: Date) -> some View {
         // The usage card's levels (and the AI tab's): amber from 70%, red
         // from 90% — a window reads the same in the block and its card.
-        let level = EdgeBarUsageLevel(percent: Double(window.percent))
+        let level = window.level
         let alert: Color? = level == .normal ? nil : level.color
         return HStack(spacing: EdgeBarUsage.columnGap) {
             Text(verbatim: window.label)

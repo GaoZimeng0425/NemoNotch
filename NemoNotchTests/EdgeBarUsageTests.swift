@@ -17,13 +17,13 @@ struct EdgeBarUsageTests {
             ]),
         ])
         // Provider order is `QuotaProvider`'s (Claude before Codex), percents
-        // rounded and clamped to 0...100.
+        // rounded and clamped to 0...100 (the unrounded share kept, clamped).
         #expect(lines == [
             .header(.claude),
-            .window(.init(provider: .claude, label: "5h", percent: 82, resetsAt: reset)),
-            .window(.init(provider: .claude, label: "7d", percent: 100, resetsAt: nil)),
+            .window(.init(provider: .claude, label: "5h", percent: 82, resetsAt: reset, utilization: 81.6)),
+            .window(.init(provider: .claude, label: "7d", percent: 100, resetsAt: nil, utilization: 100)),
             .header(.codex),
-            .window(.init(provider: .codex, label: "5h", percent: 12, resetsAt: reset)),
+            .window(.init(provider: .codex, label: "5h", percent: 12, resetsAt: reset, utilization: 12.4)),
         ])
     }
 
