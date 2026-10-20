@@ -95,6 +95,7 @@ final class EdgeBarController: NSObject {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var usagePrimed = false
     @ObservationIgnored private var hostNames: [String: String?] = [:]
+    @ObservationIgnored private var lastUsageDetails: [QuotaProvider: EdgeBarUsageDetail] = [:]
     /// Every readable line, before fitting to the window.
     @ObservationIgnored private var rawUsageLines: [EdgeBarUsageLine] = []
 
@@ -180,31 +181,43 @@ final class EdgeBarController: NSObject {
         fitUsage()
         setIfChanged(\.openWidth, measuredOpenWidth(next))
         setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
-        if let selectedRow {
-            if let provider = EdgeBarUsage.provider(ofCardID: selectedRow) {
-                // The block moves with the list's length; its card follows.
-                if let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: next.rows.count) {
-                    setIfChanged(\.cardLevel, level)
-                } else {
-                    deselect()
-                }
-            } else if let slot = next.rows.firstIndex(where: { $0.id == selectedRow }) {
-                setIfChanged(\.cardSlot, slot)
+        revalidateSelection()
+        updateBodyRect()
+        updateBeat()
+    }
+
+    /// The selected card's target still there? Follow it (the usage block
+    /// moves with the list's length; a section may be cut by `fitUsage`),
+    /// else drop the card.
+    private func revalidateSelection() {
+        guard let selectedRow else { return }
+        if let provider = EdgeBarUsage.provider(ofCardID: selectedRow) {
+            if let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count) {
+                setIfChanged(\.cardLevel, level)
             } else {
                 deselect()
             }
+        } else if let slot = content.rows.firstIndex(where: { $0.id == selectedRow }) {
+            setIfChanged(\.cardSlot, slot)
+        } else {
+            deselect()
         }
-        updateBodyRect()
-        updateBeat()
     }
 
     func session(_ id: String) -> AISessionState? {
         store.get(id)
     }
 
-    /// A provider's quota for the usage card (nil once it isn't readable).
+    /// A provider's quota for the usage card. A fetch that failed
+    /// transiently keeps the last reading — as its section in the block does
+    /// (`EdgeBarUsage.lines(previous:)`), so the card never goes blank under
+    /// the cursor.
     func usageDetail(_ provider: QuotaProvider) -> EdgeBarUsageDetail? {
-        usageQuota.quotas[provider].flatMap(EdgeBarUsageDetail.init)
+        if let fresh = usageQuota.quotas[provider].flatMap(EdgeBarUsageDetail.init) {
+            lastUsageDetails[provider] = fresh
+            return fresh
+        }
+        return EdgeBarUsage.section(of: provider, in: usageLines).isEmpty ? nil : lastUsageDetails[provider]
     }
 
     /// The app the session runs in, named for the card's "Open in …".
@@ -276,6 +289,7 @@ final class EdgeBarController: NSObject {
         window.orderFrontRegardless()
         // The room under the bar may have changed: refit the usage block.
         fitUsage()
+        revalidateSelection()
         setIfChanged(\.openWidth, measuredOpenWidth(content))
         updateBodyRect()
     }
@@ -464,6 +478,10 @@ final class EdgeBarController: NSObject {
         if let provider = EdgeBarUsage.provider(ofCardID: id) {
             guard let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count)
             else { return }
+            // A usage card has no buttons: none of a session card's may linger.
+            buttonRects = [:]
+            hoveredButton = nil
+            pressedButton = nil
             cardLevel = level
             selectedRow = id
             return
@@ -705,6 +723,7 @@ final class EdgeBarController: NSObject {
     }
 
     private func perform(_ button: CardButton, sessionId: String) {
+        guard EdgeBarUsage.provider(ofCardID: sessionId) == nil else { return }
         switch button {
         case .allow:
             aiMonitor.respondToPermission(sessionId: sessionId, approved: true)

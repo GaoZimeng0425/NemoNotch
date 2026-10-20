@@ -284,10 +284,25 @@ struct EdgeBarUsageBlock: View {
         .allowsHitTesting(false)
     }
 
-    @ViewBuilder private var ground: some View {
-        if let provider = selected ?? hovered, let range = EdgeBarUsage.sectionRange(of: provider, in: lines) {
+    /// The selected section whole, the hovered one (if another) at half —
+    /// as session rows are grounded.
+    private var ground: some View {
+        ZStack(alignment: side.topAlignment) {
+            if let selected {
+                sectionGround(selected, strength: 1)
+            }
+            if let hovered, hovered != selected {
+                sectionGround(hovered, strength: 0.5)
+            }
+        }
+        .animation(EdgeBarMotion.namesOut, value: selected)
+        .animation(EdgeBarMotion.namesOut, value: hovered)
+    }
+
+    @ViewBuilder private func sectionGround(_ provider: QuotaProvider, strength: Double) -> some View {
+        if let range = EdgeBarUsage.sectionRange(of: provider, in: lines) {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(0.09))
+                .fill(Color.white.opacity(0.09 * strength))
                 .frame(
                     width: max(0, width - 2 * EdgeBarMetrics.groundInset),
                     height: CGFloat(range.count) * EdgeBarUsage.lineHeight + 6
@@ -296,8 +311,6 @@ struct EdgeBarUsageBlock: View {
                     x: side.sign * EdgeBarMetrics.groundInset,
                     y: EdgeBarUsage.inset + CGFloat(range.lowerBound) * EdgeBarUsage.lineHeight - 3
                 )
-                .opacity(selected == provider ? 1 : 0.5)
-                .animation(EdgeBarMotion.namesOut, value: provider)
         }
     }
 

@@ -51,7 +51,6 @@ enum EdgeBarUsagePace: Equatable {
     /// Nothing left until the reset.
     case exhausted
     /// At this pace it runs out this long from now — before its reset.
-    /// before its reset.
     case runsOutIn(TimeInterval)
     /// At this pace it ends its window at this share (it lasts).
     case endsAt(Int)
@@ -63,19 +62,26 @@ enum EdgeBarUsagePace: Equatable {
 
     /// nil when the window's length or reset is unknown, or the reading
     /// doesn't fit its window (a reset already past, a stale reading).
-    static func of(_ window: EdgeBarUsageDetail.Window, now: Date) -> Self? {
+    ///
+    /// The share used is as of `readAt` (the fetch), so the pace is read
+    /// there — elapsed time measured to `now` would count minutes nobody
+    /// could have used anything in — and a run-out is then counted from
+    /// `now`.
+    static func of(_ window: EdgeBarUsageDetail.Window, readAt: Date, now: Date) -> Self? {
         guard let duration = window.duration, let resetsAt = window.resetsAt else { return nil }
-        let remaining = resetsAt.timeIntervalSince(now)
-        guard remaining > 0, remaining <= duration else { return nil }
+        let remainingAtRead = resetsAt.timeIntervalSince(readAt)
+        guard resetsAt > now, remainingAtRead <= duration else { return nil }
         if window.percent >= 100 {
             return .exhausted
         }
-        let elapsed = duration - remaining
+        let elapsed = duration - remainingAtRead
         guard elapsed >= max(duration * minimumElapsedShare, minimumElapsed) else { return .early }
         let rate = window.percent / elapsed
-        let projected = window.percent + rate * remaining
-        guard projected >= 100 else { return .endsAt(Int(projected.rounded())) }
-        return .runsOutIn((100 - window.percent) / rate)
+        let projected = window.percent + rate * remainingAtRead
+        // Short of 100 it lasts: never round a lasting window up to "100%".
+        guard projected >= 100 else { return .endsAt(min(99, Int(projected.rounded()))) }
+        let runOut = (100 - window.percent) / rate - now.timeIntervalSince(readAt)
+        return .runsOutIn(max(0, runOut))
     }
 }
 
@@ -218,7 +224,7 @@ struct EdgeBarUsageCard: View {
                     .foregroundStyle(Self.secondary)
                     .lineLimit(1)
             }
-            if let pace = EdgeBarUsagePace.of(window, now: now) {
+            if let pace = EdgeBarUsagePace.of(window, readAt: detail.fetchedAt, now: now) {
                 Text(verbatim: EdgeBarUsageCardText.pace(pace, now: now))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Self.paceColor(pace))

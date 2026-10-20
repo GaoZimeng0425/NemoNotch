@@ -14,37 +14,56 @@ struct EdgeBarUsageCardTests {
 
     @Test func lastsTheWindowAtItsPace() {
         // 5h window, 3h left (2h elapsed), 20% used → 50% by the reset.
-        let pace = EdgeBarUsagePace.of(window(.fiveHour, used: 20, resetsIn: 3 * 3600), now: now)
+        let pace = EdgeBarUsagePace.of(window(.fiveHour, used: 20, resetsIn: 3 * 3600), readAt: now, now: now)
         #expect(pace == .endsAt(50))
     }
 
     @Test func runsOutBeforeTheReset() {
         // 5h window, 3h left (2h elapsed), 80% used → 40%/h, 20% left → 30 min.
-        let pace = EdgeBarUsagePace.of(window(.fiveHour, used: 80, resetsIn: 3 * 3600), now: now)
+        let pace = EdgeBarUsagePace.of(window(.fiveHour, used: 80, resetsIn: 3 * 3600), readAt: now, now: now)
         #expect(pace == .runsOutIn(30 * 60))
     }
 
     @Test func tooEarlyToTell() {
         // 7d window, 10 min in: one burst must not project a run-out.
-        let pace = EdgeBarUsagePace.of(window(.sevenDay, used: 9, resetsIn: 7 * 86400 - 600), now: now)
+        let pace = EdgeBarUsagePace.of(window(.sevenDay, used: 9, resetsIn: 7 * 86400 - 600), readAt: now, now: now)
         #expect(pace == .early)
     }
 
     @Test func usedUp() {
-        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 100, resetsIn: 3600), now: now) == .exhausted)
+        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 100, resetsIn: 3600), readAt: now, now: now) == .exhausted)
     }
 
     @Test func noPaceWithoutALengthOrAReset() {
-        #expect(EdgeBarUsagePace.of(window(.gemini(label: "Pro"), used: 50, resetsIn: 3600), now: now) == nil)
-        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 50, resetsIn: nil), now: now) == nil)
+        #expect(EdgeBarUsagePace
+            .of(window(.gemini(label: "Pro"), used: 50, resetsIn: 3600), readAt: now, now: now) == nil)
+        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 50, resetsIn: nil), readAt: now, now: now) == nil)
         // A reset already past, or further off than the window is long.
-        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 50, resetsIn: -60), now: now) == nil)
-        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 50, resetsIn: 6 * 3600), now: now) == nil)
+        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 50, resetsIn: -60), readAt: now, now: now) == nil)
+        #expect(EdgeBarUsagePace.of(window(.fiveHour, used: 50, resetsIn: 6 * 3600), readAt: now, now: now) == nil)
+    }
+
+    @Test func paceIsReadAtTheFetchNotNow() {
+        // Read 2h into a 5h window at 80%; looked at 20 min later. The rate
+        // is the fetch's (40%/h → 30 min from the read), counted from now.
+        let w = window(.fiveHour, used: 80, resetsIn: 3 * 3600)
+        let pace = EdgeBarUsagePace.of(w, readAt: now, now: now.addingTimeInterval(20 * 60))
+        #expect(pace == .runsOutIn(10 * 60))
+    }
+
+    @Test func aLastingWindowNeverReads100() {
+        // 2h of 5h elapsed at 39.9% → 99.75% by the reset: lasts, shows 99.
+        let pace = EdgeBarUsagePace.of(window(.fiveHour, used: 39.9, resetsIn: 3 * 3600), readAt: now, now: now)
+        #expect(pace == .endsAt(99))
     }
 
     @Test func rollingWindowsUseTheirLength() {
         // Codex 300-minute window behaves like the 5h one.
-        let pace = EdgeBarUsagePace.of(window(.rolling(minutes: 300), used: 20, resetsIn: 3 * 3600), now: now)
+        let pace = EdgeBarUsagePace.of(
+            window(.rolling(minutes: 300), used: 20, resetsIn: 3 * 3600),
+            readAt: now,
+            now: now
+        )
         #expect(pace == .endsAt(50))
     }
 
