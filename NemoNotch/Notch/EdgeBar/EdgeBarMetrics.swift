@@ -301,7 +301,6 @@ enum EdgeBarMotion {
                 .animation(cardOut)
         )
     }
-
 }
 
 /// The side, for layout: everything anchored on the left in the docked-left

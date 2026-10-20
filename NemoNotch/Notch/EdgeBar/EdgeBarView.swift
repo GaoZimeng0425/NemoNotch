@@ -14,9 +14,10 @@ struct EdgeBarView: View {
         ZStack(alignment: bar.side.topAlignment) {
             Group {
                 // The form changes only under a drag, which moves the window
-                // in the same frame: swap at once. (A fade-in showed a blank
-                // frame on docking; an identity removal kept the old form —
-                // the opened bar — riding along with the window.)
+                // in the same frame: swap at once. (The drag's no-animation
+                // transaction is what makes it instant — the opened bar used
+                // to ride along because closing it, outside any transaction,
+                // let the Group's `isOpen` animation hold its removal.)
                 if bar.isFloating {
                     EdgeBarFloatingBody()
                         .transition(.identity)

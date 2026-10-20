@@ -35,7 +35,7 @@ struct SourceLogoShapeTests {
     private let rect = CGRect(x: 10, y: 20, width: 100, height: 100)
 
     @Test func opencodeFrameIsHollowAndTheBlockFillsItsLowerHalf() {
-        // 512 viewBox → fit by height: x' = (x − 128)·0.3125 + 10 + 10, y' = (y − 96)·0.3125 + 20.
+        /// 512 viewBox → fit by height: x' = (x − 128)·0.3125 + 10 + 10, y' = (y − 96)·0.3125 + 20.
         func at(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
             CGPoint(x: (x - 128) * 0.3125 + 20, y: (y - 96) * 0.3125 + 20)
         }
@@ -52,7 +52,7 @@ struct SourceLogoShapeTests {
     }
 
     @Test func zcodeZHasItsBarsAndAnOpenMiddle() {
-        // 30 viewBox, uniform: x' = x·(100/30) + 10, y' = y·(100/30) + 20.
+        /// 30 viewBox, uniform: x' = x·(100/30) + 10, y' = y·(100/30) + 20.
         func at(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
             CGPoint(x: x * 100 / 30 + 10, y: y * 100 / 30 + 20)
         }

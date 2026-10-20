@@ -46,6 +46,7 @@ final class EdgeBarController: NSObject {
     private static var initialPlacement: EdgeBarPlacement {
         UITestMode.isActive ? .standard : EdgeBarPlacement.load(from: .standard)
     }
+
     /// Where the bar's top rests in the canvas, and the canvas height — set
     /// by the dock cycle and the drag so view and window never disagree.
     private(set) var restTop: CGFloat = 200
@@ -477,8 +478,7 @@ final class EdgeBarController: NSObject {
     /// Pulled this far off its edge, a docked bar comes away as a capsule.
     static let tearOff: CGFloat = 48
 
-    /// Observed: while it holds, the card leaves without its transition.
-    private(set) var isDragging = false
+    @ObservationIgnored private var isDragging = false
 
     /// A drag moves the window with the cursor, every event. Anything the
     /// drag changes in the view must land in that same frame — no fades, no
@@ -488,6 +488,9 @@ final class EdgeBarController: NSObject {
     /// and a 0.16s fade — screen-recorded 2026-10-20).
     private static var instant: Transaction {
         var transaction = Transaction(animation: nil)
+        // The line that matters: `animation: nil` alone leaves the views'
+        // `.animation(_:value:)` and a transition's attached `.animation(_:)`
+        // (the card's fade, the names') running.
         transaction.disablesAnimations = true
         return transaction
     }

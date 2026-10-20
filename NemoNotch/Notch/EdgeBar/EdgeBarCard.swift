@@ -24,9 +24,10 @@ struct EdgeBarCardLayer: View {
                         bar.cardFrameChanged(rect)
                     }
                     .onDisappear { bar.cardFrameChanged(nil) }
-                    // A drag closes the bar while the window moves: the card
-                    // goes at once rather than fade out over the capsule.
-                    .transition(bar.isDragging ? .identity : EdgeBarMotion.cardTransition(bar.side))
+                    // A drag closes the bar inside a no-animation transaction
+                    // (`EdgeBarController.instant`), which suppresses this
+                    // transition's own fade — the card goes at once.
+                    .transition(EdgeBarMotion.cardTransition(bar.side))
             }
         }
         // Beside the open body, on its open side.
