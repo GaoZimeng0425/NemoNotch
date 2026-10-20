@@ -77,4 +77,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/NemoNotch-${{ matrix.arch }}.dmg
-          generate_release_notes: true
+          # One leg only: both matrix legs generating notes appended them twice
+          # (every release through v0.9.0 shows the changelog duplicated).
+          generate_release_notes: ${{ matrix.arch == 'arm64' }}
