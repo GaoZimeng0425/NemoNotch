@@ -21,8 +21,7 @@ enum CrashRestartPolicy {
         nowUnix: Int64,
         window: TimeInterval = restartWindow
     ) -> Int {
-        guard let lastRestartUnix else { return 1 }
-        guard nowUnix - lastRestartUnix < Int64(window) else { return 1 }
+        guard let lastRestartUnix, nowUnix - lastRestartUnix < Int64(window) else { return 1 }
         return previousCount + 1
     }
 

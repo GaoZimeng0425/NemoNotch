@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 final class QuickStartWindow: NSPanel {
     init() {
@@ -35,8 +36,6 @@ final class QuickStartWindow: NSPanel {
         false
     }
 }
-
-import SwiftUI
 
 struct QuickStartFormView: View {
     @Environment(AppSettings.self) var appSettings

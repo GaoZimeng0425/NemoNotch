@@ -42,7 +42,6 @@ struct VinylDiscView: View {
             .truncatingRemainder(dividingBy: 360)
     }
 
-    @ViewBuilder
     private var disc: some View {
         ZStack {
             if showDisc {
@@ -53,7 +52,7 @@ struct VinylDiscView: View {
                         Circle()
                             .stroke(NotchTheme.textTertiary.opacity(0.2), lineWidth: size * 0.05)
                     )
-                ForEach(0..<3) { i in
+                ForEach(0 ..< 3) { i in
                     Circle()
                         .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
                         .frame(width: size * (0.85 - CGFloat(i) * 0.15), height: size * (0.85 - CGFloat(i) * 0.15))
@@ -117,7 +116,7 @@ struct AudioEqualizerView: View {
     var body: some View {
         let _ = PerfProbe.hit("AudioEqualizerView.body")
         HStack(spacing: 1.5) {
-            ForEach(0..<barCount, id: \.self) { i in
+            ForEach(0 ..< barCount, id: \.self) { i in
                 Capsule()
                     .fill(color)
                     .frame(width: barWidth, height: isActive ? (i < bars.count ? bars[i] : 2) : 2)
@@ -127,7 +126,11 @@ struct AudioEqualizerView: View {
         .onChange(of: isActive) { _, playing in
             playing ? startAnimation() : stopAnimation()
         }
-        .onAppear { if isActive { startAnimation() } }
+        .onAppear {
+            if isActive {
+                startAnimation()
+            }
+        }
         .onDisappear { stopAnimation() }
     }
 
@@ -138,10 +141,10 @@ struct AudioEqualizerView: View {
                 // 每 tick 起一段 0.25–0.5s 的 withAnimation：tick 频率不高，
                 // 但插值期间是满帧重绘，实际成本看 AudioEqualizerView.body 的频率。
                 PerfProbe.hit("AudioEqualizerView.animTick")
-                withAnimation(.easeInOut(duration: Double.random(in: 0.25...0.5))) {
-                    bars = (0..<barCount).map { _ in .random(in: 2...maxHeight) }
+                withAnimation(.easeInOut(duration: Double.random(in: 0.25 ... 0.5))) {
+                    bars = (0 ..< barCount).map { _ in .random(in: 2 ... maxHeight) }
                 }
-                try? await Task.sleep(for: .milliseconds(Int.random(in: 250...500)))
+                try? await Task.sleep(for: .milliseconds(Int.random(in: 250 ... 500)))
             }
         }
     }

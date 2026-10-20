@@ -27,7 +27,7 @@ final class NowPlayingCLI: @unchecked Sendable {
     private var pendingCompletion: (([String: Any]?) -> Void)?
     private var timeoutItem: DispatchWorkItem?
 
-    // Fallback helpers (one-shot)
+    /// Fallback helpers (one-shot)
     private let fallbackHelpers: [HelperType]
 
     private enum HelperType {
@@ -50,7 +50,9 @@ final class NowPlayingCLI: @unchecked Sendable {
         if let path = Self.findExternal() {
             helpers.append(.external(path))
         }
-        if helpers.isEmpty { helpers = [.unavailable] }
+        if helpers.isEmpty {
+            helpers = [.unavailable]
+        }
         fallbackHelpers = helpers
     }
 
@@ -82,13 +84,15 @@ final class NowPlayingCLI: @unchecked Sendable {
 
     @discardableResult
     private func ensureDaemon() -> Bool {
-        if let p = daemonProcess, p.isRunning { return true }
+        if let p = daemonProcess, p.isRunning {
+            return true
+        }
         return startDaemon()
     }
 
     private func startDaemon() -> Bool {
         guard let helper = fallbackHelpers.first,
-              case .bundled(let script, let dylib) = helper else {
+              case let .bundled(script, dylib) = helper else {
             return false
         }
 
@@ -129,7 +133,7 @@ final class NowPlayingCLI: @unchecked Sendable {
         daemonStdout?.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard !data.isEmpty, let self else { return }
-            self.queue.async {
+            queue.async {
                 self.handleDaemonData(data)
             }
         }
@@ -170,12 +174,7 @@ final class NowPlayingCLI: @unchecked Sendable {
         pendingCompletion = completion
         responseBuffer = Data()
 
-        guard let data = "\n".data(using: .utf8) else {
-            finishPending(nil)
-            return
-        }
-
-        guard let stdin = daemonStdin, let p = daemonProcess, p.isRunning else {
+        guard let data = "\n".data(using: .utf8), let stdin = daemonStdin, let p = daemonProcess, p.isRunning else {
             finishPending(nil)
             return
         }
@@ -183,7 +182,7 @@ final class NowPlayingCLI: @unchecked Sendable {
 
         let item = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.queue.async {
+            queue.async {
                 self.handleDaemonTimeout()
             }
         }
@@ -243,12 +242,14 @@ final class NowPlayingCLI: @unchecked Sendable {
         }
 
         switch helper {
-        case .bundled(let script, let dylib):
+        case let .bundled(script, dylib):
             guard let data = runProcess(
                 executable: "/usr/bin/perl",
                 arguments: [script, dylib, "adapter_get_env"],
                 sourceTag: "cli/perl"
-            ) else { next(); return }
+            ) else { next()
+                return
+            }
 
             if let jsonObject = try? JSONSerialization.jsonObject(with: data),
                let info = Self.convertToMediaInfo(jsonObject) {
@@ -257,13 +258,24 @@ final class NowPlayingCLI: @unchecked Sendable {
                 next()
             }
 
-        case .external(let path):
+        case let .external(path):
             guard let data = runProcess(
                 executable: path,
-                arguments: ["get", "--json", "title", "artist", "album",
-                            "duration", "elapsedTime", "playbackRate", "artworkData"],
+                arguments: [
+                    "get",
+                    "--json",
+                    "title",
+                    "artist",
+                    "album",
+                    "duration",
+                    "elapsedTime",
+                    "playbackRate",
+                    "artworkData",
+                ],
                 sourceTag: "cli/external"
-            ) else { next(); return }
+            ) else { next()
+                return
+            }
 
             if let jsonObject = try? JSONSerialization.jsonObject(with: data),
                let info = Self.convertToMediaInfo(jsonObject) {
@@ -314,7 +326,10 @@ final class NowPlayingCLI: @unchecked Sendable {
         if process.terminationStatus != 0 {
             if let stderrText = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
                !stderrText.isEmpty {
-                LogService.error("\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
+                LogService.error(
+                    "\(sourceTag) exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))",
+                    category: "NowPlayingCLI"
+                )
             } else {
                 LogService.error("\(sourceTag) exit=\(process.terminationStatus)", category: "NowPlayingCLI")
             }
@@ -361,7 +376,10 @@ final class NowPlayingCLI: @unchecked Sendable {
         do {
             try process.run()
         } catch {
-            LogService.error("bundled extract failed to run gunzip: \(error.localizedDescription)", category: "NowPlayingCLI")
+            LogService.error(
+                "bundled extract failed to run gunzip: \(error.localizedDescription)",
+                category: "NowPlayingCLI"
+            )
             try? outputHandle.close()
             try? FileManager.default.removeItem(atPath: tempDest)
             return nil
@@ -385,7 +403,10 @@ final class NowPlayingCLI: @unchecked Sendable {
         guard process.terminationStatus == 0 else {
             if let stderrText = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8),
                !stderrText.isEmpty {
-                LogService.error("bundled extract exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))", category: "NowPlayingCLI")
+                LogService.error(
+                    "bundled extract exit=\(process.terminationStatus), stderr=\(stderrText.trimmingCharacters(in: .whitespacesAndNewlines))",
+                    category: "NowPlayingCLI"
+                )
             } else {
                 LogService.error("bundled extract exit=\(process.terminationStatus)", category: "NowPlayingCLI")
             }
@@ -416,8 +437,10 @@ final class NowPlayingCLI: @unchecked Sendable {
     // MARK: - Fallback search
 
     private static func findSystemDylib() -> String? {
-        for path in ["/opt/homebrew/lib/nowplaying-cli/MediaRemoteMini.dylib",
-                     "/usr/local/lib/nowplaying-cli/MediaRemoteMini.dylib"] {
+        for path in [
+            "/opt/homebrew/lib/nowplaying-cli/MediaRemoteMini.dylib",
+            "/usr/local/lib/nowplaying-cli/MediaRemoteMini.dylib",
+        ] {
             if FileManager.default.fileExists(atPath: path) {
                 return path
             }
@@ -489,7 +512,7 @@ final class NowPlayingCLI: @unchecked Sendable {
 
         let title = mediaInfo["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
         let artist = mediaInfo["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
-        if title.isEmpty && artist.isEmpty {
+        if title.isEmpty, artist.isEmpty {
             return nil
         }
 

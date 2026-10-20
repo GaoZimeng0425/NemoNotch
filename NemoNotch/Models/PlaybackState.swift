@@ -10,5 +10,7 @@ struct PlaybackState: Equatable {
     var appBundleIdentifier: String?
     var appName: String?
 
-    var isEmpty: Bool { title.isEmpty }
+    var isEmpty: Bool {
+        title.isEmpty
+    }
 }

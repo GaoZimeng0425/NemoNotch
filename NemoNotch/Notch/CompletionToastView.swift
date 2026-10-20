@@ -3,9 +3,13 @@ import SwiftUI
 /// Formats a completion duration: <60s → "42s", <1h → "2m 14s", else "1h 5m".
 private func formatDuration(_ seconds: TimeInterval) -> String {
     let s = Int(seconds.rounded())
-    if s < 60 { return "\(s)s" }
+    if s < 60 {
+        return "\(s)s"
+    }
     let (m, rs) = (s / 60, s % 60)
-    if m < 60 { return "\(m)m \(rs)s" }
+    if m < 60 {
+        return "\(m)m \(rs)s"
+    }
     let (h, rm) = (m / 60, m % 60)
     return "\(h)h \(rm)m"
 }
@@ -28,7 +32,6 @@ struct CompletionToastView: View {
     }
 
     /// Rich two-line layout: title + tool·model·tokens·duration.
-    @ViewBuilder
     private func singleItemBody(_ item: CompletionItem) -> some View {
         HStack(spacing: 10) {
             sourceIcon(item.source)
@@ -69,7 +72,6 @@ struct CompletionToastView: View {
     }
 
     /// Multi-item layout: source logo + names joined by "·" + count chip (unchanged).
-    @ViewBuilder
     private var multiItemBody: some View {
         HStack(spacing: 10) {
             if let source = items.first?.source {
@@ -107,10 +109,18 @@ struct CompletionToastView: View {
     /// skipping nil fields. Returns nil when there is no detail at all.
     private func detailLine(for item: CompletionItem) -> String? {
         var parts: [String] = []
-        if let tool = item.tool, !tool.isEmpty { parts.append(tool) }
-        if let model = item.model { parts.append(model) }
-        if let tokens = item.tokenDisplay { parts.append(tokens) }
-        if let duration = item.duration { parts.append(formatDuration(duration)) }
+        if let tool = item.tool, !tool.isEmpty {
+            parts.append(tool)
+        }
+        if let model = item.model {
+            parts.append(model)
+        }
+        if let tokens = item.tokenDisplay {
+            parts.append(tokens)
+        }
+        if let duration = item.duration {
+            parts.append(formatDuration(duration))
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

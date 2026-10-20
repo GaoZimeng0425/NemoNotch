@@ -23,7 +23,9 @@ enum SessionPhase: Equatable {
     }
 
     var isWaitingForApproval: Bool {
-        if case .waitingForApproval = self { return true }
+        if case .waitingForApproval = self {
+            return true
+        }
         return false
     }
 
@@ -39,7 +41,9 @@ enum SessionPhase: Equatable {
     }
 
     var approvalToolName: String? {
-        if case .waitingForApproval(let ctx) = self { return ctx.toolName }
+        if case let .waitingForApproval(ctx) = self {
+            return ctx.toolName
+        }
         return nil
     }
 
@@ -56,7 +60,9 @@ enum SessionPhase: Equatable {
 
     func canTransition(to next: SessionPhase) -> Bool {
         // Treat repeated same-kind updates as idempotent (e.g. processing -> processing).
-        if kind == next.kind { return true }
+        if kind == next.kind {
+            return true
+        }
 
         switch (self, next) {
         case (.idle, .processing), (.idle, .ended), (.idle, .waitingForInput), (.idle, .waitingForApproval):

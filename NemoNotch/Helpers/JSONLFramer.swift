@@ -51,7 +51,7 @@ enum JSONLFramer {
 
         for i in data.indices where data[i] == newline {
             if i > lineStart {
-                lines.append(data.subdata(in: lineStart..<i))
+                lines.append(data.subdata(in: lineStart ..< i))
             }
             lineStart = data.index(after: i)
             completeEnd = lineStart
@@ -65,7 +65,7 @@ enum JSONLFramer {
             )
         }
 
-        let tail = data.subdata(in: lineStart..<data.endIndex)
+        let tail = data.subdata(in: lineStart ..< data.endIndex)
 
         if tailEndsLikeObject(tail),
            let parsed = try? JSONSerialization.jsonObject(with: tail),

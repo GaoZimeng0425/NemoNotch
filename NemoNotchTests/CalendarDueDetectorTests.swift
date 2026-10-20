@@ -1,6 +1,6 @@
-@testable import NemoNotch
 import CoreGraphics
 import Foundation
+@testable import NemoNotch
 import Testing
 
 @Suite("CalendarDueDetector")

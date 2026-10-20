@@ -26,7 +26,9 @@ final class LauncherService {
 
     func icon(forBundleID bundleID: String) -> NSImage? {
         let key = bundleID as NSString
-        if let cached = iconCache.object(forKey: key) { return cached }
+        if let cached = iconCache.object(forKey: key) {
+            return cached
+        }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         iconCache.setObject(icon, forKey: key)

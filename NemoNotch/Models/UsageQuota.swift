@@ -180,8 +180,11 @@ enum UsageCredentialParser {
         let access = (root["access_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         let refresh = (root["refresh_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         var expiry: Date?
-        if let ms = root["expiry_date"] as? Double { expiry = Date(timeIntervalSince1970: ms / 1000) }
-        else if let ms = root["expiry_date"] as? Int { expiry = Date(timeIntervalSince1970: Double(ms) / 1000) }
+        if let ms = root["expiry_date"] as? Double {
+            expiry = Date(timeIntervalSince1970: ms / 1000)
+        } else if let ms = root["expiry_date"] as? Int {
+            expiry = Date(timeIntervalSince1970: Double(ms) / 1000)
+        }
         guard access != nil || refresh != nil else {
             return GeminiOAuthCredential(
                 accessToken: nil, refreshToken: nil, expiryDate: nil,
@@ -195,9 +198,13 @@ enum UsageCredentialParser {
 
     private static func isExpired(_ value: Any, now: Date) -> Bool {
         let raw: Double
-        if let d = value as? Double { raw = d }
-        else if let i = value as? Int { raw = Double(i) }
-        else { return false }
+        if let d = value as? Double {
+            raw = d
+        } else if let i = value as? Int {
+            raw = Double(i)
+        } else {
+            return false
+        }
         // Claude stores milliseconds (13 digits); normalize to seconds.
         let seconds = raw > 1_000_000_000_000 ? raw / 1000 : raw
         return Date(timeIntervalSince1970: seconds) < now
@@ -227,7 +234,9 @@ enum UsageQuotaParser {
         for bucket in buckets {
             guard let model = bucket.modelId, let fraction = bucket.remainingFraction else { continue }
             if let existing = byModel[model] {
-                if fraction < existing.fraction { byModel[model] = (fraction, bucket.resetTime) }
+                if fraction < existing.fraction {
+                    byModel[model] = (fraction, bucket.resetTime)
+                }
             } else {
                 byModel[model] = (fraction, bucket.resetTime)
             }
@@ -260,11 +269,18 @@ enum UsageQuotaParser {
             .first { $0.contains(".") && $0.allSatisfy { $0.isNumber || $0 == "." } }
             .map(String.init)
         let family: String
-        if lower.contains("flash-lite") { family = "Flash Lite" }
-        else if lower.contains("flash") { family = "Flash" }
-        else if lower.contains("pro") { family = "Pro" }
-        else { return modelId.replacingOccurrences(of: "gemini-", with: "") }
-        if let version { return "\(version) \(family)" }
+        if lower.contains("flash-lite") {
+            family = "Flash Lite"
+        } else if lower.contains("flash") {
+            family = "Flash"
+        } else if lower.contains("pro") {
+            family = "Pro"
+        } else {
+            return modelId.replacingOccurrences(of: "gemini-", with: "")
+        }
+        if let version {
+            return "\(version) \(family)"
+        }
         return family
     }
 
@@ -294,7 +310,9 @@ enum UsageQuotaParser {
     static func parseResetDate(_ value: String) -> Date? {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: value) { return date }
+        if let date = fractional.date(from: value) {
+            return date
+        }
         if let truncated = truncateFractionalSeconds(value), let date = fractional.date(from: truncated) {
             return date
         }
@@ -350,8 +368,12 @@ enum UsageQuotaFormatter {
     /// Short label for a rolling window of `minutes`:
     /// 300→"5h", 10080→"7d", 43200→"30d", else "Nd"/"Nh"/"Nm".
     static func windowLabel(minutes: Int) -> String {
-        if minutes % 1440 == 0 { return "\(minutes / 1440)d" }
-        if minutes % 60 == 0 { return "\(minutes / 60)h" }
+        if minutes % 1440 == 0 {
+            return "\(minutes / 1440)d"
+        }
+        if minutes % 60 == 0 {
+            return "\(minutes / 60)h"
+        }
         return "\(minutes)m"
     }
 }

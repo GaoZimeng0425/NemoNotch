@@ -56,9 +56,7 @@ enum PMSet {
         guard
             let value = IORegistryEntryCreateCFProperty(
                 root, "SleepDisabled" as CFString, kCFAllocatorDefault, 0
-            )?.takeRetainedValue()
-        else { return nil }
-        guard CFGetTypeID(value) == CFBooleanGetTypeID() else { return nil }
+            )?.takeRetainedValue(), CFGetTypeID(value) == CFBooleanGetTypeID() else { return nil }
         // swiftlint:disable:next force_cast
         return CFBooleanGetValue((value as! CFBoolean))
     }

@@ -112,7 +112,10 @@ struct NotchChinBar: View {
         let isHovered = hoveredTab == tab
         return Button {
             bounceTriggers[tab, default: 0] += 1
-            withAnimation(.spring(duration: NotchConstants.tabSwitchSpringDuration, bounce: NotchConstants.tabSwitchSpringBounce)) {
+            withAnimation(.spring(
+                duration: NotchConstants.tabSwitchSpringDuration,
+                bounce: NotchConstants.tabSwitchSpringBounce
+            )) {
                 onSelect(tab)
             }
         } label: {

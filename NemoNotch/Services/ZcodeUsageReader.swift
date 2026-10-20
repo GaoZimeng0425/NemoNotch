@@ -32,7 +32,6 @@ struct ZcodeSessionUsage: Equatable {
 }
 
 enum ZcodeUsageReader {
-
     static var defaultDatabaseURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".zcode/cli/db/db.sqlite")
@@ -164,7 +163,6 @@ enum ZcodeUsageReader {
 /// via the `ZCODE_CREDENTIAL_SECRET` env) — no Keychain involved, so this app
 /// can decrypt it exactly like the CLI does.
 enum ZcodeCredentials {
-
     static var credentialsURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".zcode/v2/credentials.json")
@@ -200,7 +198,7 @@ enum ZcodeCredentials {
         let key = SHA256.hash(data: Data(secret.utf8))
         do {
             let box = try AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: iv), ciphertext: ciphertext, tag: tag)
-            return String(data: try AES.GCM.open(box, using: SymmetricKey(data: key)), encoding: .utf8)
+            return try String(data: AES.GCM.open(box, using: SymmetricKey(data: key)), encoding: .utf8)
         } catch {
             return nil
         }
@@ -223,7 +221,6 @@ enum ZcodeCredentials {
 /// `TOKENS_LIMIT` (unit 6) → weekly tokens. `TIME_LIMIT` (unit 5, number 1)
 /// is a prompt-count limit — not rendered.
 enum ZcodeQuotaParser {
-
     struct Limit: Decodable {
         let type: String
         let unit: Int?
@@ -269,7 +266,7 @@ enum ZcodeUsageFormatter {
         switch double {
         case 1_000_000_000...: return String(format: "%.1fB", double / 1_000_000_000)
         case 1_000_000...: return String(format: "%.1fM", double / 1_000_000)
-        case 1_000...: return String(format: "%.0fK", double / 1_000)
+        case 1000...: return String(format: "%.0fK", double / 1000)
         default: return "\(value)"
         }
     }

@@ -30,7 +30,9 @@ struct HotkeyDismissState: Equatable {
 
     mutating func observe(mouseInside: Bool) -> MoveOutcome {
         if mouseInside {
-            if mouseHasEnteredContent { return .ignore }
+            if mouseHasEnteredContent {
+                return .ignore
+            }
             mouseHasEnteredContent = true
             return .markedEntered
         }

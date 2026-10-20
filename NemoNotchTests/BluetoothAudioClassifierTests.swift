@@ -1,5 +1,5 @@
-@testable import NemoNotch
 import IOBluetooth
+@testable import NemoNotch
 import Testing
 
 @Suite("BluetoothAudioClassifier")

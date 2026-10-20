@@ -48,9 +48,9 @@ struct ModelContextWindowTests {
     }
 
     @Test("parse extracts context_length keyed by normalized id")
-    func parseCatalog() {
+    func parseCatalog() throws {
         // Minimal OpenRouter /api/v1/models-shaped payload.
-        let payload = """
+        let payload = try #require("""
         {
           "data": [
             { "id": "z-ai/glm-5.2", "context_length": 1048576 },
@@ -60,7 +60,7 @@ struct ModelContextWindowTests {
             { "id": "missing-field/model" }
           ]
         }
-        """.data(using: .utf8)!
+        """.data(using: .utf8))
 
         let parsed = ModelContextWindow.parse(data: payload)
 

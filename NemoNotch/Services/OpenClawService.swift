@@ -240,7 +240,9 @@ final class OpenClawService {
         _ = fcntl(sock, F_SETFL, flags | O_NONBLOCK)
 
         let rc = Darwin.connect(sock, addr.pointee.ai_addr, addr.pointee.ai_addrlen)
-        if rc == 0 { return true }
+        if rc == 0 {
+            return true
+        }
         guard errno == EINPROGRESS else { return false }
 
         var pfd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
@@ -275,8 +277,7 @@ final class OpenClawService {
     }
 
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
-        guard case let .string(text) = message else { return }
-        guard let data = text.data(using: .utf8),
+        guard case let .string(text) = message, let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
 
         let type = json["type"] as? String ?? ""
@@ -568,9 +569,13 @@ final class OpenClawService {
             case "speaking", "chat": .speaking
             case "error": .error
             default:
-                if stream == "tool" { .toolCalling }
-                else if stream == "chat" || stream == "message" { .speaking }
-                else { .working }
+                if stream == "tool" {
+                    .toolCalling
+                } else if stream == "chat" || stream == "message" {
+                    .speaking
+                } else {
+                    .working
+                }
             }
         }
 
@@ -587,9 +592,15 @@ final class OpenClawService {
         agents[agentId]?.state = state
         agents[agentId]?.name = displayName
         agents[agentId]?.emoji = emoji
-        if let tool { agents[agentId]?.currentTool = tool }
-        if let message { agents[agentId]?.lastMessage = message }
-        if let workspace { agents[agentId]?.workspace = workspace }
+        if let tool {
+            agents[agentId]?.currentTool = tool
+        }
+        if let message {
+            agents[agentId]?.lastMessage = message
+        }
+        if let workspace {
+            agents[agentId]?.workspace = workspace
+        }
         agents[agentId]?.lastEventTime = Date()
 
         if state != prevState {

@@ -207,25 +207,33 @@ final class CompletionFlashService {
                 self.flashLevel = 1
             }
             try? await Task.sleep(for: .seconds(NotchConstants.completionFlashRise))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
             withAnimation(.easeInOut(duration: NotchConstants.completionFlashDip)) {
                 self.flashLevel = NotchConstants.completionFlashDipLevel
             }
             try? await Task.sleep(for: .seconds(NotchConstants.completionFlashDip))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
             withAnimation(.easeInOut(duration: NotchConstants.completionFlashRise)) {
                 self.flashLevel = 1
             }
             try? await Task.sleep(for: .seconds(NotchConstants.completionFlashRise))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
             withAnimation(.easeInOut(duration: NotchConstants.completionFlashFall)) {
                 self.flashLevel = 0
             }
             // Wait out the fade before letting the window leave the screen.
             try? await Task.sleep(for: .seconds(NotchConstants.completionFlashFall))
-            if Task.isCancelled { return }
-            self.flashHolding = false
-            self.syncOverlayVisibility()
+            if Task.isCancelled {
+                return
+            }
+            flashHolding = false
+            syncOverlayVisibility()
         }
     }
 
@@ -245,9 +253,11 @@ final class CompletionFlashService {
                 self.toastVisible = false
             }
             try? await Task.sleep(for: .seconds(NotchConstants.hudDismissDuration))
-            if Task.isCancelled { return }
-            self.toastHolding = false
-            self.syncOverlayVisibility()
+            if Task.isCancelled {
+                return
+            }
+            toastHolding = false
+            syncOverlayVisibility()
         }
     }
 

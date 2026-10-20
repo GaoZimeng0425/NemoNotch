@@ -17,9 +17,9 @@ final class InterruptWatcher: @unchecked Sendable {
     }
 
     func start() {
-        guard FileManager.default.fileExists(atPath: filePath) else { return }
-        guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return }
-        self.fileHandle = handle
+        guard FileManager.default.fileExists(atPath: filePath),
+              let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return }
+        fileHandle = handle
 
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: filePath)[.size] as? UInt64) ?? 0
         lastOffset = fileSize
@@ -75,13 +75,13 @@ final class InterruptWatcher: @unchecked Sendable {
         if isInterruptLine(json) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.onInterrupt?(self.sessionId)
+                onInterrupt?(sessionId)
             }
         }
         if isClearLine(json) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.onClear?(self.sessionId)
+                onClear?(sessionId)
             }
         }
     }
@@ -96,9 +96,14 @@ final class InterruptWatcher: @unchecked Sendable {
         guard let message = json["message"] as? [String: Any] else { return false }
         let content = message["content"]
         var text = ""
-        if let str = content as? String { text = str }
-        else if let arr = content as? [[String: Any]] {
-            for item in arr { if item["type"] as? String == "text", let t = item["text"] as? String { text += t } }
+        if let str = content as? String {
+            text = str
+        } else if let arr = content as? [[String: Any]] {
+            for item in arr {
+                if item["type"] as? String == "text", let t = item["text"] as? String {
+                    text += t
+                }
+            }
         }
         let lower = text.lowercased()
         return Self.interruptPatterns.contains { lower.contains($0) }
@@ -120,8 +125,8 @@ final class InterruptWatcherManager {
     var onClear: ((String) -> Void)?
 
     func startWatching(sessionId: String, cwd: String) {
-        guard let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd) else { return }
-        guard watchers[sessionId] == nil else { return }
+        guard let filePath = ConversationParser.findSessionFile(sessionId: sessionId, cwd: cwd),
+              watchers[sessionId] == nil else { return }
         let watcher = InterruptWatcher(sessionId: sessionId, filePath: filePath)
         watcher.onInterrupt = { [weak self] sessionId in self?.onInterrupt?(sessionId) }
         watcher.onClear = { [weak self] sessionId in self?.onClear?(sessionId) }
@@ -135,7 +140,9 @@ final class InterruptWatcherManager {
     }
 
     func stopAll() {
-        for (_, watcher) in watchers { watcher.stop() }
+        for (_, watcher) in watchers {
+            watcher.stop()
+        }
         watchers.removeAll()
     }
 }

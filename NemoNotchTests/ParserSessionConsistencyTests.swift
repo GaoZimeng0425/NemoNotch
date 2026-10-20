@@ -30,7 +30,7 @@ struct ParserStableIDTests {
         let r = ConversationParser.parseIncremental(filePath: url.path, fromOffset: 0)
         #expect(r.messages.count == 2)
         #expect(r.messages[0].id != r.messages[1].id) // 不同行 id 不同
-        #expect(r.messages[0].id != "user-0")        // 不再是块内序号
+        #expect(r.messages[0].id != "user-0") // 不再是块内序号
 
         // 同一批行重复解析 → id 一致(重解析幂等,可被 upsert 按 id 去重)
         let r2 = ConversationParser.parseIncremental(filePath: url.path, fromOffset: 0)

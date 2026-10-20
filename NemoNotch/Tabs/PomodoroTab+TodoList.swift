@@ -278,14 +278,22 @@ private struct TodoRow: View {
     }
 
     private var currentTaskID: UUID? {
-        if case let .running(ctx) = timerService.state { return ctx.taskID }
-        if case let .paused(ctx) = timerService.state { return ctx.taskID }
+        if case let .running(ctx) = timerService.state {
+            return ctx.taskID
+        }
+        if case let .paused(ctx) = timerService.state {
+            return ctx.taskID
+        }
         return nil
     }
 
     private var rowFill: Color {
-        if isActive { return NotchTheme.surfaceWarm }
-        if hovering { return NotchTheme.surface }
+        if isActive {
+            return NotchTheme.surfaceWarm
+        }
+        if hovering {
+            return NotchTheme.surface
+        }
         return NotchTheme.surfaceSubtle
     }
 

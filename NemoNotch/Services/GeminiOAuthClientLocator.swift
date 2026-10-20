@@ -37,8 +37,12 @@ enum GeminiOAuthClientLocator {
             return nil
         }
         let real = URL(fileURLWithPath: binary).resolvingSymlinksInPath().path
-        if let creds = fromLegacyPaths(realGeminiPath: real) { return creds }
-        if let root = findPackageRoot(startingAt: real), let creds = fromPackageRoot(root) { return creds }
+        if let creds = fromLegacyPaths(realGeminiPath: real) {
+            return creds
+        }
+        if let root = findPackageRoot(startingAt: real), let creds = fromPackageRoot(root) {
+            return creds
+        }
         LogService.warn("Gemini OAuth: could not extract client credentials", category: "UsageQuotaService")
         return nil
     }
@@ -105,7 +109,9 @@ enum GeminiOAuthClientLocator {
         ]
         for path in paths {
             if let content = try? String(contentsOfFile: path, encoding: .utf8),
-               let creds = parse(from: content) { return creds }
+               let creds = parse(from: content) {
+                return creds
+            }
         }
         return nil
     }
@@ -127,7 +133,9 @@ enum GeminiOAuthClientLocator {
                 return current.path
             }
             let parent = current.deletingLastPathComponent()
-            if parent.path == current.path { break }
+            if parent.path == current.path {
+                break
+            }
             current = parent
         }
         return nil
@@ -140,7 +148,9 @@ enum GeminiOAuthClientLocator {
         ]
         for path in candidates {
             if let content = try? String(contentsOfFile: path, encoding: .utf8),
-               let creds = parse(from: content) { return creds }
+               let creds = parse(from: content) {
+                return creds
+            }
         }
         return fromBundle(packageRoot: root)
     }
@@ -159,10 +169,14 @@ enum GeminiOAuthClientLocator {
             let key = url.standardizedFileURL.path
             guard visited.insert(key).inserted,
                   let content = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            if let creds = parse(from: content) { return creds }
+            if let creds = parse(from: content) {
+                return creds
+            }
             for imp in relativeImports(in: content) {
                 let next = URL(fileURLWithPath: imp, relativeTo: url.deletingLastPathComponent()).standardizedFileURL
-                if next.path.hasPrefix(bundleRoot.path) { pending.append(next) }
+                if next.path.hasPrefix(bundleRoot.path) {
+                    pending.append(next)
+                }
             }
         }
 
@@ -171,7 +185,9 @@ enum GeminiOAuthClientLocator {
         ) else { return nil }
         for url in files where url.pathExtension == "js" && !visited.contains(url.standardizedFileURL.path) {
             if let content = try? String(contentsOf: url, encoding: .utf8),
-               let creds = parse(from: content) { return creds }
+               let creds = parse(from: content) {
+                return creds
+            }
         }
         return nil
     }
@@ -189,7 +205,9 @@ enum GeminiOAuthClientLocator {
             for match in regex.matches(in: content, range: range) {
                 guard let r = Range(match.range(at: 1), in: content) else { continue }
                 let path = String(content[r])
-                if seen.insert(path).inserted { out.append(path) }
+                if seen.insert(path).inserted {
+                    out.append(path)
+                }
             }
         }
         return out

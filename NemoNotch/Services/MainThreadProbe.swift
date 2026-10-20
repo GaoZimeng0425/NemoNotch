@@ -86,8 +86,7 @@ final class MainThreadProbe {
             return
         }
         // 即将休眠(活跃期结束):算这段活跃工作耗时。
-        guard activity.contains(.beforeWaiting) else { return }
-        guard lastWake != 0 else { return }
+        guard activity.contains(.beforeWaiting), lastWake != 0 else { return }
         let elapsedNs = machTimeNs(since: lastWake)
         lastWake = 0
 

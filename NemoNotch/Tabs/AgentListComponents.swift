@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Agent-row components rendered inside the AI tab's merged console list
-/// (`AIChatTab`): source styles, `AgentRowView`, message preview, and the
-/// Hermes/OpenClaw setup + approval cards for the empty state.
+// Agent-row components rendered inside the AI tab's merged console list
+// (`AIChatTab`): source styles, `AgentRowView`, message preview, and the
+// Hermes/OpenClaw setup + approval cards for the empty state.
 
 // MARK: - Agent Monitor Source Style
 
@@ -229,9 +229,13 @@ struct AgentRowView: View {
 
     private func timeAgo(_ date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return String(localized: "agents.time_just_now") }
+        if interval < 60 {
+            return String(localized: "agents.time_just_now")
+        }
         let minutes = Int(interval / 60)
-        if minutes < 60 { return String(format: String(localized: "agents.time_minutes_ago"), minutes) }
+        if minutes < 60 {
+            return String(format: String(localized: "agents.time_minutes_ago"), minutes)
+        }
         return String(format: String(localized: "agents.time_hours_ago"), minutes / 60)
     }
 }

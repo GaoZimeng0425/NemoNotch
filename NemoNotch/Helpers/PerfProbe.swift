@@ -33,7 +33,9 @@ enum PerfProbe {
 
     /// 探针总开关，进程生命周期内只求值一次。
     static let enabled: Bool = {
-        if ProcessInfo.processInfo.environment["NEMONOTCH_PERF"] == "1" { return true }
+        if ProcessInfo.processInfo.environment["NEMONOTCH_PERF"] == "1" {
+            return true
+        }
         return UserDefaults.standard.bool(forKey: "perfProbe")
     }()
 
@@ -189,7 +191,9 @@ enum PerfProbe {
                         + " | 均 \(fmt(avgUs))µs | \(fmt(Double(hits) / windowSeconds))/s | \(label)"
                 )
             }
-            if timed.count > topN { lines.append("  …另有 \(timed.count - topN) 项未列出") }
+            if timed.count > topN {
+                lines.append("  …另有 \(timed.count - topN) 项未列出")
+            }
         }
 
         // 纯计数热点：按频率降序。频率异常高本身就是信号。
@@ -201,7 +205,9 @@ enum PerfProbe {
             for (label, hits) in counted.prefix(topN) {
                 lines.append("  \(fmt(Double(hits) / windowSeconds))/s | \(hits) 次 | \(label)")
             }
-            if counted.count > topN { lines.append("  …另有 \(counted.count - topN) 项未列出") }
+            if counted.count > topN {
+                lines.append("  …另有 \(counted.count - topN) 项未列出")
+            }
         }
 
         if timed.isEmpty, counted.isEmpty {
@@ -246,7 +252,9 @@ enum PerfProbe {
         let seconds: Double
         let userPercent: Double
         let systemPercent: Double
-        var totalPercent: Double { userPercent + systemPercent }
+        var totalPercent: Double {
+            userPercent + systemPercent
+        }
     }
 
     /// 读取本进程累计的 user/system CPU 时间（纳秒）。
@@ -323,7 +331,9 @@ enum PerfProbe {
             guard result == KERN_SUCCESS, info.flags & threadFlagIdle == 0 else { continue }
             let percent = Double(info.cpu_usage) / threadUsageScale * 100
             total += percent
-            if list[index] == mainPort { main = percent }
+            if list[index] == mainPort {
+                main = percent
+            }
         }
         return (total, main, Int(count))
     }

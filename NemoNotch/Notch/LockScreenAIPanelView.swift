@@ -37,7 +37,7 @@ enum LockScreenAIPanelModel {
     /// active, capped at `maxRows`.
     static func makeItems(from sessions: [AISessionState], now: Date = Date()) -> [LockScreenAIPanelItem] {
         sessions
-            .filter { $0.phase.isActive }
+            .filter(\.phase.isActive)
             .map { session in
                 LockScreenAIPanelItem(
                     id: session.id,
@@ -49,18 +49,24 @@ enum LockScreenAIPanelModel {
                 )
             }
             .sorted { lhs, rhs in
-                if lhs.status == .awaitingApproval, rhs.status != .awaitingApproval { return true }
-                if lhs.status != .awaitingApproval, rhs.status == .awaitingApproval { return false }
+                if lhs.status == .awaitingApproval, rhs.status != .awaitingApproval {
+                    return true
+                }
+                if lhs.status != .awaitingApproval, rhs.status == .awaitingApproval {
+                    return false
+                }
                 return lhs.runningSeconds > rhs.runningSeconds
             }
             .prefix(maxRows)
-            .map { $0 }
+            .map(\.self)
     }
 
     /// Prefer the project folder name (short, scannable on a glance) and fall
     /// back to the session's display title, truncated for a single line.
     static func displayTitle(for session: AISessionState) -> String {
-        if let folder = session.projectFolder, !folder.isEmpty { return folder }
+        if let folder = session.projectFolder, !folder.isEmpty {
+            return folder
+        }
         let title = session.displayTitle
         return title.count > 28 ? String(title.prefix(28)) + "…" : title
     }
@@ -119,7 +125,7 @@ struct LockScreenAIPanelView: View {
             }
 
             if items.count == LockScreenAIPanelModel.maxRows {
-                let activeCount = store.sortedSessions.filter { $0.phase.isActive }.count
+                let activeCount = store.sortedSessions.filter(\.phase.isActive).count
                 if activeCount > items.count {
                     Text("lockscreen.ai.more \(activeCount - items.count)")
                         .font(.system(size: 11, weight: .medium))

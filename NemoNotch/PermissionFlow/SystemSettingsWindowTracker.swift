@@ -18,7 +18,7 @@ enum SystemSettingsWindowTracker {
     private static var settingsPIDs: Set<Int32> {
         let apps = NSWorkspace.shared.runningApplications
             .filter { $0.bundleIdentifier == bundleIdentifier }
-        return Set(apps.map { $0.processIdentifier })
+        return Set(apps.map(\.processIdentifier))
     }
 
     /// Frame of the frontmost on-screen System Settings window, in AppKit
@@ -26,9 +26,7 @@ enum SystemSettingsWindowTracker {
     /// visible window.
     static func frontmostWindowFrame() -> CGRect? {
         let pids = settingsPIDs
-        guard !pids.isEmpty else { return nil }
-
-        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID)
+        guard !pids.isEmpty, let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID)
             as? [[String: Any]]
         else { return nil }
 
@@ -40,8 +38,8 @@ enum SystemSettingsWindowTracker {
             else { continue }
             // Layer 0 is the normal window band — filters out the app's
             // tooltips, sheets-in-waiting and offscreen scratch windows.
-            guard let layer = entry[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
-            guard let bounds = entry[kCGWindowBounds as String] as? [String: Any],
+            guard let layer = entry[kCGWindowLayer as String] as? Int, layer == 0,
+                  let bounds = entry[kCGWindowBounds as String] as? [String: Any],
                   let cgRect = cgRect(from: bounds)
             else { continue }
             // Guard against degenerate 1pt helper windows reported on some
@@ -82,7 +80,9 @@ enum SystemSettingsWindowTracker {
     /// Int or Double depending on the value; normalize through NSNumber.
     private static func number(_ value: Any?) -> CGFloat? {
         guard let value else { return nil }
-        if let number = value as? NSNumber { return CGFloat(number.doubleValue) }
+        if let number = value as? NSNumber {
+            return CGFloat(number.doubleValue)
+        }
         return nil
     }
 }

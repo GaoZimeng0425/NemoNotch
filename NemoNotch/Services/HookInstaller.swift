@@ -168,7 +168,7 @@ enum HookInstaller {
             "command": command,
         ]
         if target.requiresProcessHookType {
-            innerHook["timeoutMs"] = 30_000
+            innerHook["timeoutMs"] = 30000
         }
 
         let hookEntry: [String: Any] = [

@@ -30,16 +30,15 @@ enum PermissionPane {
     /// works from Ventura through Tahoe (matches what NotificationService
     /// already used for Accessibility).
     var settingsURL: URL {
-        let anchor: String
-        switch self {
-        case .accessibility: anchor = "Privacy_Accessibility"
-        case .fullDiskAccess: anchor = "Privacy_AllFiles"
-        case .inputMonitoring: anchor = "Privacy_ListenEvent"
-        case .screenRecording: anchor = "Privacy_ScreenCapture"
-        case .appManagement: anchor = "Privacy_AppBundles"
-        case .developerTools: anchor = "Privacy_DevTools"
-        case .bluetooth: anchor = "Privacy_Bluetooth"
-        case .mediaAppleMusic: anchor = "Privacy_Media"
+        let anchor = switch self {
+        case .accessibility: "Privacy_Accessibility"
+        case .fullDiskAccess: "Privacy_AllFiles"
+        case .inputMonitoring: "Privacy_ListenEvent"
+        case .screenRecording: "Privacy_ScreenCapture"
+        case .appManagement: "Privacy_AppBundles"
+        case .developerTools: "Privacy_DevTools"
+        case .bluetooth: "Privacy_Bluetooth"
+        case .mediaAppleMusic: "Privacy_Media"
         }
         return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!
     }

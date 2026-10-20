@@ -13,8 +13,7 @@ extension View {
     /// Use on the leaf view that consumes the service, not on a container —
     /// that way the service only runs while its UI is visible.
     func activates(_ service: any LifecycleAware) -> some View {
-        self
-            .onAppear { service.setActive(true) }
+        onAppear { service.setActive(true) }
             .onDisappear { service.setActive(false) }
     }
 }

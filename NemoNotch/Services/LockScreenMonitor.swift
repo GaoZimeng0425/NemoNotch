@@ -85,7 +85,7 @@ final class LockScreenMonitor {
                 try? await Task.sleep(for: .seconds(Self.pollInterval))
                 guard let self, !Task.isCancelled else { return }
                 if !Self.isSessionScreenLocked() {
-                    self.setLocked(false, reason: "poll")
+                    setLocked(false, reason: "poll")
                     return
                 }
             }

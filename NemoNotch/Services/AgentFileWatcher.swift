@@ -44,17 +44,17 @@ final class AgentFileWatcher: @unchecked Sendable {
         guard attempt < 10 else { return }
         queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
-            if FileManager.default.fileExists(atPath: self.filePath) {
-                self.beginWatching()
+            if FileManager.default.fileExists(atPath: filePath) {
+                beginWatching()
             } else {
-                self.retryStart(attempt: attempt + 1)
+                retryStart(attempt: attempt + 1)
             }
         }
     }
 
     private func beginWatching() {
         guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else { return }
-        self.fileHandle = handle
+        fileHandle = handle
 
         let fd = handle.fileDescriptor
         source = DispatchSource.makeFileSystemObjectSource(
@@ -93,9 +93,9 @@ final class AgentFileWatcher: @unchecked Sendable {
 
         for i in buffer.indices {
             if buffer[i] == newline {
-                let lineRange = lineStart..<i
-                if !lineRange.isEmpty {
-                    if processLine(buffer.subdata(in: lineRange)) { didChange = true }
+                let lineRange = lineStart ..< i
+                if !lineRange.isEmpty, processLine(buffer.subdata(in: lineRange)) {
+                    didChange = true
                 }
                 lineStart = buffer.index(after: i)
             }
@@ -103,13 +103,13 @@ final class AgentFileWatcher: @unchecked Sendable {
 
         // Preserve the trailing partial line for next time.
         if lineStart < buffer.endIndex {
-            pendingTail = buffer.subdata(in: lineStart..<buffer.endIndex)
+            pendingTail = buffer.subdata(in: lineStart ..< buffer.endIndex)
         }
 
         guard didChange else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.onUpdate(self.allTools)
+            onUpdate(allTools)
         }
     }
 
@@ -129,7 +129,10 @@ final class AgentFileWatcher: @unchecked Sendable {
                !seenToolIds.contains(toolId) {
                 seenToolIds.insert(toolId)
                 let input = block["input"].flatMap {
-                    try? String(data: JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]), encoding: .utf8)
+                    try? String(
+                        data: JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]),
+                        encoding: .utf8
+                    )
                 } ?? ""
                 allTools.append(SubagentToolCall(
                     id: toolId,
@@ -171,7 +174,12 @@ final class AgentFileWatcher: @unchecked Sendable {
 final class AgentFileWatcherManager {
     private var watchers: [String: AgentFileWatcher] = [:]
 
-    func startWatching(sessionId: String, taskToolId: String, agentFilePath: String, onUpdate: @escaping ([SubagentToolCall]) -> Void) {
+    func startWatching(
+        sessionId: String,
+        taskToolId: String,
+        agentFilePath: String,
+        onUpdate: @escaping ([SubagentToolCall]) -> Void
+    ) {
         let key = "\(sessionId):\(taskToolId)"
         let watcher = AgentFileWatcher(filePath: agentFilePath, taskToolId: taskToolId, onUpdate: onUpdate)
         watchers[key] = watcher

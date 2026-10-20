@@ -5,7 +5,9 @@ import Testing
 // MARK: - 分帧器单元测试
 
 struct JSONLFramerTests {
-    private func d(_ s: String) -> Data { Data(s.utf8) }
+    private func d(_ s: String) -> Data {
+        Data(s.utf8)
+    }
 
     private func tailKind(_ t: JSONLFramer.Framing.Tail) -> String {
         switch t {
