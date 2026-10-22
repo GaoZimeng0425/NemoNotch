@@ -11,6 +11,11 @@ final class EdgeBarController: NSObject {
     /// The card's buttons, resolved by their drawn frames.
     enum CardButton: Hashable {
         case allow, deny, jump
+        /// An option of a multi-choice ask: (question index, option index).
+        case pick(Int, Int)
+        /// Sends a picked multi-choice draft (multi-select, or several
+        /// questions answered together).
+        case send
     }
 
     private(set) var isOpen = false
@@ -34,6 +39,13 @@ final class EdgeBarController: NSObject {
     private(set) var isOverHead = false
     private(set) var hoveredButton: CardButton?
     private(set) var pressedButton: CardButton?
+    /// The picked options of a multi-choice ask (question → option indexes),
+    /// for the card's ticks; a single single-select question answers with
+    /// its press and never lands here.
+    private(set) var askPicks: [Int: Set<Int>] = [:]
+    /// The approval whose picks `askPicks` belong to (tool use id); a new
+    /// ask resets the draft.
+    @ObservationIgnored private var askKey: String?
     /// The beat counter: runs only while a drawn ring is waiting.
     private(set) var beat = 0
     /// Where the bar lives: docked to a screen's left or right edge, or a
@@ -183,6 +195,7 @@ final class EdgeBarController: NSObject {
         setIfChanged(\.openWidth, measuredOpenWidth(next))
         setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
         revalidateSelection()
+        syncAskPicks()
         autoCard(previous: previous, next: next)
         updateBodyRect()
         updateBeat()
@@ -208,6 +221,21 @@ final class EdgeBarController: NSObject {
 
     func session(_ id: String) -> AISessionState? {
         store.get(id)
+    }
+
+    /// Keeps the ask draft with the ask it belongs to: answered, replaced
+    /// or gone (card down) clears the picks.
+    private func syncAskPicks() {
+        let key: String? = if let id = selectedRow, let session = store.get(id),
+                              case let .waitingForApproval(ctx) = session.phase, ctx.interactivePrompt != nil {
+            ctx.toolUseId
+        } else {
+            nil
+        }
+        if key != askKey {
+            askKey = key
+            askPicks = [:]
+        }
     }
 
     // MARK: - Auto card
@@ -557,6 +585,7 @@ final class EdgeBarController: NSObject {
 
     private func deselect() {
         rowSwitch.cancel()
+        askPicks = [:]
         buttonRects = [:]
         hoveredButton = nil
         pressedButton = nil
@@ -792,6 +821,10 @@ final class EdgeBarController: NSObject {
             aiMonitor.respondToPermission(sessionId: sessionId, approved: true)
         case .deny:
             aiMonitor.respondToPermission(sessionId: sessionId, approved: false)
+        case let .pick(question, option):
+            pickAsk(question: question, option: option, sessionId: sessionId)
+        case .send:
+            sendAsk(sessionId: sessionId)
         case .jump:
             guard let session = store.get(sessionId) else { return }
             hover.closeNow()
@@ -801,6 +834,42 @@ final class EdgeBarController: NSObject {
                 tabLink: session.tabLinkURL
             )
         }
+    }
+
+    /// A press on an ask's option: one single-select question answers with
+    /// the press; anything else (ticks, or several questions answered
+    /// together) only picks, and Send sends.
+    private func pickAsk(question: Int, option: Int, sessionId: String) {
+        guard let session = store.get(sessionId),
+              case let .waitingForApproval(ctx) = session.phase,
+              let prompt = ctx.interactivePrompt
+        else { return }
+        if let reply = AskAnswer.immediateReply(question: question, option: option, prompt: prompt) {
+            aiMonitor.respondToAsk(sessionId: sessionId, answers: reply)
+            return
+        }
+        var picked = askPicks[question] ?? []
+        if question >= 0, question < prompt.questions.count, prompt.questions[question].multiSelect {
+            if picked.contains(option) {
+                picked.remove(option)
+            } else {
+                picked.insert(option)
+            }
+        } else {
+            picked = [option]
+        }
+        askPicks[question] = picked
+    }
+
+    /// Sends the draft — only whole: a question missing from the answers
+    /// would reach Claude unanswered.
+    private func sendAsk(sessionId: String) {
+        guard let session = store.get(sessionId),
+              case let .waitingForApproval(ctx) = session.phase,
+              let prompt = ctx.interactivePrompt,
+              let answers = AskAnswer.answers(picks: askPicks, prompt: prompt)
+        else { return }
+        aiMonitor.respondToAsk(sessionId: sessionId, answers: answers)
     }
 
     private func scroll(at point: CGPoint, deltaY: CGFloat, precise: Bool) -> Bool {

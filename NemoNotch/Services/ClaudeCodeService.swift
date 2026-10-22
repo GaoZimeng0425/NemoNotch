@@ -262,6 +262,13 @@ final class ClaudeProvider: AIProvider {
         }
     }
 
+    func respondToAsk(sessionId: String, originalInput: String, answers: [String: String]) {
+        hookServer?.respondToAsk(sessionId: sessionId, originalInput: originalInput, answers: answers)
+        store.mutate(sessionId) { session in
+            session.phase = session.phase.transition(to: .processing)
+        }
+    }
+
     // MARK: - Event Handling
 
     func handleEvent(_ event: HookEvent) {

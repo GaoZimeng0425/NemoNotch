@@ -356,6 +356,15 @@ final class HookServer {
         }
     }
 
+    /// An AskUserQuestion answered from the bar: allow with `updatedInput`
+    /// carrying the original tool input plus the chosen answers.
+    func respondToAsk(sessionId: String, originalInput: String, answers: [String: String]) {
+        guard !answers.isEmpty else { return }
+        if let conn = takePendingConnection(matchingPrefix: sessionId + ":") {
+            sendJSON(conn, payload: .answer(originalInput: originalInput, answers: answers))
+        }
+    }
+
     func cancelPendingPermissions(sessionId: String) {
         let matching = pendingPermissions.keys.filter { $0.hasPrefix(sessionId + ":") }
         for key in matching {
@@ -443,9 +452,7 @@ final class HookServer {
         payload: HookResponse
     ) {
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .sortedKeys // deterministic wire format
-            let data = try encoder.encode(payload)
+            let data = try payload.jsonData() // deterministic wire format
             let bodyString = String(data: data, encoding: .utf8) ?? "{}"
             sendHTTP(connection, status: status, body: bodyString)
         } catch {

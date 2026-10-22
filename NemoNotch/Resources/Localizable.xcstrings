@@ -6151,6 +6151,54 @@
         }
       }
     },
+    "edge_bar.send" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送"
+          }
+        }
+      }
+    },
+    "edge_bar.pick_one" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick one"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选一个"
+          }
+        }
+      }
+    },
+    "edge_bar.pick_any" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick any"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可多选"
+          }
+        }
+      }
+    },
     "edge_bar.answer" : {
       "localizations" : {
         "en" : {
@@ -6163,22 +6211,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "去选择"
-          }
-        }
-      }
-    },
-    "edge_bar.answer_hint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Answer in its terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在它的终端里作答"
           }
         }
       }

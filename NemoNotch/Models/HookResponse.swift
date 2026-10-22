@@ -8,6 +8,14 @@ import Foundation
 enum HookResponse: Codable, Equatable {
     case ack
     case decision(Decision)
+    /// An AskUserQuestion answered: `allow` with `updatedInput` — the tool's
+    /// input as it came plus an `answers` object (question text → answer).
+    /// `updatedInput` replaces the whole input, so the original rides along
+    /// in full; measured behavior in evlat's AskQuestion.swift (Claude Code
+    /// 2.1.285): the terminal's dialog closes, free text passes through, a
+    /// multi-select is labels joined by ", ", a question missing from
+    /// `answers` reaches Claude unanswered.
+    case answer(originalInput: String, answers: [String: String])
 
     enum Decision: Codable, Equatable {
         case allow
@@ -22,8 +30,38 @@ enum HookResponse: Codable, Equatable {
         case noSessionId = "no session id"
     }
 
+    /// The wire bytes. The answer case carries the caller's tool input as
+    /// arbitrary JSON, which Codable cannot hold — it goes through
+    /// JSONSerialization whole; every other case through Codable as before.
+    func jsonData() throws -> Data {
+        switch self {
+        case .ack, .decision:
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            return try encoder.encode(self)
+        case let .answer(originalInput, answers):
+            var updated = (try? JSONSerialization.jsonObject(with: Data(originalInput.utf8))) as? [String: Any] ?? [:]
+            updated["answers"] = answers
+            let body: [String: Any] = [
+                "hookSpecificOutput": [
+                    "hookEventName": "PermissionRequest",
+                    "decision": ["behavior": "allow", "updatedInput": updated],
+                ],
+            ]
+            return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes])
+        }
+    }
+
     func encode(to encoder: Encoder) throws {
         switch self {
+        case .answer:
+            // The answer's payload holds the caller's arbitrary tool input;
+            // it can only be encoded by `jsonData()`, which everything that
+            // sends a response goes through.
+            throw EncodingError.invalidValue(self, .init(
+                codingPath: encoder.codingPath,
+                debugDescription: "HookResponse.answer goes through jsonData(), not Codable"
+            ))
         case .ack:
             var container = encoder.container(keyedBy: AckKeys.self)
             try container.encode("ok", forKey: .status)

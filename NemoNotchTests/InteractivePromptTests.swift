@@ -51,6 +51,14 @@ struct InteractivePromptTests {
         #expect(single.questions[0].choices.map(\.label) == ["yes", "no"])
     }
 
+    @Test func duplicateQuestionTextsAreNotAnswerable() throws {
+        // The answer is keyed by question text; a duplicate would answer
+        // the wrong one, so the ask is not answerable from the bar.
+        let input = #"{"questions":[{"question":"Same?","options":[{"label":"a","description":"1"}]},{"question":"Same?","options":[{"label":"b","description":"2"}]}]}"#
+        let json = try #require(JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: Any])
+        #expect(InteractivePrompt.parse(json) == nil)
+    }
+
     @Test func garbageMeansNoPrompt() {
         for json in [["other": "x"], ["questions": []], ["questions": [["options": []]]]] {
             #expect(InteractivePrompt.parse(json) == nil)
