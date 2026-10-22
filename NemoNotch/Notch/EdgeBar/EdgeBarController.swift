@@ -525,6 +525,9 @@ final class EdgeBarController: NSObject {
     }
 
     private func closeBar() {
+        // However the bar closed, it is no longer the auto-opened one —
+        // a stale flag would log a phantom "auto-closed" on a later refresh.
+        autoOpened = false
         deselect()
         hoveredRow = nil
         isOpen = false
