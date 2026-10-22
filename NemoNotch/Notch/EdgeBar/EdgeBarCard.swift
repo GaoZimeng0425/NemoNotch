@@ -116,6 +116,9 @@ struct EdgeBarCard: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
         let content = body_
+        // A multi-choice ask carries its own way to the terminal; the
+        // bottom Go button would say the same thing twice.
+        let goStandsDown = content.asksToChoose
         VStack(alignment: .leading, spacing: 0) {
             identity
                 .padding(.horizontal, Self.padding)
@@ -128,7 +131,7 @@ struct EdgeBarCard: View {
                     .padding(.top, 10)
             }
             section(content)
-            if row.hasHost {
+            if row.hasHost, !goStandsDown {
                 goButton
                     .padding(.horizontal, Self.padding)
                     .padding(.top, Self.actionGap)
@@ -136,7 +139,7 @@ struct EdgeBarCard: View {
         }
         .padding(.top, Self.padding)
         // A section ends the card when nothing follows it: it runs to the foot.
-        .padding(.bottom, row.hasHost || !Self.isSection(content) ? Self.padding : 0)
+        .padding(.bottom, (row.hasHost && !goStandsDown) || !Self.isSection(content) ? Self.padding : 0)
         .frame(width: EdgeBarMetrics.cardWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .background(Self.ground)
@@ -255,29 +258,34 @@ struct EdgeBarCard: View {
     @ViewBuilder
     private func section(_ content: EdgeBarCardModel.Body) -> some View {
         switch content {
-        case let .approval(tool, input):
+        case let .approval(tool, input, prompt):
             sectionGround(ask: true, gap: 10) {
-                sectionTitle(tool)
-                if !input.isEmpty {
-                    ScrollView {
-                        Text(verbatim: input)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(EdgeBarPalette.textPrimary)
-                            .lineSpacing(2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
+                if let prompt {
+                    promptBody(prompt)
+                } else {
+                    sectionTitle(tool)
+                    if !input.isEmpty {
+                        ScrollView {
+                            Text(verbatim: input)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(EdgeBarPalette.textPrimary)
+                                .lineSpacing(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                        }
+                        .scrollIndicators(.never)
+                        .frame(maxHeight: 92)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.black.opacity(0.35)))
                     }
-                    .scrollIndicators(.never)
-                    .frame(maxHeight: 92)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.black.opacity(0.35)))
+                    HStack(spacing: 8) {
+                        cardButton(.deny, title: String(localized: "edge_bar.deny"), loud: false)
+                        cardButton(.allow, title: String(localized: "edge_bar.allow"), loud: true)
+                    }
+                    .padding(.top, 2)
                 }
-                HStack(spacing: 8) {
-                    cardButton(.deny, title: String(localized: "edge_bar.deny"), loud: false)
-                    cardButton(.allow, title: String(localized: "edge_bar.allow"), loud: true)
-                }
-                .padding(.top, 2)
             }
             .padding(.top, Self.sectionGap)
         case let .tool(name, subject):
@@ -325,6 +333,43 @@ struct EdgeBarCard: View {
         .background(ask ? EdgeBarPalette.amber.opacity(0.07) : Color.white.opacity(0.04))
     }
 
+    /// A multi-choice ask, shown as it is: the questions and every choice.
+    /// Allow/Deny would pretend to answer them — the hook protocol cannot —
+    /// so the one button goes where the choosing happens.
+    private func promptBody(_ prompt: InteractivePrompt) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(prompt.questions.enumerated()), id: \.offset) { _, question in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(verbatim: question.text)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(EdgeBarPalette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(Array(question.choices.enumerated()), id: \.offset) { _, choice in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(verbatim: choice.label)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(EdgeBarPalette.textPrimary.opacity(0.9))
+                            if let detail = choice.detail, !detail.isEmpty {
+                                Text(verbatim: detail)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Self.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                    }
+                }
+            }
+            if row.hasHost {
+                cardButton(.jump, title: String(localized: "edge_bar.answer"), loud: true)
+            } else {
+                Text("edge_bar.answer_hint")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Self.secondary)
+            }
+        }
+    }
+
     private func sectionTitle(_ text: String) -> some View {
         Text(verbatim: text)
             .font(.system(size: 11, weight: .semibold))
@@ -367,7 +412,14 @@ struct EdgeBarCard: View {
             .frame(height: 32)
             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(loud ? EdgeBarPalette.amber.opacity(hovered ? 1 : 0.9) : Color.white
-                    .opacity(hovered ? 0.16 : 0.10)))
+                    .opacity(hovered ? 0.20 : 0.14)))
+            // The quiet button gets an outline: on the card's near-black a
+            // fill alone read as nothing next to the loud one, and Deny
+            // looked like it was not offered at all.
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(loud ? Color.clear : Color.white.opacity(hovered ? 0.45 : 0.32), lineWidth: 1)
+            )
             .scaleEffect(pressed ? 0.96 : 1)
             .animation(.easeOut(duration: 0.1), value: hovered)
             .animation(.easeOut(duration: 0.08), value: pressed)

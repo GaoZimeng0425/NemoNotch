@@ -6151,6 +6151,38 @@
         }
       }
     },
+    "edge_bar.answer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Go choose"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去选择"
+          }
+        }
+      }
+    },
+    "edge_bar.answer_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer in its terminal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在它的终端里作答"
+          }
+        }
+      }
+    },
     "edge_bar.jump" : {
       "localizations" : {
         "en" : {
