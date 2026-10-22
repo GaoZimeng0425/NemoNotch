@@ -243,7 +243,7 @@ final class EdgeBarController: NSObject {
     /// Whether the bar opened itself for an approval (`EdgeBarAutoCard`).
     /// Such a bar is held open until the last approval is answered — a
     /// cursor crossing it changes nothing (a stray exit must not take the
-    /// ask away); answered, it closes itself wherever the cursor is.
+    /// ask away); answered, it closes itself (a cursor on the bar keeps it until that cursor leaves).
     @ObservationIgnored private var autoOpened = false
 
     /// An exit does not fold the bar while this is true.
