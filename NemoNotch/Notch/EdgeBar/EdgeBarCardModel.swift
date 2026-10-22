@@ -4,20 +4,36 @@ import Foundation
 /// the status line's trailing facts and which body section shows.
 enum EdgeBarCardModel {
     enum Body: Equatable {
-        /// A held permission: the tool and its input, with Deny/Allow.
-        case approval(tool: String, input: String)
+        /// A held permission: the tool and its input, with Deny/Allow. A
+        /// multi-choice ask (AskUserQuestion) carries its `prompt` instead —
+        /// choices are the user's to make in the CLI, so the card shows them
+        /// and jumps, it does not pretend Allow/Deny answer them.
+        case approval(tool: String, input: String, prompt: InteractivePrompt?)
         /// The last reply of a turn that ended (parked at the prompt).
         case reply(String)
         /// The turn's last tool and what it was about.
         case tool(name: String, subject: String?)
         case none
+
+        /// A multi-choice ask: the bottom Go button stands down (the section
+        /// itself carries the way to the terminal).
+        var asksToChoose: Bool {
+            if case let .approval(_, _, prompt) = self {
+                return prompt != nil
+            }
+            return false
+        }
     }
 
     /// Approval first; then a finished turn's reply; then the turn's last
     /// tool (kept after it finished). A turn still thinking says nothing.
     static func body(of session: AISessionState) -> Body {
         if case let .waitingForApproval(context) = session.phase {
-            return .approval(tool: context.toolName, input: context.displayInput)
+            return .approval(
+                tool: context.toolName,
+                input: context.displayInput,
+                prompt: context.interactivePrompt
+            )
         }
         if session.phase == .waitingForInput, let reply = lastReply(of: session) {
             return .reply(reply)

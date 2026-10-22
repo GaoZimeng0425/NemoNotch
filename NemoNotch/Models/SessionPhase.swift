@@ -101,6 +101,55 @@ enum SessionPhase: Equatable {
     }
 }
 
+/// An AskUserQuestion-shaped ask: the questions and the choices each offers.
+/// The hook protocol can only answer allow/deny — a choice is the user's to
+/// make in the CLI — so this exists for display, not for answering.
+struct InteractivePrompt: Equatable {
+    struct Question: Equatable {
+        let text: String
+        let choices: [Choice]
+    }
+
+    struct Choice: Equatable {
+        let label: String
+        let detail: String?
+    }
+
+    let questions: [Question]
+
+    /// "Which framework? → React / Vue", the questions run together — the
+    /// one-line form for the status row and the notch tab.
+    var summary: String {
+        questions
+            .map { question in
+                question.choices.isEmpty
+                    ? question.text
+                    : "\(question.text) → \(question.choices.map(\.label).joined(separator: " / "))"
+            }
+            .joined(separator: "; ")
+    }
+
+    /// Claude Code's AskUserQuestion: `{"questions": [{question, options:
+    /// [{label, description}]}]}` (1–4 questions, 2–4 options each). An
+    /// older shape puts one `{question, options}` at the top level — accept
+    /// both. Nil when there is nothing to ask.
+    static func parse(_ json: [String: Any]) -> InteractivePrompt? {
+        var raw = json["questions"] as? [[String: Any]] ?? []
+        if raw.isEmpty, json["question"] != nil {
+            raw = [json]
+        }
+        let questions: [Question] = raw.compactMap { entry in
+            guard let text = (entry["question"] as? String), !text.isEmpty else { return nil }
+            let choices = (entry["options"] as? [[String: Any]] ?? []).compactMap { option -> Choice? in
+                guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+                return Choice(label: label, detail: option["description"] as? String)
+            }
+            return Question(text: text, choices: choices)
+        }
+        return questions.isEmpty ? nil : InteractivePrompt(questions: questions)
+    }
+}
+
 struct PermissionContext: Equatable {
     let toolUseId: String
     let toolName: String
@@ -113,6 +162,9 @@ struct PermissionContext: Equatable {
         // Try to parse as JSON for tool-specific formatting
         if let data = input.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if isInteractiveTool, let prompt = InteractivePrompt.parse(json) {
+                return truncate(prompt.summary, limit: 160)
+            }
             return formattedToolInput(toolName: toolName, json: json)
         }
 
@@ -126,6 +178,17 @@ struct PermissionContext: Equatable {
     var isInteractiveTool: Bool {
         let normalized = toolName.replacingOccurrences(of: "_", with: "").lowercased()
         return normalized == "askuserquestion" || normalized == "askuser"
+    }
+
+    /// The parsed ask of an AskUserQuestion-shaped tool; nil for everything
+    /// else (and for an interactive tool whose input did not parse).
+    var interactivePrompt: InteractivePrompt? {
+        guard isInteractiveTool,
+              let input = toolInput,
+              let data = input.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return InteractivePrompt.parse(json)
     }
 
     private func formattedToolInput(toolName: String, json: [String: Any]) -> String {

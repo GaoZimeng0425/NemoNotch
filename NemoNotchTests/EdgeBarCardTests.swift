@@ -68,7 +68,7 @@ struct EdgeBarCardTests {
         s.phase = .waitingForApproval(PermissionContext(
             toolUseId: "t", toolName: "Edit", toolInput: nil, receivedAt: Date()
         ))
-        #expect(EdgeBarCardModel.body(of: s) == .approval(tool: "Edit", input: ""))
+        #expect(EdgeBarCardModel.body(of: s) == .approval(tool: "Edit", input: "", prompt: nil))
     }
 
     @Test func metaSaysToolsOnlyWhenThereAreAny() {
