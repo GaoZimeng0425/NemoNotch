@@ -256,10 +256,17 @@ final class EdgeBarHostingView: NSHostingView<AnyView> {
         /// cursor never says "entered" (the bar can still open from moves),
         /// and a repeated exit is harmless to the hover intent.
         func keep(_ regions: Set<Region>) {
+            let wasInside = !inside.isEmpty
             inside.formIntersection(regions)
             if regions.isEmpty {
                 doubted.removeAll()
-                handler?(.exited)
+                // Only a cursor that was somewhere on the bar left it: a bar
+                // the controller opened on its own (an approval card) rebuilds
+                // its areas under a cursor that never entered, and that
+                // rebuild must not read as leaving and fold it at once.
+                if wasInside {
+                    handler?(.exited)
+                }
             }
         }
     }

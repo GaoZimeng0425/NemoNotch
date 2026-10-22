@@ -167,6 +167,7 @@ final class EdgeBarController: NSObject {
             applyDock()
         }
         let next = EdgeBarModel.content(of: store.sortedSessions)
+        let previous = content
         if next != content {
             content = next
         }
@@ -182,6 +183,7 @@ final class EdgeBarController: NSObject {
         setIfChanged(\.openWidth, measuredOpenWidth(next))
         setIfChanged(\.scrollOffset, min(scrollOffset, EdgeBarMetrics.maxScrollOffset(rows: next.rows.count)))
         revalidateSelection()
+        autoCard(previous: previous, next: next)
         updateBodyRect()
         updateBeat()
     }
@@ -206,6 +208,61 @@ final class EdgeBarController: NSObject {
 
     func session(_ id: String) -> AISessionState? {
         store.get(id)
+    }
+
+    // MARK: - Auto card
+
+    /// Whether the bar opened itself for an approval (`EdgeBarAutoCard`).
+    /// Such a bar closes itself when the last approval is answered — the
+    /// cursor may never have come. The first real pointer enter hands the
+    /// bar to the cursor, whose exit then closes it as always.
+    @ObservationIgnored private var autoOpened = false
+
+    private func autoCard(previous: EdgeBarModel.Content, next: EdgeBarModel.Content) {
+        guard !UITestMode.isActive, !isDragging else { return }
+        let decision = EdgeBarAutoCard.plan(
+            previous: previous.rows.map { EdgeBarAutoCard.Candidate(id: $0.id, phase: $0.phase) },
+            next: next.rows.map { EdgeBarAutoCard.Candidate(id: $0.id, phase: $0.phase) },
+            isOpen: isOpen,
+            selectedRow: selectedRow
+        )
+        if decision.open, let id = decision.select {
+            hover.openNow()
+            autoOpened = true
+            LogService.info("Auto-opened the bar: \(id.prefix(8)) waiting for approval", category: "EdgeBar")
+            reveal(id)
+            select(id)
+        } else if let id = decision.select {
+            LogService.info("Auto-selected the card of \(id.prefix(8))", category: "EdgeBar")
+            reveal(id)
+            select(id)
+        }
+        if autoOpened, !next.rows.contains(where: \.phase.isWaitingForApproval) {
+            guard !pointerOnBar() else { return }
+            autoOpened = false
+            hover.closeNow()
+            LogService.info("Auto-closed the bar: no approval waiting", category: "EdgeBar")
+        }
+    }
+
+    /// Scroll a row into the visible list: an auto-shown card may speak for
+    /// a row beyond the fold.
+    private func reveal(_ id: String) {
+        guard let slot = content.rows.firstIndex(where: { $0.id == id }),
+              !EdgeBarMetrics.isRowVisible(slot, rows: content.rows.count, offset: scrollOffset)
+        else { return }
+        setIfChanged(\.scrollOffset, min(
+            EdgeBarMetrics.slotTop(slot) - EdgeBarMetrics.listTop,
+            EdgeBarMetrics.maxScrollOffset(rows: content.rows.count)
+        ))
+    }
+
+    /// Where the cursor stands now, in the hosting view's coordinates — the
+    /// same conversion the tracking areas use.
+    private func pointerOnBar() -> Bool {
+        guard let window, let hosting else { return false }
+        let point = hosting.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        return hosting.bodyRect.contains(point) || hosting.cardRect?.contains(point) == true
     }
 
     /// A provider's quota for the usage card. A fetch that failed
@@ -392,6 +449,9 @@ final class EdgeBarController: NSObject {
         }
         switch pointer {
         case .entered:
+            // A real enter: the cursor owns the bar from here (an auto-opened
+            // bar stops closing itself; the exit that follows closes it).
+            autoOpened = false
             hover.pointerEntered()
         case .exited:
             rowSwitch.cancel()
