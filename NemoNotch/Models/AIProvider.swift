@@ -17,6 +17,12 @@ protocol AIProvider: AnyObject, Observable {
     func respondToPermission(sessionId: String, approved: Bool)
 }
 
+extension AIProvider {
+    /// Answering an AskUserQuestion from the notch: only Claude's
+    /// PermissionRequest protocol carries it (allow + updatedInput).
+    func respondToAsk(sessionId: String, originalInput: String, answers: [String: String]) {}
+}
+
 struct AISessionState: Identifiable {
     let id: String
     /// Mutable so an explicit per-event `cli_source` can correct a session that

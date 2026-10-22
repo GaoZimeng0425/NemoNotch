@@ -108,6 +108,13 @@ struct InteractivePrompt: Equatable {
     struct Question: Equatable {
         let text: String
         let choices: [Choice]
+        let multiSelect: Bool
+
+        init(text: String, choices: [Choice], multiSelect: Bool = false) {
+            self.text = text
+            self.choices = choices
+            self.multiSelect = multiSelect
+        }
     }
 
     struct Choice: Equatable {
@@ -144,7 +151,9 @@ struct InteractivePrompt: Equatable {
                 guard let label = option["label"] as? String, !label.isEmpty else { return nil }
                 return Choice(label: label, detail: option["description"] as? String)
             }
-            return Question(text: text, choices: choices)
+            return Question(
+                text: text, choices: choices, multiSelect: entry["multiSelect"] as? Bool ?? false
+            )
         }
         return questions.isEmpty ? nil : InteractivePrompt(questions: questions)
     }
@@ -228,5 +237,45 @@ struct PermissionContext: Equatable {
 
     static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
         lhs.toolUseId == rhs.toolUseId
+    }
+}
+
+/// The bar's side of answering an `InteractivePrompt`: which press answers
+/// at once, when the Send button is live, and the `answers` object the
+/// response carries (question text → answer; a multi-select is its labels
+/// joined by ", " in the options' own order). Pure, unit-tested.
+enum AskAnswer {
+    /// A press on one option of one question: the whole reply when one
+    /// press is the whole answer — a single single-select question. Nil
+    /// when the press only picks (something to tick, or more questions
+    /// than one to answer together).
+    static func immediateReply(question: Int, option: Int, prompt: InteractivePrompt) -> [String: String]? {
+        guard prompt.questions.count == 1, question == 0, option >= 0,
+              !prompt.questions[0].multiSelect,
+              option < prompt.questions[0].choices.count
+        else { return nil }
+        let q = prompt.questions[0]
+        return [q.text: q.choices[option].label]
+    }
+
+    /// Send is live only with every question answered — a question missing
+    /// from `answers` reaches Claude unanswered, so a draft never goes.
+    static func isComplete(picks: [Int: Set<Int>], prompt: InteractivePrompt) -> Bool {
+        answers(picks: picks, prompt: prompt) != nil
+    }
+
+    /// The `answers` object for what is picked, or nil while any question
+    /// has nothing picked. Multi-select labels keep the options' order.
+    static func answers(picks: [Int: Set<Int>], prompt: InteractivePrompt) -> [String: String]? {
+        var answers: [String: String] = [:]
+        for (index, question) in prompt.questions.enumerated() {
+            guard let picked = picks[index], !picked.isEmpty else { return nil }
+            let labels = question.choices.enumerated()
+                .filter { picked.contains($0.offset) }
+                .map(\.element.label)
+            guard !labels.isEmpty else { return nil }
+            answers[question.text] = labels.joined(separator: ", ")
+        }
+        return answers
     }
 }

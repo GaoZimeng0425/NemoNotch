@@ -333,41 +333,108 @@ struct EdgeBarCard: View {
         .background(ask ? EdgeBarPalette.amber.opacity(0.07) : Color.white.opacity(0.04))
     }
 
-    /// A multi-choice ask, shown as it is: the questions and every choice.
-    /// Allow/Deny would pretend to answer them — the hook protocol cannot —
-    /// so the one button goes where the choosing happens.
+    /// A multi-choice ask, answered here: one single-select question with a
+    /// press on its option; ticks and Send for anything with more to it
+    /// (multi-select, or several questions answered together). The answer
+    /// rides the permission response as `updatedInput.answers`; Deny stays
+    /// — telling Claude to go on without asking.
     private func promptBody(_ prompt: InteractivePrompt) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(prompt.questions.enumerated()), id: \.offset) { _, question in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(verbatim: question.text)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(EdgeBarPalette.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(Array(question.choices.enumerated()), id: \.offset) { _, choice in
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(verbatim: choice.label)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(EdgeBarPalette.textPrimary.opacity(0.9))
-                            if let detail = choice.detail, !detail.isEmpty {
-                                Text(verbatim: detail)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(Self.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
+        let needsDraft = prompt.questions.count > 1 || prompt.questions.contains { $0.multiSelect }
+        return VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(Array(prompt.questions.enumerated()), id: \.offset) { q, question in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(verbatim: question.text)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(EdgeBarPalette.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(question.multiSelect ? "edge_bar.pick_any" : "edge_bar.pick_one")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Self.secondary)
+                            ForEach(Array(question.choices.enumerated()), id: \.offset) { o, choice in
+                                optionRow(
+                                    .pick(q, o),
+                                    choice: choice,
+                                    picked: bar.askPicks[q]?.contains(o) == true
+                                )
                             }
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if row.hasHost {
-                cardButton(.jump, title: String(localized: "edge_bar.answer"), loud: true)
+            .frame(maxHeight: 168)
+            .fixedSize(horizontal: false, vertical: true)
+            if needsDraft {
+                HStack(spacing: 8) {
+                    cardButton(.deny, title: String(localized: "edge_bar.deny"), loud: false)
+                    cardButton(
+                        .send,
+                        title: String(localized: "edge_bar.send"),
+                        loud: AskAnswer.isComplete(picks: bar.askPicks, prompt: prompt)
+                    )
+                }
+                .padding(.top, 2)
             } else {
-                Text("edge_bar.answer_hint")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Self.secondary)
+                HStack(spacing: 8) {
+                    cardButton(.deny, title: String(localized: "edge_bar.deny"), loud: false)
+                    if row.hasHost {
+                        cardButton(.jump, title: String(localized: "edge_bar.answer"), loud: false)
+                    }
+                }
+                .padding(.top, 2)
             }
         }
+    }
+
+    /// One option, the whole row the press: label with its description,
+    /// picked shown as a filled dot before the label.
+    private func optionRow(
+        _ button: EdgeBarController.CardButton,
+        choice: InteractivePrompt.Choice,
+        picked: Bool
+    ) -> some View {
+        let hovered = bar.hoveredButton == button
+        let pressed = bar.pressedButton == button
+        return HStack(spacing: 7) {
+            ZStack {
+                Circle()
+                    .strokeBorder(picked ? EdgeBarPalette.amber : Color.white.opacity(0.35), lineWidth: 1)
+                    .frame(width: 11, height: 11)
+                if picked {
+                    Circle()
+                        .fill(EdgeBarPalette.amber)
+                        .frame(width: 5, height: 5)
+                }
+            }
+            Text(verbatim: choice.label)
+                .font(.system(size: 11, weight: picked ? .semibold : .medium))
+                .foregroundStyle(EdgeBarPalette.textPrimary.opacity(picked ? 1 : 0.9))
+            if let detail = choice.detail, !detail.isEmpty {
+                Text(verbatim: detail)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Self.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.white.opacity(hovered ? 0.10 : 0.03)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(
+                    picked ? EdgeBarPalette.amber.opacity(0.6) : Color.white.opacity(hovered ? 0.25 : 0.10),
+                    lineWidth: 1
+                )
+        )
+        .scaleEffect(pressed ? 0.98 : 1)
+        .animation(.easeOut(duration: 0.08), value: hovered)
+        .reportingFrame(button, to: bar)
     }
 
     private func sectionTitle(_ text: String) -> some View {

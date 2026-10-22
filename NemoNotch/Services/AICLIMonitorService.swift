@@ -95,6 +95,24 @@ final class AICLIMonitorService {
         }
     }
 
+    /// A multi-choice ask answered from the bar. Only Claude's PermissionRequest
+    /// protocol carries an answer; any other source is left to its own terminal.
+    func respondToAsk(sessionId: String, answers: [String: String]) {
+        guard let session = store.get(sessionId),
+              case let .waitingForApproval(ctx) = session.phase else { return }
+        switch session.source {
+        case .claude:
+            claudeProvider.respondToAsk(
+                sessionId: sessionId, originalInput: ctx.toolInput ?? "{}", answers: answers
+            )
+        case .gemini, .opencode, .zcode:
+            LogService.info(
+                "Ask answer not supported for \(session.source.rawValue); answer in its terminal",
+                category: "AICLIMonitorService"
+            )
+        }
+    }
+
     // MARK: - Event Routing
 
     private func routeEvent(_ event: HookEvent) {
