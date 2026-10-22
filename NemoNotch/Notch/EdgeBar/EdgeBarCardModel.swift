@@ -6,8 +6,8 @@ enum EdgeBarCardModel {
     enum Body: Equatable {
         /// A held permission: the tool and its input, with Deny/Allow. A
         /// multi-choice ask (AskUserQuestion) carries its `prompt` instead —
-        /// choices are the user's to make in the CLI, so the card shows them
-        /// and jumps, it does not pretend Allow/Deny answer them.
+        /// its options are answered on the card (`AskAnswer`), Deny tells
+        /// Claude to go on without asking.
         case approval(tool: String, input: String, prompt: InteractivePrompt?)
         /// The last reply of a turn that ended (parked at the prompt).
         case reply(String)

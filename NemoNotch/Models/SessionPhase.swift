@@ -101,9 +101,8 @@ enum SessionPhase: Equatable {
     }
 }
 
-/// An AskUserQuestion-shaped ask: the questions and the choices each offers.
-/// The hook protocol can only answer allow/deny — a choice is the user's to
-/// make in the CLI — so this exists for display, not for answering.
+/// An AskUserQuestion-shaped ask: the questions and the choices each
+/// offers, answered from the bar (`AskAnswer` builds the reply).
 struct InteractivePrompt: Equatable {
     struct Question: Equatable {
         let text: String
@@ -139,21 +138,30 @@ struct InteractivePrompt: Equatable {
     /// Claude Code's AskUserQuestion: `{"questions": [{question, options:
     /// [{label, description}]}]}` (1–4 questions, 2–4 options each). An
     /// older shape puts one `{question, options}` at the top level — accept
-    /// both. Nil when there is nothing to ask.
+    /// both. Nil when there is nothing to ask — and when two questions share
+    /// a text: the answer is keyed by that text, and a duplicate would
+    /// answer the wrong one (evlat's rule).
     static func parse(_ json: [String: Any]) -> InteractivePrompt? {
         var raw = json["questions"] as? [[String: Any]] ?? []
         if raw.isEmpty, json["question"] != nil {
             raw = [json]
         }
-        let questions: [Question] = raw.compactMap { entry in
-            guard let text = (entry["question"] as? String), !text.isEmpty else { return nil }
+        var seenTexts: Set<String> = []
+        var questions: [Question] = []
+        for entry in raw {
+            // An entry that cannot be answered by key refuses the whole ask,
+            // not just itself: an empty text has no key, and a duplicate
+            // text would have one answer land on the wrong question.
+            guard let text = (entry["question"] as? String), !text.isEmpty,
+                  seenTexts.insert(text).inserted
+            else { return nil }
             let choices = (entry["options"] as? [[String: Any]] ?? []).compactMap { option -> Choice? in
                 guard let label = option["label"] as? String, !label.isEmpty else { return nil }
                 return Choice(label: label, detail: option["description"] as? String)
             }
-            return Question(
+            questions.append(Question(
                 text: text, choices: choices, multiSelect: entry["multiSelect"] as? Bool ?? false
-            )
+            ))
         }
         return questions.isEmpty ? nil : InteractivePrompt(questions: questions)
     }
