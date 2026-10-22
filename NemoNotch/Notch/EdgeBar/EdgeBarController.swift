@@ -241,10 +241,15 @@ final class EdgeBarController: NSObject {
     // MARK: - Auto card
 
     /// Whether the bar opened itself for an approval (`EdgeBarAutoCard`).
-    /// Such a bar closes itself when the last approval is answered — the
-    /// cursor may never have come. The first real pointer enter hands the
-    /// bar to the cursor, whose exit then closes it as always.
+    /// Such a bar is held open until the last approval is answered — a
+    /// cursor crossing it changes nothing (a stray exit must not take the
+    /// ask away); answered, it closes itself (a cursor on the bar keeps it until that cursor leaves).
     @ObservationIgnored private var autoOpened = false
+
+    /// An exit does not fold the bar while this is true.
+    private var holdsBarForApproval: Bool {
+        autoOpened && (isOpen ? content.rows : content.closedRows).contains { $0.phase.isWaitingForApproval }
+    }
 
     private func autoCard(previous: EdgeBarModel.Content, next: EdgeBarModel.Content) {
         guard !UITestMode.isActive, !isDragging else { return }
@@ -477,16 +482,19 @@ final class EdgeBarController: NSObject {
         }
         switch pointer {
         case .entered:
-            // A real enter: the cursor owns the bar from here (an auto-opened
-            // bar stops closing itself; the exit that follows closes it).
-            autoOpened = false
             hover.pointerEntered()
         case .exited:
             rowSwitch.cancel()
             setIfChanged(\.hoveredRow, nil)
             setIfChanged(\.hoveredButton, nil)
             setIfChanged(\.isOverHead, false)
-            hover.pointerExited()
+            // A bar held open by an approval is not the cursor's to fold: a
+            // hand crossing it on the way elsewhere must not take the ask
+            // away. It closes when the approval is answered (or dragged, or
+            // the feature goes off) — never by a stray exit.
+            if !holdsBarForApproval {
+                hover.pointerExited()
+            }
         case let .moved(point):
             let bar = barPoint(point)
             setIfChanged(\.isOverHead, EdgeBarMetrics.isOverHead(x: bar.x, y: bar.y))
