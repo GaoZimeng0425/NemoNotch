@@ -139,7 +139,7 @@ struct EdgeBarCard: View {
         }
         .padding(.top, Self.padding)
         // A section ends the card when nothing follows it: it runs to the foot.
-        .padding(.bottom, row.hasHost && !goStandsDown || !Self.isSection(content) ? Self.padding : 0)
+        .padding(.bottom, (row.hasHost && !goStandsDown) || !Self.isSection(content) ? Self.padding : 0)
         .frame(width: EdgeBarMetrics.cardWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .background(Self.ground)

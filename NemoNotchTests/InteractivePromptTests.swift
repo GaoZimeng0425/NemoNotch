@@ -97,5 +97,9 @@ struct InteractivePromptTests {
         #expect(binary == .approval(tool: "Bash", input: "ls", prompt: nil))
 
         #expect(!EdgeBarCardModel.Body.reply("hi").asksToChoose)
+
+        // A parsed ask with no choice anywhere falls back to the binary card.
+        s.phase = .waitingForApproval(askContext(#"{"questions":[{"question":"Only a question?","options":[]}]}"#))
+        #expect(!EdgeBarCardModel.body(of: s).asksToChoose)
     }
 }

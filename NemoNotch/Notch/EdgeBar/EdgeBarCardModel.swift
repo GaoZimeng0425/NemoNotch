@@ -16,10 +16,12 @@ enum EdgeBarCardModel {
         case none
 
         /// A multi-choice ask: the bottom Go button stands down (the section
-        /// itself carries the way to the terminal).
+        /// itself carries the way to the terminal). A parsed ask with no
+        /// choice anywhere is not really a choice — it falls back to the
+        /// binary card rather than leaving Deny/Allow nowhere.
         var asksToChoose: Bool {
             if case let .approval(_, _, prompt) = self {
-                return prompt != nil
+                return prompt?.questions.contains { !$0.choices.isEmpty } ?? false
             }
             return false
         }
