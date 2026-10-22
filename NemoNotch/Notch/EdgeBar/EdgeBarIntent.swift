@@ -49,6 +49,19 @@ final class EdgeBarHoverIntent {
         onChange?(false)
     }
 
+    /// Open at once (a session began waiting for approval). Through the
+    /// intent for the same reason as `closeNow`: the open state stays
+    /// truthful for the pointer cycles that follow.
+    func openNow() {
+        guard !isOpen else {
+            cancelPending()
+            return
+        }
+        cancelPending()
+        isOpen = true
+        onChange?(true)
+    }
+
     private func want(_ open: Bool) {
         if open == isOpen {
             // Already there: whatever was pending went the other way.
