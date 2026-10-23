@@ -2,8 +2,8 @@
 
 Reviewer: 独立评审子代理 (zcode session, 2026-10-23)
 Date: 2026-10-23
-Reviewed-Head: f51cb41
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 53f94fd
+Verdict: APPROVED
 Scope:  4 files changed, 83 insertions(+), 3 deletions(-)
 
 ```
@@ -29,6 +29,21 @@ scripts/review.sh
 - 手册对账:worktree 内 `sh scripts/doc-audit.sh` exit 0(六对断言全绿);AGENTS.md 三处散文(观测不成律/bug 根因披露/生成技能不覆盖门禁)与「测试」节「新功能不强制 TDD(已定,勿重议)」等既有口径无矛盾。
 - 机制清场 grep(证据):`grep -rn "NEMONOTCH_SKIP" --include='*.md' --include='*.sh'`(全仓,排除 .worktree/)——新变量三处(manual/feat-done/plan-audit)拼写一致,无第四种拼法;`grep -rn "feat-done" docs/`——git-worktree-workflow.md 只述「合并前跑单测 + 独立评审」(仍为真,未列全部门禁、与 doc-audit 同等待遇,无矛盾口径);README/README_CN 同样只述单测,仍为真。未发现与新门禁构成矛盾的旧口径。
 - HEAD 考古:实现提交在交接前由 e016be0 **amend 成 f51cb41**(reflog:同作者/时间戳/message;amend 补上了 feat-done 接线 + review.sh + AGENTS.md hunk)。评审期间分支未被评审方改动;任务提示中的 e016be0 系 amend 前过时引用。
+
+## 补审(53f94fd — 2026-10-23,同评审子代理)
+
+修复范围核对:`git show --stat 53f94fd` 仅 scripts/plan-audit.sh(18+/6-),无顺手改动;shellcheck 修复后版零告警。逐条对账(评审实测,演示提交均 `git reset --hard` 复原、HEAD 与 status 终态核对):
+
+- **F1(P2)— 已解决,实测**:pathspec 加 `':(exclude)docs/superpowers/plans/archive/'`,头部注释改为与行为一致并写明理由;红态演示(活跃区 + archive/ 各一个裸框文件)exit 1 且**只列活跃区文件**,archive/ 文件不出现在输出——排除生效,注释/行为/commit message 三者对齐。
+- **F3(P3)— 已解决,实测**:勾框不提交 → `⚠️ …有未提交改动 — 门禁审计的是工作区版,合并只带走已提交版` + exit 0;提交后复跑无警告 + exit 0。与测试门禁的混合态警告同款。
+- **F4(P3)— 已解决,构造级验证**:`base=$(git merge-base HEAD develop) || { …exit 2; }` 的 POSIX 语义实测(`base=$(false) || handler` 正确触发;赋值语句状态=命令替换状态)加上代码走读确认;未造孤儿分支做全真触发(改动面小、逻辑直白,如实记为构造级)。
+- **F2(P3)— 部分解决,残留一条新 P3**(见下):(b) 场景(分支已提交、工作区删文件)已修——实测 exit 1「diff 报有此文件但工作区找不到」,fail-closed 生效;(a) 子目录场景**未修且注释说法被实测推翻**。
+
+**[P3·残留] scripts/plan-audit.sh:44 — 注释称 `[ ! -f ]` 守卫拦「比如从子目录跑」,实测从子目录跑根本到不了该守卫**:git pathspec 相对 **cwd** 解析,从 `docs/superpowers/` 下 `'docs/superpowers/plans/'` 解析到不存在的嵌套路径 → `plans` 为空 → 走「✅ 未动 plan 文档 — 跳过」exit 0 **假绿**(评审演示:子目录下提交了 plan 文件后运行,输出「跳过」)。影响面仅限**手动**从子目录跑——feat-done 接线恒 `(cd "$wt" && …)` 根目录,集成路径不受影响(接线即正确用法);文件头「在 feature worktree 根目录跑」是文档性约束而非机制约束。后续一行修:脚本开头 `cd "$(git rev-parse --show-toplevel)"`,或 pathspec 用 `':(top)'` 魔法(后者顺带让 `[ ! -f ]` 守卫对子目录真正生效)。不拦本次合并,建议随下个触及该文件的 feature 或 guardrail backlog 收口。
+
+开发会话自报的复测四项(archive 不触发/活跃裸框 exit 1/勾后 exit 0/未动 exit 0)与评审实测全部一致。
+
+**Verdict 翻转为 APPROVED 的依据**:唯一 P2(F1)已修并经评审实测确认;新残留为 P3 级(手动误用路径、集成路径经接线与实测双重确认安全),按首轮既定判例(P3 不拦合并)放行。Reviewed-Head 更新为 53f94fd。
 
 ## 三态复核(评审独立重做,非转述)
 
