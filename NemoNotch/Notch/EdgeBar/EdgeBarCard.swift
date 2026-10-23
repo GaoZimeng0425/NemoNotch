@@ -39,10 +39,13 @@ struct EdgeBarCardLayer: View {
         .animation(EdgeBarMotion.length, value: bar.cardLevel)
     }
 
-    /// A usage section's card, or a session's; a swap between the two
-    /// cross-fades inside the container.
+    /// A pending quota alert's card, a usage section's, or a session's; a
+    /// swap between them cross-fades inside the container.
     @ViewBuilder private func card(_ id: String) -> some View {
-        if let provider = EdgeBarUsage.provider(ofCardID: id) {
+        if let alert = bar.alert(ofCardID: id) {
+            EdgeBarAlertCard(alert: alert)
+                .transition(EdgeBarMotion.cardTransition(bar.side))
+        } else if let provider = EdgeBarUsage.provider(ofCardID: id) {
             if let detail = bar.usageDetail(provider) {
                 EdgeBarUsageCard(detail: detail)
                     .transition(EdgeBarMotion.cardTransition(bar.side))
@@ -494,7 +497,7 @@ struct EdgeBarCard: View {
     }
 }
 
-private extension View {
+extension View {
     /// A drawn button's rectangle for the controller's geometry-routed click;
     /// cleared when it goes.
     func reportingFrame(_ button: EdgeBarController.CardButton, to bar: EdgeBarController) -> some View {

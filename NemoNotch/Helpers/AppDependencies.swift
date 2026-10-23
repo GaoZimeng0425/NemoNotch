@@ -42,6 +42,7 @@ struct AppDependencies {
 
     let completionFlash: CompletionFlashService
     let edgeBar: EdgeBarController
+    let quotaAlerts: QuotaAlertMonitor
     let chatBubble: ChatBubbleController
     let lockScreenMonitor: LockScreenMonitor
     let lockScreenAIPanel: LockScreenAIPanelController?
@@ -103,6 +104,10 @@ struct AppDependencies {
         }
 
         let usageQuota = UsageQuotaService()
+        // 用量阈值提醒:监控器自带轮询定时器,与 usageQuota 的视图生命周期
+        // (setActive)解耦;start() 自带 UI 测试/单测宿主守卫,无条件调用安全。
+        let quotaAlerts = QuotaAlertMonitor(usageQuota: usageQuota, appSettings: settings)
+        quotaAlerts.start()
 
         let hud = HUDService(settings: settings)
 
@@ -161,6 +166,7 @@ struct AppDependencies {
             store: aiMonitor.store,
             appSettings: settings,
             usageQuota: usageQuota,
+            alerts: quotaAlerts,
             aiMonitor: aiMonitor,
             chatBubble: chatBubble
         )
@@ -214,6 +220,7 @@ struct AppDependencies {
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
             edgeBar: edgeBar,
+            quotaAlerts: quotaAlerts,
             chatBubble: chatBubble,
             lockScreenMonitor: lockMonitor,
             lockScreenAIPanel: lockScreenAIPanel,
