@@ -262,6 +262,10 @@ final class EdgeBarController: NSObject {
     /// The alert cards the last refresh saw; arrivals are measured against it.
     @ObservationIgnored private var knownAlerts: [String] = []
 
+    /// Until when a card's removal still owns the screen — the bar folds
+    /// after it, not alongside it (see `EdgeBarAutoCard.closePlan`).
+    @ObservationIgnored private var cardGoneBy: Date?
+
     /// An exit does not fold the bar while this is true.
     private var holdsBarForApproval: Bool {
         autoOpened && (isOpen ? content.rows : content.closedRows).contains { $0.phase.isWaitingForApproval }
@@ -286,11 +290,29 @@ final class EdgeBarController: NSObject {
             reveal(id)
             select(id)
         }
-        if autoOpened, !next.rows.contains(where: \.phase.isWaitingForApproval), alerts.alerts.isEmpty {
-            guard !pointerOnBar() else { return }
+        switch EdgeBarAutoCard.closePlan(
+            autoOpened: autoOpened,
+            approvalWaiting: next.rows.contains { $0.phase.isWaitingForApproval },
+            alertsPending: !alerts.alerts.isEmpty,
+            pointerOnBar: pointerOnBar(),
+            cardGoneBy: cardGoneBy,
+            now: Date()
+        ) {
+        case .close:
             autoOpened = false
             hover.closeNow()
             LogService.info("Auto-closed the bar: no approval waiting, no alert pending", category: "EdgeBar")
+        case let .waitForCard(recheckIn):
+            // The acknowledged card is still leaving; fold after it, with fresh
+            // state when it is gone (a cursor may have come, an alert may arrive).
+            DispatchQueue.main.asyncAfter(deadline: .now() + recheckIn) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.isOpen else { return }
+                    self.refresh()
+                }
+            }
+        case .standDown:
+            break
         }
     }
 
@@ -691,6 +713,11 @@ final class EdgeBarController: NSObject {
         hoveredButton = nil
         pressedButton = nil
         selectedRow = nil
+        // While the bar stays open, a card going away is still leaving the
+        // screen: the bar's own fold waits it out (see `EdgeBarAutoCard.closePlan`).
+        if isOpen, hosting?.cardRect != nil {
+            cardGoneBy = Date().addingTimeInterval(EdgeBarMotion.cardRemovalHold)
+        }
         hosting?.cardRect = nil
     }
 

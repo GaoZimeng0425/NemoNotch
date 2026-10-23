@@ -280,6 +280,10 @@ enum EdgeBarMotion {
     static let pressFeedback: TimeInterval = 0.12
     /// The usage refresh waits out the opening's curve.
     static let usageRefreshDelay: TimeInterval = 0.3
+    /// The bar's fold waits out a card's removal by at least this long — an
+    /// acknowledged card leaves the screen first, the bar folds after it,
+    /// never alongside it (see `EdgeBarAutoCard.closePlan`).
+    static let cardRemovalHold: TimeInterval = 0.2
     /// Seconds between beats (a waiting ring's wave).
     static let beatInterval: TimeInterval = 3
 

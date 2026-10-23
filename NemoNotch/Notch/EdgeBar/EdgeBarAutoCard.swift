@@ -64,4 +64,31 @@ enum EdgeBarAutoCard {
         }
         return Decision()
     }
+
+    /// The auto-opened bar folding itself: only with nothing left to show, the
+    /// cursor off the bar — and no card still on its way out. An acknowledged
+    /// alert deselects its card while the bar stays open (unlike an answered
+    /// approval, whose row keeps its card); folding at once ran the bar's fold
+    /// and the card's fade in the same breath. Pure and unit-tested.
+    enum ClosePlan: Equatable {
+        case close
+        /// A card is still leaving; re-decide this long from now.
+        case waitForCard(TimeInterval)
+        case standDown
+    }
+
+    static func closePlan(
+        autoOpened: Bool,
+        approvalWaiting: Bool,
+        alertsPending: Bool,
+        pointerOnBar: Bool,
+        cardGoneBy: Date?,
+        now: Date
+    ) -> ClosePlan {
+        guard autoOpened, !approvalWaiting, !alertsPending, !pointerOnBar else { return .standDown }
+        if let gone = cardGoneBy, now < gone {
+            return .waitForCard(gone.timeIntervalSince(now))
+        }
+        return .close
+    }
 }
