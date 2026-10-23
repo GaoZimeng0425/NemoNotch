@@ -2,7 +2,7 @@
 
 Reviewer: 独立评审子代理 (zcode session, 2026-10-23)
 Date: 2026-10-23
-Reviewed-Head: 53f94fd
+Reviewed-Head: fa75303
 Verdict: APPROVED
 Scope:  4 files changed, 83 insertions(+), 3 deletions(-)
 
@@ -44,6 +44,10 @@ scripts/review.sh
 开发会话自报的复测四项(archive 不触发/活跃裸框 exit 1/勾后 exit 0/未动 exit 0)与评审实测全部一致。
 
 **Verdict 翻转为 APPROVED 的依据**:唯一 P2(F1)已修并经评审实测确认;新残留为 P3 级(手动误用路径、集成路径经接线与实测双重确认安全),按首轮既定判例(P3 不拦合并)放行。Reviewed-Head 更新为 53f94fd。
+
+### 补审3(fa75303 — 子目录假绿收口)
+
+- **残留 P3 — 已解决,判别场景实测**:fa75303 在仓库检查后加 `cd "$(git rev-parse --show-toplevel)" || exit 2`,子目录运行统一挪到仓根再判。判别测试(分支提交裸框 plan + 从 `scripts/` 子目录跑):**exit 1 并列出 file:行号**——修复前该场景实测为「✅ 跳过」exit 0 假绿,判别力成立;复原后根目录跑 skip exit 0 无回归。`[ ! -f ]` 守卫的子目录来由注释随机制变化自然弱化(守卫仍覆盖工作区删除场景),无需再改。Reviewed-Head 更新为 fa75303。
 
 ## 三态复核(评审独立重做,非转述)
 
