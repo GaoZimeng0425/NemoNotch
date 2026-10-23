@@ -34,7 +34,7 @@ NemoNotch/
 
 1. `git feat xxx`:先拉最新(本地 develop 纯落后 origin 时 `--ff-only --autostash` 快进;分叉则警告留在本地;主检出不在 develop 则跳过拉取),再从刷新后的 develop 建 worktree。
 2. 在 worktree 里干活、提交。
-3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
+3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
 4. post-merge 钩子在主检出对 develop 收到 feature/hotfix 合并时自动跑 `./build.sh`(=自动部署);`NEMONOTCH_HOOK_DEBUG=1` 干跑。构建失败响亮但不回滚合并。
 5. `git feat-list` 列 worktree;`git feat-gc` 清已合并进 develop 的本地 feature/hotfix 化石分支(只 `-d` 删已合并,未合并的列出不动;worktree 在用的跳过——**刚建未提交的分支与 develop 同指针,会被 `--merged` 列出**,靠这层过滤保住,实测踩过)。细节 `docs/git-worktree-workflow.md`。
 
@@ -213,13 +213,15 @@ graph LR
 - **推翻旧口径 ⇒ 全仓 grep 旧口径残留**(AGENTS.md、docs/、代码注释、测试注释):doc-audit 只管成对断言的机器事实,散文口径的清场靠这一步。
 - **原则(触发式,命中即应用;格式:何时触发 → 判据)**:
   - **教训优先结构化**:任何"下次别再犯"——能做成 lint/钩子/脚本强制的就不写提示词,先落门禁;文档是次选(doc-audit 即此哲学的产物)。
+  - **观测不成律**:想下「X 导致 Y」的因果结论并写进文档/记忆前——先原样重做确认可复现,验因果一次只动一个变量;做不到就只记现象(失败次数+日志)不写归因。错误归因比没有归因贵:它派你去修错的东西,真因在别处躺着(build.sh 偶发失败的单样本归因是反例)。
   - **攻击前提**:两个及以上修法共享同一前提且都失败过 → 前提本身错,先质疑前提再写第三个修法("hook 协议不可行"误判的教训:先查兄弟项目实装再下断言)。
   - **先删后加**:排期一次新增/重构,先删死代码/冗余校验/桩引用,在更简的底上动工。
   - **序列可验证单元**:多步工作拆成每个收尾都处于可验证状态的单元,逐个验证再进下一个;提交顺序让评审能顺着序列自证。
   - **造杠杆**:非平凡工作优先造可重跑的工具/脚本(codemod/验证脚本)——手工一遍等于评审无法复跑(scripts/*.sh 即此哲学)。
   - **穷尽设计空间**:无先例的交互/架构决策,先做 2–3 个竞争原型对比再定,不锁死第一版形状(脑暴阶段用)。
 - **提问分类器**:要问用户前先自问——答案是否"跑一下就能观察到"(行为/耗时/布局/输出)?能 → 做探针/原型让结果说话,不问;只有真正的产品/偏好取舍留给人。
-- **任务入口分流**:investigation(只读调查)引用证据直接作答,不建 worktree 不跑执行环;bug 类 plan 首任务=落失败测试;feature 走完整管线(brainstorming → writing-plans → git feat → implement-with-review 工作流 → feat-done)。
+- **任务入口分流**:investigation(只读调查)引用证据直接作答,不建 worktree 不跑执行环;bug 类 plan 首任务=落失败测试,可观察症状优先真机复现,复现不出须明说「根因系代码审阅推断」并经用户确认再修——推断根因被实测推翻会报废整张 plan;feature 走完整管线(brainstorming → writing-plans → git feat → implement-with-review 工作流 → feat-done)。
+- **生成技能文本不覆盖本仓门禁**:superpowers 等第三方技能是通用产物,自带流程口径(严格 TDD、worktree 内合并收尾等)。技能管"做事的手艺",门禁与已定决策归本手册,冲突时手册赢。恒例:技能的 TDD 要求不推翻「新功能不强制 TDD」;收尾一律 feat-done 主检出合并,不按技能在 worktree 内合并;技能升级换文本不改变这两条。
 - **收尾例行(reflect)**:任务合并部署后提炼本次教训——先过"能不能做成门禁"检查,能强制的记入 `docs/guardrail-backlog.md` 排期硬化(pstack Backlog 路由同款),其余写进本手册坑总目录或 `docs/experience-playbook.md`。一次性的事不是教训。
 - 功能增改后同步更新 `README.md`、`README_CN.md`、`AGENTS.md`(功能描述/技术栈/架构)。
 - 设计文档:spec 在 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`,plan 在 `docs/superpowers/plans/`,ship 后 plan 挪 `archive/`;plan 文档随代码一起提交。

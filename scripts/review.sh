@@ -46,6 +46,16 @@ fi
 stat=$(git -C "$wt" diff --stat "$base...HEAD" | tail -1)
 files=$(git -C "$wt" diff --name-only "$base...HEAD")
 
+# 工作流机制清场项(条件生成):触及 hooks/scripts/CI 的 feature 自动多一行清单——
+# 触发集与 feat-done 评审门禁的工程面同判据。判断(哪个旧口径死了、grep 哪个词)
+# 留给评审者;脚本只保证「这一步不被遗忘」(octok「机制改动必带全文档 sweep」的
+# 借鉴,2026-10-23)。
+mech=$(printf '%s\n' "$files" | grep -E '^(\.githooks/|scripts/|\.github/)' || true)
+mech_item=""
+if [ -n "$mech" ]; then
+  mech_item='- [ ] **工作流机制清场**:本分支触及 hooks/scripts/CI——旧口径(措辞/路径/次序)全仓 grep 过了吗(AGENTS.md、docs/、注释)?证据贴 Findings。'
+fi
+
 cat > "$note" <<EOF
 # Code Review — feature/$name
 
@@ -72,7 +82,7 @@ ${files:-(无文件)}
 - [ ] **错误路径**:失败会响(非零退出/日志),没有吞错、没有假绿
 - [ ] **坑总目录对照**:改到的区域在 AGENTS.md 有已知坑吗?对照过了吗?
 - [ ] **文档同步**:行为变了的话 AGENTS.md / README 跟上了吗?
-
+${mech_item}
 ## 评审方法提示(给评审会话)
 
 在 worktree 里:\`git diff $base...HEAD\` 看全量改动;重要文件直接读上下文,

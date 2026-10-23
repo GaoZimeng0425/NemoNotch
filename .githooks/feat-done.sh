@@ -56,6 +56,21 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/doc-audit.sh" ]; then
   fi
 fi
 
+# ── plan 全勾门禁:本分支动过的 plan 文档不许有裸着的未勾任务框 ──
+# doc-audit 只对账成对断言,「漏做半张 plan 也能合」是它的盲区(octok「收尾全勾」
+# 的机械化,2026-10-23)。跳过的合法形态=勾上写原因或删行。逃生:NEMONOTCH_SKIP_PLAN_AUDIT=1。
+if [ "${NEMONOTCH_SKIP_PLAN_AUDIT:-0}" = "1" ]; then
+  echo "⏭  NEMONOTCH_SKIP_PLAN_AUDIT=1 — 跳过 plan 全勾门禁" >&2
+elif [ -n "$wt" ] && [ -f "$wt/scripts/plan-audit.sh" ]; then
+  echo "📋 plan 全勾门禁:在 worktree 跑 plan-audit…"
+  if ! (cd "$wt" && sh scripts/plan-audit.sh); then
+    echo "" >&2
+    echo "❌ plan 全勾门禁未过 — 中止合并,worktree 与分支原样保留。" >&2
+    echo "   补做任务,或勾上框写明跳过原因后重试。应急跳过:NEMONOTCH_SKIP_PLAN_AUDIT=1 git feat-done $name" >&2
+    exit 1
+  fi
+fi
+
 # ── 评审门禁:judge ≠ author 的机械化(2026-10-20)──
 # 判断不能机械化,评审的「发生」可以:改动触及代码/scripts/hooks/CI 的 feature,
 # 合并前必须有 .reviews/<name>.md 且 Verdict: APPROVED——由**未参与开发**的
