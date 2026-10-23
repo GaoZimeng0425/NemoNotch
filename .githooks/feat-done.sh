@@ -85,7 +85,27 @@ elif [ -n "$wt" ]; then
     fi
     verdict=$(git -C "$wt" show "HEAD:.reviews/$name.md" | grep '^Verdict:' | head -1 | sed 's/^Verdict: *//')
     reviewer=$(git -C "$wt" show "HEAD:.reviews/$name.md" | grep '^Reviewer:' | head -1 | sed 's/^Reviewer: *//')
-    echo "🧑‍⚖️ 评审门禁:.reviews/$name.md — Verdict: $verdict(Reviewer: $reviewer)"
+    # ── 判决新鲜度(机械化):Verdict 描述的代码必须就是当前的代码 ──
+    # 评审者记录 Reviewed-Head(评审时的分支 head 短哈希);对比对象是**最近一次
+    # 非 .reviews 提交**的 head——评审记录本身通常在评审之后才提交,不能拿它算过期。
+    # rebase/重写会让两边对不上:旧 Verdict 不再描述补丁,须补审。
+    reviewed_head=$(git -C "$wt" show "HEAD:.reviews/$name.md" | grep '^Reviewed-Head:' | head -1 | sed 's/^Reviewed-Head: *//' | tr -d '[:space:]')
+    code_head=$(git -C "$wt" log --format=%h -1 -- . ':!.reviews')
+    if [ -z "$reviewed_head" ]; then
+      echo "" >&2
+      echo "❌ 评审记录缺 Reviewed-Head: 行(判决新鲜度无法核对)— 让评审者补记" >&2
+      echo "   评审时的 head 短哈希(git rev-parse --short HEAD)后重新提交记录。应急:NEMONOTCH_SKIP_REVIEW=1" >&2
+      echo "" >&2
+      exit 1
+    fi
+    if [ "$reviewed_head" != "$code_head" ]; then
+      echo "" >&2
+      echo "❌ 判决过期 — 评审时 head $reviewed_head ≠ 当前代码 head $code_head(评审后 rebase/重写过)。" >&2
+      echo "   旧 Verdict 不再描述当前补丁:补审后更新 Reviewed-Head 再提交。应急:NEMONOTCH_SKIP_REVIEW=1" >&2
+      echo "" >&2
+      exit 1
+    fi
+    echo "🧑‍⚖️ 评审门禁:.reviews/$name.md — Verdict: $verdict(Reviewer: $reviewer;Reviewed-Head: $reviewed_head ✓)"
   fi
 else
   echo "⚠️  分支没有 worktree — 评审门禁无法检查已提交的评审记录,请自行确保评审已完成" >&2

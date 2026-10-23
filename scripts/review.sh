@@ -51,6 +51,7 @@ cat > "$note" <<EOF
 
 Reviewer: (填:评审会话/子代理标识。绝不能是写这段代码的那个——judge ≠ author)
 Date: $(date +%F)
+Reviewed-Head: (填:评审时分支 head 短哈希,git rev-parse --short HEAD。feat-done 会核对它与最近一次非 .reviews 提交的 head 一致——rebase/重写后旧 Verdict 失效,须补审)
 Verdict: (填 APPROVED 或 CHANGES_NEEDED —— feat-done 门禁按行首「Verdict: APPROVED」匹配,保持行首裸格式)
 Scope: ${stat:-无改动}
 
