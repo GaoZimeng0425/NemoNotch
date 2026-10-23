@@ -96,6 +96,8 @@ final class AppSettings {
     static let lockScreenAIPanelEnabledKey = "lockScreenAIPanelEnabled"
     static let waitingReminderEnabledKey = "waitingReminderEnabled"
     static let waitingReminderMinutesKey = "waitingReminderMinutes"
+    static let quotaAlertEnabledKey = "quotaAlertEnabled"
+    static let quotaAlertThresholdKey = "quotaAlertThreshold"
 
     var claudeEnabled: Bool {
         didSet { UserDefaults.standard.set(claudeEnabled, forKey: Self.claudeEnabledKey) }
@@ -170,6 +172,18 @@ final class AppSettings {
 
     var waitingReminderMinutes: Int {
         didSet { UserDefaults.standard.set(waitingReminderMinutes, forKey: Self.waitingReminderMinutesKey) }
+    }
+
+    /// Edge-bar cards when a quota window passes `quotaAlertThreshold` (and when
+    /// it recovers), held until acknowledged. Default off — alerts are opt-in,
+    /// like `waitingReminderEnabled`.
+    var quotaAlertEnabled: Bool {
+        didSet { UserDefaults.standard.set(quotaAlertEnabled, forKey: Self.quotaAlertEnabledKey) }
+    }
+
+    /// Percent used (50...100) that fires the alert.
+    var quotaAlertThreshold: Int {
+        didSet { UserDefaults.standard.set(quotaAlertThreshold, forKey: Self.quotaAlertThresholdKey) }
     }
 
     // MARK: - Keep awake (合盖不休眠)
@@ -277,6 +291,10 @@ final class AppSettings {
             .object(forKey: Self.waitingReminderEnabledKey) as? Bool ?? false
         waitingReminderMinutes = UserDefaults.standard
             .object(forKey: Self.waitingReminderMinutesKey) as? Int ?? 5
+        quotaAlertEnabled = UserDefaults.standard
+            .object(forKey: Self.quotaAlertEnabledKey) as? Bool ?? false
+        quotaAlertThreshold = UserDefaults.standard
+            .object(forKey: Self.quotaAlertThresholdKey) as? Int ?? 80
         keepAwakeLidDisplayOff = UserDefaults.standard
             .object(forKey: Self.keepAwakeLidDisplayOffKey) as? Bool ?? true
         keepAwakeRestoreOnQuit = UserDefaults.standard

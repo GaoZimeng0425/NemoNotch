@@ -72,6 +72,27 @@ struct AlertsSettingsPage: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section("settings.quota_alert.header") {
+                Toggle("settings.quota_alert.enabled", isOn: Binding(
+                    get: { appSettings.quotaAlertEnabled },
+                    set: { appSettings.quotaAlertEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                Picker("settings.quota_alert.threshold", selection: Binding(
+                    get: { appSettings.quotaAlertThreshold },
+                    set: { appSettings.quotaAlertThreshold = $0 }
+                )) {
+                    ForEach([50, 60, 70, 80, 90, 100], id: \.self) { percent in
+                        Text(verbatim: "\(percent)%").tag(percent)
+                    }
+                }
+                if !appSettings.aiStatusFabEnabled {
+                    Text("settings.quota_alert.needs_bar")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
     }
