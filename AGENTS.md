@@ -38,7 +38,7 @@ NemoNotch/
 4. post-merge 钩子在主检出对 develop 收到 feature/hotfix 合并时自动跑 `./build.sh`(=自动部署);`NEMONOTCH_HOOK_DEBUG=1` 干跑。构建失败响亮但不回滚合并。
 5. `git feat-list` 列 worktree;`git feat-gc` 清已合并进 develop 的本地 feature/hotfix 化石分支(只 `-d` 删已合并,未合并的列出不动;worktree 在用的跳过——**刚建未提交的分支与 develop 同指针,会被 `--merged` 列出**,靠这层过滤保住,实测踩过)。细节 `docs/git-worktree-workflow.md`。
 
-**Judge ≠ author(已机械化)**:改动触及代码/scripts/hooks/CI 的 feature,合并前必须有 `.reviews/<name>.md` 评审记录且 **Verdict: APPROVED**——由**未参与开发**的会话/子代理填写(`sh scripts/review.sh <name>` 生成模板与审查清单:判别剃刀/证据纪律/Swift 6 并发/最小改动/错误路径/坑总目录对照)。feat-done 的评审门禁检查记录(纯文档 feature 自动跳过;`NEMONOTCH_SKIP_REVIEW=1` 应急)。评审记录随分支提交 = 永久证据链。CI 绿 / lint 绿 / 构建成功是**信号不是判决**。**判决新鲜度**:评审记录须写明评审时的分支 head 短哈希;feat-done 前核对分支未 rebase/重写——head 变了旧 Verdict 不再描述补丁,须补审。
+**Judge ≠ author(已机械化)**:改动触及代码/scripts/hooks/CI 的 feature,合并前必须有 `.reviews/<name>.md` 评审记录且 **Verdict: APPROVED**——由**未参与开发**的会话/子代理填写(`sh scripts/review.sh <name>` 生成模板与审查清单:判别剃刀/证据纪律/Swift 6 并发/最小改动/错误路径/坑总目录对照)。feat-done 的评审门禁检查记录(纯文档 feature 自动跳过;`NEMONOTCH_SKIP_REVIEW=1` 应急)。评审记录随分支提交 = 永久证据链。CI 绿 / lint 绿 / 构建成功是**信号不是判决**。**判决新鲜度(已机械化)**:评审记录须含 `Reviewed-Head:` 行(评审时的分支 head 短哈希,review.sh 模板自带);feat-done 门禁自动核对它与最近一次非 .reviews 提交的 head——评审后 rebase/重写即拒绝,补审后更新该行才能合。
 
 **钩子(每 clone 跑一次 `sh .githooks/install.sh`;副本会自检——`git feat`/`feat-done`/`feat-gc`/`pre-commit` 启动时经 `.githooks/freshness.sh` 逐字节对比 `.githooks/` 源与已装副本,不一致自动重装并中止本次让你重跑;`freshness.sh` 自身不复制,检查器永不过期。改源不重装 = 静默跑旧代码、排障盯一份没在执行的源文件——这是它存在的理由。在 worktree 里开发 hooks 自身时 `NEMONOTCH_SKIP_FRESHNESS=1` 跳过):**
 - `pre-commit`:拦 main/master 直提;拦主检出直提(唯一例外:带着 `MERGE_HEAD` 收尾冲突合并);对 staged `*.swift` 跑 lint 门禁;对 staged `*.xcstrings` 跑 `scripts/xcstrings.py format` 归一化。
@@ -53,7 +53,7 @@ NemoNotch/
 
 - 单测在 `NemoNotchTests/`,用 **Swift Testing**(`import Testing`、`@Test`、`#expect`),新代码不要用 XCTest。
 - 只测纯逻辑(parser、编码、状态机);ScriptingBridge/AX/NSWindow 集成测试跳过(要真权限,CI 不稳)。
-- **跑测试用 `sh scripts/test.sh`**(不是裸 xcodebuild——它带本机 ad-hoc 签名参数;支持 `--only <Class>`;全量输出写 `build/test.log`)。**报告测试结果必须引脚本的退出码和日志,绝不凭记忆复述"过了"**。
+- **跑测试用 `sh scripts/test.sh`**(不是裸 xcodebuild——它带本机 ad-hoc 签名参数;`--only <Class>` 支持逗号列表;全量输出写 `build/test.log`)。**影响面测试选择已硬化**:feature worktree 里用 `sh scripts/affected-tests.sh`——改动文件→顶层符号→测试引用的确定性映射选类,映射为空回落全量(宁多跑不漏跑);**禁手挑 --only 类名**(--only 选错类的假绿出过实案;ripwire --affected 对 Swift Testing 宏测试解析不了,tests=0 实测,故自建映射)。**报告测试结果必须引脚本的退出码和日志,绝不凭记忆复述"过了"**。
 - `feat-done` 合并前在 worktree 跑单测——合并即部署 /Applications,测试必须先于部署。
 - **冷启动宿主崩溃有界重试**:仅当「非零退出 + 0 个用例执行 + 日志含崩溃特征(`Early unexpected exit`/`Test runner exited` 等)」同时成立才重试一次(首次日志存 `build/test.log.crash1`)——真失败/编译错误绝不重试,不给真失败擦粉。`NEMONOTCH_TEST_NO_RETRY=1` 关;特征词待抓到真实崩溃日志后校准。
 - **判别剃刀(假测试判据)**:每个测试必须以具体输入调被测单元、断言字面输出或可观察副作用。问:*被测代码到处返回默认值,这测试还能过吗?*能过就没有鉴别力。不可接受:只断言"调用发生了"、自指期望(`#expect(f(a)) == f(a)` 形)、钉手写常量。例外:跨表关系断言。范例:`CompletionDetector`、`BadgeGrouping` 等纯 fold 测试。
@@ -210,7 +210,7 @@ graph LR
   - **穷尽设计空间**:无先例的交互/架构决策,先做 2–3 个竞争原型对比再定,不锁死第一版形状(脑暴阶段用)。
 - **提问分类器**:要问用户前先自问——答案是否"跑一下就能观察到"(行为/耗时/布局/输出)?能 → 做探针/原型让结果说话,不问;只有真正的产品/偏好取舍留给人。
 - **任务入口分流**:investigation(只读调查)引用证据直接作答,不建 worktree 不跑执行环;bug 类 plan 首任务=落失败测试;feature 走完整管线(brainstorming → writing-plans → git feat → implement-with-review 工作流 → feat-done)。
-- **收尾例行(reflect)**:任务合并部署后提炼本次教训——先过"能不能做成门禁"检查,能强制的记 TODO 做成脚本/钩子;其余写进本手册坑总目录或 `docs/experience-playbook.md`。一次性的事不是教训。
+- **收尾例行(reflect)**:任务合并部署后提炼本次教训——先过"能不能做成门禁"检查,能强制的记入 `docs/guardrail-backlog.md` 排期硬化(pstack Backlog 路由同款),其余写进本手册坑总目录或 `docs/experience-playbook.md`。一次性的事不是教训。
 - 功能增改后同步更新 `README.md`、`README_CN.md`、`AGENTS.md`(功能描述/技术栈/架构)。
 - 设计文档:spec 在 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`,plan 在 `docs/superpowers/plans/`,ship 后 plan 挪 `archive/`;plan 文档随代码一起提交。
 - 多 provider 场景协议优先:协议只放公共接口;各 provider 保留自己的 Result 类型与解析逻辑,**别强推统一数据结构**;加 provider 只实现协议,零改既有代码。

@@ -73,7 +73,8 @@ const IMPLEMENTER_PERSONA =
   "不自行改设计、不扩范围、不顺手重构;" +
   "不建/不删 worktree 与分支,不运行 git feat-done,不 push;" +
   "全部任务完成后的判据是仓库固定脚本:sh scripts/lint.sh --staged --fix 并重新暂存," +
-  "plan 涉及 Swift 变更时跑针对性测试 sh scripts/test.sh --only <TestClass>," +
+  "plan 涉及 Swift 变更时跑影响面测试 sh scripts/affected-tests.sh——测试类由它确定性选出," +
+  "你不挑类名(手挑 --only 出过假绿);它映射为空会自动回落全量," +
   "报告只引用脚本真实退出码,绝不凭记忆复述;" +
   "plan 要求同步 README/AGENTS 文档时按 plan 办,plan 没提就不动。";
 
@@ -85,7 +86,7 @@ const REVIEWER_PERSONA =
   "除非明显必要且提交信息说明了理由;逐任务提交是否如 plan 所列)。" +
   "验证必须亲跑(lint/针对性测试/必要处变异),引用真实退出码;不得只信实现者的自述。" +
   "把 Findings(按 P1/P2/P3)与 Verdict 写入 worktree 的 .reviews/<分支>.md " +
-  "(首轮先跑 sh scripts/review.sh <branch> 生成模板;后续轮次在既有记录上按轮次追加,**绝不重跑 review.sh 覆盖**——中间轮 findings 是证据链),并在记录里写明评审时的分支 head 短哈希" +
+  "(首轮先跑 sh scripts/review.sh <branch> 生成模板;后续轮次在既有记录上按轮次追加,**绝不重跑 review.sh 覆盖**——中间轮 findings 是证据链),并在记录里写明 Reviewed-Head: 行(评审时 git rev-parse --short HEAD 的输出,feat-done 门禁逐字核对)" +
   "(feat-done 前核对分支未 rebase——head 变了本 Verdict 不再描述补丁);" +
   "除该文件外不得修改任何文件,不得提交。" +
   "批准需要证据,反对要给出可复现的理由;无法验证就明说,不猜。";

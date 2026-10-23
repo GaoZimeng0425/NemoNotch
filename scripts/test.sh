@@ -6,6 +6,7 @@
 # Usage:
 #   sh scripts/test.sh                              # 全量单元测试
 #   sh scripts/test.sh --only FooTests              # 只跑 NemoNotchTests/FooTests
+#   sh scripts/test.sh --only FooTests,BarTests     # 逗号列表 = 多个类(affected-tests.sh 用)
 #   sh scripts/test.sh --only NemoNotchTests/FooTests/testBar   # 完整路径原样透传
 set -u
 
@@ -27,10 +28,14 @@ done
 # shellcheck disable=SC2086
 only_flag=
 if [ -n "$only" ]; then
-  case "$only" in
-    */*) only_flag="-only-testing:$only" ;;  # 已含模块前缀,原样透传
-    *)   only_flag="-only-testing:NemoNotchTests/$only" ;;
-  esac
+  # 逗号列表 → 多个 -only-testing: 标志(affected-tests.sh 的确定性类清单)。
+  # 标识符不含空格,tr 拆分安全;含路径的条目原样透传。
+  for part in $(echo "$only" | tr ',' ' '); do
+    case "$part" in
+      */*) only_flag="$only_flag -only-testing:$part" ;;
+      *)   only_flag="$only_flag -only-testing:NemoNotchTests/$part" ;;
+    esac
+  done
 fi
 
 mkdir -p build
