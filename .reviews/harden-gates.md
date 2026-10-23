@@ -2,7 +2,7 @@
 
 Reviewer: ZCode 独立评审子代理(GLM-5.3,未参与本 feature 开发,judge ≠ author)
 Date: 2026-10-23
-Reviewed-Head: 4d71ee6
+Reviewed-Head: 445ce8c
 Verdict: APPROVED
 Scope:  7 files changed, 155 insertions(+), 10 deletions(-)
 
@@ -70,7 +70,7 @@ Verdict: APPROVED(维持;无新增 P1,残留 P2 仍为潜伏性、当前代码�
 
 ### 复核 Findings
 
-- **[P2·残留] `scripts/affected-tests.sh:66`(首轮 P2 的修复不完整)** — extract() 现在能抽到 `@Observable final class X`(探针:`echo '@Observable final class ProbeSameLine {'` 经新 sed 捕获 `ProbeSameLine`),但 **declared 集过滤仍用无属性词表**:`^[[:space:]]*(final |public |private |fileprivate |internal |open |static )*(class|…)` 对同一行 grep 为**空**(探针实测),line 67 的 `grep -Fx -f` 会把该符号**滤掉**。对修复声称的目标场景(同行属性声明)管线净效果与修复前相同:多类型文件里被其它符号掩盖时仍静默少跑;单类型文件仍经"符号空→映射空→回落全量"自愈。修复建议:line 66 的前缀组同步改为容 `@[A-Za-z]+ `(与 extract 同词表)。仍非阻塞:全仓同行属性声明依旧 0 个,纯潜伏。
+- **[P2·残留] `scripts/affected-tests.sh:66`(首轮 P2 的修复不完整)** — extract() 现在能抽到 `@Observable final class X`(探针:`echo '@Observable final class ProbeSameLine {'` 经新 sed 捕获 `ProbeSameLine`),但 **declared 集过滤仍用无属性词表**:`^[[:space:]]*(final |public |private |fileprivate |internal |open |static )*(class|…)` 对同一行 grep 为**空**(探针实测),line 67 的 `grep -Fx -f` 会把该符号**滤掉**。对修复声称的目标场景(同行属性声明)管线净效果与修复前相同:多类型文件里被其它符号掩盖时仍静默少跑;单类型文件仍经"符号空→映射空→回落全量"自愈。修复建议:line 66 的前缀组同步改为容 `@[A-Za-z]+ `(与 extract 同词表)。仍非阻塞:全仓同行属性声明依旧 0 个,纯潜伏。→ **445ce8c 已修闭环**(declared 集词表已同步,见文末「复核 445ce8c」节)。
 - 无新增 P3;新正则未引入误吸面(`@[A-Za-z]+ ` 要求尾随空格,`@objc(FOO)` 这类带括号形式不匹配,列 0 本就罕见)。
 
 ### 复核验证(亲跑,命令 + 退出码)
@@ -83,3 +83,36 @@ Verdict: APPROVED(维持;无新增 P1,残留 P2 仍为潜伏性、当前代码�
 ### 结论
 
 修复方向正确但只改了管线两段中的一段;目标场景行为未变。鉴于该场景在当前仓库零命中(纯潜伏)、非阻塞,维持 APPROVED,建议随本 feature 或下一个 touches-scripts 的 feature 把 line 66 前缀组对齐后关闭该 P2。
+
+---
+
+## 复核 445ce8c(2026-10-23,第三轮;amend 前旧 head 4d71ee6)
+
+Reviewer: 同上(ZCode 独立评审子代理)
+Reviewed-Head: 445ce8c
+Verdict: APPROVED(维持;第二轮 P2·残留已修闭环,仅余信息性 P3)
+
+### 改动核对
+
+`git diff 4d71ee6..445ce8c -- scripts/` = **仅 `scripts/affected-tests.sh` 一行**(line 66 declared 集管线:grep 与 sed 同步把前缀组改为可重复并加入 `@[A-Za-z]+ `,sed 捕获 `\3`→`\4` 重编号正确)。另:第二轮评审记录更新被卷入本 amend——即流程教训实例(见下)。
+
+### 复核 Findings
+
+- **第二轮 P2·残留 → 已修闭环**(证据见下,管线两段词表已一致,同行属性声明端到端精准选类)。
+- **[P3·信息] 带括号属性仍两段一致抓不到**:`@available(macOS 13.0, *) final class X` 经 extract sed 与 declared grep 均零匹配(探针实测)——`@[A-Za-z]+ ` 要求尾随空格,`@available(…)`/`@objc(FOO)` 不匹配。与第二轮的不对称不同,这次**两段一致**,单类型文件仍自愈回落;列 0 同行带括号属性比无括号属性更罕见。记录备查,不建议本 feature 内再扩。
+- 无新增 P2;declared 集扩大只增不减(grep -Fx 交集方向安全),未引入误吸面。
+
+### 复核验证(亲跑,命令 + 退出码)
+
+1. **修复路径端到端探针**(仓库临时文件,跑完即删,`git status --porcelain` 空):创建 `NemoNotch/ProbeSameLine.swift`(`@Observable final class ProbeSameLine { var value = 42 }`,声明与属性**同行**)+ `NemoNotchTests/ProbeSameLineTests.swift`(真断言 `#expect(ProbeSameLine().value == 42)`)→ `sh scripts/affected-tests.sh --files NemoNotch/ProbeSameLine.swift` → **命中符号 1 个**(第二轮此处会被 declared 集滤成 0 → 回落全量)、精准选出 `ProbeSameLineTests`、**1 通过 / 0 失败,exit 0**(pbxproj 是 PBXFileSystemSynchronizedRootGroup,新文件自动进 target,真编译真跑)。
+2. **回归**:`sh scripts/affected-tests.sh --files NemoNotch/Models/SessionPhase.swift` → 与前两轮**逐字一致**:10 类、72 通过 / 0 失败,exit 0。
+3. 括号属性一致性探针(literal I/O):`@available(macOS 13.0, *) final class ParenAttr {` 两段管线均零匹配 → 上述 P3·信息。
+4. `git rev-parse --short HEAD` = 445ce8c;记录更新后待提交(feat-done 的 `grep '^Reviewed-Head:' | head -1` 读首行 = 445ce8c,与 `git log --format=%h -1 -- . ':!.reviews'` 一致)。
+
+### 流程教训(记入证据链)
+
+**代码 amend 与评审记录提交必须分开**:本 feature 连续两轮 amend 把评审记录卷进代码提交,`Reviewed-Head:` 随之连续过期两轮(29b3b57→4d71ee6→445ce8c)——这正是判决新鲜度门禁在正确咬合:Verdict 描述的必须是当前代码,head 一动就得补审。后续约定:评审记录单独 commit(它本身在 `':!.reviews'` 排除集内,不会推走 code_head),代码 amend 不 touching `.reviews/`。
+
+### 结论
+
+第二轮 P2 修复闭环(两段词表一致,同行属性场景端到端验证通过),回归零变化。维持 APPROVED。
