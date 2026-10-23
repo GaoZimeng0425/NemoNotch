@@ -2,7 +2,7 @@
 description: NemoNotch 开发执行环(pstack 融入版):主对话脑暴澄清(提问分类器)、writing-plans 写 plan、git
   feat 建环境后启动;实现子代理按 executing-plans
   逐任务实现;评审双席并行——评审员(仓库清单)+挑战者(对抗镜头:并发时序/错误路径/注释审判/ripwire 影响面),findings 合并写入
-  .reviews,P1/P2 回流修复(≤3 轮)。脑暴、规划、环境、合并与 push 留在主对话。
+  .reviews(后续轮追加不覆盖),P1/P2 回流修复(≤3 轮,回流携带上轮意见)。脑暴、规划、环境、合并与 push 留在主对话。
 whenToUse: 仅 feature 类任务。主对话已完成:①brainstorming
   脑暴(提问分类器:可实验回答的做探针,只问产品/偏好取舍);②git feat 建 worktree、plan 文档写入
   docs/superpowers/plans/。investigation 只读调查不启动本工作流;bug 类 plan 首任务=落失败测试。以
@@ -85,7 +85,7 @@ const REVIEWER_PERSONA =
   "除非明显必要且提交信息说明了理由;逐任务提交是否如 plan 所列)。" +
   "验证必须亲跑(lint/针对性测试/必要处变异),引用真实退出码;不得只信实现者的自述。" +
   "把 Findings(按 P1/P2/P3)与 Verdict 写入 worktree 的 .reviews/<分支>.md " +
-  "(先跑 sh scripts/review.sh <branch> 生成模板),并在记录里写明评审时的分支 head 短哈希" +
+  "(首轮先跑 sh scripts/review.sh <branch> 生成模板;后续轮次在既有记录上按轮次追加,**绝不重跑 review.sh 覆盖**——中间轮 findings 是证据链),并在记录里写明评审时的分支 head 短哈希" +
   "(feat-done 前核对分支未 rebase——head 变了本 Verdict 不再描述补丁);" +
   "除该文件外不得修改任何文件,不得提交。" +
   "批准需要证据,反对要给出可复现的理由;无法验证就明说,不猜。";
@@ -101,7 +101,8 @@ const CHALLENGER_PERSONA =
   "不接受纯文字分析。" +
   "每个结论指到 file:line 或命令+真实退出码;无法验证就明说,不猜。" +
   "你不写 .reviews、不改任何文件、不提交,只把发现(P1/P2/P3 + MUST KILL 清单)交给调用方汇总。" +
-  "对手越强留下的代码越硬,但反对必须有可复现证据,不为反对而反对。";
+  "对手越强留下的代码越硬,但反对必须有可复现证据,不为反对而反对。" +
+  "校准:没有 P1/P2 级发现就给 APPROVED——REJECTED 必须伴随至少一条可行动的 P1/P2。";
 
 phase("按 plan 文档逐任务实现(自测并提交)");
 const implementer = agent("实现者", { system: IMPLEMENTER_PERSONA });
@@ -114,6 +115,7 @@ const impl = await implementer.ask<Implementation>(
 log(`实现完成:${impl.commits.length} 个提交`);
 
 let final: Review | undefined;
+let previousFindings: Finding[] = [];
 for (let round = 1; round <= 3; round += 1) {
   // 双席并行:清单评审与对抗挑战各一双新鲜眼睛,findings 汇总后一起回流修复。
   phase("双席评审与挑战(未参与开发,写 .reviews 记录)");
@@ -124,13 +126,17 @@ for (let round = 1; round <= 3; round += 1) {
         `plan 文档(先完整读取,核验忠实度与任务覆盖):\n${planPath}\n\n` +
         `实现者交接:${impl.summary}\n风险点:${JSON.stringify(impl.risks)}\n` +
         `实现者自跑的证据(你必须抽查复跑):${JSON.stringify(impl.checks)}\n` +
-        (round > 1 ? `这是第 ${round} 轮:重点核验上一轮意见是否修到位,并回归检查。` : "")
+        (round > 1
+          ? `这是第 ${round} 轮:重点核验上一轮意见是否修到位,并回归检查。\n上轮意见:\n${JSON.stringify(previousFindings)}`
+          : "")
     ),
     agent(`挑战者-第${round}轮`, { system: CHALLENGER_PERSONA }).ask<Review>(
       `攻击 worktree ${worktree} 的分支 feature/${branch}(对照 develop:git diff develop...feature/${branch})。\n` +
         `任务背景:${task}\nplan 文档:\n${planPath}\n\n` +
         `实现者自述(别信,抽查):${impl.summary}\n` +
-        (round > 1 ? `第 ${round} 轮:上一轮的 MUST KILL 与影响面问题修了吗?回归扫一遍。` : "")
+        (round > 1
+          ? `第 ${round} 轮:上一轮的 MUST KILL 与影响面问题修了吗?回归扫一遍。\n上轮意见:\n${JSON.stringify(previousFindings)}`
+          : "")
     ),
   ]);
   const merged: Review = {
@@ -146,7 +152,10 @@ for (let round = 1; round <= 3; round += 1) {
       ` + 挑战者 ${challenge.verdict}(${challenge.findings.length} 条) → ${merged.verdict}`
   );
   const blockingNow = merged.findings.filter((f) => f.severity === "P1" || f.severity === "P2");
-  if (merged.verdict === "APPROVED" && blockingNow.length === 0) break;
+  previousFindings = merged.findings;
+  // 没有可行动意见就出环:REJECTED 而无 P1/P2 是校准失败,不为它空转一轮;
+  // verdict 原样带出,conclusion 如实说明。
+  if (blockingNow.length === 0) break;
   if (round === 3) break;
 
   phase("按评审意见修复并自测");
@@ -200,7 +209,7 @@ return {
   findings: finalReview.findings.map((f) => ({
     where: f.where,
     what: f.problem,
-    evidence: `${f.suggestion}(双席 Verdict: ${finalReview.verdict})`,
+    evidence: `${f.suggestion}(单席产出未经第三席复验;双席合计 Verdict: ${finalReview.verdict})`,
     status: "verified" as const,
     severity: f.severity === "P1" ? ("high" as const) : f.severity === "P2" ? ("medium" as const) : ("low" as const),
   })),

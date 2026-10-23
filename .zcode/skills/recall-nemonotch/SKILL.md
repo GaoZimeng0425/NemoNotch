@@ -11,7 +11,7 @@ description: 重建 NemoNotch 最近的工作上下文并交回接续简报。�
 
 1. **活体状态(永远先看)**:`git log --oneline -15`、`git status`、`git feat-list`(在途 worktree;结合主检出当前分支判断是否有未收尾的 feature)。
 2. **评审与决策记录**:`.reviews/*.md`——各 feature 的 Verdict、findings、评审时的 head 短哈希(可对照 rebase 与否)。
-3. **计划档案**:`docs/superpowers/plans/`(在途)与 `plans/archive/`(已 ship);文件名即日期与主题。
+3. **计划档案**:`docs/superpowers/plans/` 在途,`docs/superpowers/plans/archive/` 已 ship;文件名即日期与主题。
 4. **经验与坑**:AGENTS.md 坑总目录、`docs/experience-playbook.md`。
 5. 持久记忆(memory 目录,若有)与会话 transcript 只作补充,不作首选。
 
