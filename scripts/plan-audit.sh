@@ -13,6 +13,8 @@ if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
   echo "❌ plan-audit 要在 git 仓库里跑" >&2
   exit 2
 fi
+# pathspec 相对 cwd 解析——从子目录跑会把 diff 算空、走「跳过」假绿;统一挪到仓根再判。
+cd "$(git rev-parse --show-toplevel)" || exit 2
 
 # 与 feat-done 同判据:merge-base(develop, HEAD) = 本分支自己的改动。
 # develop 缺失时退 HEAD~1 并报出所用 base——宁可少判也不静默换语义;
