@@ -86,6 +86,9 @@ enum EdgeBarAutoCard {
         now: Date
     ) -> ClosePlan {
         guard autoOpened, !approvalWaiting, !alertsPending, !pointerOnBar else { return .standDown }
+        if let gone = cardGoneBy, now < gone {
+            return .waitForCard(gone.timeIntervalSince(now))
+        }
         return .close
     }
 }
