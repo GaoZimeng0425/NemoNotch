@@ -145,4 +145,72 @@ struct EdgeBarAutoCardTests {
         #expect(decision.open)
         #expect(decision.select == "a")
     }
+
+    // EdgeBarAutoCard.closePlan: the auto-opened bar folds itself only when
+    // nothing is left to show, the cursor is off the bar, and no card is still
+    // on its way out — the acknowledge flow folds after the card, not with it.
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func closePlanClosesWhenNothingLeftAndCursorOff() {
+        #expect(EdgeBarAutoCard.closePlan(
+            autoOpened: true, approvalWaiting: false, alertsPending: false,
+            pointerOnBar: false, cardGoneBy: nil, now: now
+        ) == .close)
+    }
+
+    @Test func closePlanStandsDownWhileThereIsSomethingToShowOrACursorOn() {
+        #expect(EdgeBarAutoCard.closePlan(
+            autoOpened: false,
+            approvalWaiting: false,
+            alertsPending: false,
+            pointerOnBar: false,
+            cardGoneBy: nil,
+            now: now
+        ) == .standDown)
+        #expect(EdgeBarAutoCard.closePlan(
+            autoOpened: true,
+            approvalWaiting: true,
+            alertsPending: false,
+            pointerOnBar: false,
+            cardGoneBy: nil,
+            now: now
+        ) == .standDown)
+        #expect(EdgeBarAutoCard.closePlan(
+            autoOpened: true,
+            approvalWaiting: false,
+            alertsPending: true,
+            pointerOnBar: false,
+            cardGoneBy: nil,
+            now: now
+        ) == .standDown)
+        #expect(EdgeBarAutoCard.closePlan(
+            autoOpened: true,
+            approvalWaiting: false,
+            alertsPending: false,
+            pointerOnBar: true,
+            cardGoneBy: now.addingTimeInterval(0.2),
+            now: now
+        ) == .standDown)
+    }
+
+    @Test func closePlanWaitsForTheCardToLeave() {
+        // TimeInterval equality at the Date arithmetic boundary is off by one
+        // ulp (~5e-8), so the wait is asserted within a tolerance.
+        let plan = EdgeBarAutoCard.closePlan(
+            autoOpened: true, approvalWaiting: false, alertsPending: false,
+            pointerOnBar: false, cardGoneBy: now.addingTimeInterval(0.2), now: now
+        )
+        guard case let .waitForCard(wait) = plan else {
+            Issue.record("expected waitForCard, got \(plan)")
+            return
+        }
+        #expect(abs(wait - 0.2) < 0.001)
+    }
+
+    @Test func closePlanClosesOnceTheCardIsGone() {
+        #expect(EdgeBarAutoCard.closePlan(
+            autoOpened: true, approvalWaiting: false, alertsPending: false,
+            pointerOnBar: false, cardGoneBy: now.addingTimeInterval(-0.01), now: now
+        ) == .close)
+    }
 }
