@@ -16,6 +16,8 @@ final class EdgeBarController: NSObject {
         /// Sends a picked multi-choice draft (multi-select, or several
         /// questions answered together).
         case send
+        /// Acknowledges a quota alert (its card goes).
+        case acknowledge
     }
 
     private(set) var isOpen = false
@@ -96,6 +98,7 @@ final class EdgeBarController: NSObject {
     @ObservationIgnored private let store: AISessionStore
     @ObservationIgnored private let appSettings: AppSettings
     @ObservationIgnored private let usageQuota: UsageQuotaService
+    @ObservationIgnored private let alerts: QuotaAlertMonitor
     @ObservationIgnored private let aiMonitor: AICLIMonitorService
     @ObservationIgnored private let chatBubble: ChatBubbleController
     @ObservationIgnored private let hover = EdgeBarHoverIntent()
@@ -115,12 +118,14 @@ final class EdgeBarController: NSObject {
         store: AISessionStore,
         appSettings: AppSettings,
         usageQuota: UsageQuotaService,
+        alerts: QuotaAlertMonitor,
         aiMonitor: AICLIMonitorService,
         chatBubble: ChatBubbleController
     ) {
         self.store = store
         self.appSettings = appSettings
         self.usageQuota = usageQuota
+        self.alerts = alerts
         self.aiMonitor = aiMonitor
         self.chatBubble = chatBubble
         super.init()
@@ -158,6 +163,7 @@ final class EdgeBarController: NSObject {
             _ = store.sortedSessions.map { "\($0.id):\($0.phase):\($0.lastEventTime)" }
             _ = appSettings.aiStatusFabEnabled
             _ = usageQuota.quotas
+            _ = alerts.alerts
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.observe()
@@ -197,6 +203,7 @@ final class EdgeBarController: NSObject {
         revalidateSelection()
         syncAskPicks()
         autoCard(previous: previous, next: next)
+        autoAlert()
         updateBodyRect()
         updateBeat()
     }
@@ -206,7 +213,13 @@ final class EdgeBarController: NSObject {
     /// else drop the card.
     private func revalidateSelection() {
         guard let selectedRow else { return }
-        if let provider = EdgeBarUsage.provider(ofCardID: selectedRow) {
+        if EdgeBarAlertCards.alertID(ofCardID: selectedRow) != nil {
+            if let alert = alert(ofCardID: selectedRow) {
+                setIfChanged(\.cardLevel, alertLevel(alert))
+            } else {
+                deselect()
+            }
+        } else if let provider = EdgeBarUsage.provider(ofCardID: selectedRow) {
             if let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count) {
                 setIfChanged(\.cardLevel, level)
             } else {
@@ -246,6 +259,9 @@ final class EdgeBarController: NSObject {
     /// ask away); answered, it closes itself (a cursor on the bar keeps it until that cursor leaves).
     @ObservationIgnored private var autoOpened = false
 
+    /// The alert cards the last refresh saw; arrivals are measured against it.
+    @ObservationIgnored private var knownAlerts: [String] = []
+
     /// An exit does not fold the bar while this is true.
     private var holdsBarForApproval: Bool {
         autoOpened && (isOpen ? content.rows : content.closedRows).contains { $0.phase.isWaitingForApproval }
@@ -270,11 +286,61 @@ final class EdgeBarController: NSObject {
             reveal(id)
             select(id)
         }
-        if autoOpened, !next.rows.contains(where: \.phase.isWaitingForApproval) {
+        if autoOpened, !next.rows.contains(where: \.phase.isWaitingForApproval), alerts.alerts.isEmpty {
             guard !pointerOnBar() else { return }
             autoOpened = false
             hover.closeNow()
-            LogService.info("Auto-closed the bar: no approval waiting", category: "EdgeBar")
+            LogService.info("Auto-closed the bar: no approval waiting, no alert pending", category: "EdgeBar")
+        }
+    }
+
+    // MARK: - Alerts
+
+    private var pendingAlertCards: [String] {
+        alerts.alerts.map(EdgeBarAlertCards.cardID)
+    }
+
+    private var approvalSelected: Bool {
+        selectedRow.flatMap { store.get($0)?.phase.isWaitingForApproval } ?? false
+    }
+
+    /// An open bar with an alert pending does not fold on an exit — the alert
+    /// must be seen and acknowledged.
+    private var holdsBarForAlert: Bool {
+        isOpen && !alerts.alerts.isEmpty
+    }
+
+    /// The pending alert a card id names; nil when its card is not up to date.
+    func alert(ofCardID id: String) -> QuotaAlert? {
+        alerts.alerts.first { EdgeBarAlertCards.cardID($0) == id }
+    }
+
+    /// Level with the provider's usage section; a section cut for room puts
+    /// the card at the block's top.
+    private func alertLevel(_ alert: QuotaAlert) -> CGFloat {
+        EdgeBarUsage.sectionTop(of: alert.key.provider, in: usageLines, rows: content.rows.count)
+            ?? EdgeBarUsage.top(rows: content.rows.count)
+    }
+
+    private func autoAlert() {
+        let pending = pendingAlertCards
+        defer { knownAlerts = pending }
+        guard !UITestMode.isActive, !isDragging else { return }
+        let decision = EdgeBarAlertCards.plan(
+            previous: knownAlerts,
+            pending: pending,
+            isOpen: isOpen,
+            selectedRow: selectedRow,
+            approvalSelected: approvalSelected
+        )
+        if decision.open, let id = decision.select {
+            hover.openNow()
+            autoOpened = true
+            LogService.info("Auto-opened the bar: quota alert \(id)", category: "EdgeBar")
+            select(id)
+        } else if let id = decision.select {
+            LogService.info("Auto-selected the card of quota alert \(id)", category: "EdgeBar")
+            select(id)
         }
     }
 
@@ -492,7 +558,17 @@ final class EdgeBarController: NSObject {
             // hand crossing it on the way elsewhere must not take the ask
             // away. It closes when the approval is answered (or dragged, or
             // the feature goes off) — never by a stray exit.
-            if !holdsBarForApproval {
+            if holdsBarForApproval || holdsBarForAlert {
+                // A held bar is not the cursor's to fold. Leaving it with an alert
+                // pending brings the alert's card back (a hovered row's card had it).
+                if let id = EdgeBarAlertCards.reclaim(
+                    pending: pendingAlertCards,
+                    selectedRow: selectedRow,
+                    approvalSelected: approvalSelected
+                ) {
+                    select(id)
+                }
+            } else {
                 hover.pointerExited()
             }
         case let .moved(point):
@@ -553,6 +629,14 @@ final class EdgeBarController: NSObject {
         isOpen = true
         updateBodyRect()
         updateBeat()
+        // A hover-opened bar shows the pending alert when nothing else is up.
+        if let id = EdgeBarAlertCards.reclaim(
+            pending: pendingAlertCards,
+            selectedRow: selectedRow,
+            approvalSelected: approvalSelected
+        ) {
+            select(id)
+        }
         // The still cursor's row (the bar opened under it).
         if let window, let hosting {
             let point = hosting.convert(window.mouseLocationOutsideOfEventStream, from: nil)
@@ -574,6 +658,15 @@ final class EdgeBarController: NSObject {
 
     private func select(_ id: String) {
         guard isOpen else { return }
+        if let alert = alert(ofCardID: id) {
+            // An alert card has one button of its own; none of a session card's may linger.
+            buttonRects = [:]
+            hoveredButton = nil
+            pressedButton = nil
+            cardLevel = alertLevel(alert)
+            selectedRow = id
+            return
+        }
         if let provider = EdgeBarUsage.provider(ofCardID: id) {
             guard let level = EdgeBarUsage.sectionTop(of: provider, in: usageLines, rows: content.rows.count)
             else { return }
@@ -823,6 +916,12 @@ final class EdgeBarController: NSObject {
     }
 
     private func perform(_ button: CardButton, sessionId: String) {
+        if let alertID = EdgeBarAlertCards.alertID(ofCardID: sessionId) {
+            if button == .acknowledge {
+                alerts.acknowledge(alertID)
+            }
+            return
+        }
         guard EdgeBarUsage.provider(ofCardID: sessionId) == nil else { return }
         switch button {
         case .allow:
@@ -841,6 +940,8 @@ final class EdgeBarController: NSObject {
                 expectedBundleId: session.launchingAppBundleId,
                 tabLink: session.tabLinkURL
             )
+        case .acknowledge:
+            break
         }
     }
 

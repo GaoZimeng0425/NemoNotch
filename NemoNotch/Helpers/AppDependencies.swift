@@ -166,6 +166,7 @@ struct AppDependencies {
             store: aiMonitor.store,
             appSettings: settings,
             usageQuota: usageQuota,
+            alerts: quotaAlerts,
             aiMonitor: aiMonitor,
             chatBubble: chatBubble
         )
