@@ -36,6 +36,10 @@ build.log
 /assets/
 /reference/
 /.scratch/
-/.zcode/
+/.zcode/*
+!/.zcode/skills/
+!/.zcode/workflows/
+/.zcode/workflows/*
+!/.zcode/workflows/*.dwf.ts
 
 __pycache__/
