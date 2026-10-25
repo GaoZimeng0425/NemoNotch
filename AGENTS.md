@@ -32,9 +32,9 @@ NemoNotch/
 
 **绝不在 main 直提,也绝不在主检出直提**;一切开发走 `git feat <name>` 建的 worktree(嵌套在 `.worktree/<name>`,被 `.gitignore`/`.swiftlint.yml`/`.swiftformat` 三重排除——缺一处嵌套副本就被全仓 lint 扫、被 `git add -A` 暂存成嵌入仓库)。
 
-1. `git feat xxx`:先拉最新(本地 develop 纯落后 origin 时 `--ff-only --autostash` 快进;分叉则警告留在本地;主检出不在 develop 则跳过拉取),再从刷新后的 develop 建 worktree。
+1. `git feat xxx`:先拉最新(本地 develop 纯落后 origin 时 `--ff-only --autostash` 快进;分叉则警告留在本地;主检出不在 develop 则跳过拉取),再从刷新后的 develop 建 worktree(**get-or-create**:进行中的 worktree 指路复用、孤儿分支自动挂回,重跑不报错)。
 2. 在 worktree 里干活、提交。
-3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
+3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 评审门禁(代码/scripts/hooks/CI 改动须有**已提交**的 APPROVED 记录,纯文档自动跳过;缺记录时自动生成模板;`NEMONOTCH_SKIP_REVIEW=1` 应急)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ merge-tree 冲突预检(探到冲突干净退出,主检出不进半合并态)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
 4. post-merge 钩子在主检出对 develop 收到 feature/hotfix 合并时自动跑 `./build.sh`(=自动部署);`NEMONOTCH_HOOK_DEBUG=1` 干跑。构建失败响亮但不回滚合并。
 5. `git feat-list` 列 worktree;`git feat-gc` 清已合并进 develop 的本地 feature/hotfix 化石分支(只 `-d` 删已合并,未合并的列出不动;worktree 在用的跳过——**刚建未提交的分支与 develop 同指针,会被 `--merged` 列出**,靠这层过滤保住,实测踩过)。细节 `docs/git-worktree-workflow.md`。
 
@@ -214,6 +214,7 @@ graph LR
 - **原则(触发式,命中即应用;格式:何时触发 → 判据)**:
   - **教训优先结构化**:任何"下次别再犯"——能做成 lint/钩子/脚本强制的就不写提示词,先落门禁;文档是次选(doc-audit 即此哲学的产物)。
   - **观测不成律**:想下「X 导致 Y」的因果结论并写进文档/记忆前——先原样重做确认可复现,验因果一次只动一个变量;做不到就只记现象(失败次数+日志)不写归因。错误归因比没有归因贵:它派你去修错的东西,真因在别处躺着(build.sh 偶发失败的单样本归因是反例)。
+  - **命令是目标状态不是单步**:重跑同一命令应从任何中间状态走到终点——已完成的幂等跳过(git feat 对进行中的 worktree 指路、孤儿分支自动挂回),缺的机械步骤自动补齐(feat-done 撞缺评审记录时自己生成模板);只有必须由用户/他方完成的环节才停下,写清在等什么、重跑同一命令继续(octok-platform 借鉴)。
   - **攻击前提**:两个及以上修法共享同一前提且都失败过 → 前提本身错,先质疑前提再写第三个修法("hook 协议不可行"误判的教训:先查兄弟项目实装再下断言)。
   - **先删后加**:排期一次新增/重构,先删死代码/冗余校验/桩引用,在更简的底上动工。
   - **序列可验证单元**:多步工作拆成每个收尾都处于可验证状态的单元,逐个验证再进下一个;提交顺序让评审能顺着序列自证。

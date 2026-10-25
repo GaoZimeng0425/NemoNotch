@@ -25,9 +25,27 @@ fi
 wt="$main_wt/.worktree/$name"
 branch="feature/$name"
 
+# ── get-or-create(目标状态语义,2026-10-24):重跑同一命令从任何中间状态回到现场 ──
+# worktree+分支都在 → 指路复用(不报错);分支在、worktree 没了(feat-done 清理失败的
+# 残留)→ 挂回来;都没有才走「拉最新 + 新建」。报错留给真正的错。
+existing_wt=$(git -C "$main_wt" worktree list --porcelain | awk -v b="refs/heads/$branch" '
+  /^worktree /{p=$2} /^branch /{ if ($2==b) print p }')
 if git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
-  echo "✋ 分支 $branch 已存在。" >&2
-  exit 1
+  # porcelain 是注册表视图不是文件系统视图:条目可能 prunable(目录被带外 rm 掉)。
+  # 目录真在才指路,否则先 prune 清掉僵尸注册再走挂回——指到不存在的目录是静默的错成功。
+  if [ -n "$existing_wt" ] && [ -d "$existing_wt" ]; then
+    echo "✅ $branch 已在进行中 — worktree 在,直接进:"
+    echo "   cd \"$existing_wt\"   (完成后: git feat-done $name)"
+    exit 0
+  fi
+  [ -n "$existing_wt" ] && git -C "$main_wt" worktree prune
+  echo "♻️  分支 $branch 在、worktree 缺(清理残留)— 挂回:"
+  git -C "$main_wt" worktree add "$wt" "$branch"
+  echo ""
+  echo "✅ $branch  @  $wt   (分支已存在,worktree 已挂回)"
+  echo "   下一步:  cd \"$wt\""
+  echo "   完成后:  git feat-done $name"
+  exit 0
 fi
 
 if ! git -C "$main_wt" show-ref --verify --quiet refs/heads/develop; then

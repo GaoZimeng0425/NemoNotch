@@ -38,10 +38,13 @@ What it configures:
 ## Daily commands
 
 ```sh
-git feat <name>        # pull latest first: ff-only --autostash develop to
-                       #   origin/develop when purely behind (aborts the feat
-                       #   if the pull fails), then feature/<name> off the
-                       #   refreshed develop, in .worktree/<name> (nested
+git feat <name>        # get-or-create: in-progress worktree → prints the path to
+                       #   cd into (no error); branch exists but worktree gone →
+                       #   re-attaches it (prunes stale registrations first);
+                       #   neither exists → pull latest first: ff-only --autostash
+                       #   develop to origin/develop when purely behind (aborts
+                       #   the feat if the pull fails), then feature/<name> off
+                       #   the refreshed develop, in .worktree/<name> (nested
                        #   inside the primary checkout; git-ignored, excluded
                        #   from swiftlint/swiftformat)
                        #   (diverged → warns, stays on local develop;
@@ -49,9 +52,15 @@ git feat <name>        # pull latest first: ff-only --autostash develop to
 cd .worktree/<name>
 # ...work, commit freely on the feature branch (lint gate runs on commit)...
 
-git feat-done <name>   # auto-stash primary checkout → merge feature/<name> -> develop
-                       #   (--no-ff, triggers post-merge build) → restore stash
-                       #   → remove worktree, delete the branch
+git feat-done <name>   # gates in the worktree (doc-audit → plan unticked-box
+                       #   audit → review record w/ Reviewed-Head freshness →
+                       #   unit tests when Swift changed) → merge-tree conflict
+                       #   precheck (conflict → clean exit, fix inside the
+                       #   worktree) → auto-stash primary checkout → merge
+                       #   feature/<name> -> develop (--no-ff, triggers
+                       #   post-merge build) → restore stash → remove worktree,
+                       #   delete the branch. Missing review record → the gate
+                       #   auto-generates the template via review.sh first.
 git feat-list          # list all worktrees
 ```
 
