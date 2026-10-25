@@ -19,6 +19,9 @@
   用户点名第二个模型即可启用(workflow 原生支持 subagent_model)。
 - [ ] **doc-audit 对 .zcode 的对账**——workflow/skills 已入库,但没有"人格里引用的
   脚本路径存在"类断言(doc-audit 只查手册引用)。低优先:漂移面小。
+- [ ] **advisory 债表模式**——未来新增门禁若遇存量债(如新 lint 规则上线时上百违例),
+  别做"全有或全无":登记表只减不增 + 某项跑绿时哨兵提示删条目(参考 octok-platform
+  local-ci 的 TYPECHECK/JEST_LEGACY_ADVISORY + advisoryPassed 设计,2026-10-24 调研)。
 
 ## 已硬化(留档)
 

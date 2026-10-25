@@ -90,10 +90,19 @@ elif [ -n "$wt" ]; then
     # 评审是证据链,未提交的 APPROVED 不算数;也避免未跟踪记录卡死 worktree 拆除
     # (评审发现的实测点)。git show 失败(记录未提交)经 grep 落入拒绝分支 = fail-closed。
     if ! git -C "$wt" show "HEAD:.reviews/$name.md" 2>/dev/null | grep -q '^Verdict: APPROVED'; then
+      # 目标状态语义(2026-10-24):模板生成是机械步骤,门禁自己补齐,失败信息从教程变代办。
+      # review.sh 自带「已有 APPROVED 不覆盖」保护;分支上没有 review.sh(古老分支)则跳过。
+      if [ -f "$wt/scripts/review.sh" ]; then
+        sh "$wt/scripts/review.sh" "$name" >/dev/null 2>&1 || true
+      fi
       echo "" >&2
-      echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
-      echo "   流程:sh scripts/review.sh $name 生成模板 → 让未参与开发的会话/子代理评审" >&2
-      echo "         diff、填 Findings 与 Verdict → git add .reviews/$name.md && git commit → 重试。" >&2
+      if [ -f "$wt/.reviews/$name.md" ] && grep -q '^Verdict: APPROVED' "$wt/.reviews/$name.md"; then
+        echo "❌ 评审记录已填好(APPROVED)但**未提交** — 在 worktree 提交 .reviews/$name.md 后重跑本命令。" >&2
+      else
+        echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
+        echo "   ✅ 模板已生成在 $wt/.reviews/$name.md(机械步骤已代办)— 派**未参与开发**的会话/子代理评审" >&2
+        echo "      diff、填 Findings 与 Verdict → git add .reviews/$name.md && git commit → 重跑本命令。" >&2
+      fi
       echo "   应急跳过:NEMONOTCH_SKIP_REVIEW=1 git feat-done $name" >&2
       echo "" >&2
       exit 1
@@ -153,6 +162,22 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/test.sh" ]; then
   fi
 else
   echo "⚠️  分支没有 worktree 或缺 scripts/test.sh — 跳过测试门禁,请自行确保测试通过" >&2
+fi
+
+# ── merge-tree 冲突预检:真合并前的无副作用彩排(octok-platform 借鉴,2026-10-24)──
+# 探到冲突就干净退出:主检出不被切到 develop、不进半合并态、stash 舞步不动;
+# 修复路径 = 回 worktree 把 develop 合进 feature 分支解完,再重跑本命令。
+# merge-tree 退出码:0=干净放行;1=冲突拦下;≥2=工具本身不可用 → 响亮降级为旧行为
+# (fail-open:预检缺席最多回到「冲突在真合并时炸」,误拦则是永远合不了,取前者)。
+probe_rc=0
+git -C "$main_wt" merge-tree --write-tree develop "$branch" >/dev/null 2>&1 || probe_rc=$?
+if [ "$probe_rc" = "1" ]; then
+  echo "" >&2
+  echo "❌ 与 develop 有合并冲突(merge-tree 预检探到)— 不进入合并,主检出原样。" >&2
+  echo "   回 worktree 解冲突:cd \"$wt\" && git merge develop → 解完提交 → 重跑 git feat-done $name" >&2
+  exit 1
+elif [ "$probe_rc" -ge 2 ]; then
+  echo "⚠️  merge-tree 预检不可用(退出码 $probe_rc)— 降级:冲突将在真合并时暴露,主检出可能停在半合并态" >&2
 fi
 
 # ── 自动 stash 舞步:主检出脏了不挡路,合并完原样恢复 ──
