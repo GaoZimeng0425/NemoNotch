@@ -2,7 +2,7 @@
 
 Reviewer: 独立评审子代理 (zcode session, 2026-10-24)
 Date: 2026-10-25
-Reviewed-Head: c0a1bcf
+Reviewed-Head: d8b3ddf
 Verdict: APPROVED
 Scope:  4 files changed, 51 insertions(+), 7 deletions(-)
 
@@ -81,6 +81,43 @@ docs/guardrail-backlog.md
 - `rg -n "feat-done|feat\.sh|git feat" docs/git-worktree-workflow.md` + `.zcode/skills/`
   (using-git-worktrees / finishing-a-development-branch):无旧报错语义描述;缺口为上述
   P3 文档项(不完整而非矛盾)。
+
+## 补审(d8b3ddf)
+
+对 091de61 六条 P3 的修复核对 + 抽查复核,逐条裁定:
+
+- **#1 已修(留一个新 P3 残余,见 R1)**。review.sh:40-44 守卫扩为 `^Verdict:` 任意已填值
+  ——实测:工作区记录临时改成 `Verdict: CHANGES_NEEDED` 后跑 review.sh,得「不覆盖」
+  exit 0,Reviewer/Findings 原样(已 `git checkout --` 恢复)。feat-done 侧三态分诊
+  (APPROVED 未提交 / Verdict 非 APPROVED / 文件缺=生成失败)代码核对无误。
+- **#2 已修,实测复现修复生效**。feat.sh:34-42 加 `[ -d "$existing_wt" ]` 守卫 + 定向
+  `worktree prune`(仅在确有僵尸注册时)。复测:临时分支建 worktree → rm -rf 目录 →
+  跑新 feat.sh,不再指死路径,prune 后挂回成功 exit 0(首轮同场景是静默假成功);
+  健康复用路径回归通过。prune 时机正确:不加 prune 时 `worktree add` 会撞
+  「already checked out」,挂回成功本身即 prune 生效的证明。探针分支已清。
+- **#3 已修**。注释改为实测口径:「1=冲突(**坏 ref 也是 1**;两 ref 已上文验证,
+  实践中 1 即冲突);≥2(如 129)=用法/工具错」——与本评审实测完全一致。
+- **#4 已修**。三态分诊后「模板已生成」只在文件存在时出现,文件缺失给独立的
+  「生成失败」消息;门禁各路径仍全部 exit 1,无假绿。
+- **#5 已修**。git-worktree-workflow.md 的 feat 描述补 get-or-create(含 prune)、
+  feat-done 补全部门禁次序(与脚本实序逐项一致)+ merge-tree 预检 + 自动生成模板。
+- **#6 已修**。AGENTS.md 步骤 3 在 plan 门禁与单测之间补上评审门禁(含「缺记录时
+  自动生成模板」),与脚本实序一致;步骤行不再缺项。
+
+**R1 [P3·新残余,d8b3ddf 引入]** — `^Verdict:` 把**空模板的占位行**也当「已填」。
+review.sh 生成的模板自带 `Verdict: (填 APPROVED 或 …)` 行,实测匹配 `grep '^Verdict:'`;
+后果:(a) feat-done 三态分诊里空模板落入「Verdict 不是 APPROVED(如 CHANGES_NEEDED)—
+按 Findings 修复」支,而「✅ 模板已生成…派未参与开发的会话/子代理评审」这支对
+review.sh 生成的模板**实际不可达**——主路径(未评审先跑 feat-done)的引导语从「派评
+审」降级成「按 Findings 修复」(动作仍对:评审员填 APPROVED→提交→重跑,全路径仍
+exit 1);(b) review.sh 拒绝刷新空模板且提示「要重评先清 Verdict 行」对空模板失义。
+修法建议:已填判别子改用 `Reviewer: (填` 占位前缀(实测可区分),或 `^Verdict:`
+排除 `Verdict: (` 开头。消息精度问题,无数据丢失、无假绿——不阻合并,留给收尾
+reflect/硬化排期。
+
+**补审方法附记**:复核中踩到 `feat-done … | tail; echo $?` 吃掉退出码(报 rc=0,
+去管道后真实 rc=1)——正是 feat-done.sh:146-147 注释警告的管道陷阱,顺带验证了
+该注释的先见。
 
 ## 教训候选
 
