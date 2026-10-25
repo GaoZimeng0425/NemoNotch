@@ -96,12 +96,19 @@ elif [ -n "$wt" ]; then
         sh "$wt/scripts/review.sh" "$name" >/dev/null 2>&1 || true
       fi
       echo "" >&2
-      if [ -f "$wt/.reviews/$name.md" ] && grep -q '^Verdict: APPROVED' "$wt/.reviews/$name.md"; then
-        echo "❌ 评审记录已填好(APPROVED)但**未提交** — 在 worktree 提交 .reviews/$name.md 后重跑本命令。" >&2
-      else
+      if [ -f "$wt/.reviews/$name.md" ] && grep -q '^Verdict:' "$wt/.reviews/$name.md"; then
+        # review.sh 只护已填记录,这里如实分诊:APPROVED 未提交 vs Verdict 不是 APPROVED
+        if grep -q '^Verdict: APPROVED' "$wt/.reviews/$name.md"; then
+          echo "❌ 评审记录已填好(APPROVED)但**未提交** — 在 worktree 提交 .reviews/$name.md 后重跑本命令。" >&2
+        else
+          echo "❌ 工作区评审记录的 Verdict 不是 APPROVED(如 CHANGES_NEEDED)— 按 Findings 修复后让评审员更新记录为 APPROVED 并提交,再重跑本命令。" >&2
+        fi
+      elif [ -f "$wt/.reviews/$name.md" ]; then
         echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
         echo "   ✅ 模板已生成在 $wt/.reviews/$name.md(机械步骤已代办)— 派**未参与开发**的会话/子代理评审" >&2
         echo "      diff、填 Findings 与 Verdict → git add .reviews/$name.md && git commit → 重跑本命令。" >&2
+      else
+        echo "❌ 评审门禁未过,且模板自动生成失败(分支缺 scripts/review.sh?)— 手动跑 review.sh 生成模板再评审。" >&2
       fi
       echo "   应急跳过:NEMONOTCH_SKIP_REVIEW=1 git feat-done $name" >&2
       echo "" >&2
@@ -167,8 +174,9 @@ fi
 # ── merge-tree 冲突预检:真合并前的无副作用彩排(octok-platform 借鉴,2026-10-24)──
 # 探到冲突就干净退出:主检出不被切到 develop、不进半合并态、stash 舞步不动;
 # 修复路径 = 回 worktree 把 develop 合进 feature 分支解完,再重跑本命令。
-# merge-tree 退出码:0=干净放行;1=冲突拦下;≥2=工具本身不可用 → 响亮降级为旧行为
-# (fail-open:预检缺席最多回到「冲突在真合并时炸」,误拦则是永远合不了,取前者)。
+# merge-tree 退出码(实测 git 2.54):0=干净放行;1=冲突(**坏 ref 也是 1**;本流程两个
+# ref 都已在上文验证存在,故实践中 1 即冲突);≥2(如 129)=用法/工具错误 → 响亮降级为
+# 旧行为(fail-open:预检缺席最多回到「冲突在真合并时炸」,误拦则是永远合不了,取前者)。
 probe_rc=0
 git -C "$main_wt" merge-tree --write-tree develop "$branch" >/dev/null 2>&1 || probe_rc=$?
 if [ "$probe_rc" = "1" ]; then

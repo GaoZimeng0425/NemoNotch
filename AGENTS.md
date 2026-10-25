@@ -34,7 +34,7 @@ NemoNotch/
 
 1. `git feat xxx`:先拉最新(本地 develop 纯落后 origin 时 `--ff-only --autostash` 快进;分叉则警告留在本地;主检出不在 develop 则跳过拉取),再从刷新后的 develop 建 worktree(**get-or-create**:进行中的 worktree 指路复用、孤儿分支自动挂回,重跑不报错)。
 2. 在 worktree 里干活、提交。
-3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ merge-tree 冲突预检(探到冲突干净退出,主检出不进半合并态)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
+3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 评审门禁(代码/scripts/hooks/CI 改动须有**已提交**的 APPROVED 记录,纯文档自动跳过;缺记录时自动生成模板;`NEMONOTCH_SKIP_REVIEW=1` 应急)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ merge-tree 冲突预检(探到冲突干净退出,主检出不进半合并态)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
 4. post-merge 钩子在主检出对 develop 收到 feature/hotfix 合并时自动跑 `./build.sh`(=自动部署);`NEMONOTCH_HOOK_DEBUG=1` 干跑。构建失败响亮但不回滚合并。
 5. `git feat-list` 列 worktree;`git feat-gc` 清已合并进 develop 的本地 feature/hotfix 化石分支(只 `-d` 删已合并,未合并的列出不动;worktree 在用的跳过——**刚建未提交的分支与 develop 同指针,会被 `--merged` 列出**,靠这层过滤保住,实测踩过)。细节 `docs/git-worktree-workflow.md`。
 

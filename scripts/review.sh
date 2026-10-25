@@ -37,9 +37,11 @@ base=$(git -C "$main_wt" merge-base develop "$branch")
 note="$wt/.reviews/$name.md"
 mkdir -p "$wt/.reviews"
 
-# 已有填好的记录时不覆盖(评审是证据,不是模板)
-if [ -f "$note" ] && grep -q '^Verdict: APPROVED' "$note"; then
-  echo "✅ .reviews/$name.md 已有 APPROVED 记录 — 不覆盖。要重评先人工清掉 Verdict 行。"
+# 已填 Verdict 的记录(不论 APPROVED 还是 CHANGES_NEEDED)都是证据,不覆盖——自动
+# 重生成只许作用于空白模板(feat-done 门禁会代跑本脚本;曾把填好的 CHANGES_NEEDED
+# 洗回空白模板,评审实测)。要重评先人工清掉 Verdict 行。
+if [ -f "$note" ] && grep -q '^Verdict:' "$note"; then
+  echo "✅ .reviews/$name.md 已有已填 Verdict 的记录 — 不覆盖。要重评先人工清掉 Verdict 行。"
   exit 0
 fi
 
