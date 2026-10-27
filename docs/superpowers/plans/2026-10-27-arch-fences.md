@@ -142,3 +142,20 @@
 - [x] 红绿实测:A 档注入 SBApplication(工作区)→ exit 1 含 why 指针,还原 exit 0;B 档**须带真提交**(B 档扫的是已提交 diff,工作区注入对它不可见——门禁管的是进合并的内容,语义如此)→ exit 1 含 `b:repeatForever` + file:line,reset 后 exit 0
 - [x] 全部任务框勾完(plan-audit 门禁依赖)
 - [x] commit: `test(fences): birth ceremony — A/B tier red-green recorded`
+
+---
+
+### Task 7: 评审回流修复(F1 假绿 / F2 selftest 缺口 / F3 崩溃守卫 / F4 文档清场)
+
+评审员(新鲜会话,26dca2e 记录)实测坐实:B 档 opacity 规则在门禁模式下
+**假绿放行**——`awk -v` 对值做反斜杠转义,`\.opacity\(` 剥成裸 `.opacity(`
+→ awk 正则语法错 exit 2 → 命令替换吞退出码 → 「无命中」。出生仪式没抓到
+是因为 B 档只用无反斜杠的 repeatForever 测过。
+
+**Steps:**
+- [x] F1:模式改经 `ENVIRON` 传入 added_line_hits,绝不用 `-v`(评审隔离复现 ENVIRON 路线正确)
+- [x] F2:selftest 新增「真模式(含反斜杠)过 B 档执行器」用例——repeatForever 探不出这类雷
+- [x] F3:B 档执行器退出码 fail-closed 守卫(崩溃≠无命中);A 档加模式合法性预检(坏正则 grep exit 2 同样会假绿)
+- [x] F4:docs/git-worktree-workflow.md 旧门禁链清场(「推翻旧口径 ⇒ 全仓 grep 残留」)
+- [x] 回归证明:同一探针(真提交 `.opacity(probe ? 0 : 1)`)修复前 exit 0(评审实测)→ 修复后 exit 1,reset 后绿
+- [x] commit: `fix(fences): ENVIRON for awk pattern (F1 fake-green), crash guards, selftest via real pattern`
