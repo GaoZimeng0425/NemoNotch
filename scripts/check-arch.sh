@@ -79,11 +79,14 @@ added_line_hits() {
 violations=0
 
 # 模式合法性预检(F3 同族):坏正则(加规则时手滑)在 grep/awk 都是「exit 2 + 零输出」,
-# 不预检就会一路假绿。任何模式编不过 → 响亮失败。
+# 不预检就会一路假绿。注意退出码语义:0=命中/1=无命中都健康,**≥2 才是模式非法**
+# (首版写成 `if ! grep -q`,把「无命中」当失败,门禁永久假红——探针当场抓出)。
 validate_patterns() {
   for p in "$PAT_SB" "$PAT_OPACITY_HIDE" "$PAT_RUSAGE" "$PAT_UI_DICT" 'repeatForever'; do
-    if ! printf 'probe\n' | grep -qE -- "$p" 2>/dev/null; then
-      echo "❌ [arch] 模式非法(加规则时写坏了?):$p" >&2
+    printf 'probe\n' | grep -qE -- "$p" 2>/dev/null
+    rc=$?
+    if [ "$rc" -gt 1 ]; then
+      echo "❌ [arch] 模式非法(加规则时写坏了?grep 退出码 $rc):$p" >&2
       exit 1
     fi
   done
