@@ -30,3 +30,7 @@
   全量)。关闭历史假绿类(--only 选错类)。
 - [x] **判决新鲜度**(同上):评审记录 `Reviewed-Head:` 行 + feat-done 门禁自动核对
   最近一次非 .reviews 提交的 head;rebase/重写即拒绝,补审才能合。
+- [ ] **门禁自测框架推广**——check-arch 的 --selftest(样本级鉴别力断言,含"不
+  命中样本取自真实易误写形状")开了先例(octok local-ci.test.mts 借鉴,
+  2026-10-27);doc-audit/plan-audit 尚无同款 red/green 用例表,模式腐化只能
+  靠人工发现。做一版 scripts/test-gates.sh 统一喂样本。

@@ -121,17 +121,17 @@
 - Edit: `docs/guardrail-backlog.md`(⑤ 门禁自测框架条目)
 
 **AGENTS.md 四处:**
-- [ ] feat-done 步骤 3 门禁链描述:链首加 merge-tree 预检、plan-audit 后加 check-arch(含 `NEMONOTCH_SKIP_ARCH=1`)
-- [ ] 「测试」节或紧邻处新增「架构围栏」小段:check-arch 是什么、两档语义、**加新规则的规矩**(A 档必须校准到零命中或配行内豁免;B 档只拦新增;出生必须 `--selftest` 全绿 + 门禁模式见红一次;规则头注释写 why 指针)——照 CHECK_RULES 哲学:规则与为什么同住
-- [ ] Judge≠author 段加一句(⑥):评审 prompt 不携带 plan 文档/实现笔记/设计讨论——干净上下文最现实的泄漏口,给了就退化成自我辩护
-- [ ] 证据纪律五级梯子后加一句(⑦):关键证据未取得时(日志没抓到/截图缺失/复现失败)明说「以下判断只基于 X」——读者有权知道判断吃的是哪种输入
+- [x] feat-done 步骤 3 门禁链描述:链首加 merge-tree 预检、plan-audit 后加 check-arch(含 `NEMONOTCH_SKIP_ARCH=1`)
+- [x] 「Git 流程与门禁」新增「架构围栏门禁」段落(doc-audit 段之后):两档语义、豁免、加规则三规矩、--all/--selftest
+- [x] Judge≠author 段加一句(⑥):评审 prompt 不带 plan 文档/实现笔记/设计讨论——干净上下文最现实的泄漏口
+- [x] 证据纪律加一句(⑦):披露证据完备度——「以下判断只基于 X」
 
-**CI:** doc-audit job 加 `sh scripts/check-arch.sh --all`?**不加 --all**——CI 跑门禁语义(默认模式,B 档需 diff 基线,CI 上退化为 A 档全仓,效果等同);直接 `sh scripts/check-arch.sh`(ubuntu 上 grep -E 可用,注释行已在脚本内说明)。
+**CI:** doc-audit job 加 `sh scripts/check-arch.sh` 步骤(门禁语义;B 档在 CI checkout 拿不到 merge-base develop 时脚本自身响亮降级,A 档不受影响)。
 
 **Steps:**
-- [ ] CI 加步骤;本地 `sh scripts/doc-audit.sh` 确认 AGENTS.md 改动不破坏硬断言
-- [ ] AGENTS.md 四处 + backlog ⑤ 条目落笔
-- [ ] commit: `docs(gates): AGENTS.md gate chain + fence rules; CI runs check-arch`
+- [x] CI 加步骤;本地 `sh scripts/doc-audit.sh` 全绿(新引用的 scripts/check-arch.sh 被路径断言验证存在)
+- [x] AGENTS.md 四处 + backlog ⑤ 条目(门禁自测框架推广)落笔
+- [x] commit: `docs(gates): AGENTS.md fence section + review/evidence lines; CI runs check-arch`
 
 ---
 
