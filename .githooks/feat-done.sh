@@ -2,9 +2,10 @@
 # git feat-done <name> — merge feature/<name> back into develop (--no-ff) and
 # tear down its worktree. Run it from anywhere in the repo.
 #
-# 流程:测试门禁(worktree 内跑单测,不过就中止)→ 自动 stash/恢复主检出的
-# 未提交改动(以前手动做了七轮的舞步)→ checkout develop → merge(触发
-# post-merge 自动构建)→ stash pop → 拆 worktree。
+# 流程:merge-tree 冲突预检(秒级,先行)→ doc-audit → plan 全勾 → 架构围栏
+# (check-arch)→ 评审门禁 → 测试门禁(worktree 内跑单测,不过就中止)→ 自动
+# stash/恢复主检出的未提交改动(以前手动做了七轮的舞步)→ checkout develop
+# → merge(触发 post-merge 自动构建)→ stash pop → 拆 worktree。
 set -e
 
 name="$1"
@@ -41,6 +42,26 @@ fi
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/$branch" '
   /^worktree /{p=$2} /^branch /{ if ($2==b) print p }')
 
+# ── merge-tree 冲突预检:真合并前的无副作用彩排(octok-platform 借鉴,2026-10-24)──
+# **链首**(2026-10-27 从测试门禁之后挪来):秒级探针先行,探到冲突时分钟级
+# 的测试/评审一次都不用跑 — octok §C.3 的教训是「带冲突的分支评审白花」,
+# 我们原先的顺序比那还多白跑一层测试。
+# 探到冲突就干净退出:主检出不被切到 develop、不进半合并态、stash 舞步不动;
+# 修复路径 = 回 worktree 把 develop 合进 feature 分支解完,再重跑本命令。
+# merge-tree 退出码(实测 git 2.54):0=干净放行;1=冲突(**坏 ref 也是 1**;本流程两个
+# ref 都已在上文验证存在,故实践中 1 即冲突);≥2(如 129)=用法/工具错误 → 响亮降级为
+# 旧行为(fail-open:预检缺席最多回到「冲突在真合并时炸」,误拦则是永远合不了,取前者)。
+probe_rc=0
+git -C "$main_wt" merge-tree --write-tree develop "$branch" >/dev/null 2>&1 || probe_rc=$?
+if [ "$probe_rc" = "1" ]; then
+  echo "" >&2
+  echo "❌ 与 develop 有合并冲突(merge-tree 预检探到)— 不进入合并,主检出原样。" >&2
+  echo "   回 worktree 解冲突:cd \"$wt\" && git merge develop → 解完提交 → 重跑 git feat-done $name" >&2
+  exit 1
+elif [ "$probe_rc" -ge 2 ]; then
+  echo "⚠️  merge-tree 预检不可用(退出码 $probe_rc)— 降级:冲突将在真合并时暴露,主检出可能停在半合并态" >&2
+fi
+
 # ── 文档对账门禁:merge 前在 worktree 跑 doc-audit(纯 grep,秒级)──
 # 漂移要在部署前被抓住,而不是 push 之后等 CI 变红(socket 描述曾漂 5 个月)。
 # 纯文档 feature 也跑 — 那正是漂移进来的入口。逃生口:NEMONOTCH_SKIP_DOC_AUDIT=1。
@@ -71,6 +92,23 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/plan-audit.sh" ]; then
   fi
 fi
 
+# ── 架构围栏:坑总目录不变量的机器检查(纯 grep,秒级,2026-10-27)──
+# A 档全仓(校准零命中)+ B 档本分支新增行(opacity-hide/repeatForever);
+# 无 Swift 改动也跑 — A 档防的是全仓级复活(如 ScriptingBridge 回潮),
+# 与本次改没改 Swift 无关,且秒级零成本。规则表与加规则的规矩见
+# scripts/check-arch.sh 头注释。逃生口:NEMONOTCH_SKIP_ARCH=1。
+if [ "${NEMONOTCH_SKIP_ARCH:-0}" = "1" ]; then
+  echo "⏭  NEMONOTCH_SKIP_ARCH=1 — 跳过架构围栏" >&2
+elif [ -n "$wt" ] && [ -f "$wt/scripts/check-arch.sh" ]; then
+  echo "🏗  架构围栏:在 worktree 跑 check-arch…"
+  if ! sh "$wt/scripts/check-arch.sh"; then
+    echo "" >&2
+    echo "❌ 架构围栏未过 — 中止合并,worktree 与分支原样保留。" >&2
+    echo "   按输出修掉,或在确认合法处行尾加 // fence: allow 并在评审说明;应急跳过:NEMONOTCH_SKIP_ARCH=1 git feat-done $name" >&2
+    exit 1
+  fi
+fi
+
 # ── 评审门禁:judge ≠ author 的机械化(2026-10-20)──
 # 判断不能机械化,评审的「发生」可以:改动触及代码/scripts/hooks/CI 的 feature,
 # 合并前必须有 .reviews/<name>.md 且 Verdict: APPROVED——由**未参与开发**的
@@ -96,13 +134,13 @@ elif [ -n "$wt" ]; then
         sh "$wt/scripts/review.sh" "$name" >/dev/null 2>&1 || true
       fi
       echo "" >&2
-      if [ -f "$wt/.reviews/$name.md" ] && grep -q '^Verdict:' "$wt/.reviews/$name.md"; then
-        # review.sh 只护已填记录,这里如实分诊:APPROVED 未提交 vs Verdict 不是 APPROVED
-        if grep -q '^Verdict: APPROVED' "$wt/.reviews/$name.md"; then
-          echo "❌ 评审记录已填好(APPROVED)但**未提交** — 在 worktree 提交 .reviews/$name.md 后重跑本命令。" >&2
-        else
-          echo "❌ 工作区评审记录的 Verdict 不是 APPROVED(如 CHANGES_NEEDED)— 按 Findings 修复后让评审员更新记录为 APPROVED 并提交,再重跑本命令。" >&2
-        fi
+      if [ -f "$wt/.reviews/$name.md" ] && grep -q '^Verdict: APPROVED' "$wt/.reviews/$name.md"; then
+        echo "❌ 评审记录已填好(APPROVED)但**未提交** — 在 worktree 提交 .reviews/$name.md 后重跑本命令。" >&2
+      elif [ -f "$wt/.reviews/$name.md" ] && grep -q '^Verdict:' "$wt/.reviews/$name.md" && ! grep -q '^Verdict: (填' "$wt/.reviews/$name.md"; then
+        # R1 残留收口(2026-10-27,本轮实测现形):模板占位行「Verdict: (填…」也被
+        # ^Verdict: 判成「已填」,分诊走错支。占位行单独路由到「模板已生成」话术
+        # (行为同为 fail-closed,只是提示从「Verdict 不是 APPROVED」变回正确的代办指引)。
+        echo "❌ 工作区评审记录的 Verdict 不是 APPROVED(如 CHANGES_NEEDED)— 按 Findings 修复后让评审员更新记录为 APPROVED 并提交,再重跑本命令。" >&2
       elif [ -f "$wt/.reviews/$name.md" ]; then
         echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
         echo "   ✅ 模板已生成在 $wt/.reviews/$name.md(机械步骤已代办)— 派**未参与开发**的会话/子代理评审" >&2
@@ -169,23 +207,6 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/test.sh" ]; then
   fi
 else
   echo "⚠️  分支没有 worktree 或缺 scripts/test.sh — 跳过测试门禁,请自行确保测试通过" >&2
-fi
-
-# ── merge-tree 冲突预检:真合并前的无副作用彩排(octok-platform 借鉴,2026-10-24)──
-# 探到冲突就干净退出:主检出不被切到 develop、不进半合并态、stash 舞步不动;
-# 修复路径 = 回 worktree 把 develop 合进 feature 分支解完,再重跑本命令。
-# merge-tree 退出码(实测 git 2.54):0=干净放行;1=冲突(**坏 ref 也是 1**;本流程两个
-# ref 都已在上文验证存在,故实践中 1 即冲突);≥2(如 129)=用法/工具错误 → 响亮降级为
-# 旧行为(fail-open:预检缺席最多回到「冲突在真合并时炸」,误拦则是永远合不了,取前者)。
-probe_rc=0
-git -C "$main_wt" merge-tree --write-tree develop "$branch" >/dev/null 2>&1 || probe_rc=$?
-if [ "$probe_rc" = "1" ]; then
-  echo "" >&2
-  echo "❌ 与 develop 有合并冲突(merge-tree 预检探到)— 不进入合并,主检出原样。" >&2
-  echo "   回 worktree 解冲突:cd \"$wt\" && git merge develop → 解完提交 → 重跑 git feat-done $name" >&2
-  exit 1
-elif [ "$probe_rc" -ge 2 ]; then
-  echo "⚠️  merge-tree 预检不可用(退出码 $probe_rc)— 降级:冲突将在真合并时暴露,主检出可能停在半合并态" >&2
 fi
 
 # ── 自动 stash 舞步:主检出脏了不挡路,合并完原样恢复 ──

@@ -22,3 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Doc/code reconciliation
         run: sh scripts/doc-audit.sh
+      - name: Architecture fences
+        # 门禁语义:A 档全仓;B 档(新增行)在 CI checkout 上拿不到可靠的
+        # merge-base develop 时,脚本自身响亮降级跳过,A 档不受影响。
+        run: sh scripts/check-arch.sh

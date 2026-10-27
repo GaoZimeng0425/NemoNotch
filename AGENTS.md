@@ -34,11 +34,11 @@ NemoNotch/
 
 1. `git feat xxx`:先拉最新(本地 develop 纯落后 origin 时 `--ff-only --autostash` 快进;分叉则警告留在本地;主检出不在 develop 则跳过拉取),再从刷新后的 develop 建 worktree(**get-or-create**:进行中的 worktree 指路复用、孤儿分支自动挂回,重跑不报错)。
 2. 在 worktree 里干活、提交。
-3. `git feat-done xxx`:先跑文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 评审门禁(代码/scripts/hooks/CI 改动须有**已提交**的 APPROVED 记录,纯文档自动跳过;缺记录时自动生成模板;`NEMONOTCH_SKIP_REVIEW=1` 应急)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ merge-tree 冲突预检(探到冲突干净退出,主检出不进半合并态)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
+3. `git feat-done xxx`:先 merge-tree 冲突预检(秒级探针链首——冲突时分钟级门禁全不跑;探到冲突干净退出,主检出不进半合并态)→ 文档对账门禁(秒级 grep;`NEMONOTCH_SKIP_DOC_AUDIT=1` 逃生)→ plan 全勾门禁(本分支动过的 plan 文档不许有裸框,`NEMONOTCH_SKIP_PLAN_AUDIT=1` 逃生)→ 架构围栏(秒级,见下;`NEMONOTCH_SKIP_ARCH=1` 逃生)→ 评审门禁(代码/scripts/hooks/CI 改动须有**已提交**的 APPROVED 记录,纯文档自动跳过;缺记录时自动生成模板;`NEMONOTCH_SKIP_REVIEW=1` 应急)→ 再在 worktree 跑单测(Swift 变更才跑;`NEMONOTCH_SKIP_TESTS=1` 逃生)→ 自动 stash 主检出脏状态 → `--no-ff` 合回 develop → 恢复 stash → 拆 worktree。
 4. post-merge 钩子在主检出对 develop 收到 feature/hotfix 合并时自动跑 `./build.sh`(=自动部署);`NEMONOTCH_HOOK_DEBUG=1` 干跑。构建失败响亮但不回滚合并。
 5. `git feat-list` 列 worktree;`git feat-gc` 清已合并进 develop 的本地 feature/hotfix 化石分支(只 `-d` 删已合并,未合并的列出不动;worktree 在用的跳过——**刚建未提交的分支与 develop 同指针,会被 `--merged` 列出**,靠这层过滤保住,实测踩过)。细节 `docs/git-worktree-workflow.md`。
 
-**Judge ≠ author(已机械化)**:改动触及代码/scripts/hooks/CI 的 feature,合并前必须有 `.reviews/<name>.md` 评审记录且 **Verdict: APPROVED**——由**未参与开发**的会话/子代理填写(`sh scripts/review.sh <name>` 生成模板与审查清单:判别剃刀/证据纪律/Swift 6 并发/最小改动/错误路径/坑总目录对照/教训候选)。feat-done 的评审门禁检查记录(纯文档 feature 自动跳过;`NEMONOTCH_SKIP_REVIEW=1` 应急)。评审记录随分支提交 = 永久证据链。CI 绿 / lint 绿 / 构建成功是**信号不是判决**。**判决新鲜度(已机械化)**:评审记录须含 `Reviewed-Head:` 行(评审时的分支 head 短哈希,review.sh 模板自带);feat-done 门禁自动核对它与最近一次非 .reviews 提交的 head——评审后 rebase/重写即拒绝,补审后更新该行才能合。
+**Judge ≠ author(已机械化)**:改动触及代码/scripts/hooks/CI 的 feature,合并前必须有 `.reviews/<name>.md` 评审记录且 **Verdict: APPROVED**——由**未参与开发**的会话/子代理填写(`sh scripts/review.sh <name>` 生成模板与审查清单:判别剃刀/证据纪律/Swift 6 并发/最小改动/错误路径/坑总目录对照/教训候选)。feat-done 的评审门禁检查记录(纯文档 feature 自动跳过;`NEMONOTCH_SKIP_REVIEW=1` 应急)。评审记录随分支提交 = 永久证据链。CI 绿 / lint 绿 / 构建成功是**信号不是判决**。**判决新鲜度(已机械化)**:评审记录须含 `Reviewed-Head:` 行(评审时的分支 head 短哈希,review.sh 模板自带);feat-done 门禁自动核对它与最近一次非 .reviews 提交的 head——评审后 rebase/重写即拒绝,补审后更新该行才能合。**评审 prompt 不带实现思路**:派评审会话时只给 diff、AGENTS.md、worktree 只读权——**别把 plan 文档/实现笔记/设计讨论塞进 prompt**(干净上下文最现实的泄漏口;给了,评审员看到的就是"作者已经想好的理由",第三方性退化成自我辩护)。
 
 **钩子(每 clone 跑一次 `sh .githooks/install.sh`;副本会自检——`git feat`/`feat-done`/`feat-gc`/`pre-commit` 启动时经 `.githooks/freshness.sh` 逐字节对比 `.githooks/` 源与已装副本,不一致自动重装并中止本次让你重跑;`freshness.sh` 自身不复制,检查器永不过期。改源不重装 = 静默跑旧代码、排障盯一份没在执行的源文件——这是它存在的理由。在 worktree 里开发 hooks 自身时 `NEMONOTCH_SKIP_FRESHNESS=1` 跳过):**
 - `pre-commit`:拦 main/master 直提;拦主检出直提(唯一例外:带着 `MERGE_HEAD` 收尾冲突合并);对 staged `*.swift` 跑 lint 门禁;对 staged `*.xcstrings` 跑 `scripts/xcstrings.py format` 归一化。
@@ -48,6 +48,8 @@ NemoNotch/
 **Lint 门禁**:`scripts/lint.sh` = SwiftFormat(格式)+ SwiftLint(分析,只有 error 级拦提交)。pre-commit 以 `--staged --fix` 跑:SwiftFormat 自动修并重新暂存(同时有未暂改动的文件只检查,防部分暂存泄漏);缺工具**拦**而非跳过(无假绿)。手动:`sh scripts/lint.sh [--staged] [--fix]`。
 
 **文档对账门禁(`scripts/doc-audit.sh`)**:成对断言机器对账代码与手册——HookServer 传输(代码 `NWListener` ↔ 本手册 `127.0.0.1 TCP` 标注)、`INFOPLIST_KEY_*` pbxproj 双配置、worktree 三重排除、`CLAUDE.md → AGENTS.md` 符号链接、签名身份名、**手册引用的脚本路径必须存在**(scripts/ 与 .githooks/ 精确路径;根目录裸名须在仓库根 / scripts/ / .githooks/,或是 Swift 源码里出现的运行时产物——`hook-sender.sh` 由 HookInstaller 生成不在仓库)。**在 feat-done 合并前与 CI(push/PR 到 main/develop)各跑一次**——漂移要在部署前抓,不是 push 后等 CI 变红。**事实(传输/布局/数字)变了,代码、手册、断言三者必须同一提交改**——这个强迫同行就是门禁存在的目的;起因是 HookServer 从 unix socket 迁到 TCP 后手册漂了 5 个月才被抓到。
+
+**架构围栏门禁(`scripts/check-arch.sh`)**:坑总目录里"机器可判定"的不变量的秒级检查(octok-platform 围栏舰队借鉴,2026-10-27)。两档:**A 档全仓扫描**(校准到零命中才上线:ScriptingBridge 复活 / `proc_pid_rusage` / UI 直读 store 原始会话字典 / `kSecReturnData` 文件允许清单)与 **B 档只拦本分支 diff 新增行**(条件 opacity 隐藏、`repeatForever`——存量使用不追,新增需行尾 `// fence: allow` 显式豁免,豁免写在代码里评审看得见)。注释行全局跳过。**加规则三规矩**(规则与"为什么"同住):规则头注释写 why 指针(拦什么/哪次事故/AGENTS.md 条目);A 档校准不到零就降 B 档或不上线(会假红的警报会被学会忽略);出生必须 `--selftest` 全绿 + 注入违规见红一次。`--all` 全仓体检(B 档信息性列举);`--selftest` 模式自测,不命中样本必须取自真实易误写形状。feat-done 与 CI 各跑一次。
 
 ## 测试
 
@@ -208,7 +210,7 @@ graph LR
 
 ## 开发约定
 
-- **证据纪律(五级梯子)**:验证声明必须自报梯级——(1) 自述( worthless);(2) 指到 `file:line`;(3) 走失败路径证不可达;(4) **真跑过**(碰真代码的脚本/测试,错时响亮失败);(5) 在运行中的 app 复现。停在 2–3 级可以,**把安全结论当已定而没到 4 级不行**——"听起来对"的行文不管真假都有说服力,自洽不是证据。对真工件验证(跑功能/读真值/看 diff),不用代理(mtime/缓存截图/自述);**验证失败先怀疑观测方法再怀疑系统**;委派工作(subagent/脚本/别的会话)查输出工件,不查 delegate 的总结。`scripts/lint.sh`/`scripts/test.sh` 就是为此存在——可重跑的确定性脚本胜过一次性目测。
+- **证据纪律(五级梯子)**:验证声明必须自报梯级——(1) 自述( worthless);(2) 指到 `file:line`;(3) 走失败路径证不可达;(4) **真跑过**(碰真代码的脚本/测试,错时响亮失败);(5) 在运行中的 app 复现。停在 2–3 级可以,**把安全结论当已定而没到 4 级不行**——"听起来对"的行文不管真假都有说服力,自洽不是证据。对真工件验证(跑功能/读真值/看 diff),不用代理(mtime/缓存截图/自述);**验证失败先怀疑观测方法再怀疑系统**;委派工作(subagent/脚本/别的会话)查输出工件,不查 delegate 的总结。`scripts/lint.sh`/`scripts/test.sh` 就是为此存在——可重跑的确定性脚本胜过一次性目测。**披露证据完备度**(octok 借鉴,2026-10-27):梯级说的是"验证有多硬",还有正交一维是"输入有多全"——关键证据未取得时(日志没抓到/截图缺失/复现失败)明说「以下判断只基于 X」,读者有权知道判断吃的是哪种输入。
 - 行为基线:假设要说出口;多解释并列出而非默默选一个;最小改动(不顺手"改进"邻近代码/格式;只清自己制造的垃圾);每行改动可追溯到请求;任务转成可验证目标再循环。
 - **推翻旧口径 ⇒ 全仓 grep 旧口径残留**(AGENTS.md、docs/、代码注释、测试注释):doc-audit 只管成对断言的机器事实,散文口径的清场靠这一步。
 - **原则(触发式,命中即应用;格式:何时触发 → 判据)**:
