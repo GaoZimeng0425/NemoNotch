@@ -105,10 +105,11 @@
 - Edit: `.githooks/feat-done.sh`
 
 **Steps:**
-- [ ] merge-tree 冲突预检整段(含退出码三分与降级注释)从测试门禁之后**原样搬移**到门禁链最前(doc-audit 之前):秒级探针先行,冲突时分钟级门禁一次不跑(octok §C.3 教训:评审白花;我们多一层——测试也白花)
-- [ ] plan-audit 之后、评审门禁之前插入 check-arch 门:无 `.swift` 变更跳过(与测试门禁同款判定);命中即停,报"在 worktree 修完重跑 feat-done";逃生阀 `NEMONOTCH_SKIP_ARCH=1` 对齐既有命名
-- [ ] 对照验证:临时在 worktree 加违规 Swift 行 → 跑 feat-done 应在 check-arch 处停(不进评审);还原
-- [ ] commit: `feat(gates): wire check-arch into feat-done; move merge-tree probe to chain front`
+- [x] merge-tree 冲突预检整段(含退出码三分与降级注释)从测试门禁之后**原样搬移**到门禁链最前(doc-audit 之前),原注释保留、新增链首理由注释
+- [x] plan-audit 之后、评审门禁之前插入 check-arch 门:无 `.swift` 变更也跑(A 档防全仓级复活,秒级);逃生阀 `NEMONOTCH_SKIP_ARCH=1`
+- [x] 顺手收口 R1 残留(占位行 `Verdict: (填` 被误判成已填,分诊走错支 — 本轮端到端实测现形,就在本文件):占位行单独路由到「模板已生成」话术,行为仍 fail-closed
+- [x] 对照验证:注入 SBApplication 违规 → feat-done 停在 check-arch(exit 1,输出含修复指引);还原后过 check-arch 停在评审门禁(占位模板 → 正确的「模板已生成」消息)
+- [x] commit: `feat(gates): wire check-arch into feat-done; merge-tree probe to chain front; R1 triage fix`
 
 ---
 
