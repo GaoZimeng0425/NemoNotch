@@ -21,9 +21,14 @@ struct PowerSourceChange: Equatable {
 /// Pure edge detection behind `HUDService.readBattery()` (IOKit reads stay
 /// there; everything decidable lives here so it can be tested).
 enum PowerSourceEdge {
-    /// The reading HUD/capsule track, picked from all IOPS descriptions.
+    /// The reading HUD/capsule track: the internal battery only. IOPS also
+    /// lists UPSes (and their order isn't fixed); sharing one baseline across
+    /// sources turned their differences into fake plug/unplug edges. No
+    /// internal battery (desktop Mac) = nothing to track.
     static func trackedReading(in descriptions: [[String: Any]]) -> PowerSourceReading? {
-        descriptions.first.map(reading(from:))
+        descriptions
+            .first { $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType }
+            .map(reading(from:))
     }
 
     static func reading(from info: [String: Any]) -> PowerSourceReading {
