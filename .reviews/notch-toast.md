@@ -2,8 +2,8 @@
 
 Reviewer: independent code-reviewer subagent (fresh context; did not author this branch — judge ≠ author)
 Date: 2026-10-27
-Reviewed-Head: 4c6fc64
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 4931983
+Verdict: APPROVED
 Scope:  13 files changed, 744 insertions(+), 207 deletions(-)
 
 ```
@@ -22,7 +22,7 @@ README_CN.md
 docs/images/completion-flash.png
 ```
 
-## Findings
+## Findings(第 1 轮,Reviewed-Head 4c6fc64 → CHANGES_NEEDED;第 2 轮复审见文末)
 
 证据完备度声明:以下判断基于代码阅读(梯级 2–3)+ 单测实跑(梯级 4,见下);**未在运行中的 app 复现**(未跑 build.sh、未做多屏/悬停实机验证)。F1 的触发链是代码审阅推断。
 
@@ -67,3 +67,30 @@ docs/images/completion-flash.png
 在 worktree 里:`git diff 7c5dd4318391d596487eddf04314d3890c2766eb...HEAD` 看全量改动;重要文件直接读上下文,
 别只看 diff 片段。发现问题先列 Findings(标 CHANGES_NEEDED),修完复审再改
 APPROVED。APPROVED 意味着:"我愿意为这个合并背书"——不是"看起来没毛病"。
+
+## 第 2 轮复审(Reviewed-Head 4931983)
+
+复审范围:`git diff 4c6fc64..4931983`(另含第 1 轮评审记录文件)。证据完备度:读代码(梯级 2–3)+ 单测与变异实跑(梯级 4);**仍未在运行中的 app 复现**悬停卡死(F1 原本就是推断,修复也只验证到代码与单测层面)。
+
+实跑:
+- `sh scripts/affected-tests.sh` → exit 0,「选出测试类: CalendarDueDetectorTests,CompletionToastLayoutTests,CompletionToastQueueTests」,「通过 23 · 失败 0」。build/test.log 中 toast 相关 14 条 passed(Queue 9 + Layout 5),没有 failed。
+- `sh scripts/mutate.sh NemoNotch/Services/CompletionToastQueue.swift '<min(by: deadline)>' 'let stalest = toasts.indices.first' --only CompletionToastQueueTests` → exit 0,「变异被抓住:失败 1 个,通过 8」(内层测试退出码 65);文件已恢复,`git status` 干净。
+
+逐项结论:
+- **F1 已关闭**。`CompletionToastWindow.swift:143-158`:从不在内转为在内时启动 0.25s 重复 `Timer`,每次都用实测的 `cursorInRow()` 重报;转为不在内时 invalidate。所以一次被误判的 exit 最迟 0.25s 内就会被纠正,不会再永久暂停。生命周期:`report` 有 `inside != hovering` 守卫,不会叠出两个 timer;`remove()`(`:313-319`)先 `stopHoverTracking()`,再 `setHover(false)`。面板的三条拆除路径(屏幕变化重建、刘海打开、清空后 hideTask)都经过 `remove()`。并发:timer 用 `scheduledTimer` 挂在主 runloop 上,block 里的 `MainActor.assumeIsolated` 成立,`[weak self]` 不会让视图多活。
+- **F2 已关闭**。布局测试移到了独立文件 `NemoNotchTests/CompletionToastLayoutTests.swift`,affected-tests 已经选中它(见上)。
+- **F3 已关闭**。`CompletionToastQueue.swift:44-47` 改为淘汰 deadline 最早的卡;deadline 相同时 `min(by:)` 取第一个,原来的 `capacityEvictsOldest` 照常通过。新测试 `refreshedCardSurvivesEviction` 用变异验证过有鉴别力(见上)。
+- **F5 已关闭**。入场动画改成 `.scale(0.92, anchor: .top)`,在面板内缩放;面板高度改为 `cardHeight + 2`。行顶的屏幕位置没变(frame 的 y 用 panelHeight 推算,顶边仍是 `maxY - notch - topGap`),和刘海 hitbox 之间的间隙不受影响。
+- **F4 接受(范围外)**。按 name 合并在本分支之前就存在,旧版胶囊也一样,不是回归。建议另开一个 follow-up,把键改成 name+source 或会话 id。
+- **F6 接受**。影响很小:只有另一块屏的刘海开着时才会发生,收起刘海也是可以撤销的结果。
+- **F7 已关闭**。第 2 轮的提交信息写明了 test.sh 的退出码、用例数和变异结果。
+
+第 2 轮新发现:
+- **R2-1 [P3,不阻塞]** 复查 timer 挂在 `.default` runloop 模式,鼠标按住拖动(事件跟踪模式)期间不会触发,松手后恢复。这对悬停语义无害,只是记录在案。
+- **R2-2 [P3,不阻塞]** `CompletionToastHostingView` 没有在 deinit 里 invalidate timer,完全靠 `remove()` 的纪律。现在所有拆除路径都经过 `remove()`;如果以后有人绕过它直接丢掉 host,`[weak self]` 能防住崩溃,但 runloop 上会留一个每 0.25s 空转的 timer。可以加一道保险:`viewWillMove(toWindow: nil)` 时调 `stopHoverTracking()`。
+
+第 2 轮判决:**APPROVED**。两个 P2(F1、F2)和 P3 的 F3、F5 都已关闭并经过实跑验证;剩下的 F4、F6、R2-1、R2-2 都是 P3,不阻塞合并。
+
+### 教训候选(第 2 轮补充)
+
+- 第 1 轮的两条仍然成立。F2 的修法是手工拆文件,"一个测试文件只放一个 suite"还没变成门禁,建议按第 1 轮的提议落进 check-arch 或 affected-tests。
