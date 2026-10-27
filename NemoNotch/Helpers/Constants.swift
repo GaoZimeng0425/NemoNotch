@@ -97,7 +97,7 @@ enum NotchConstants {
 
     /// Completion flash (full-screen edge glow on AI/agent completion)
     /// Cooldown window: the first completion flashes; further completions
-    /// within this window merge into the visible toast without re-flashing.
+    /// within this window only add toast cards, without re-flashing.
     static let completionFlashThrottle: TimeInterval = 2.0
     /// One flash is a single continuous double-pulse on the glow level:
     /// 0 → 1 → dipLevel → 1 → 0. Each rise (`0→1` and `dipLevel→1`) uses
@@ -108,9 +108,12 @@ enum NotchConstants {
     static let completionFlashFall: Double = 0.4
     /// Trough between the two peaks — the glow dips to this fraction, never to 0.
     static let completionFlashDipLevel: Double = 0.5
-    /// How long the completion toast stays before dismissing (own value — the
-    /// volume/brightness HUD keeps its shorter `hudDismissDelay`).
-    static let completionToastDuration: Double = 5.0
+    /// How long each completion toast card stays before dismissing (hovering
+    /// the row pauses it; own value — the volume/brightness HUD keeps its
+    /// shorter `hudDismissDelay`).
+    static let completionToastDuration: Double = 30.0
+    /// Most toast cards side by side under the notch; a newer one evicts the oldest.
+    static let completionToastCapacity = 4
     /// Calendar due monitor tick cadence — how late an "on start" reminder can
     /// be in the worst case.
     static let calendarDueTickInterval: TimeInterval = 10
@@ -129,20 +132,10 @@ enum NotchConstants {
     /// Peak opacity of the edge glow at the top of the flash.
     static let completionGlowOpacity: Double = 0.9
 
-    /// Completion toast capsule — rendered in the full-screen flash overlay,
-    /// horizontally centered with its vertical center this fraction of the
-    /// screen height up from the bottom edge.
-    static let completionToastBottomFraction: CGFloat = 0.15
-    /// Toast capsule sizing (deliberately larger than the volume/brightness
-    /// HUD capsule — this is a full-screen completion alert, not a corner HUD).
-    /// The capsule hugs its text via horizontal padding; `maxWidth` is only an
-    /// upper bound that truncates very long names, not a fixed width.
-    static let completionToastHeight: CGFloat = 48
-    static let completionToastMaxWidth: CGFloat = 560
-    static let completionToastHPadding: CGFloat = 22
-    static let completionToastIconSize: CGFloat = 20
-    static let completionToastFontSize: CGFloat = 16
-    static let completionToastCountFontSize: CGFloat = 14
+    /// Completion toast card type sizes (card geometry lives in
+    /// `CompletionToastLayout`). Scaled to the notch, not a full-screen alert.
+    static let completionToastIconSize: CGFloat = 18
+    static let completionToastFontSize: CGFloat = 13
 
     // MARK: - AI status FAB
 

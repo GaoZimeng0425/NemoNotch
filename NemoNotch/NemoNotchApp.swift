@@ -150,6 +150,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private(set) var coordinator: NotchCoordinator?
+    /// The completion toast row under the notch; needs the coordinator's
+    /// notch geometry and open state, so it is built here, not in `AppDependencies`.
+    private var completionToastWindow: CompletionToastWindowController?
     /// `--uitest --flash` 截图用的暗色背景窗(仅此模式存在),让 `.screen` 混合的
     /// 全屏 glow 不被亮色壁纸冲淡,得到稳定可复现的演示图。
     private var uiTestFlashBackdrop: NSWindow?
@@ -216,6 +219,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.deps?.calendar.resetSelectedDateToToday()
         }
         coordinator = notchCoordinator
+        // Same gating as the glow windows: always, except UI tests outside --flash.
+        if !UITestMode.isActive || UITestMode.flash {
+            completionToastWindow = CompletionToastWindowController(
+                service: deps.completionFlash,
+                coordinator: notchCoordinator
+            )
+        }
 
         setupHotkeys(coordinator: notchCoordinator)
 
@@ -254,8 +264,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             if UITestMode.flash {
                 // 保持刘海收起,只钉住完成态 glow + toast —— 贴合真实开发场景:
-                // 正在写代码、刘海收着,AI 跑完时屏幕一闪 + 刘海旁弹出完成 Toast。
-                deps.completionFlash.holdForUITest(names: ["NemoNotch"])
+                // 正在写代码、刘海收着,AI 跑完时屏幕一闪 + 刘海下方横排弹出完成 Toast 卡片。
+                deps.completionFlash.holdForUITest(names: ["NemoNotch", "evlat"])
                 // 安全网:--flash 会铺满屏的暗色背景窗;万一截图脚本被强杀来不及
                 // 清理,也让 app 自己 12s 后退出,绝不把全屏窗永久挂在屏幕上。
                 DispatchQueue.main.asyncAfter(deadline: .now() + 12) {

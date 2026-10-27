@@ -14,25 +14,15 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
     return "\(h)h \(rm)m"
 }
 
-/// Completion alert capsule shown centered in the lower portion of the screen
-/// (inside the full-screen flash overlay) when a session/agent finishes or a
-/// Pomodoro phase ends. Black-capsule styling matching `HUDOverlayView`, but
-/// deliberately larger. Leads with the **source app's logo** (Claude Code /
-/// Gemini / opencode / agent / Pomodoro) so it's clear which app finished,
-/// then the name(s); when more than one, appends a count chip.
+/// One completion card in the toast row under the notch: notch-black, the
+/// source app's logo, the task title and a tool·model·tokens·duration line,
+/// and a close glyph in the top-trailing corner. Fixed size from
+/// `CompletionToastLayout` — the panel resolves clicks (close) from that
+/// same geometry, so nothing here is a SwiftUI button.
 struct CompletionToastView: View {
-    let items: [CompletionItem]
+    let item: CompletionItem
 
     var body: some View {
-        if items.count == 1, let item = items.first {
-            singleItemBody(item)
-        } else {
-            multiItemBody
-        }
-    }
-
-    /// Rich two-line layout: title + tool·model·tokens·duration.
-    private func singleItemBody(_ item: CompletionItem) -> some View {
         HStack(spacing: 10) {
             sourceIcon(item.source)
                 .frame(
@@ -47,63 +37,37 @@ struct CompletionToastView: View {
                     .foregroundStyle(NotchTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(maxWidth: NotchConstants.completionToastMaxWidth, alignment: .leading)
 
                 if let detail = detailLine(for: item) {
                     Text(detail)
-                        .font(.system(size: NotchConstants.completionToastFontSize - 5, weight: .medium))
+                        .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
                         .foregroundStyle(NotchTheme.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: NotchConstants.completionToastMaxWidth, alignment: .leading)
                 }
             }
-
-            // The "name" (project folder) is dropped from the visible text when a
-            // richer subtitle is present; otherwise it's the title line above.
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, NotchConstants.completionToastHPadding)
-        .frame(minHeight: NotchConstants.completionToastHeight)
-        .fixedSize(horizontal: true, vertical: false)
-        .background(.black)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(NotchTheme.stroke, lineWidth: 0.6))
-        .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+        .padding(.leading, 14)
+        // Keep text clear of the close glyph's hit square.
+        .padding(.trailing, CompletionToastLayout.closeSize + CompletionToastLayout.closeInset + 2)
+        .frame(width: CompletionToastLayout.cardWidth, height: CompletionToastLayout.cardHeight)
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .stroke(NotchTheme.stroke, lineWidth: 0.6)
+        )
+        .overlay(alignment: .topTrailing) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(NotchTheme.textTertiary)
+                .frame(width: CompletionToastLayout.closeSize, height: CompletionToastLayout.closeSize)
+                .padding(CompletionToastLayout.closeInset)
+        }
     }
 
-    /// Multi-item layout: source logo + names joined by "·" + count chip (unchanged).
-    private var multiItemBody: some View {
-        HStack(spacing: 10) {
-            if let source = items.first?.source {
-                sourceIcon(source)
-                    .frame(
-                        width: NotchConstants.completionToastIconSize + 4,
-                        height: NotchConstants.completionToastIconSize + 4
-                    )
-            }
-
-            Text(items.map(\.name).joined(separator: " · "))
-                .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: NotchConstants.completionToastMaxWidth)
-
-            if items.count > 1 {
-                Text("\(items.count)")
-                    .font(.system(size: NotchConstants.completionToastCountFontSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(NotchTheme.accent)
-                    .monospacedDigit()
-            }
-        }
-        .padding(.horizontal, NotchConstants.completionToastHPadding)
-        .frame(height: NotchConstants.completionToastHeight)
-        .fixedSize(horizontal: true, vertical: false)
-        .background(.black)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(NotchTheme.stroke, lineWidth: 0.6))
-        .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
-    }
+    private static let cornerRadius: CGFloat = 14
 
     /// "tool · model · tokens · duration" for the single-item detail line,
     /// skipping nil fields. Returns nil when there is no detail at all.
