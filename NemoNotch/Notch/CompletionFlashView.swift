@@ -11,66 +11,23 @@ import SwiftUI
 struct CompletionFlashView: View {
     let service: CompletionFlashService
 
-    /// 首帧挂载闸门,见 `toast` 的注释 —— 重建窗口的入场动画依赖它。
-    @State private var toastMounted = false
-
     /// Warm near-white center — the "hot" core of the neon tube.
     private static let core = Color(red: 1.0, green: 0.93, blue: 0.82)
 
     var body: some View {
         // 闲置时窗口已 orderOut,每次闪光重建;`.idle` 只剩淡出尾段 ——
-        // overlay 还在、glow 与 toast 都已归零的那几帧仍在重绘的部分。
+        // overlay 还在、glow 已归零的那几帧仍在重绘的部分。
         let _ = PerfProbe.hit(
-            service.flashLevel == 0 && !service.toastVisible
+            service.flashLevel == 0
                 ? "CompletionFlashView.body.idle(overlay 仍在、内容已归零的淡出尾段)"
                 : "CompletionFlashView.body.active"
         )
-        ZStack {
-            glow
-                .opacity(NotchConstants.completionGlowOpacity * service.flashLevel)
-                .allowsHitTesting(false)
-                .ignoresSafeArea()
-
-            // Every screen: the toast is read where the user is looking,
-            // like the glow it comes with.
-            toast
-        }
-        .ignoresSafeArea()
-    }
-
-    /// The unified completion capsule, horizontally centered with its vertical
-    /// center at `completionToastBottomFraction` of the screen height up from
-    /// the bottom edge. Fades/slides in on `service.toastVisible`.
-    ///
-    /// `mounted` 延迟一帧才放行 toast:闪光窗口现在是**闪光时重建**的(具文窗口
-    /// 修复,见 CompletionFlashWindow.applyOverlayVisibility),全新 SwiftUI 树挂载
-    /// 时 `toastVisible` 往往已是 true —— 直接首渲染终态,入场弹簧/transition 不会
-    /// 播放。先以"无 toast"状态挂载、下一帧翻 `mounted`,插入动画两条路径
-    /// (新建窗/存活窗翻转)都照常播放。
-    private var toast: some View {
-        GeometryReader { geo in
-            if toastMounted, service.toastVisible, !service.toastItems.isEmpty {
-                CompletionToastView(items: service.toastItems)
-                    .position(
-                        x: geo.size.width / 2,
-                        y: geo.size.height * (1 - NotchConstants.completionToastBottomFraction)
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
-        .allowsHitTesting(false)
-        .animation(
-            .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
-            value: service.toastVisible
-        )
-        .animation(
-            .spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08),
-            value: toastMounted
-        )
-        .onAppear {
-            guard !toastMounted else { return }
-            DispatchQueue.main.async { toastMounted = true }
-        }
+        // The toast lives in its own clickable panel under the notch
+        // (`CompletionToastWindowController`); this overlay is glow only.
+        glow
+            .opacity(NotchConstants.completionGlowOpacity * service.flashLevel)
+            .allowsHitTesting(false)
+            .ignoresSafeArea()
     }
 
     private var glow: some View {

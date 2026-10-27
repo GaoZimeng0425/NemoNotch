@@ -1,34 +1,25 @@
 import SwiftUI
 
 /// Watches the AI session store and agent registry for work-completion edges
-/// (working→idle / active→idle) and drives the full-screen edge glow + toast.
-/// Throttles: the first completion flashes and shows a toast; completions
-/// arriving during the cooldown merge their names into the visible toast
-/// without replaying the flash.
+/// (working→idle / active→idle) and drives the full-screen edge glow + the
+/// toast row under the notch. Throttles the glow only: the first completion
+/// flashes, completions arriving during the cooldown don't replay it. Every
+/// completion gets its own toast card (`CompletionToastQueue`).
 @MainActor
 @Observable
 final class CompletionFlashService {
     /// Drives the edge-glow level, 0...1 (scaled by `completionGlowOpacity` in
     /// the view). Animated through the double-pulse curve inside `withAnimation`.
     private(set) var flashLevel: Double = 0
-    /// Finished units (name + source logo) shown in the current toast.
-    private(set) var toastItems: [CompletionItem] = []
-    /// Whether the toast is currently shown.
-    private(set) var toastVisible = false
+    /// The toast cards under the notch, oldest first.
+    private(set) var toasts: [CompletionToast] = []
 
-    /// Whether the full-screen overlay windows need to be on screen.
+    /// Whether the full-screen glow windows need to be on screen.
     ///
-    /// Deliberately falls **later** than `flashLevel` / `toastVisible`: those are
-    /// assigned instantly while their visual interpolation still has to run
-    /// (`completionFlashFall` for the glow, `hudDismissDuration` for the toast).
-    /// Ordering the window out on the assignment would cut the animation off.
+    /// Deliberately falls **later** than `flashLevel`: that is assigned
+    /// instantly while its interpolation (`completionFlashFall`) still has to
+    /// run. Ordering the window out on the assignment would cut the fade off.
     private(set) var overlayVisible = false
-
-    /// The two independent reasons the overlay may be needed. Tracked
-    /// separately because a flash (~1.2s) and a toast (~5.2s) end at different
-    /// times, and a merge can restart the toast while the flash is long done.
-    private var flashHolding = false
-    private var toastHolding = false
 
     private let store: AISessionStore
     private let registry: AgentMonitorRegistry
@@ -38,7 +29,11 @@ final class CompletionFlashService {
     private var inCooldown = false
     private var cooldownTask: Task<Void, Never>?
     private var flashResetTask: Task<Void, Never>?
-    private var toastDismissTask: Task<Void, Never>?
+    private var toastExpiryTask: Task<Void, Never>?
+    private var toastQueue = CompletionToastQueue(
+        duration: NotchConstants.completionToastDuration,
+        capacity: NotchConstants.completionToastCapacity
+    )
 
     init(store: AISessionStore, registry: AgentMonitorRegistry, settings: AppSettings) {
         self.store = store
@@ -54,7 +49,7 @@ final class CompletionFlashService {
         MainActor.assumeIsolated {
             cooldownTask?.cancel()
             flashResetTask?.cancel()
-            toastDismissTask?.cancel()
+            toastExpiryTask?.cancel()
             LogService.info("CompletionFlashService deinit", category: "CompletionFlash")
         }
     }
@@ -145,21 +140,38 @@ final class CompletionFlashService {
 
     // MARK: - External toast (no flash)
 
-    /// Show the unified completion toast without firing the full-screen edge
-    /// glow — used by the Pomodoro end alert, whose visual channel is the notch
-    /// ring pulse rather than the glow. Merges into a visible toast if one is
-    /// up. Deliberately leaves the flash cooldown untouched so it can never
-    /// swallow a subsequent AI/agent flash.
+    /// Show completion toasts without firing the full-screen edge glow — used
+    /// by the Pomodoro end alert, whose visual channel is the notch ring pulse
+    /// rather than the glow. Deliberately leaves the flash cooldown untouched
+    /// so it can never swallow a subsequent AI/agent flash.
     func showCompletionToast(names: [String]) {
         guard settings.completionFlashEnabled else {
             LogService.debug("Completion toast ignored — completion flash disabled", category: "CompletionFlash")
             return
         }
-        let items = names.map { CompletionItem(name: $0, source: .pomodoro) }
-        let base = toastVisible ? toastItems : []
-        toastItems = CompletionFlashNames.merge(existing: base, new: items)
-        showToast()
-        LogService.debug("Completion toast shown (no flash): \(toastItems.map(\.name))", category: "CompletionFlash")
+        addToasts(names.map { CompletionItem(name: $0, source: .pomodoro) })
+        LogService.debug("Completion toast shown (no flash): \(names)", category: "CompletionFlash")
+    }
+
+    // MARK: - Toast row interaction
+
+    /// The close button on one card.
+    func dismissToast(id: UUID) {
+        toastQueue.dismiss(id: id)
+        syncToasts()
+        LogService.debug("Toast dismissed by user", category: "CompletionFlash")
+    }
+
+    /// Pointer over the toast row: freeze every card's timer. Leaving restarts
+    /// them from full so a card being read never vanishes as the cursor leaves.
+    func setToastHover(_ hovering: Bool) {
+        guard hovering != toastQueue.isPaused else { return }
+        if hovering {
+            toastQueue.pause()
+        } else {
+            toastQueue.resume(now: Date())
+        }
+        syncToasts()
     }
 
     // MARK: - UI test
@@ -169,13 +181,12 @@ final class CompletionFlashService {
     func holdForUITest(names: [String]) {
         flashLevel = 1
         // Show a Claude-sourced item so the screenshot demonstrates the source logo.
-        toastItems = names.map { CompletionItem(name: $0, source: .ai(.claude)) }
-        toastVisible = true
-        // Screenshot mode never decays, so the overlay has to stay up: no
-        // reset/dismiss task will ever lower these.
-        flashHolding = true
-        toastHolding = true
-        syncOverlayVisibility()
+        toastQueue.add(names.map { CompletionItem(name: $0, source: .ai(.claude)) }, now: Date())
+        // Screenshot mode never decays: a paused queue expires nothing.
+        toastQueue.pause()
+        syncToasts()
+        // No reset task will ever lower the glow, so the overlay stays up.
+        overlayVisible = true
         LogService.debug("Flash held for UI test: \(names)", category: "CompletionFlash")
     }
 
@@ -183,22 +194,18 @@ final class CompletionFlashService {
 
     private func handle(items: [CompletionItem]) {
         if inCooldown {
-            toastItems = CompletionFlashNames.merge(existing: toastItems, new: items)
-            restartToastDismiss()
-            LogService.debug("Merged into active toast: \(toastItems.map(\.name))", category: "CompletionFlash")
+            LogService.debug("Flash throttled, toast only: \(items.map(\.name))", category: "CompletionFlash")
         } else {
             triggerFlash()
-            toastItems = CompletionFlashNames.merge(existing: [], new: items)
-            showToast()
             startCooldown()
         }
+        addToasts(items)
     }
 
     private func triggerFlash() {
         LogService.debug("Flash triggered", category: "CompletionFlash")
         flashResetTask?.cancel()
-        flashHolding = true
-        syncOverlayVisibility()
+        overlayVisible = true
         flashResetTask = Task { @MainActor [weak self] in
             guard let self else { return }
             // Continuous double-pulse: 0 → 1 → dipLevel → 1 → 0.
@@ -232,39 +239,31 @@ final class CompletionFlashService {
             if Task.isCancelled {
                 return
             }
-            flashHolding = false
-            syncOverlayVisibility()
+            overlayVisible = false
         }
     }
 
-    private func showToast() {
-        toastVisible = true
-        toastHolding = true
-        syncOverlayVisibility()
-        restartToastDismiss()
+    private func addToasts(_ items: [CompletionItem]) {
+        toastQueue.add(items, now: Date())
+        syncToasts()
     }
 
-    private func restartToastDismiss() {
-        toastDismissTask?.cancel()
-        toastDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(NotchConstants.completionToastDuration))
+    /// Publishes the queue and re-arms the single expiry timer for the
+    /// earliest deadline (none while paused or empty).
+    private func syncToasts() {
+        if toasts != toastQueue.toasts {
+            withAnimation(.spring(duration: NotchConstants.hudAppearDuration, bounce: 0.08)) {
+                toasts = toastQueue.toasts
+            }
+        }
+        toastExpiryTask?.cancel()
+        guard let deadline = toastQueue.nextDeadline else { return }
+        toastExpiryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(deadline.timeIntervalSinceNow, 0)))
             guard let self, !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: NotchConstants.hudDismissDuration)) {
-                self.toastVisible = false
-            }
-            try? await Task.sleep(for: .seconds(NotchConstants.hudDismissDuration))
-            if Task.isCancelled {
-                return
-            }
-            toastHolding = false
-            syncOverlayVisibility()
+            toastQueue.expire(now: Date())
+            syncToasts()
         }
-    }
-
-    private func syncOverlayVisibility() {
-        let needed = flashHolding || toastHolding
-        guard needed != overlayVisible else { return }
-        overlayVisible = needed
     }
 
     private func startCooldown() {
