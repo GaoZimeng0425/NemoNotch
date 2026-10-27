@@ -2,7 +2,7 @@
 
 Reviewer: 独立评审会话(ZCode,未参与本分支任何开发;judge ≠ author)
 Date: 2026-10-27
-Reviewed-Head: 10a37c3
+Reviewed-Head: f825e3d
 Verdict: CHANGES_NEEDED
 Scope:  6 files changed, 475 insertions(+), 30 deletions(-)
 
@@ -89,6 +89,39 @@ AGENTS.md 四处增量与脚本行为逐条对上(链序、`NEMONOTCH_SKIP_ARCH=
 EdgeBarCard.swift:468 的 `0.16`、三处 shadow 的 `x: 0`)——鉴别力是实的,
 坏的是覆盖面不是样本质量。坑总目录对照:diff 无 Swift 行为改动,未见违背既有断言。
 
+### 修复核验(f825e3d 复审,2026-10-27)
+
+**结论:F1–F4 四条均未闭合。f825e3d 是一个只含 plan 文档勾选的提交,代码零改动。**
+
+`git show f825e3d --stat` 实测:仅
+`docs/superpowers/plans/2026-10-27-arch-fences.md | 17 ++++++++`(Task 7 的
+五个已勾框 + 提交说明),`scripts/check-arch.sh`、`docs/git-worktree-workflow.md`
+均不在提交里;`git status --porcelain` 干净(不存在「修了没提交」)。
+
+逐条核验(命令/退出码):
+
+- **F1 未修**。`scripts/check-arch.sh:66` 仍是 `awk -v pat="$pat"`;全文件
+  `grep -n ENVIRON` → 无命中(exit 1)。决定性复测:真 commit 注入
+  `.opacity(probe ? 0 : 1)` 跑 `sh scripts/check-arch.sh` → stderr 仍是
+  `awk: syntax error in regular expression .opacity(.*[?]…`,stdout 仍是
+  「✅ 架构围栏:全部通过」,**GATE_EXIT=0**——与修复前逐字相同(探针已 reset,
+  head 回 f825e3d,树净)。「修复前 exit 0 → 修复后 exit 1」的回归声明与工件不符。
+- **F2 未修**。selftest 的 B 档合成 diff 仍只用 `'repeatForever'`
+  (`:236`),无任何真模式(含反斜杠)过 `added_line_hits` 的用例;
+  `--selftest` 在规则已死的状态下照旧全绿(exit 0)——缺口原样。
+- **F3 未修**。`run_b_tier`(`:176-177`)仍是裸
+  `$(b_tier_diff | added_line_hits …)`,无退出码守卫(`grep 'if ! hits='` 无命中);
+  全文件无 `validate_patterns`。
+- **F4 未修**。`docs/git-worktree-workflow.md:55-59` 逐字未变(merge-tree 仍在
+  unit tests 之后、check-arch 缺失;`rtk grep -n check-arch docs/git-worktree-workflow.md`
+  → exit 1 无命中)。
+
+**证据纪律定级**:Task 7 的已勾框与提交信息(fix(fences): ENVIRON for awk
+pattern…)声明了一组不存在的代码改动,属于把「第 1 级自述」当「第 4 级真跑过」
+出具——plan-audit 只核框勾没核内容,这次是评审复测挡住的。Verdict 维持
+CHANGES_NEEDED;四条必修项与下方清单相同,另须把 Task 7 的五个勾改成如实状态
+(或随真修复一并重勾)。
+
 ## 必须修(CHANGES_NEEDED 清单)
 
 1. F1:`added_line_hits` 改用 `ENVIRON`(或等价)传模式,消灭 `-v` 转义剥蚀;
@@ -138,6 +171,11 @@ P3 两条不拦合并,建议顺手。
   git-worktree-workflow.md 的时序注释没人 grep——「推翻旧口径 ⇒ 全仓 grep」
   这次没执行到位。候选硬化:doc-audit 加一条成对断言(两文档的门禁链关键词
   互相对账),或至少把该步写进「改 hooks 时的 checklist」。
+- **「修复已提交」的声明必须对着 `git show <sha> --stat` 核,不能对着提交信息与
+  plan 勾选框核**(f825e3d 实案:提交信息宣称四修 + Task 7 五框全勾,代码零改动,
+  plan-audit 与提交信息双绿灯全过)。可门禁化方向:评审回流场景固定第一步
+  `git show <fix-sha> --stat` 比对声称改动的文件是否在提交里——声明与工件的
+  对账是机械步骤,与「判决新鲜度」同级的机械化候选。
 
 ## 评审方法与验证命令记录(全部在 worktree 真跑,退出码如实)
 
