@@ -159,3 +159,9 @@
 - [x] F4:docs/git-worktree-workflow.md 旧门禁链清场(「推翻旧口径 ⇒ 全仓 grep 残留」)
 - [x] 回归证明:同一探针(真提交 `.opacity(probe ? 0 : 1)`)修复前 exit 0(评审实测)→ 修复后 exit 1,reset 后绿
 - [x] commit: `fix(fences): ENVIRON for awk pattern (F1 fake-green), crash guards, selftest via real pattern`
+
+**事故记录(评审第 2 轮抓出,如实留档):** 首轮修复真实存在且回归过(exit 0→1),
+但作者在提交**之前**做了探针的 `git reset --hard`,未提交的修复被一并抹掉,
+随后的 f825e3d 只含 plan 文档——提交信息与勾选框声明了不存在的修复。再犯
+「commit fixes BEFORE any reset dance」旧坑。本轮修复重新落地并**先提交后探针**,
+提交内容以 `git show --stat` 自证。

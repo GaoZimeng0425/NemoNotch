@@ -61,18 +61,33 @@ scan_dirs() {
 
 # B 档执行件:stdin 吃 `git diff -U0` 文本,打印「新增行中命中模式的 file:line:content」。
 # awk 按 +++ 头与 @@ 头跟踪 file:line;行首注释与豁免行在此滤。
+# ⚠️ 模式经 ENVIRON 传入,**绝不用 `-v`**:POSIX 规定 `-v` 对值做反斜杠转义,
+# `\.opacity\(` 会被剥成 `.opacity(` → awk 动态正则语法错、exit 2、零输出 →
+# 命令替换吞掉退出码 → 假绿放行(评审 F1 实锤:坏在 CPU 22% 那条规则上,
+# 出生仪式没抓到是因为只拿无反斜杠的 repeatForever 测过 B 档)。
+# 配套:调用侧对执行器退出码做 fail-closed 守卫(见 run_b_tier),崩溃≠无命中。
 added_line_hits() {
-  pat=$1
-  awk -v pat="$pat" '
+  FENCE_PAT=$1 awk '
     /^\+\+\+ / { file=$2; sub(/^b\//, "", file); next }
     /^@@ /     { for (i = 1; i <= NF; i++) if ($i ~ /^\+[0-9]/) { split(substr($i, 2), a, ","); ln = a[1] - 1 } next }
     /^\+/      { ln++; line = substr($0, 2)
-                  if (line !~ /^[[:space:]]*\/\// && line !~ /fence: allow/ && line ~ pat)
+                  if (line !~ /^[[:space:]]*\/\// && line !~ /fence: allow/ && line ~ ENVIRON["FENCE_PAT"])
                     print file ":" ln ":" line }
   '
 }
 
 violations=0
+
+# 模式合法性预检(F3 同族):坏正则(加规则时手滑)在 grep/awk 都是「exit 2 + 零输出」,
+# 不预检就会一路假绿。任何模式编不过 → 响亮失败。
+validate_patterns() {
+  for p in "$PAT_SB" "$PAT_OPACITY_HIDE" "$PAT_RUSAGE" "$PAT_UI_DICT" 'repeatForever'; do
+    if ! printf 'probe\n' | grep -qE -- "$p" 2>/dev/null; then
+      echo "❌ [arch] 模式非法(加规则时写坏了?):$p" >&2
+      exit 1
+    fi
+  done
+}
 
 # $1=规则id $2=why(含 AGENTS.md 指针) $3=findings 串(换行分隔;空=通过)
 report_block() {
@@ -173,8 +188,14 @@ run_b_tier() { # 门禁模式:新增行命中即拦(两条规则,显式展开 �
     echo "⚠️  [arch] B 档跳过:merge-base HEAD develop 不可得(develop 缺失?)— A 档仍全量拦截" >&2
     return 0
   fi
-  report_block "b:opacity-hide" "$WHY_B_OPACITY" "$(b_tier_diff | added_line_hits "$PAT_OPACITY_HIDE")"
-  report_block "b:repeatForever" "$WHY_B_REPEAT" "$(b_tier_diff | added_line_hits 'repeatForever')"
+  # F3 守卫:执行器崩溃(awk/grep 非零退出)绝不降级成「无命中」——一次假绿 =
+  # 放行一个错误,比没有这道门更糟。命令替换的退出码 = 管道末命令的退出码。
+  _h_op=$(b_tier_diff | added_line_hits "$PAT_OPACITY_HIDE") || {
+    echo "❌ [arch] B 档执行器出错(opacity-hide)— 按失败处理,不放行" >&2; exit 1; }
+  _h_rf=$(b_tier_diff | added_line_hits 'repeatForever') || {
+    echo "❌ [arch] B 档执行器出错(repeatForever)— 按失败处理,不放行" >&2; exit 1; }
+  report_block "b:opacity-hide" "$WHY_B_OPACITY" "$_h_op"
+  report_block "b:repeatForever" "$WHY_B_REPEAT" "$_h_rf"
 }
 
 list_b_tier_repo() { # --all 用:全仓现存使用,信息性列举(不影响退出码)
@@ -238,6 +259,19 @@ case "${1:-}" in
   if [ "$got_b" != "$want_b" ]; then
     echo "❌ selftest: B 档新增行 — 期望「${want_b}」实得「${got_b}」" >&2; fails=$((fails + 1))
   fi
+  # **真模式(含反斜杠)也必须过一遍 B 档执行器**(评审 F2):repeatForever 无
+  # 反斜杠,探不出「-v 剥反斜杠」这类只有含 `\.` 模式才踩的雷。
+  got_o=$(printf '%s\n' \
+    '+++ b/NemoNotch/Bar.swift' \
+    '@@ -3,1 +3,3 @@' \
+    '+.opacity(probe ? 0 : 1)' \
+    '+.opacity(dim ? 0.5 : 1)' \
+    | added_line_hits "$PAT_OPACITY_HIDE") || {
+      echo "❌ selftest: B 档执行器出错(opacity 真模式)" >&2; exit 1; }
+  want_o='NemoNotch/Bar.swift:3:.opacity(probe ? 0 : 1)'
+  if [ "$got_o" != "$want_o" ]; then
+    echo "❌ selftest: B 档 opacity(真模式含反斜杠)— 期望「${want_o}」实得「${got_o}」" >&2; fails=$((fails + 1))
+  fi
   if [ "$fails" -gt 0 ]; then
     echo "arch selftest:$fails 条样本失败" >&2; exit 1
   fi
@@ -245,6 +279,7 @@ case "${1:-}" in
   exit 0
   ;;
 --all)
+  validate_patterns
   echo "🏗  架构围栏全仓体检(--all:A 档拦语义,B 档信息性列举)"
   run_a_tier
   list_b_tier_repo
@@ -255,6 +290,7 @@ case "${1:-}" in
   exit 0
   ;;
 "")
+  validate_patterns
   echo "🏗  架构围栏(A 档全仓 + B 档本分支新增行)"
   run_a_tier
   run_b_tier

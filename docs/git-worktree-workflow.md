@@ -52,11 +52,12 @@ git feat <name>        # get-or-create: in-progress worktree → prints the path
 cd .worktree/<name>
 # ...work, commit freely on the feature branch (lint gate runs on commit)...
 
-git feat-done <name>   # gates in the worktree (doc-audit → plan unticked-box
-                       #   audit → review record w/ Reviewed-Head freshness →
-                       #   unit tests when Swift changed) → merge-tree conflict
-                       #   precheck (conflict → clean exit, fix inside the
-                       #   worktree) → auto-stash primary checkout → merge
+git feat-done <name>   # gates in the worktree (merge-tree conflict precheck
+                       #   FIRST — seconds, a conflict skips every expensive
+                       #   gate → doc-audit → plan unticked-box audit → arch
+                       #   fences check-arch → review record w/ Reviewed-Head
+                       #   freshness → unit tests when Swift changed) →
+                       #   auto-stash primary checkout → merge
                        #   feature/<name> -> develop (--no-ff, triggers
                        #   post-merge build) → restore stash → remove worktree,
                        #   delete the branch. Missing review record → the gate
