@@ -2,8 +2,8 @@
 
 Reviewer: 独立评审会话(ZCode,未参与本分支任何开发;judge ≠ author)
 Date: 2026-10-27
-Reviewed-Head: f825e3d
-Verdict: CHANGES_NEEDED
+Reviewed-Head: ea482a0
+Verdict: APPROVED
 Scope:  6 files changed, 475 insertions(+), 30 deletions(-)
 
 ```
@@ -122,7 +122,46 @@ pattern…)声明了一组不存在的代码改动,属于把「第 1 级自述�
 CHANGES_NEEDED;四条必修项与下方清单相同,另须把 Task 7 的五个勾改成如实状态
 (或随真修复一并重勾)。
 
-## 必须修(CHANGES_NEEDED 清单)
+### 第 3 轮核验(b7c6dad + ea482a0,2026-10-27)——F1–F4 全部闭合,Verdict 转 APPROVED
+
+提交工件先行核对:`git show b7c6dad --stat` = scripts/check-arch.sh(+46/−10)+
+docs/git-worktree-workflow.md + plan 事故记录;`git show ea482a0 --stat` =
+check-arch.sh(+6/−3)。代码真实存在(第 2 轮的教训执行到位;plan 尾部如实
+留档了「修复被自己 reset --hard 抹掉后才提交」的事故与「先提交后探针」规矩)。
+
+逐条核验(命令/退出码):
+
+- **F1 闭合**。`added_line_hits` 改 `FENCE_PAT=$1 awk … ENVIRON["FENCE_PAT"]`,
+  函数头 why 注释写明绝不用 `-v` 的原因。端到端探针:真 commit 注入
+  `.opacity(probe ? 0 : 1)` → **exit 1,`❌ [arch:b:opacity-hide] …
+  MarqueeText.swift:80`**,消息/file:line 全对;reset 后门禁 exit 0。与第 1、2 轮
+  同一探针三轮对照:exit 0(假绿)→ exit 0(假绿)→ **exit 1**。
+- **F2 闭合**。selftest 新增真 `PAT_OPACITY_HIDE`(含反斜杠)过 `added_line_hits`
+  的合成 diff 用例,精确断言输出串且带 `|| exit 1`;`--selftest` exit 0(该用例
+  在第 1 轮代码上会因 awk 崩溃转红——正是要的回归守卫)。
+- **F3 闭合**。两层:(a) `run_b_tier` 对两条执行器调用加 `_h=$(…) || { 响亮;
+  exit 1 }` 守卫;(b) `validate_patterns` 在门禁与 `--all` 入口对全部模式预检。
+  反事实验证:把第 1 轮的旧 `-v` 执行器原样配新守卫跑同探针 → 「GUARD FIRED:
+  B 档执行器出错 — 按失败处理,不放行」exit 1——即便同类 bug 回潮,防线从
+  「静默绿」变「响亮红」。
+- **validate_patterns 退出码语义(ea482a0)正确**。好模式 → exit 0;故意坏模式
+  `.opacity(.*[?]?`(grep rc=2)→「❌ 模式非法… 退出码 2」exit 1;`[[:space`
+  (rc=2)同路径;探测确认 BSD grep 对 `\(` 转义形回 rc=1(合法无命中)不误伤。
+  0/1 健康、≥2 非法,与注释声明一致。首版「`if ! grep -q` 把 rc=1 当失败 =
+  永久假红」的 bug 由作者自报并在 plan 留档,现版已收口。
+- **F4 闭合**。`docs/git-worktree-workflow.md:55-64` 新链:merge-tree FIRST →
+  doc-audit → plan → **arch fences check-arch** → review → tests → stash →
+  merge,与 feat-done.sh 实际顺序逐环对上;`grep check-arch` 命中。
+- **回归全绿**:selftest 0 / 门禁 0 / --all 0 / doc-audit 0 / plan-audit 0;
+  repeatForever 真提交探针仍红(`b:repeatForever` 命中);A 档 SBApplication
+  注入 → exit 1 → 还原 → 0;新执行器多文件/多 hunk 行号(A:5 / B:101 / B:200,
+  删除行不推 ln、`0.5` miss 正确)全对。
+
+残余观察(不拦):validate_patterns 只预检 grep 方言;grep-合法但 awk-不合法的
+模式理论上可溜过预检——由 run_b_tier 退出码守卫兜底(崩→响亮红),+selftest
+真模式过 awk 双保险,纵深成立。
+
+## 必须修(第 3 轮核验后:已全部闭合,以下留档为历史)
 
 1. F1:`added_line_hits` 改用 `ENVIRON`(或等价)传模式,消灭 `-v` 转义剥蚀;
    修后用真 commit 注入 `.opacity(probe ? 0 : 1)` 复验 exit 1。
