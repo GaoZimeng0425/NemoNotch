@@ -24,11 +24,17 @@
 # CI:.github/workflows/doc-audit.yml(与 doc-audit 同 job,纯 grep,ubuntu)。
 # feat-done:.githooks/feat-done.sh 在 plan-audit 之后调用;逃生阀 NEMONOTCH_SKIP_ARCH=1。
 #
-# 加新规则的三条规矩(照抄 octok CHECK_RULES 哲学 — 规则与「为什么」同住):
+# 加新规则的四条规矩(照抄 octok CHECK_RULES 哲学 — 规则与「为什么」同住):
 #   1. 每条规则上方注释写清:拦什么、为什么(指向 AGENTS.md 具体条目)、校准现状;
 #   2. A 档必须校准到零命中(或合法位点带豁免注释);做不到就进 B 档或不上线;
 #   3. 出生必须 --selftest 全绿 + 门禁模式对合成违规见红一次(样本要有鉴别力:
 #      「不应命中」样本得是真实容易误写的形状,不是摆设)。
+#   4. 何时独立成脚本:规则仍是「一个模式」时住本文件 — 引擎(过滤/diff 行号/
+#      豁免/守卫)是共享承重件,勿为解耦拆散(拆散=接线清单多处维护,octok
+#      OC-612「围栏写了没接表=从没跑过」的教训)。当某条规则长出自己的逻辑
+#      (需要 AST/类型信息、需要 baseline 记账)或规则总数 >10 条时,毕业为
+#      scripts/check-<name>.sh 独立脚本并在本文件登记 — **feat-done 永远只认
+#      check-arch 这一个入口**,解耦发生在规则之间,不发生在门禁链与规则之间。
 #
 # 已知局限(诚实边界,评审时别当漏抓来报):
 #   - 行尾注释里提到模式词(如 `foo() // 见 ScriptingBridge`)仍会误报 — 行级

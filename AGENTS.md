@@ -49,7 +49,7 @@ NemoNotch/
 
 **文档对账门禁(`scripts/doc-audit.sh`)**:成对断言机器对账代码与手册——HookServer 传输(代码 `NWListener` ↔ 本手册 `127.0.0.1 TCP` 标注)、`INFOPLIST_KEY_*` pbxproj 双配置、worktree 三重排除、`CLAUDE.md → AGENTS.md` 符号链接、签名身份名、**手册引用的脚本路径必须存在**(scripts/ 与 .githooks/ 精确路径;根目录裸名须在仓库根 / scripts/ / .githooks/,或是 Swift 源码里出现的运行时产物——`hook-sender.sh` 由 HookInstaller 生成不在仓库)。**在 feat-done 合并前与 CI(push/PR 到 main/develop)各跑一次**——漂移要在部署前抓,不是 push 后等 CI 变红。**事实(传输/布局/数字)变了,代码、手册、断言三者必须同一提交改**——这个强迫同行就是门禁存在的目的;起因是 HookServer 从 unix socket 迁到 TCP 后手册漂了 5 个月才被抓到。
 
-**架构围栏门禁(`scripts/check-arch.sh`)**:坑总目录里"机器可判定"的不变量的秒级检查(octok-platform 围栏舰队借鉴,2026-10-27)。两档:**A 档全仓扫描**(校准到零命中才上线:ScriptingBridge 复活 / `proc_pid_rusage` / UI 直读 store 原始会话字典 / `kSecReturnData` 文件允许清单)与 **B 档只拦本分支 diff 新增行**(条件 opacity 隐藏、`repeatForever`——存量使用不追,新增需行尾 `// fence: allow` 显式豁免,豁免写在代码里评审看得见)。注释行全局跳过。**加规则三规矩**(规则与"为什么"同住):规则头注释写 why 指针(拦什么/哪次事故/AGENTS.md 条目);A 档校准不到零就降 B 档或不上线(会假红的警报会被学会忽略);出生必须 `--selftest` 全绿 + 注入违规见红一次。`--all` 全仓体检(B 档信息性列举);`--selftest` 模式自测,不命中样本必须取自真实易误写形状。feat-done 与 CI 各跑一次。
+**架构围栏门禁(`scripts/check-arch.sh`)**:坑总目录里"机器可判定"的不变量的秒级检查(octok-platform 围栏舰队借鉴,2026-10-27)。两档:**A 档全仓扫描**(校准到零命中才上线:ScriptingBridge 复活 / `proc_pid_rusage` / UI 直读 store 原始会话字典 / `kSecReturnData` 文件允许清单)与 **B 档只拦本分支 diff 新增行**(条件 opacity 隐藏、`repeatForever`——存量使用不追,新增需行尾 `// fence: allow` 显式豁免,豁免写在代码里评审看得见)。注释行全局跳过。**加规则四规矩**(规则与"为什么"同住):规则头注释写 why 指针(拦什么/哪次事故/AGENTS.md 条目);A 档校准不到零就降 B 档或不上线(会假红的警报会被学会忽略);出生必须 `--selftest` 全绿 + 注入违规见红一次;规则仍是"一个模式"时住 check-arch 单文件(引擎共享勿拆散),长出 AST/baseline 需求或总数 >10 条才毕业为独立脚本并登记进 check-arch——feat-done 只认 check-arch 一个入口。`--all` 全仓体检(B 档信息性列举);`--selftest` 模式自测,不命中样本必须取自真实易误写形状。feat-done 与 CI 各跑一次。
 
 ## 测试
 
