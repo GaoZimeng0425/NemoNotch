@@ -21,13 +21,12 @@ import SwiftUI
 /// itself widening rather than a foreign pill hovering over it; the frame
 /// carries the flare overhang (`+ topRadius * 2`) on top of the body width.
 struct NotchCapsuleView: View {
-    let icon: String
-    let iconColor: Color
-    let text: String
+    let capsule: NotchCapsule
     /// Physical notch footprint — the capsule starts at this size and grows
     /// horizontally around the same top edge.
     let notchSize: CGSize
 
+    @State private var appeared = false
     @State private var opened = false
     @State private var contentShown = false
     @State private var measuredContentWidth: CGFloat?
@@ -45,12 +44,21 @@ struct NotchCapsuleView: View {
         max(notchSize.width, measuredContentWidth ?? 0)
     }
 
+    private var openSpring: Animation {
+        .spring(duration: NotchConstants.openSpringDuration, bounce: 0.1)
+    }
+
     var body: some View {
         ZStack {
             capsuleShape
                 .fill(NotchTheme.panelBase)
 
+            // A newer event swaps only the content (keyed by event id) inside
+            // the one live shape: no second capsule fading over the first,
+            // and the width springs to the new measurement.
             content
+                .id(capsule.id)
+                .transition(.opacity)
                 .opacity(contentShown ? 1 : 0)
         }
         .frame(width: (opened ? capsuleWidth : notchSize.width) + NotchConstants.cornerRadiusTopClosed * 2)
@@ -58,21 +66,31 @@ struct NotchCapsuleView: View {
         .clipShape(capsuleShape)
         .overlay(capsuleShape.stroke(NotchTheme.stroke, lineWidth: 0.6))
         .onAppear {
-            withAnimation(.spring(duration: NotchConstants.openSpringDuration, bounce: 0.1)) {
-                opened = true
-            }
-            withAnimation(.easeIn(duration: 0.18).delay(0.1)) {
-                contentShown = true
-            }
+            appeared = true
+            openIfReady()
+        }
+    }
+
+    /// The open spring starts only once BOTH the view is on screen and the
+    /// content width is known — whichever lands second fires it — so the
+    /// spring always targets the real width instead of the notch width with
+    /// the measurement snapping in afterwards.
+    private func openIfReady() {
+        guard appeared, measuredContentWidth != nil, !opened else { return }
+        withAnimation(openSpring) {
+            opened = true
+        }
+        withAnimation(.easeIn(duration: 0.18).delay(0.1)) {
+            contentShown = true
         }
     }
 
     private var content: some View {
         HStack(spacing: 8) {
-            Image(systemName: icon)
+            Image(systemName: capsule.icon)
                 .font(.system(size: NotchConstants.notchCapsuleIconSize, weight: .semibold))
-                .foregroundStyle(iconColor)
-            Text(text)
+                .foregroundStyle(capsule.iconColor)
+            Text(capsule.text)
                 .font(.system(size: NotchConstants.notchCapsuleFontSize, weight: .semibold))
                 .foregroundStyle(NotchTheme.textPrimary)
                 .lineLimit(1)
@@ -83,9 +101,43 @@ struct NotchCapsuleView: View {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
-            // Frame-by-frame tracking, deliberately NOT inside withAnimation —
-            // the one spring lives on the `opened` toggle in onAppear.
-            measuredContentWidth = width
+            if opened {
+                // Content swapped in place (newer event): spring to fit it.
+                withAnimation(openSpring) { measuredContentWidth = width }
+            } else {
+                measuredContentWidth = width
+                openIfReady()
+            }
         }
+    }
+}
+
+/// What the notch capsule shows. Charging wins over Bluetooth, and both feed
+/// one mount slot in `NotchView`, so a switch between them is a content swap
+/// inside a single shape rather than two capsules cross-fading on the spot.
+struct NotchCapsule: Equatable {
+    let id: UUID
+    let icon: String
+    let iconColor: Color
+    let text: String
+
+    static func current(charging: ChargingCapsuleEvent?, bluetooth: BluetoothDeviceEvent?) -> NotchCapsule? {
+        if let charging {
+            return NotchCapsule(
+                id: charging.id,
+                icon: charging.externalConnected ? "bolt.fill" : "battery.100",
+                iconColor: charging.externalConnected ? NotchTheme.chargingGreen : NotchTheme.accent,
+                text: charging.text
+            )
+        }
+        if let bluetooth {
+            return NotchCapsule(
+                id: bluetooth.id,
+                icon: "headphones",
+                iconColor: NotchTheme.accent,
+                text: bluetooth.text
+            )
+        }
+        return nil
     }
 }

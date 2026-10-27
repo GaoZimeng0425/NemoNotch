@@ -110,7 +110,7 @@ graph LR
 - 悬停路径**零延迟开**(光标一进闭合 hitbox 就开,快速扫过也开——设计如此);保护只剩两个:关合宽限 100ms(离开后复验光标仍在界外才收)、重开抑制 0.35s(任何关闭后 hover 不能重开,click 可以;防 ESC 关后光标还停在刘海上的弹跳)。
 - 收起徽章**永不长第二行**:按图标身份分组折叠成镜像扇(左 logo 右状态,组内多于 1 只显计数),可见组上限 4,多的折进 +K。宽度按扇形实测张开量长(读去抖后的 `badgeCluster`,与扇同步动画)。
 - **空集去抖 600ms**:agent 在工具调用间隙回 `.idle` 会把 `activeBadgeItems` 掏空一拍;非空更新 16ms 合并、变空延迟 600ms、窗口内来非空即取消。延迟走注入的 `DelayScheduler`(代际守卫),测试手动触发,不睡真时间。
-- 胶囊(蓝牙/充电)只在 `effectiveStatus == .closed` 挂载,互斥(同位不叠影);刘海打开即 `hideCapsule()`。
+- 胶囊(蓝牙/充电)只在 `effectiveStatus == .closed` 挂载,**共用一个挂载位**(`NotchCapsule.current`,充电优先,已单测)——换事件只换胶囊里按事件 id 键控的内容,不是两只胶囊同位交叉淡入淡出;弹开弹簧要等「已出现」与「已测宽」都到齐才起跑(否则弹簧瞄的是刘海宽、测量值事后瞬跳);刘海打开即 `hideCapsule()`。
 
 ### 完成闪光 / Toast
 
@@ -170,7 +170,7 @@ graph LR
 - **没 `NSBluetoothAlwaysUsageDescription` 碰 IOBluetooth 直接崩**("attempted to access privacy-sensitive data without a usage description");key 以 `INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription` 进 pbxproj(双配置)。有 key 后首次触碰弹进程级蓝牙 TCC,**会挂死单测宿主**(测试 runner 还没连上)→ `UITestMode.isTestHost` 下 `build()` 整个跳过 `bluetooth.bind()`。
 - **惰性启动**:`bluetoothToastEnabled`(默认关)是**唯一**启动源——设置里的开关就是用户触发的那一瞬,TCC 弹窗只出现在用户动作处。被拒后用静默 `CBCentralManager.authorization` 读(类属性,不初始化协调器、不弹)渲染提示,绝无自动重试。
 - 音频分类纯函数 `BluetoothAudioClassifier`:**只认 major device class == 0x04**。0x100 音频服务位连笔记本/手机都广播(它们有扬声器和麦),会误分类配对的 Mac/iPhone;键盘鼠标是 0x05 且每次睡眠唤醒都重连,绝不能匹配。
-- **充电胶囊边缘检测用 Power Source State == "AC Power"**(`kIOPSPowerSourceStateKey`),**不是** `kIOPSIsChargingKey`——满电插着电源时 macOS 不再报 charging,用它会在 100% 时闪一个假"已断开"。没有公开的 external-connected bool(`kIOPSExternalConnectedKey` 私有,SDK 头里没有,别再找)。IOPS 读数不过 TCC。首次读数只种基线(`lastExternalConnected` 初始 nil——启动时已插着不是新闻;顺带修了每次冷启动弹一次电池药丸的老 bug)。
+- **充电胶囊边缘检测用 Power Source State == "AC Power"**(`kIOPSPowerSourceStateKey`),**不是** `kIOPSIsChargingKey`——满电插着电源时 macOS 不再报 charging,用它会在 100% 时闪一个假"已断开"。没有公开的 external-connected bool(`kIOPSExternalConnectedKey` 私有,SDK 头里没有,别再找)。IOPS 读数不过 TCC。首次读数只种基线(启动时已插着不是新闻;顺带修了每次冷启动弹一次电池药丸的老 bug)。**只跟踪内置电池**(`kIOPSTypeKey == InternalBattery`):IOPS 还会列出 UPS 且顺序不定,多源共用一份基线会把源间差异读成假插拔;台式机无内置电池即不跟踪。判定在纯 `PowerSourceEdge`(已单测),`readBattery()` 只管 IOKit 读取。
 
 ### Keychain / 权限 / TCC
 

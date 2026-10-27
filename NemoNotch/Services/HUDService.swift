@@ -6,8 +6,8 @@ import IOKit.ps
 import SwiftUI
 
 /// One transient power-source event for the notch capsule. `id` is fresh per
-/// event so a rapid plug→unplug reads as a new capsule, not an edit of the
-/// showing one.
+/// event so a rapid plug→unplug swaps the capsule's content (fade + re-fit)
+/// rather than silently editing the showing text.
 struct ChargingCapsuleEvent: Equatable {
     let id = UUID()
     let percent: Int

@@ -83,4 +83,11 @@ struct PowerSourceEdgeTests {
         let ups = info(type: kIOPSUPSType, capacity: 100, charging: false, state: kIOPSACPowerValue)
         #expect(PowerSourceEdge.trackedReading(in: [ups]) == nil)
     }
+
+    @Test("a source that isn't typed as the internal battery is not tracked")
+    func untypedSource() {
+        var unknown = info(capacity: 30, charging: false, state: kIOPSBatteryPowerValue)
+        unknown[kIOPSTypeKey] = nil
+        #expect(PowerSourceEdge.trackedReading(in: [unknown]) == nil)
+    }
 }

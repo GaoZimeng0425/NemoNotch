@@ -17,8 +17,8 @@ enum BluetoothAudioClassifier {
 }
 
 /// One transient audio-device event for the notch capsule. `id` is fresh per
-/// event so a rapid connect→disconnect reads as a new capsule, not an edit of
-/// the showing one.
+/// event so a rapid connect→disconnect swaps the capsule's content (fade +
+/// re-fit) rather than silently editing the showing text.
 struct BluetoothDeviceEvent: Equatable {
     let id = UUID()
     let name: String
