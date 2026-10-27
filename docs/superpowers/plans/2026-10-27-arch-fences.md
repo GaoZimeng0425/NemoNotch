@@ -138,7 +138,7 @@
 ### Task 6: 出生仪式 — 全链见红一次
 
 **Steps:**
-- [ ] `sh scripts/check-arch.sh --selftest` 全绿
-- [ ] worktree 加一行违规(SBApplication 调用)→ `sh scripts/check-arch.sh` exit 1 且输出含 why 指针 → 还原后 exit 0(红绿都留输出在提交信息里引用)
-- [ ] 全部任务框勾完(plan-audit 门禁依赖)
-- [ ] commit: `test(fences): birth red/green ceremony outputs`
+- [x] `sh scripts/check-arch.sh --selftest` 全绿(20 样本含 B 档合成 diff)
+- [x] 红绿实测:A 档注入 SBApplication(工作区)→ exit 1 含 why 指针,还原 exit 0;B 档**须带真提交**(B 档扫的是已提交 diff,工作区注入对它不可见——门禁管的是进合并的内容,语义如此)→ exit 1 含 `b:repeatForever` + file:line,reset 后 exit 0
+- [x] 全部任务框勾完(plan-audit 门禁依赖)
+- [x] commit: `test(fences): birth ceremony — A/B tier red-green recorded`
