@@ -172,30 +172,20 @@ struct NotchView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // 瞬时刘海胶囊(灵动岛式):充电事件优先于蓝牙,互斥防同位叠影。
+            // 瞬时刘海胶囊(灵动岛式):充电事件优先于蓝牙,共用一个挂载位——
+            // 两者切换只换胶囊里的内容,不会两只胶囊同位交叉淡入淡出。
             // 仅在收起态渲染——展开的面板盖着刘海区,叠上去会打架;宽出的
             // 黑色区域不参与 hover/click 命中(EventMonitor 只认物理刘海
             // 矩形),鼠标停上去不会误开刘海。
-            if effectiveStatus == .closed, let charging = hudService.chargingCapsule {
-                NotchCapsuleView(
-                    icon: charging.externalConnected ? "bolt.fill" : "battery.100",
-                    iconColor: charging.externalConnected ? NotchTheme.chargingGreen : NotchTheme.accent,
-                    text: charging.text,
-                    notchSize: hardwareNotchSize
-                )
-                .zIndex(3)
-                .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
-                .transition(.opacity)
-            } else if effectiveStatus == .closed, let event = bluetoothService.capsuleEvent {
-                NotchCapsuleView(
-                    icon: "headphones",
-                    iconColor: NotchTheme.accent,
-                    text: event.text,
-                    notchSize: hardwareNotchSize
-                )
-                .zIndex(3)
-                .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
-                .transition(.opacity)
+            if effectiveStatus == .closed,
+               let capsule = NotchCapsule.current(
+                   charging: hudService.chargingCapsule,
+                   bluetooth: bluetoothService.capsuleEvent
+               ) {
+                NotchCapsuleView(capsule: capsule, notchSize: hardwareNotchSize)
+                    .zIndex(3)
+                    .position(x: notchCenterX, y: hardwareNotchSize.height / 2)
+                    .transition(.opacity)
             }
         }
         .onAppear {

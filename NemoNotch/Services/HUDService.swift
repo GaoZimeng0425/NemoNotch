@@ -6,8 +6,8 @@ import IOKit.ps
 import SwiftUI
 
 /// One transient power-source event for the notch capsule. `id` is fresh per
-/// event so a rapid plug→unplug reads as a new capsule, not an edit of the
-/// showing one.
+/// event so a rapid plug→unplug swaps the capsule's content (fade + re-fit)
+/// rather than silently editing the showing text.
 struct ChargingCapsuleEvent: Equatable {
     let id = UUID()
     let percent: Int
@@ -59,9 +59,7 @@ final class HUDService {
 
     // Battery
     private var batteryRunLoopSource: CFRunLoopSource?
-    private var lastBatteryLevel: Int = -1
-    private var lastChargingState: Bool?
-    private var lastExternalConnected: Bool?
+    private var lastPowerReading: PowerSourceReading?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -287,54 +285,36 @@ final class HUDService {
         guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else { return }
 
-        for source in sources {
-            // Get rule: the description dictionary is owned by `blob`, not the
-            // caller — takeRetainedValue over-releases it and SIGSEGVs later
-            // (bit us 2026-04 and again 2026-09, keep this takeUnretained).
-            guard let info = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
-            else { continue }
-            let capacity = (info[kIOPSCurrentCapacityKey] as? Int) ?? 0
-            let charging = info[kIOPSIsChargingKey] as? Bool ?? false
-            // "AC Power" state == adapter present. There is no public
-            // "external connected" bool key — Power Source State is the
-            // public signal for it (kIOPSExternalConnectedKey is private).
-            let powerState = info[kIOPSPowerSourceStateKey] as? String
-            let externalConnected = powerState.map { $0 == kIOPSACPowerValue } ?? charging
+        // Get rule: the description dictionary is owned by `blob`, not the
+        // caller — takeRetainedValue over-releases it and SIGSEGVs later
+        // (bit us 2026-04 and again 2026-09, keep this takeUnretained).
+        let descriptions = sources.compactMap {
+            IOPSGetPowerSourceDescription(blob, $0)?.takeUnretainedValue() as? [String: Any]
+        }
+        guard let reading = PowerSourceEdge.trackedReading(in: descriptions) else { return }
+        let previous = lastPowerReading
+        lastPowerReading = reading
+        guard let change = PowerSourceEdge.change(from: previous, to: reading) else { return }
 
-            // First reading only seeds the baseline: power being already
-            // connected at launch is not a "change" (the old code seeded
-            // `lastChargingState` as nil, so every cold launch popped the
-            // battery HUD once for nothing).
-            if lastExternalConnected == nil {
-                lastBatteryLevel = capacity
-                lastChargingState = charging
-                lastExternalConnected = externalConnected
-                return
-            }
+        LogService.info(
+            "Battery changed: \(reading.capacity)% charging=\(reading.isCharging) external=\(reading.externalConnected)",
+            category: "HUD"
+        )
 
-            let levelChanged = capacity != lastBatteryLevel
-            let chargingChanged = charging != lastChargingState
-            let powerEdge = externalConnected != lastExternalConnected
-            guard levelChanged || chargingChanged || powerEdge else { return }
-
-            lastBatteryLevel = capacity
-            lastChargingState = charging
-            lastExternalConnected = externalConnected
-            LogService.info(
-                "Battery changed: \(capacity)% charging=\(charging) external=\(externalConnected)",
-                category: "HUD"
+        if change.powerEdge {
+            showChargingCapsule(
+                percent: reading.capacity,
+                isCharging: reading.isCharging,
+                externalConnected: reading.externalConnected
             )
-
-            if powerEdge {
-                showChargingCapsule(percent: capacity, isCharging: charging, externalConnected: externalConnected)
-            }
-            // 10%-milestone pills stay; power/charging edges pop the pill only
-            // when the notch capsule is disabled (otherwise double prompts).
-            if capacity % 10 == 0 || ((powerEdge || chargingChanged) && !settings.chargingCapsuleEnabled) {
-                // Round to nearest 10 for consistent look
-                let displayLevel = Int((Double(capacity) / 10.0).rounded()) * 10
-                showHUD(.battery(charging: charging), value: Float(min(max(displayLevel, 0), 100)) / 100.0)
-            }
+        }
+        // 10%-milestone pills stay; power/charging edges pop the pill only
+        // when the notch capsule is disabled (otherwise double prompts).
+        if reading.capacity % 10 == 0
+            || ((change.powerEdge || change.chargingChanged) && !settings.chargingCapsuleEnabled) {
+            // Round to nearest 10 for consistent look
+            let displayLevel = Int((Double(reading.capacity) / 10.0).rounded()) * 10
+            showHUD(.battery(charging: reading.isCharging), value: Float(min(max(displayLevel, 0), 100)) / 100.0)
         }
     }
 
