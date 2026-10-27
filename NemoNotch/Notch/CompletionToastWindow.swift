@@ -48,7 +48,9 @@ final class CompletionToastHostingView: NSHostingView<AnyView> {
     var onClick: ((CGPoint) -> Void)?
     /// Whether the cursor is over the row. Exits are checked against the real
     /// cursor before being reported (a rebuilt tracking area under a still
-    /// cursor can send a spurious exit).
+    /// cursor can send a spurious exit), and while inside the cursor is
+    /// rechecked every 0.25s — a doubted exit gets no second exit event, so
+    /// without the recheck the row could stay "hovered" (timers frozen) forever.
     var onHover: ((Bool) -> Void)?
 
     var layout = CompletionToastLayout(panelWidth: 0, count: 0) {
@@ -61,6 +63,8 @@ final class CompletionToastHostingView: NSHostingView<AnyView> {
 
     private var area: NSTrackingArea?
     private var hovering = false
+    private var recheckTimer: Timer?
+    private static let recheckInterval: TimeInterval = 0.25
 
     /// The hover region: the whole row, gaps included, so moving between
     /// cards is not a leave.
@@ -124,6 +128,13 @@ final class CompletionToastHostingView: NSHostingView<AnyView> {
         report(cursorInRow())
     }
 
+    /// The panel is going away: stop the recheck (a hidden panel can't be hovered).
+    func stopHoverTracking() {
+        recheckTimer?.invalidate()
+        recheckTimer = nil
+        hovering = false
+    }
+
     private func cursorInRow() -> Bool {
         guard let window, !rowRect.isNull else { return false }
         return rowRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
@@ -132,6 +143,18 @@ final class CompletionToastHostingView: NSHostingView<AnyView> {
     private func report(_ inside: Bool) {
         guard inside != hovering else { return }
         hovering = inside
+        if inside {
+            recheckTimer = Timer
+                .scheduledTimer(withTimeInterval: Self.recheckInterval, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.report(self.cursorInRow())
+                    }
+                }
+        } else {
+            recheckTimer?.invalidate()
+            recheckTimer = nil
+        }
         onHover?(inside)
     }
 }
@@ -155,7 +178,9 @@ private struct CompletionToastRowView: View {
                 let rect = layout.cardRect(at: index)
                 CompletionToastView(item: toast.item)
                     .position(x: rect.midX, y: rect.midY)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    // Scale from the top edge: stays inside the panel (a move
+                    // from above would be clipped by the panel's top).
+                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -187,8 +212,8 @@ final class CompletionToastWindowController {
     private nonisolated(unsafe) var observer: Any?
 
     private static let panelWidth = CompletionToastLayout.panelWidth(capacity: NotchConstants.completionToastCapacity)
-    /// Room under the cards for the transition's travel; transparent, no hits.
-    private static let panelHeight = CompletionToastLayout.cardHeight + 16
+    /// Just the cards (plus the stroke); the transition scales within it.
+    private static let panelHeight = CompletionToastLayout.cardHeight + 2
 
     init(service: CompletionFlashService, coordinator: NotchCoordinator) {
         self.service = service
@@ -287,6 +312,7 @@ final class CompletionToastWindowController {
 
     private func remove(_ id: UInt32) {
         panels[id]?.orderOut(nil)
+        hosts[id]?.stopHoverTracking()
         panels[id] = nil
         hosts[id] = nil
         // A hidden panel sends no exit; drop its hover so timers can't stay frozen.

@@ -15,8 +15,9 @@ struct CompletionToast: Identifiable, Equatable {
 ///
 /// - A completion whose name already has a card refreshes that card in place
 ///   (newer non-nil fields win, timer restarts) instead of adding a duplicate.
-/// - At most `capacity` cards: a new arrival beyond it evicts the oldest —
-///   the one that has been on screen longest.
+/// - At most `capacity` cards: a new arrival beyond it evicts the card that
+///   last arrived longest ago (earliest deadline) — a just-refreshed card
+///   keeps its slot even if it sits first in the row.
 struct CompletionToastQueue {
     let duration: TimeInterval
     let capacity: Int
@@ -40,8 +41,9 @@ struct CompletionToastQueue {
                 toasts.append(CompletionToast(id: makeID(), item: item, deadline: deadline))
             }
         }
-        if toasts.count > capacity {
-            toasts.removeFirst(toasts.count - capacity)
+        while toasts.count > capacity,
+              let stalest = toasts.indices.min(by: { toasts[$0].deadline < toasts[$1].deadline }) {
+            toasts.remove(at: stalest)
         }
     }
 
