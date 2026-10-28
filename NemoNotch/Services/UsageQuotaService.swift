@@ -15,14 +15,8 @@ final class UsageQuotaService: LifecycleAware {
     /// Computed at init so the UI gate is correct before the first fetch.
     var hasCodexCredential = false
 
-    /// Claude quota comes exclusively from the snapshot claude-hud mirrors
-    /// out of Claude Code's statusline stdin (`rate_limits`). No credential
-    /// is read and no network call is made for Claude quota.
     let claudeSnapshotURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".claude/usage-snapshot.json")
-    /// Last logged Claude quota state (status + tier count) — the 60s refresh
-    /// logs `.info` only when this changes, `.debug` otherwise (state-transition
-    /// discipline: a poll loop must not re-log an unchanged state every tick).
     var lastClaudeQuotaLogState: String?
 
     let codexKeychainService = "Codex Auth"

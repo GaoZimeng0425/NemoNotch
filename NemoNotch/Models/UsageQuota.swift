@@ -375,8 +375,7 @@ enum CodexRateWindowNormalizer {
 /// Claude Code pushes server-side `rate_limits` to statusline scripts over stdin;
 /// claude-hud mirrors them into that file (atomic write, 0600, refreshed at most
 /// every 30s while a Claude session renders its statusline; not written while
-/// no session runs). This is Claude's ONLY quota source — reading it touches no
-/// credential and makes no network call.
+/// no session runs).
 enum ClaudeUsageSnapshotParser {
     /// A snapshot older than the rolling five-hour window describes a window
     /// that has already rolled over, so its percentages can't be trusted:
