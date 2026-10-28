@@ -2,7 +2,7 @@
 
 Reviewer: independent review subagent (Claude, fresh context; did not author this branch)
 Date: 2026-10-28
-Reviewed-Head: f354a46
+Reviewed-Head: b363c48
 Verdict: APPROVED
 Scope:  5 files changed, 57 insertions(+), 7 deletions(-)
 
@@ -17,12 +17,20 @@ NemoNotchTests/CompletionToastQueueTests.swift
 ## Findings
 
 - 结论:所有产生 toast 的路径都过 `CompletionToastQueue.add`(CompletionFlashService.swift:207/153/185),去重键已换成 `toastKey`(CompletionToastQueue.swift:40)。AI 会话候选 key=`ai:<session.id>`(CompletionFlashService.swift:63)、agent=`agent:<agent.id>`(:79),detector 把 key 带到 item(CompletionDetector.swift:146)——同项目同 app / 跨 app 的不同会话各成一卡,满足用户要求。驱逐按 deadline(CompletionToastQueue.swift:47-50)、闪光节流只管辉光(CompletionFlashService.swift:200-208),都不按名合并。无会话来源(番茄钟 :153、日历 CalendarDueMonitor.swift:101-108、UI-test 种子 :185-189)key=nil → 退回按名,符合「有会话才按会话」。
-- CompletionToastQueue.swift:41 + CompletionDetector.swift:184:队列按 toastKey 命中后仍交给 `CompletionFlashNames.merge`,而 merge 内部按 **name** 匹配并取 `[0]`。同一会话两次完成之间 name 变了(name = `projectFolder ?? displayTitle`,CompletionFlashService.swift:64;cwd 变化或 cwd 缺失时首条消息晚到)→ merge 走 append 分支,`[0]` 返回旧 item 原样:计时刷新了,但 name/tool/tokens/duration 全是旧值且无声。分支前两处键一致,本分支引入不一致。罕见,不阻塞;建议让 merge 按 toastKey 匹配或在队列内直接做字段合并 [P3]
-- CompletionDetector.swift:178 merge 的文档「skipping duplicate names」与多元素 append 语义现在只剩 queue 一个调用点且只用 `[0]`,属半死代码;连同上一条一起收拾即可 [P3]
-- CalendarDueMonitor.swift:101-108:同标题的两个日历事件同时到期仍并成一卡(无 key → 按名)。不属本次「会话」范围,分支前即如此,仅记录 [P3]
-- NemoNotchTests/CompletionToastQueueTests.swift:28 旧测试名「same name refreshes…」现实际守的是无 key 的按名回退路径,名字可更准确;不影响鉴别力 [P3]
+- CompletionToastQueue.swift:41 + CompletionDetector.swift:184:队列按 toastKey 命中后仍交给 `CompletionFlashNames.merge`,而 merge 内部按 **name** 匹配并取 `[0]`。同一会话两次完成之间 name 变了(name = `projectFolder ?? displayTitle`,CompletionFlashService.swift:64;cwd 变化或 cwd 缺失时首条消息晚到)→ merge 走 append 分支,`[0]` 返回旧 item 原样:计时刷新了,但 name/tool/tokens/duration 全是旧值且无声。分支前两处键一致,本分支引入不一致。罕见,不阻塞;建议让 merge 按 toastKey 匹配或在队列内直接做字段合并 [P3] — **已修(b363c48)**:merge 按 toastKey 匹配,命中即以新 item 整体替换(含 name/source),nil 富字段回落旧值(CompletionDetector.swift:185-194);新测 `sameSessionRenamed`(CompletionToastQueueTests.swift:70-81)
+- CompletionDetector.swift:178 merge 的文档「skipping duplicate names」与多元素 append 语义现在只剩 queue 一个调用点且只用 `[0]`,属半死代码;连同上一条一起收拾即可 [P3] — **已修(b363c48)**:文档改为按 toastKey、一键一项;多元素语义仍被 CompletionDetectorTests:82 等直接测试使用,保留合理
+- CalendarDueMonitor.swift:101-108:同标题的两个日历事件同时到期仍并成一卡(无 key → 按名)。不属本次「会话」范围,分支前即如此,仅记录 [P3] — 协调者确认保留为既有行为
+- NemoNotchTests/CompletionToastQueueTests.swift:28 旧测试名「same name refreshes…」现实际守的是无 key 的按名回退路径,名字可更准确;不影响鉴别力 [P3] — **已修(b363c48)**:改名为「without a session key, same name refreshes…」
 
-### 本次运行证据(梯级 4)
+### 复审 b363c48(f354a46..HEAD:CompletionDetector.swift merge 改写 + 一条新测 + 一处测试改名)
+
+- 新发现:无。merge 改写后语义:同 key → 新值整体胜出、nil 富字段继承旧值;不同 key → 追加。现有按名回退(无 key)的 merge 测试(CompletionDetectorTests:82/160/172、CompletionPathTests:51/54)均仍通过。
+- `sh scripts/test.sh --only CompletionToastQueueTests,CompletionDetectorTests,CompletionPathTests` → exit 0,通过 32 · 失败 0(与 b363c48 提交信息一致)。
+- `sh scripts/mutate.sh NemoNotch/Services/CompletionDetector.swift 'result.firstIndex(where: { $0.toastKey == item.toastKey })' 'result.firstIndex(where: { $0.name == item.name })' --only CompletionToastQueueTests` → exit 0(变异被抓:失败 1 / 通过 11)。
+- `sh scripts/mutate.sh NemoNotch/Services/CompletionDetector.swift 'merged.tool = item.tool ?? older.tool' 'merged.tool = item.tool' --only CompletionToastQueueTests` → exit 0(变异被抓:失败 1 / 通过 11)。两次均自动恢复。
+- 端口:复审开始与结束时 hook-sender.sh / hermes-hook-sender.sh 均为 `# port: 45831`;文件 mtime 19:37:26(协调者恢复,早于本轮首个测试宿主 19:38:00),本轮 5 个测试宿主日志无任何 HookServer/插件写入。
+
+### 首轮运行证据(f354a46,梯级 4)
 
 - `sh scripts/test.sh --only CompletionToastQueueTests,CompletionDetectorTests,CompletionPathTests` → exit 0,通过 31 · 失败 0(与 f354a46 提交信息所述一致)。
 - `sh scripts/mutate.sh NemoNotch/Services/CompletionToastQueue.swift '$0.item.toastKey == item.toastKey' '$0.item.name == item.name' --only CompletionToastQueueTests` → exit 0(变异被抓:失败 1 / 通过 10)。
@@ -31,7 +39,7 @@ NemoNotchTests/CompletionToastQueueTests.swift
 
 ### 环境事件(非本分支造成,须告知用户)
 
-- 评审开始时 `~/.NemoNotch/hooks/hook-sender.sh` 为 `# port: 45831`;19:34:34 被改写为 `# port: 45832`(hermes-hook-sender.sh、opencode 插件同时被改写),而真实 app(pid 61310)仍只监听 45831 → CLI hook 事件当前发往死端口。日志 19:34:34.755「Hook server failed on 45831 … listening on 127.0.0.1:45832 / Wrote opencode plugin (port 45832)」来自**并发跑测的 `.worktree/claude-quota-snapshot` 测试宿主**(其 test.log mtime 19:34:35;该分支不含 56c5f39 守卫,`merge-base --is-ancestor` = NO_GUARD)。本分支测试宿主 19:34:38 启动,无 HookServer/插件写入日志;两次 mutate 后文件 mtime 仍为 19:34:34。
+- 评审开始时 `~/.NemoNotch/hooks/hook-sender.sh` 为 `# port: 45831`;19:34:34 被改写为 `# port: 45832`(hermes-hook-sender.sh、opencode 插件同时被改写),而真实 app(pid 61310)仍只监听 45831 → CLI hook 事件当时发往死端口(协调者已于 19:37:26 恢复为 45831)。日志 19:34:34.755「Hook server failed on 45831 … listening on 127.0.0.1:45832 / Wrote opencode plugin (port 45832)」来自**并发跑测的 `.worktree/claude-quota-snapshot` 测试宿主**(其 test.log mtime 19:34:35;该分支不含 56c5f39 守卫,`merge-base --is-ancestor` = NO_GUARD)。本分支测试宿主 19:34:38 启动,无 HookServer/插件写入日志;两次 mutate 后文件 mtime 仍为 19:34:34。
 
 ### 教训候选
 
