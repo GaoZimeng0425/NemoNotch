@@ -121,7 +121,8 @@ struct CompletionToastView: View {
 /// The card's border: a multi-color conic gradient that slowly rotates, seen
 /// through a 1.5pt rounded-rect stroke mask. Turned by Core Animation (the
 /// `EdgeBarSpinningArc` pattern), not SwiftUI: a `TimelineView` ring measured
-/// 12–18% of a core for four cards (isolated bench, 20s × 3), the CA version
+/// 10.5–17.9% of a core for four cards (isolated bench, 20s each, two batches:
+/// 12.80/17.87/11.70 and 10.45/13.50/12.04), the CA version
 /// leaves the app process ~idle — the turn runs in the render server. No
 /// rotation under Reduce Motion (the colored ring still shows). Torn down
 /// with the panel whenever the row is empty or off-screen.
