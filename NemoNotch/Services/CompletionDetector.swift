@@ -13,6 +13,9 @@ enum CompletionSource: Equatable, Hashable {
 /// and optional rich detail (task title, last tool, model, tokens, duration)
 /// carried through from the AI session that completed.
 struct CompletionItem: Equatable {
+    /// The unit that finished — the candidate key ("ai:<sessionID>" /
+    /// "agent:<agentID>"). nil for sources with no session (Pomodoro, calendar).
+    var key: String?
     let name: String
     let source: CompletionSource
     var subtitle: String?
@@ -25,6 +28,7 @@ struct CompletionItem: Equatable {
 
     /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
     init(name: String, source: CompletionSource) {
+        key = nil
         self.name = name
         self.source = source
         subtitle = nil
@@ -45,6 +49,7 @@ struct CompletionItem: Equatable {
         duration: TimeInterval?,
         path: String? = nil
     ) {
+        key = nil
         self.name = name
         self.source = source
         self.subtitle = subtitle
@@ -128,7 +133,7 @@ struct CompletionDetector {
         for candidate in candidates {
             next[candidate.key] = candidate.isActive
             if prior[candidate.key] == true, !candidate.isActive {
-                completed.append(CompletionItem(
+                var item = CompletionItem(
                     name: candidate.name,
                     source: candidate.source,
                     subtitle: candidate.subtitle,
@@ -137,11 +142,21 @@ struct CompletionDetector {
                     tokenDisplay: candidate.tokenDisplay,
                     duration: candidate.duration,
                     path: candidate.path
-                ))
+                )
+                item.key = candidate.key
+                completed.append(item)
             }
         }
         prior = next
         return completed
+    }
+}
+
+extension CompletionItem {
+    /// What makes two completions "the same card": the session/agent when
+    /// known, else the name (session-less sources such as Pomodoro).
+    var toastKey: String {
+        key ?? "name:\(name)"
     }
 }
 

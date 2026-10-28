@@ -37,6 +37,36 @@ struct CompletionToastQueueTests {
         #expect(q.toasts[0].deadline == t0.addingTimeInterval(50))
     }
 
+    @Test("two sessions in the same project get two cards, not one merged card")
+    func sameNameDifferentSessions() {
+        var q = queue()
+        var claude = item("NemoNotch")
+        claude.key = "ai:claude-1"
+        var zcode = CompletionItem(name: "NemoNotch", source: .ai(.zcode))
+        zcode.key = "ai:sess_zcode-1"
+        var claude2 = item("NemoNotch")
+        claude2.key = "ai:claude-2"
+        q.add([claude], now: t0)
+        q.add([zcode, claude2], now: t0)
+        #expect(q.toasts.map(\.item.key) == ["ai:claude-1", "ai:sess_zcode-1", "ai:claude-2"])
+        #expect(q.toasts.map(\.item.source) == [.ai(.claude), .ai(.zcode), .ai(.claude)])
+    }
+
+    @Test("the same session finishing again refreshes its own card")
+    func sameSessionRefreshes() {
+        var q = queue()
+        var first = item("NemoNotch", tool: "Read")
+        first.key = "ai:s1"
+        var again = item("NemoNotch", tool: "Edit")
+        again.key = "ai:s1"
+        q.add([first], now: t0)
+        let id = q.toasts[0].id
+        q.add([again], now: t0.addingTimeInterval(10))
+        #expect(q.toasts.count == 1)
+        #expect(q.toasts[0].id == id)
+        #expect(q.toasts[0].item.tool == "Edit")
+    }
+
     @Test("beyond capacity the oldest card is evicted")
     func capacityEvictsOldest() {
         var q = queue()

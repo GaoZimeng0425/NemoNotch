@@ -32,7 +32,9 @@ struct CompletionDetectorTests {
         var d = CompletionDetector()
         _ = d.step([CompletionCandidate(key: "ai:1", name: "Proj", isActive: true, source: .ai(.gemini))])
         let result = d.step([CompletionCandidate(key: "ai:1", name: "Proj", isActive: false, source: .ai(.gemini))])
-        #expect(result == [item("Proj", .ai(.gemini))])
+        var expected = item("Proj", .ai(.gemini))
+        expected.key = "ai:1"
+        #expect(result == [expected])
     }
 
     @Test("idle staying idle does not report")
