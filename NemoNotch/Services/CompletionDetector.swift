@@ -20,6 +20,8 @@ struct CompletionItem: Equatable {
     var model: String?
     var tokenDisplay: String?
     var duration: TimeInterval?
+    /// Working directory the session ran in (AI sessions only).
+    var path: String?
 
     /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -30,6 +32,7 @@ struct CompletionItem: Equatable {
         model = nil
         tokenDisplay = nil
         duration = nil
+        path = nil
     }
 
     init(
@@ -39,7 +42,8 @@ struct CompletionItem: Equatable {
         tool: String?,
         model: String?,
         tokenDisplay: String?,
-        duration: TimeInterval?
+        duration: TimeInterval?,
+        path: String? = nil
     ) {
         self.name = name
         self.source = source
@@ -48,6 +52,7 @@ struct CompletionItem: Equatable {
         self.model = model
         self.tokenDisplay = tokenDisplay
         self.duration = duration
+        self.path = path
     }
 }
 
@@ -67,6 +72,8 @@ struct CompletionCandidate: Equatable {
     var model: String?
     var tokenDisplay: String?
     var duration: TimeInterval?
+    /// Working directory the session ran in (AI sessions only).
+    var path: String?
 
     /// Convenience for callers that only have the identity fields.
     init(key: String, name: String, isActive: Bool, source: CompletionSource) {
@@ -79,6 +86,7 @@ struct CompletionCandidate: Equatable {
         model = nil
         tokenDisplay = nil
         duration = nil
+        path = nil
     }
 
     init(
@@ -90,7 +98,8 @@ struct CompletionCandidate: Equatable {
         tool: String?,
         model: String?,
         tokenDisplay: String?,
-        duration: TimeInterval?
+        duration: TimeInterval?,
+        path: String? = nil
     ) {
         self.key = key
         self.name = name
@@ -101,6 +110,7 @@ struct CompletionCandidate: Equatable {
         self.model = model
         self.tokenDisplay = tokenDisplay
         self.duration = duration
+        self.path = path
     }
 }
 
@@ -125,12 +135,26 @@ struct CompletionDetector {
                     tool: candidate.tool,
                     model: candidate.model,
                     tokenDisplay: candidate.tokenDisplay,
-                    duration: candidate.duration
+                    duration: candidate.duration,
+                    path: candidate.path
                 ))
             }
         }
         prior = next
         return completed
+    }
+}
+
+/// How a completion's working directory reads on the toast card.
+enum CompletionPath {
+    /// `path` with the home directory folded to `~`; nil for empty paths.
+    static func display(_ path: String?, home: String = NSHomeDirectory()) -> String? {
+        guard let path, !path.isEmpty else { return nil }
+        let trimmedHome = home.hasSuffix("/") ? String(home.dropLast()) : home
+        if !trimmedHome.isEmpty, path == trimmedHome || path.hasPrefix(trimmedHome + "/") {
+            return "~" + path.dropFirst(trimmedHome.count)
+        }
+        return path
     }
 }
 
@@ -158,6 +182,9 @@ enum CompletionFlashNames {
                 }
                 if let v = item.duration {
                     result[idx].duration = v
+                }
+                if let v = item.path {
+                    result[idx].path = v
                 }
             } else {
                 result.append(item)

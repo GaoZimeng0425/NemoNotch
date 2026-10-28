@@ -16,8 +16,9 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
 
 /// One completion card in the toast row under the notch: notch-black with a
 /// rotating color ring (so it reads against a black wallpaper too), the
-/// source app's logo, the task title and a tool·model·tokens·duration line,
-/// and a close glyph in the top-trailing corner. Fixed size from
+/// source app's logo, the task title, a tool·model·tokens·duration line and
+/// the working directory (AI sessions), and a close glyph in the top-trailing
+/// corner. Fixed size from
 /// `CompletionToastLayout` — the panel resolves clicks (close) from that
 /// same geometry, so nothing here is a SwiftUI button.
 struct CompletionToastView: View {
@@ -45,6 +46,20 @@ struct CompletionToastView: View {
                         .foregroundStyle(NotchTheme.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                }
+
+                // Where it ran: `~`-folded, middle-truncated so both the root
+                // and the project folder stay readable.
+                if let path = CompletionPath.display(item.path) {
+                    Text(verbatim: path)
+                        .font(.system(
+                            size: NotchConstants.completionToastFontSize - 3,
+                            weight: .regular,
+                            design: .monospaced
+                        ))
+                        .foregroundStyle(NotchTheme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
