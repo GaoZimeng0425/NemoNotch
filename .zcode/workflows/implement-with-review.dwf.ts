@@ -1,30 +1,29 @@
 /* zcode-workflow
-description: NemoNotch 开发执行环(pstack 融入版):主对话脑暴澄清(提问分类器)、writing-plans 写 plan、git
-  feat 建环境后启动;实现子代理按 executing-plans
-  逐任务实现;评审双席并行——评审员(仓库清单)+挑战者(对抗镜头:并发时序/错误路径/注释审判/ripwire 影响面),findings 合并写入
-  .reviews(后续轮追加不覆盖),P1/P2 回流修复(≤3 轮,回流携带上轮意见)。脑暴、规划、环境、合并与 push 留在主对话。
-whenToUse: 仅 feature 类任务。主对话已完成:①brainstorming
-  脑暴(提问分类器:可实验回答的做探针,只问产品/偏好取舍);②git feat 建 worktree、plan 文档写入
-  docs/superpowers/plans/。investigation 只读调查不启动本工作流;bug 类 plan 首任务=落失败测试。以
-  task/worktree/branch/planPath 四参启动。
+description: NemoNotch 开发执行环,双入口。①feature 入口(task/worktree/branch/planPath
+  四参):实现子代理按 executing-plans 逐任务实现,双席评审并行(评审员按仓库清单+挑战者四镜头),findings 合并写
+  .reviews,P1/P2 回流修复 ≤3 轮。②bug 入口(symptom 一参,与四参二选一):先诊断——只读复现+≤3
+  假设并行探针(单变量,证据标梯级)+单席证据链挑战;复现确凿、证据链审计成立、修法机械、有确认探针且挑战者建议 proceed
+  五者俱全才免闸直通,否则根因拍板闸停下问运行方(未复现的根因系推断,须用户确认);建环段自建 worktree+plan(首任务=失败测试)后合流
+  feature 开发段,合流评审含 bug 专项镜头(失败测试必须由红转绿、修复与根因因果对应)。脑暴、合并与 push 留在主对话。
+whenToUse: feature 类任务(主对话已 brainstorming 脑暴、git feat 建 worktree、writing-plans
+  写好 plan)以四参启动;bug 类任务(有可观察症状、根因未知)以 symptom 启动,先诊断后修。investigation
+  只读调查不启动本工作流。
 args:
   branch:
     type: string
-    description: feature 分支名(不含 feature/ 前缀),主对话已创建
-    required: true
+    description: feature 分支名(不含 feature/ 前缀),主对话已创建;feature 入口必填,bug 入口忽略
   planPath:
     type: string
-    description: 主对话按 writing-plans 惯例写好的 plan 文档路径(仓库相对,worktree 内的
-      docs/superpowers/plans/ 下,随分支提交)
-    required: true
+    description: plan 文档路径(仓库相对,worktree 内 docs/superpowers/plans/ 下);feature 入口必填,bug 入口忽略
+  symptom:
+    type: string
+    description: bug 入口:症状描述+期望 vs 实际(与四参二选一;给了 symptom 就走诊断段)
   task:
     type: string
-    description: 任务描述,含主对话脑暴澄清后的目标与约束
-    required: true
+    description: 任务描述,含脑暴澄清后的目标与约束;feature 入口必填,bug 入口忽略
   worktree:
     type: string
-    description: 主对话已用 git feat 建好的 worktree 路径(仓库相对,如 .worktree/xxx)
-    required: true
+    description: 主对话已建好的 worktree 路径(仓库相对,如 .worktree/xxx);feature 入口必填,bug 入口忽略
 */
 interface Implementation {
   /** 本轮实现的提交哈希(短哈希),按 plan 任务逐个提交。 */
@@ -56,13 +55,59 @@ interface Review {
   evidence: string[];
 }
 
-const task = String(args.task);
-const worktree = String(args.worktree);
-const branch = String(args.branch);
-const planPath = String(args.planPath);
+interface ReproSurvey {
+  /** 症状是否被真实复现或直接观察(true = 有梯级 4/5 证据)。 */
+  reproduced: boolean;
+  /** 观察到的事实,每条带证据(file:line / 日志行 / 命令+输出)。 */
+  facts: string[];
+  /** ≤3 个候选根因假设,各一句理由。 */
+  hypotheses: { hypothesis: string; rationale: string }[];
+  /** 复现/观察过程摘要:跑过什么、看到什么。 */
+  evidence: string[];
+}
+
+interface ProbeResult {
+  /** 本假设的判定:证实 / 证伪 / 无法判定。 */
+  verdict: "confirmed" | "refuted" | "inconclusive";
+  /** 证据链,每条注明梯级(1 自述…4 真跑过…5 运行中复现)。 */
+  evidence: string[];
+  /** 一句话结论。 */
+  summary: string;
+}
+
+interface DiagnosisAudit {
+  /** 根因结论是否站得住(无 2 级结论被当 4 级用、替代假设已穷尽)。 */
+  sound: boolean;
+  /** 修复是否机械(小、局部、无产品取舍)。 */
+  mechanicalFix: boolean;
+  /** 缺口与保留意见。 */
+  gaps: string[];
+  /** 建议动作。 */
+  recommendation: "proceed" | "needs-user" | "not-a-bug" | "no-fix";
+}
+
+interface GateDecision {
+  /** continue = 建环并进开发段;abort = 只交诊断报告,不修。 */
+  action: "continue" | "abort";
+  /** 运行方补充:如用户确认的推断根因、指定修法、或中止理由。 */
+  note?: string;
+}
+
+interface Scaffold {
+  /** 分支名(不含 feature/ 前缀)。 */
+  branch: string;
+  /** worktree 路径(仓库相对,如 .worktree/xxx)。 */
+  worktree: string;
+  /** plan 文档路径(仓库相对)。 */
+  planPath: string;
+  /** 交给实现者的任务描述(含根因与范围约束)。 */
+  task: string;
+}
 
 // 分工铁律:脑暴与方案由主对话完成,环境由主对话备好;实现者只实现,
 // 流程(评审、修复回流、收尾)由本脚本机械化——任何一侧都不做结构性判断。
+// bug 入口是这条铁律的例外声明:根因未知时,诊断段先把未知变已知(只读),
+// 拍板闸把「推断根因须用户确认」机械化,建环段产出与 feature 入口等价的四参。
 const IMPLEMENTER_PERSONA =
   "你是 NemoNotch 仓库的实现者:环境与方案已由主对话备好,你只管实现,不管流程。" +
   "只在工作目录所在的给定 worktree 里改文件,绝不动主检出的任何文件;" +
@@ -105,6 +150,174 @@ const CHALLENGER_PERSONA =
   "对手越强留下的代码越硬,但反对必须有可复现证据,不为反对而反对。" +
   "校准:没有 P1/P2 级发现就给 APPROVED——REJECTED 必须伴随至少一条可行动的 P1/P2。";
 
+const DETECTIVE_PERSONA =
+  "你是 NemoNotch 的复现侦探,只读诊断。仓库文件一律不改,探针脚本/产物只写 /tmp;" +
+  "证据源优先级:~/.NemoNotch/logs 真实日志(注意时间戳是本地时)、rtk grep/rg、ripwire(调用关系)," +
+  "必要时真机观察(运行中的 app、screencapture、ps/lsof)。" +
+  "任务:①竭尽全力复现或直接观察到症状(期望 vs 实际的差);②如实记录观察到的事实," +
+  "每条带证据(file:line / 日志行 / 命令+真实输出);③提出不超过 3 个最可能的根因假设,各配一句理由。" +
+  "观测不成律:复现不了就如实说复现不了,绝不脑补因果;你产出的事实清单是后续探针的唯一输入。" +
+  "无法验证就明说,不猜。";
+
+const PROBE_PERSONA =
+  "你是假设探针:拿到一个根因假设,设计最小的单变量实验去证实或证伪它。" +
+  "只读纪律:仓库文件不改,探针脚本/产物只写 /tmp;可用日志、rtk grep、ripwire、构建产物," +
+  "必要时只读地观察运行中的 app。一次只动一个变量;证伪与证实同样有价值;" +
+  "每条证据注明梯级(1 自述 / 2 file:line / 3 走失败路径 / 4 真跑过 / 5 运行中复现);" +
+  "无法判定就如实 inconclusive,不猜。";
+
+const DIAG_AUDIT_PERSONA =
+  "你是诊断挑战者,未参与任何侦察与探针,只凭交给你的证据链审一件事:根因结论站不站得住。" +
+  "检查:①有没有 2 级结论被当成 4 级用(读代码推出来的不等于跑过的);" +
+  "②替代假设是否穷尽——还有没有更简单的解释没被排除;" +
+  "③证据与结论的因果对应是否成立。" +
+  "另判断修法是否机械(小、局部、无产品取舍——涉及取舍就交给用户)。" +
+  "宁严勿松,但不为反对而反对;给出建议动作。";
+
+const SCAFFOLD_PERSONA =
+  "你是建环者:把已拍板的根因转成 feature 入口等价的环境与 plan。" +
+  "①在主检出跑 git feat <分支名>(分支名按根因 kebab 命名,fix- 前缀;命令幂等,已在则复用);" +
+  "②在新 worktree 里写 plan 文档落 docs/superpowers/plans/YYYY-MM-DD-<分支名>.md 并提交到分支" +
+  "(提交信息 docs(plan): …)。plan 必含:症状与期望 vs 实际、根因报告(证据链逐条带梯级;" +
+  "若诊断未能复现,plan 首部必须写明『根因系代码审阅推断,已经用户确认』)、任务清单" +
+  "(首任务=落失败测试,引用真实失败输出,red→green 可重放;后续任务按最小修复排)、" +
+  "验证命令(sh scripts/affected-tests.sh,不手挑类名)、范围纪律。" +
+  "不改任何代码、不跑 feat-done、不 push。" +
+  "返回 branch(不含 feature/ 前缀)、worktree(仓库相对路径)、planPath(仓库相对)、" +
+  "task(给实现者的一段任务描述:根因+修复范围+约束)。";
+
+const symptom = typeof args.symptom === "string" ? args.symptom : "";
+let task = typeof args.task === "string" ? args.task : "";
+let worktree = typeof args.worktree === "string" ? args.worktree : "";
+let branch = typeof args.branch === "string" ? args.branch : "";
+let planPath = typeof args.planPath === "string" ? args.planPath : "";
+
+if (!symptom && (!task || !worktree || !branch || !planPath)) {
+  return {
+    conclusion:
+      "入口缺参:feature 入口需要 task/worktree/branch/planPath 四参,bug 入口需要 symptom 一参。什么都没跑。",
+    findings: [],
+    verified: [],
+    notCovered: ["未启动任何阶段——参数校验即返回"],
+  };
+}
+
+// bug 入口:诊断段只读把「根因未知」变成「根因已知」,拍板闸机械化
+// 「推断根因须用户确认」,建环段产出与 feature 入口等价的四参后合流下方开发段。
+let bugDiagnosis = "";
+if (symptom) {
+  phase("复现优先:真机观察与假设盘点");
+  const survey = await agent("复现侦探", { system: DETECTIVE_PERSONA }).ask<ReproSurvey>(
+    `症状(期望 vs 实际):${symptom}\n\n` +
+      "先读 AGENTS.md 的坑总目录排已知坑,再按你的纪律复现与盘点。"
+  );
+  report(survey);
+  log(
+    `复现:${survey.reproduced ? "确凿" : "未能复现(根因将标推断)"};` +
+      `事实 ${survey.facts.length} 条;假设 ${survey.hypotheses.length} 个`
+  );
+
+  phase("并行假设探针(单变量,证据标梯级)");
+  const hypotheses = survey.hypotheses.slice(0, 3);
+  const probes = await Promise.all(
+    hypotheses.map((h, i) =>
+      agent(`探针-${i + 1}`, { system: PROBE_PERSONA }).ask<ProbeResult>(
+        `假设:${h.hypothesis}(理由:${h.rationale})\n\n` +
+          `已知事实(侦察产出,可直接引用):${JSON.stringify(survey.facts)}\n` +
+          `症状:${symptom}`
+      )
+    )
+  );
+  probes.forEach((p) => report(p));
+  const confirmed = probes.find((p) => p.verdict === "confirmed");
+
+  phase("证据链挑战与根因拍板(单席,只审梯级与穷尽性)");
+  const audit = await agent("诊断挑战者", { system: DIAG_AUDIT_PERSONA }).ask<DiagnosisAudit>(
+    `症状:${symptom}\n复现:${survey.reproduced ? "确凿" : "未复现"}\n` +
+      `侦察事实:${JSON.stringify(survey.facts)}\n` +
+      `探针结果:${JSON.stringify(probes)}\n` +
+      "(你看不到侦察与探针的原始上下文,只凭以上证据审——这正是你的价值。)"
+  );
+  report(audit);
+
+  // 免闸五合取:挑战者的建议动作必须被消费——sound+机械+复现+确认探针俱全
+  // 但建议 not-a-bug / no-fix / needs-user 时,否决表态不能被静默丢弃。
+  const autoProceed =
+    audit.sound &&
+    survey.reproduced &&
+    audit.mechanicalFix &&
+    audit.recommendation === "proceed" &&
+    confirmed !== undefined;
+  let proceed = autoProceed;
+  let gateNote = "";
+  if (!autoProceed) {
+    const gate = await hole<GateDecision>(
+      "根因拍板闸",
+      `症状:${symptom}\n` +
+        `复现:${survey.reproduced ? "确凿" : "未复现——根因系代码审阅推断,按 AGENTS 须用户确认才能修"}\n` +
+        `确认的探针:${confirmed ? confirmed.summary : "无(全部证伪或无法判定)"}\n` +
+        `挑战者审计:${JSON.stringify(audit)}\n` +
+        `全部探针:${JSON.stringify(probes)}\n\n` +
+        `继续(action:"continue",可带 note:用户确认的根因/指定修法)= 建环并进开发段;` +
+        `中止(action:"abort")= 只交诊断报告。请与用户确认后填 GateDecision。`
+    );
+    proceed = gate.action === "continue";
+    gateNote = typeof gate.note === "string" ? gate.note : "";
+    log(`根因拍板闸:${gate.action}${gateNote ? `(note: ${gateNote})` : ""}`);
+  }
+
+  if (!proceed) {
+    return {
+      conclusion:
+        `bug「${symptom}」在根因拍板闸中止,未修复。诊断结论:` +
+        `${confirmed ? confirmed.summary : "无确认根因(探针:" + probes.map((p) => p.verdict).join("/") + ")"}` +
+        `;挑战者:${audit.recommendation}(${audit.gaps.join(";") || "无保留意见"})。` +
+        "诊断 findings 已随本报告交付;若用户后续确认根因,重跑本工作流从诊断段重新开始(无跨 run 记忆)。",
+      findings: probes.map((p) => ({
+        where: "诊断",
+        what: `${p.summary}`,
+        evidence: p.evidence.join(";"),
+        status: p.verdict === "confirmed" ? ("verified" as const) : ("unconfirmed" as const),
+        severity: "medium" as const,
+      })),
+      verified: survey.evidence,
+      notCovered: ["修复未进行(拍板闸中止)", "全量测试与 feat-done 门禁未跑(无代码改动)"],
+    };
+  }
+
+  phase("建 worktree 与 plan(首任务=失败测试)");
+  const scaffold = await agent("建环者", { system: SCAFFOLD_PERSONA }).ask<Scaffold>(
+    `症状:${symptom}\n` +
+      `根因(探针确认):${confirmed ? confirmed.summary : "无确认探针——按拍板闸 note 的根因走"}\n` +
+      `证据链:${JSON.stringify(confirmed ? confirmed.evidence : probes.map((p) => p.summary))}\n` +
+      `挑战者审计:${JSON.stringify(audit)}\n` +
+      `拍板闸补充:${gateNote || (autoProceed ? "(免闸直通:复现确凿+证据链成立+修法机械+探针确认+挑战者放行)" : "(拍板闸放行,无补充说明)")}\n` +
+      `复现状态:${survey.reproduced ? "真机/日志确凿" : "未复现——plan 首部必须写明根因系推断且已经用户确认"}`
+  );
+  if (!scaffold.branch || !scaffold.worktree || !scaffold.planPath || !scaffold.task) {
+    return {
+      conclusion:
+        `建环者输出不完整(branch/worktree/planPath/task 有空值),已中止在衔接段——` +
+        `诊断结论:${confirmed ? confirmed.summary : "见 findings"}。修复未开始,无代码改动。`,
+      findings: probes.map((p) => ({
+        where: "诊断",
+        what: p.summary,
+        evidence: p.evidence.join(";"),
+        status: p.verdict === "confirmed" ? ("verified" as const) : ("unconfirmed" as const),
+        severity: "medium" as const,
+      })),
+      verified: survey.evidence,
+      notCovered: ["建环失败中止(输出缺参,建环者可重试)", "开发段与评审未进入"],
+    };
+  }
+  task = scaffold.task;
+  worktree = scaffold.worktree;
+  branch = scaffold.branch;
+  planPath = scaffold.planPath;
+  bugDiagnosis = `bug 入口(症状→诊断→建环 ${branch});根因:${confirmed ? confirmed.summary : gateNote};`;
+  log(`bug 入口衔接:feature/${branch} @ ${worktree},plan:${planPath}`);
+}
+
 phase("按 plan 文档逐任务实现(自测并提交)");
 const implementer = agent("实现者", { system: IMPLEMENTER_PERSONA });
 const impl = await implementer.ask<Implementation>(
@@ -127,6 +340,9 @@ for (let round = 1; round <= 3; round += 1) {
         `plan 文档(先完整读取,核验忠实度与任务覆盖):\n${planPath}\n\n` +
         `实现者交接:${impl.summary}\n风险点:${JSON.stringify(impl.risks)}\n` +
         `实现者自跑的证据(你必须抽查复跑):${JSON.stringify(impl.checks)}\n` +
+        (symptom
+          ? "\nbug 修复专项:核验失败测试确实由红转绿、修复与根因因果对应、无越出根因的顺手改动。\n"
+          : "") +
         (round > 1
           ? `这是第 ${round} 轮:重点核验上一轮意见是否修到位,并回归检查。\n上轮意见:\n${JSON.stringify(previousFindings)}`
           : "")
@@ -185,7 +401,7 @@ await artifact.markdown(
   [
     `# ${branch} 实现与评审`,
     "",
-    `任务:${task}`,
+    `${bugDiagnosis ? bugDiagnosis + "\n" : ""}任务:${task}`,
     `分支:feature/${branch}(${impl.commits.join(", ")})`,
     `plan 文档:${planPath}`,
     `双席评审:${finalReview.verdict}(共 ${finalReview.findings.length} 条意见)`,
@@ -200,7 +416,7 @@ await artifact.markdown(
 const blocking = finalReview.findings.filter((f) => f.severity === "P1" || f.severity === "P2");
 return {
   conclusion:
-    `任务「${task}」已在 feature/${branch} 实现并通过 ${finalReview.verdict} 双席评审` +
+    `${bugDiagnosis}任务「${task}」已在 feature/${branch} 实现并通过 ${finalReview.verdict} 双席评审` +
     (finalReview.verdict === "APPROVED"
       ? blocking.length === 0
         ? ",无未决 P1/P2。"
@@ -215,6 +431,7 @@ return {
     severity: f.severity === "P1" ? ("high" as const) : f.severity === "P2" ? ("medium" as const) : ("low" as const),
   })),
   verified: [
+    ...(bugDiagnosis ? [`bug 诊断段:${bugDiagnosis}`] : []),
     `实现者自跑:${impl.checks.join(";")}`,
     `评审员复跑抽查:${finalReview.evidence.join(";")}`,
     `评审记录(含 head 短哈希):${recordPath}`,
@@ -222,6 +439,6 @@ return {
   ],
   notCovered: [
     "全量测试套件与 doc-audit 门禁在 feat-done 合并时才跑,本工作流只跑了针对性测试",
-    "脑暴、plan 撰写、worktree 创建、合并、部署与 push 均在主对话,不在本工作流范围",
+    "脑暴、plan 撰写(feature 入口)、worktree 创建(feature 入口)、合并、部署与 push 均在主对话,不在本工作流范围",
   ],
 };

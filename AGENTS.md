@@ -227,7 +227,7 @@ graph LR
   - **造杠杆**:非平凡工作优先造可重跑的工具/脚本(codemod/验证脚本)——手工一遍等于评审无法复跑(scripts/*.sh 即此哲学)。
   - **穷尽设计空间**:无先例的交互/架构决策,先做 2–3 个竞争原型对比再定,不锁死第一版形状(脑暴阶段用)。
 - **提问分类器**:要问用户前先自问——答案是否"跑一下就能观察到"(行为/耗时/布局/输出)?能 → 做探针/原型让结果说话,不问;只有真正的产品/偏好取舍留给人。
-- **任务入口分流**:investigation(只读调查)引用证据直接作答,不建 worktree 不跑执行环;bug 类 plan 首任务=落失败测试,可观察症状优先真机复现,复现不出须明说「根因系代码审阅推断」并经用户确认再修——推断根因被实测推翻会报废整张 plan;feature 走完整管线(brainstorming → writing-plans → git feat → implement-with-review 工作流 → feat-done)。
+- **任务入口分流(三入口,硬路由)**:**新需求(feature)必须先用 superpowers brainstorming skill 脑暴**(`.zcode/skills/brainstorming/`,主对话与用户对聊澄清;竞品调研/原型对比等跑腿可派子代理并行,对话本身留在主对话)——跳过脑暴直接写 plan 是流程违规;产物 spec 落 `docs/superpowers/specs/`,之后 writing-plans 写 plan → `git feat` → implement-with-review 工作流(四参:task/worktree/branch/planPath)→ feat-done。**bug 症状走 implement-with-review 的 symptom 入口**(一参:症状+期望 vs 实际):诊断段只读(复现优先、≤3 假设并行探针单变量、证据逐条标梯级)+单席证据链挑战;**五者俱全才免闸直通**(复现确凿、证据链审计成立、修法机械、有确认探针、挑战者建议 proceed),否则根因拍板闸停下问用户——**复现不出的根因系代码审阅推断,未经用户确认绝不进修复**(推断根因被实测推翻会报废整张 plan);建环段自建 worktree+plan(首任务=失败测试,未复现须在 plan 首部写明推断已确认)后合流 feature 开发段,合流评审带 bug 专项镜头(失败测试必须由红转绿、修复与根因因果对应)。investigation(只读调查)不变:引用证据直接作答,不建 worktree 不跑执行环。
 - **生成技能文本不覆盖本仓门禁**:superpowers 等第三方技能是通用产物,自带流程口径(严格 TDD、worktree 内合并收尾等)。技能管"做事的手艺",门禁与已定决策归本手册,冲突时手册赢。恒例:技能的 TDD 要求不推翻「新功能不强制 TDD」;收尾一律 feat-done 主检出合并,不按技能在 worktree 内合并;技能升级换文本不改变这两条。
 - **收尾例行(reflect)**:任务合并部署后提炼本次教训——**先读评审记录 Findings 尾部的「教训候选」小节**(评审员在门上的现场观察,比事后回忆新鲜;AI-DLC 学习回路借鉴)→ 再过"能不能做成门禁"检查,能强制的记入 `docs/guardrail-backlog.md` 排期硬化(pstack Backlog 路由同款),其余写进本手册坑总目录或 `docs/experience-playbook.md`。一次性的事不是教训。
 - 功能增改后同步更新 `README.md`、`README_CN.md`、`AGENTS.md`(功能描述/技术栈/架构)。
