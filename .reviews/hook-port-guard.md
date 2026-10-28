@@ -2,8 +2,8 @@
 
 Reviewer: independent reviewer subagent (Claude, fresh session; did not author this branch)
 Date: 2026-10-28
-Reviewed-Head: 1cd4c67
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 56c5f39
+Verdict: APPROVED
 Scope:  5 files changed, 42 insertions(+), 6 deletions(-)
 
 ```
@@ -15,6 +15,15 @@ NemoNotchTests/UITestModeTests.swift
 ```
 
 ## Findings
+
+### 复审 @ 56c5f39(`git diff 1cd4c67..HEAD`)
+
+- **P2 已解决**:`NemoNotch/Helpers/AppDependencies.swift:83` 改为 `if UITestMode.ownsSharedHookConfig { aiMonitor.startServer() }`——测试宿主与 `--uitest` 都不再监听,`handleServerReady` 不可能在其中运行;`startServer()` 全仓唯一调用点即此处(rg 核对),NemoNotchTests 无任何用例依赖 HookServer 起跑/端口(rg `HookServer(|startServer|45831|serverRunning` 零命中)。`HookServer.swift:109` 的 ready 门控保留为纵深防线。实测(第 4 级):`sh scripts/affected-tests.sh` 退出码 0(36 通过 0 失败,19:27:41–19:27:47);前后对 hook-sender.sh / hermes-hook-sender.sh / opencode 插件 / `~/.claude`、`~/.gemini`、`~/.zcode` 配置 mtime 与 UserDefaults `hookServerPort` 快照 diff 为空;同窗口主日志有测试宿主的 `HermesService initialized`(19:27:46.355)但**无** `Hook server listening`/`Wrote opencode plugin`/任何 Installer 行。
+- **P3 已解决**:`NemoNotch/Services/HermesService.swift:49` 启动刷新加 `ownsSharedHookConfig` 门控。
+- AGENTS.md 已更正 `--uitest` 的写入路径表述;guardrail-backlog 已登记 test.sh 共享文件哨兵。
+- **[P3,运维提示,不阻塞]** 本修复只保护含它的二进制。19:26:21 一次 45832 改写来自 `.worktree/claude-quota-snapshot` 的测试运行(其 `build/test.log` mtime 19:26:22,`-only-testing:...UsageQuotaTests` 等;该分支不含 1cd4c67;日志行显示 `NemoNotch.debug.dylib` 且两次 `Wrote opencode plugin (port 45832)` = 修复前行为)。合并后其他进行中的 worktree 在 rebase/合入 develop 前**仍会**改坏共享配置——合并后宜提醒或让在飞分支同步 develop。
+
+### 初审 @ 1cd4c67(原记录,保留)
 
 - **[P2] 守卫不完整,手册新不变量与实测不符** — `NemoNotch/Services/HookServer.swift:122` 的 else 分支照样调 `onReady?()`,于是单测宿主仍会跑 `AICLIMonitorService.handleServerReady`(`NemoNotch/Services/AICLIMonitorService.swift:181-193`):`HookInstaller.install(.claude/.gemini/.zcode)`(改写 `~/.claude/settings.json`、`~/.gemini/settings.json`、`~/.zcode/cli/config.json` 并经 `ensureScriptExists` 按**本 worktree 的模板**核对 hook-sender.sh)和 `OpencodePluginInstaller.install()`(无条件重写 opencode 插件)。实测(第 4 级):`sh scripts/test.sh --only UITestModeTests` 退出码 0;前后 stat 显示 opencode 插件与三份 CLI 配置的 mtime 从 1793186603 变为 1793186699(19:24:59,测试运行中);主日志 `HookServer` 19:24:59.297 「Test/UI-test instance on 45832: shared hook config left alone」紧接 19:24:59.300 「[OpencodePluginInstaller] Wrote opencode plugin (port 45831)」。端口这次是对的——只是因为 UserDefaults 已不再被改写,所以**本次症状(死端口)确已修住**;但 AGENTS.md 新节写的「只有用户的真实 app 写共享 hook 配置」不成立。剩余伤害路径真实存在:在动 hook 模板的 feature worktree 里(或从更老的分支)跑测试,宿主会用那份模板改写用户正在用的 hook-sender.sh / opencode 插件 / CLI hook 命令,直到真实 app 下次启动(`scriptVersion` 不匹配)才被修回;opencode 插件与 CLI 配置则只有 handleServerReady 的无条件安装能修。修法建议(最小):`handleServerReady` 里的四个 install 也以 `UITestMode.ownsSharedHookConfig` 门控(或在测试宿主里不 `startServer()`,与 `--uitest` 同处理,`AppDependencies.swift:80`),这样手册断言才名副其实。
 - **[P3]** `NemoNotch/Services/HermesService.swift:49-51` 的 init 仍在测试宿主与 `--uitest` 实例里 `refreshScript()`(无条件整文件重写 hermes-hook-sender.sh)。端口取自 UserDefaults 故不再指向死端口,模板问题同上;顺手和 AICLIMonitorService init 一样加 `ownsSharedHookConfig` 门控可让不变量完整。本次实测该文件 mtime 未变(推测本机 Hermes hook 未装、`isHookInstalled` 为 false——未核实)。
