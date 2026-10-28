@@ -3338,6 +3338,38 @@
         }
       }
     },
+    "quota.status.snapshot_missing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure claude-hud usage snapshot"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需配置 claude-hud 快照"
+          }
+        }
+      }
+    },
+    "quota.status.snapshot_stale" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for a Claude session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待 Claude 会话刷新"
+          }
+        }
+      }
+    },
     "quota.title" : {
       "localizations" : {
         "en" : {

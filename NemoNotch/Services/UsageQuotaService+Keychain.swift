@@ -66,9 +66,9 @@ extension UsageQuotaService {
     /// the macOS consent dialog. On success the quota is refreshed (subsequent
     /// non-interactive reads then succeed silently); on denial nothing changes.
     func authorize(_ provider: QuotaProvider) async {
-        guard provider != .gemini else {
+        guard provider != .gemini, provider != .claude else {
             LogService.warn(
-                "Quota authorize ignored: Gemini uses file-based OAuth, not Keychain",
+                "Quota authorize ignored: \(provider.rawValue) has no Keychain credential path",
                 category: "UsageQuotaService"
             )
             return
@@ -127,7 +127,7 @@ extension UsageQuotaService {
 
     func keychainService(for provider: QuotaProvider) -> String {
         switch provider {
-        case .claude: claudeKeychainService
+        case .claude: "" // Claude quota reads the claude-hud snapshot, never Keychain
         case .codex: codexKeychainService
         case .gemini: "" // Gemini uses file-based OAuth, not Keychain
         case .zcode: "" // zcode credentials are locally encrypted, never Keychain

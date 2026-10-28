@@ -27,6 +27,14 @@ enum CredentialStatus: Equatable, Sendable {
     /// Keychain item exists but this app isn't authorized to read it yet.
     /// Surfaces a "Authorize" button rather than auto-prompting.
     case needsAuthorization
+    /// Claude's usage snapshot file (`~/.claude/usage-snapshot.json`, written
+    /// by claude-hud) is absent — claude-hud isn't installed/configured, or it
+    /// has never written a snapshot.
+    case snapshotMissing
+    /// The snapshot exists but its `updated_at` is older than the fresh
+    /// interval: no Claude session has rendered the statusline recently.
+    /// Stale percentages are withheld (no tiers), not shown.
+    case snapshotStale
 }
 
 /// A usage rolling-window. Claude uses named windows (localized labels);
@@ -128,25 +136,6 @@ struct GeminiOAuthCredential: Equatable, Sendable {
 }
 
 enum UsageCredentialParser {
-    /// Parses `~/.claude/.credentials.json` or the Keychain blob.
-    /// Shape: `{ "claudeAiOauth": { "accessToken": "...", "expiresAt": <ms epoch> } }`.
-    static func parseClaudeCredentials(data: Data, now: Date = Date()) throws -> UsageCredential {
-        let object = try JSONSerialization.jsonObject(with: data)
-        guard let root = object as? [String: Any] else {
-            return UsageCredential(token: nil, status: .parseError, message: "Claude credentials JSON is not an object")
-        }
-        guard let entry = (root["claudeAiOauth"] ?? root["claude.ai_oauth"]) as? [String: Any] else {
-            return UsageCredential(token: nil, status: .parseError, message: "No OAuth entry in Claude credentials")
-        }
-        guard let token = entry["accessToken"] as? String, !token.isEmpty else {
-            return UsageCredential(token: nil, status: .parseError, message: "accessToken is empty or missing")
-        }
-        if let expiresAt = entry["expiresAt"], isExpired(expiresAt, now: now) {
-            return UsageCredential(token: token, status: .expired, message: "OAuth token has expired")
-        }
-        return UsageCredential(token: token, status: .valid)
-    }
-
     /// Parses Codex's `~/.codex/auth.json`:
     /// `{ "auth_mode": "chatgpt", "tokens": { "access_token": "...", "account_id": "..." } }`.
     static func parseCodexCredentials(data: Data, now: Date = Date()) throws -> UsageCredential {
@@ -195,34 +184,9 @@ enum UsageCredentialParser {
             accessToken: access, refreshToken: refresh, expiryDate: expiry, status: .valid
         )
     }
-
-    private static func isExpired(_ value: Any, now: Date) -> Bool {
-        let raw: Double
-        if let d = value as? Double {
-            raw = d
-        } else if let i = value as? Int {
-            raw = Double(i)
-        } else {
-            return false
-        }
-        // Claude stores milliseconds (13 digits); normalize to seconds.
-        let seconds = raw > 1_000_000_000_000 ? raw / 1000 : raw
-        return Date(timeIntervalSince1970: seconds) < now
-    }
 }
 
 enum UsageQuotaParser {
-    static func parseClaudeCodeQuota(data: Data, fetchedAt: Date = Date()) throws -> ProviderUsageQuota {
-        let response = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
-        let tiers: [QuotaTier] = [
-            response.fiveHour.map { tier(.fiveHour, $0) },
-            response.sevenDay.map { tier(.sevenDay, $0) },
-            response.sevenDayOpus.map { tier(.sevenDayOpus, $0) },
-            response.sevenDaySonnet.map { tier(.sevenDaySonnet, $0) },
-        ].compactMap(\.self)
-        return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: fetchedAt)
-    }
-
     /// Parses Gemini's `retrieveUserQuota` response. Collapses each model's
     /// buckets to the lowest `remainingFraction` (most-constrained token type)
     /// and maps to `utilization = (1 - fraction) * 100`, descending.
@@ -321,10 +285,6 @@ enum UsageQuotaParser {
         return plain.date(from: value)
     }
 
-    private static func tier(_ window: QuotaWindow, _ source: ClaudeUsageTier) -> QuotaTier {
-        QuotaTier(window: window, utilization: source.utilization, resetsAt: source.resetsAt.flatMap(parseResetDate))
-    }
-
     /// Trims fractional seconds to 3 digits: `...00.858062+00:00` → `...00.858+00:00`.
     private static func truncateFractionalSeconds(_ value: String) -> String? {
         guard let dot = value.firstIndex(of: ".") else { return nil }
@@ -411,31 +371,69 @@ enum CodexRateWindowNormalizer {
     }
 }
 
+/// Parses the usage snapshot written by claude-hud (`~/.claude/usage-snapshot.json`).
+/// Claude Code pushes server-side `rate_limits` to statusline scripts over stdin;
+/// claude-hud mirrors them into that file (atomic write, 0600, refreshed at most
+/// every 30s while a Claude session renders its statusline; not written while
+/// no session runs).
+enum ClaudeUsageSnapshotParser {
+    /// A snapshot older than the rolling five-hour window describes a window
+    /// that has already rolled over, so its percentages can't be trusted:
+    /// treat it as "waiting for a session to refresh" instead of showing stale
+    /// numbers.
+    static let claudeSnapshotFreshInterval: TimeInterval = 5 * 3600
+
+    static func parse(data: Data?, now: Date = Date()) -> ProviderUsageQuota {
+        guard let data else {
+            return ProviderUsageQuota(provider: .claude, status: .snapshotMissing, fetchedAt: now)
+        }
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return ProviderUsageQuota(
+                provider: .claude, status: .parseError, fetchedAt: now,
+                errorMessage: "Usage snapshot is not a JSON object"
+            )
+        }
+        guard let updatedAt = (root["updated_at"] as? String).flatMap(UsageQuotaParser.parseResetDate),
+              now.timeIntervalSince(updatedAt) <= claudeSnapshotFreshInterval
+        else {
+            return ProviderUsageQuota(provider: .claude, status: .snapshotStale, fetchedAt: now)
+        }
+        let tiers = [
+            tier(root["five_hour"], window: .fiveHour),
+            tier(root["seven_day"], window: .sevenDay),
+        ].compactMap(\.self)
+        guard !tiers.isEmpty else {
+            return ProviderUsageQuota(
+                provider: .claude, status: .parseError, fetchedAt: now,
+                errorMessage: "Usage snapshot has no usable window"
+            )
+        }
+        // A tier whose server-side reset already passed describes a window that
+        // rolled over after the snapshot's last write: its percentages are old
+        // even while updated_at is still within the interval (no session has
+        // rendered since the rollover). updated_at is only the fallback
+        // freshness signal for tiers without a resets_at.
+        if tiers.contains(where: { $0.resetsAt.map { $0 < now } == true }) {
+            return ProviderUsageQuota(provider: .claude, status: .snapshotStale, fetchedAt: now)
+        }
+        return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: now)
+    }
+
+    /// `{"used_percentage": 0-100, "resets_at": ISO8601-or-null}` → tier.
+    /// An unparseable `resets_at` yields nil, never a dropped window.
+    private static func tier(_ raw: Any?, window: QuotaWindow) -> QuotaTier? {
+        guard let entry = raw as? [String: Any],
+              let used = entry["used_percentage"] as? Double, used.isFinite
+        else { return nil }
+        return QuotaTier(
+            window: window,
+            utilization: used,
+            resetsAt: (entry["resets_at"] as? String).flatMap(UsageQuotaParser.parseResetDate)
+        )
+    }
+}
+
 // MARK: - Wire decoding
-
-private struct ClaudeUsageResponse: Decodable {
-    let fiveHour: ClaudeUsageTier?
-    let sevenDay: ClaudeUsageTier?
-    let sevenDayOpus: ClaudeUsageTier?
-    let sevenDaySonnet: ClaudeUsageTier?
-
-    enum CodingKeys: String, CodingKey {
-        case fiveHour = "five_hour"
-        case sevenDay = "seven_day"
-        case sevenDayOpus = "seven_day_opus"
-        case sevenDaySonnet = "seven_day_sonnet"
-    }
-}
-
-private struct ClaudeUsageTier: Decodable {
-    let utilization: Double
-    let resetsAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case utilization
-        case resetsAt = "resets_at"
-    }
-}
 
 private struct CodexUsageResponse: Decodable {
     let rateLimit: CodexRateLimit?

@@ -15,22 +15,9 @@ final class UsageQuotaService: LifecycleAware {
     /// Computed at init so the UI gate is correct before the first fetch.
     var hasCodexCredential = false
 
-    let claudeKeychainService = "Claude Code-credentials"
-    /// When true, resolve the Claude OAuth token via the `/usr/bin/security` CLI
-    /// (`find-generic-password -w`) instead of `SecItemCopyMatching`. The CLI runs
-    /// as an Apple-signed binary in the user session, so it silently returns the
-    /// plaintext for the ACL-less `Claude Code-credentials` item — no consent
-    /// dialog and no `needsAuthorization` gate (this is how Claude Usage and
-    /// similar apps read it). Flip to `false` to restore the Security-framework
-    /// path; the two branches are otherwise interchangeable.
-    let useSecurityCLIForClaudeKeychain = true
-    let claudeCredentialsURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".claude/.credentials.json")
-    /// Local read cache of the last good Claude token (accessToken + expiresAt only).
-    /// Lets refreshes skip the Keychain entirely; see `readClaudeCredential`.
-    let claudeCacheURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".NemoNotch/claude-cred.json")
-    let claudeUsageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+    let claudeSnapshotURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".claude/usage-snapshot.json")
+    var lastClaudeQuotaLogState: String?
 
     let codexKeychainService = "Codex Auth"
     let codexAuthURL = FileManager.default.homeDirectoryForCurrentUser
@@ -69,6 +56,15 @@ final class UsageQuotaService: LifecycleAware {
 
     init() {
         LogService.info("UsageQuotaService init", category: "UsageQuotaService")
+        // Migration cleanup: the credential path this service used to run wrote a
+        // plaintext token copy to ~/.NemoNotch/claude-cred.json. That path is gone;
+        // the leftover secret must not live on the user's disk forever. Best-effort.
+        let legacyClaudeCache = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".NemoNotch/claude-cred.json")
+        if FileManager.default.fileExists(atPath: legacyClaudeCache.path) {
+            try? FileManager.default.removeItem(at: legacyClaudeCache)
+            LogService.info("Removed legacy Claude credential cache", category: "UsageQuotaService")
+        }
         hasCodexCredential = codexCredentialPresent()
         hasGeminiCredential = geminiCredentialPresent()
         hasZcodeCredential = FileManager.default.fileExists(atPath: ZcodeCredentials.credentialsURL.path)

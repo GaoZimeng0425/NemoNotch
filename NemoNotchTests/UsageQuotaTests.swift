@@ -3,58 +3,9 @@ import Foundation
 import Testing
 
 struct UsageQuotaTests {
-    // MARK: - Credential parsing
+    // MARK: - ISO8601 reset parsing (microsecond + offset shapes still live in
 
-    @Test func parseCredentialValid() throws {
-        let json = #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":1780988250441}}"#
-        let now = Date(timeIntervalSince1970: 1_700_000_000) // before expiry
-        let cred = try UsageCredentialParser.parseClaudeCredentials(data: Data(json.utf8), now: now)
-        #expect(cred.token == "tok-abc")
-        #expect(cred.status == .valid)
-    }
-
-    @Test func parseCredentialExpired() throws {
-        let json = #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":1700000000000}}"#
-        let now = Date(timeIntervalSince1970: 1_800_000_000) // after expiry
-        let cred = try UsageCredentialParser.parseClaudeCredentials(data: Data(json.utf8), now: now)
-        #expect(cred.token == "tok-abc")
-        #expect(cred.status == .expired)
-    }
-
-    @Test func parseCredentialMissingToken() throws {
-        let json = #"{"claudeAiOauth":{"expiresAt":1780988250441}}"#
-        let cred = try UsageCredentialParser.parseClaudeCredentials(data: Data(json.utf8), now: Date())
-        #expect(cred.token == nil)
-        #expect(cred.status == .parseError)
-    }
-
-    // MARK: - Quota parsing (real payload shape, incl. microsecond resets_at)
-
-    @Test func parseQuotaRealPayload() throws {
-        let json = """
-        {
-          "five_hour": {"utilization": 6.0, "resets_at": "2026-06-09T08:00:00.858062+00:00"},
-          "seven_day": {"utilization": 3.0, "resets_at": "2026-06-15T13:00:00.858087+00:00"},
-          "seven_day_opus": null,
-          "seven_day_sonnet": {"utilization": 0.0, "resets_at": "2026-06-15T13:00:00.858099+00:00"},
-          "extra_usage": {"is_enabled": false}
-        }
-        """
-        let quota = try UsageQuotaParser.parseClaudeCodeQuota(data: Data(json.utf8))
-        #expect(quota.status == .valid)
-        #expect(quota.provider == .claude)
-        // null tiers dropped → 3 tiers, in declared order
-        #expect(quota.tiers.map(\.window) == [.fiveHour, .sevenDay, .sevenDaySonnet])
-        #expect(quota.tiers[0].utilization == 6.0)
-        // regression: microsecond + offset resets_at MUST parse to a non-nil Date
-        #expect(quota.tiers[0].resetsAt != nil)
-    }
-
-    @Test func parseQuotaMalformedThrows() {
-        #expect(throws: (any Error).self) {
-            try UsageQuotaParser.parseClaudeCodeQuota(data: Data("not json".utf8))
-        }
-    }
+    // Gemini/Codex payloads and the claude-hud snapshot)
 
     @Test func parseResetDateMicroseconds() {
         let d = UsageQuotaParser.parseResetDate("2026-06-09T08:00:00.858062+00:00")
@@ -67,12 +18,6 @@ struct UsageQuotaTests {
 
     @Test func parseResetDateNoFraction() {
         #expect(UsageQuotaParser.parseResetDate("2026-06-09T08:00:00+00:00") != nil)
-    }
-
-    @Test func parseCredentialNonJSONThrows() {
-        #expect(throws: (any Error).self) {
-            try UsageCredentialParser.parseClaudeCredentials(data: Data("not json".utf8), now: Date())
-        }
     }
 
     // MARK: - Countdown formatting
@@ -264,6 +209,128 @@ struct UsageQuotaTests {
         #expect(UsageQuotaParser.geminiModelShortName("gemini-2.5-flash") == "2.5 Flash")
         #expect(UsageQuotaParser.geminiModelShortName("gemini-2.5-flash-lite") == "2.5 Flash Lite")
         #expect(UsageQuotaParser.geminiModelShortName("gemini-exp-1206") == "exp-1206")
+    }
+
+    // MARK: - Claude usage snapshot (claude-hud statusline mirror)
+
+    /// The e2e-verified snapshot shape claude-hud writes (2026-10-28), with
+    /// coherent dates: both resets lie in the future of `updated_at`, as real
+    /// server data does (the original synthetic capture had arbitrary past
+    /// resets, which the rolled-window rule now reads as stale).
+    private static let snapshotFixtureJSON = """
+    {
+      "updated_at": "2026-10-28T09:45:53.129Z",
+      "five_hour": { "used_percentage": 42, "resets_at": "2026-10-28T12:13:20.000Z" },
+      "seven_day": { "used_percentage": 17, "resets_at": "2026-11-04T12:53:20.000Z" }
+    }
+    """
+
+    /// 2026-10-28T09:45:53Z — the fixture's `updated_at` truncated to the second.
+    private static let snapshotUpdatedAt = ISO8601DateFormatter().date(from: "2026-10-28T09:45:53Z")!
+
+    @Test func snapshotMissingWhenFileAbsent() {
+        let quota = ClaudeUsageSnapshotParser.parse(data: nil, now: Self.snapshotUpdatedAt)
+        #expect(quota.provider == .claude)
+        #expect(quota.status == .snapshotMissing)
+        #expect(quota.tiers.isEmpty)
+        #expect(quota.fetchedAt == Self.snapshotUpdatedAt)
+    }
+
+    @Test func snapshotHappyPathBothWindows() throws {
+        let now = Self.snapshotUpdatedAt.addingTimeInterval(4 * 60)
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(Self.snapshotFixtureJSON.utf8), now: now)
+        #expect(quota.provider == .claude)
+        #expect(quota.status == .valid)
+        #expect(quota.tiers.map(\.window) == [.fiveHour, .sevenDay])
+        let fiveHour = try #require(quota.tiers.first)
+        #expect(fiveHour.utilization == 42)
+        // millisecond ISO (…20.000Z) must parse to the exact second
+        #expect(fiveHour.resetsAt == ISO8601DateFormatter().date(from: "2026-10-28T12:13:20Z"))
+        let sevenDay = try #require(quota.tiers.last)
+        #expect(sevenDay.utilization == 17)
+        #expect(sevenDay.resetsAt == ISO8601DateFormatter().date(from: "2026-11-04T12:53:20Z"))
+        #expect(quota.fetchedAt == now)
+    }
+
+    @Test func snapshotStaleWhenOlderThanFiveHours() throws {
+        // resets_at lies past the 5h+ε read so ONLY the updated_at rule can
+        // decide staleness here (guards the threshold's mutation test).
+        let json = #"{"updated_at":"2026-10-28T09:45:53Z","five_hour":{"used_percentage":42,"resets_at":"2026-10-28T16:45:53Z"}}"#
+        let base = try #require(ISO8601DateFormatter().date(from: "2026-10-28T09:45:53Z"))
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: base.addingTimeInterval(5 * 3600 + 1))
+        #expect(quota.status == .snapshotStale)
+        // stale percentages are withheld, never shown
+        #expect(quota.tiers.isEmpty)
+    }
+
+    @Test func snapshotRolledWindowIsStaleDespiteFreshUpdatedAt() throws {
+        // Real capture (review round 1): updated_at 11:40, five-hour reset 12:00.
+        // Read at 12:20 the window has rolled, yet updated_at is only 40min old —
+        // the rolled percentage must not display as fresh data.
+        let json = """
+        {"updated_at":"2026-10-28T11:40:14.129Z",
+         "five_hour":{"used_percentage":49,"resets_at":"2026-10-28T12:00:00.000Z"},
+         "seven_day":{"used_percentage":11,"resets_at":"2026-11-01T12:00:00.000Z"}}
+        """
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-28T12:20:00Z"))
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
+        #expect(quota.status == .snapshotStale)
+        #expect(quota.tiers.isEmpty)
+    }
+
+    @Test func snapshotFreshAtExactlyFiveHours() throws {
+        // updated_at without milliseconds so the boundary is exact: 5h is still
+        // fresh (null resets_at → updated_at is the freshness signal).
+        let json = #"{"updated_at":"2026-10-28T09:45:53Z","five_hour":{"used_percentage":10,"resets_at":null}}"#
+        let base = try #require(ISO8601DateFormatter().date(from: "2026-10-28T09:45:53Z"))
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: base.addingTimeInterval(5 * 3600))
+        #expect(quota.status == .valid)
+        let tier = try #require(quota.tiers.first)
+        #expect(tier.resetsAt == nil) // resets_at may be null
+    }
+
+    @Test func snapshotStaleWhenUpdatedAtMissing() {
+        let json = #"{"five_hour":{"used_percentage":42,"resets_at":null},"seven_day":{"used_percentage":17,"resets_at":null}}"#
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: Date())
+        #expect(quota.status == .snapshotStale)
+        #expect(quota.tiers.isEmpty)
+    }
+
+    @Test func snapshotBadJSONIsParseError() {
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data("not json".utf8), now: Date())
+        #expect(quota.status == .parseError)
+    }
+
+    @Test func snapshotNonObjectJSONIsParseError() {
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data("[1,2,3]".utf8), now: Date())
+        #expect(quota.status == .parseError)
+    }
+
+    @Test func snapshotSingleWindowYieldsOneTier() {
+        let json = #"{"updated_at":"2026-10-28T09:45:53.129Z","five_hour":{"used_percentage":42,"resets_at":"2026-10-28T12:13:20.000Z"}}"#
+        let now = Self.snapshotUpdatedAt.addingTimeInterval(60)
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
+        #expect(quota.status == .valid)
+        #expect(quota.tiers.map(\.window) == [.fiveHour])
+    }
+
+    @Test func snapshotUnparseableResetKeepsTier() throws {
+        // A resets_at we can't parse must not drop the whole window.
+        let json = #"{"updated_at":"2026-10-28T09:45:53.129Z","five_hour":{"used_percentage":42,"resets_at":"not-a-date"}}"#
+        let now = Self.snapshotUpdatedAt.addingTimeInterval(60)
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
+        #expect(quota.status == .valid)
+        let tier = try #require(quota.tiers.first)
+        #expect(tier.utilization == 42)
+        #expect(tier.resetsAt == nil)
+    }
+
+    @Test func snapshotBothWindowsMissingIsParseError() {
+        let json = #"{"updated_at":"2026-10-28T09:45:53.129Z"}"#
+        let now = Self.snapshotUpdatedAt.addingTimeInterval(60)
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
+        #expect(quota.status == .parseError)
+        #expect(quota.tiers.isEmpty)
     }
 
     // MARK: - Gemini OAuth client extraction
