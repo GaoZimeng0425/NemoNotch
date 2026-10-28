@@ -14,7 +14,8 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
     return "\(h)h \(rm)m"
 }
 
-/// One completion card in the toast row under the notch: notch-black, the
+/// One completion card in the toast row under the notch: notch-black with a
+/// rotating color ring (so it reads against a black wallpaper too), the
 /// source app's logo, the task title and a tool·model·tokens·duration line,
 /// and a close glyph in the top-trailing corner. Fixed size from
 /// `CompletionToastLayout` — the panel resolves clicks (close) from that
@@ -54,10 +55,7 @@ struct CompletionToastView: View {
         .frame(width: CompletionToastLayout.cardWidth, height: CompletionToastLayout.cardHeight)
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                .stroke(NotchTheme.stroke, lineWidth: 0.6)
-        )
+        .overlay(CompletionToastRing(cornerRadius: Self.cornerRadius))
         .overlay(alignment: .topTrailing) {
             Image(systemName: "xmark")
                 .font(.system(size: 9, weight: .bold))
@@ -117,5 +115,40 @@ struct CompletionToastView: View {
                 .font(.system(size: s * 0.9, weight: .semibold))
                 .foregroundStyle(NotchTheme.accent)
         }
+    }
+}
+
+/// The card's border: a multi-color angular gradient that slowly rotates.
+/// Driven by `TimelineView(.animation)` with the angle derived from the date
+/// — never `repeatForever` (can't be stopped, see AGENTS.md SwiftUI pitfalls).
+/// Capped at 30fps; frozen under Reduce Motion. Costs nothing while hidden:
+/// the toast panels are torn down whenever the row is empty or off-screen.
+private struct CompletionToastRing: View {
+    let cornerRadius: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Seconds per full turn.
+    private static let period: TimeInterval = 4
+    private static let colors: [Color] = [
+        NotchTheme.accent,
+        Color(red: 1.0, green: 0.36, blue: 0.62),
+        Color(red: 0.62, green: 0.42, blue: 1.0),
+        Color(red: 0.25, green: 0.62, blue: 1.0),
+        Color(red: 0.2, green: 0.86, blue: 0.78),
+        NotchTheme.accent,
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let turns = context.date.timeIntervalSinceReferenceDate / Self.period
+            let degrees = (turns - turns.rounded(.down)) * 360
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(
+                    AngularGradient(colors: Self.colors, center: .center, angle: .degrees(degrees)),
+                    lineWidth: 1.5
+                )
+        }
+        .allowsHitTesting(false)
     }
 }
