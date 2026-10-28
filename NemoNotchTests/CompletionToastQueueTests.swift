@@ -25,7 +25,7 @@ struct CompletionToastQueueTests {
         #expect(Set(q.toasts.map(\.id)).count == 3)
     }
 
-    @Test("same name refreshes its card in place: fields merge, timer restarts")
+    @Test("without a session key, same name refreshes its card in place: fields merge, timer restarts")
     func sameNameRefreshes() {
         var q = queue()
         q.add([item("A", tool: "Read")], now: t0)
@@ -35,6 +35,49 @@ struct CompletionToastQueueTests {
         #expect(q.toasts[0].id == id)
         #expect(q.toasts[0].item.tool == "Edit")
         #expect(q.toasts[0].deadline == t0.addingTimeInterval(50))
+    }
+
+    @Test("two sessions in the same project get two cards, not one merged card")
+    func sameNameDifferentSessions() {
+        var q = queue()
+        var claude = item("NemoNotch")
+        claude.key = "ai:claude-1"
+        var zcode = CompletionItem(name: "NemoNotch", source: .ai(.zcode))
+        zcode.key = "ai:sess_zcode-1"
+        var claude2 = item("NemoNotch")
+        claude2.key = "ai:claude-2"
+        q.add([claude], now: t0)
+        q.add([zcode, claude2], now: t0)
+        #expect(q.toasts.map(\.item.key) == ["ai:claude-1", "ai:sess_zcode-1", "ai:claude-2"])
+        #expect(q.toasts.map(\.item.source) == [.ai(.claude), .ai(.zcode), .ai(.claude)])
+    }
+
+    @Test("the same session finishing again refreshes its own card")
+    func sameSessionRefreshes() {
+        var q = queue()
+        var first = item("NemoNotch", tool: "Read")
+        first.key = "ai:s1"
+        var again = item("NemoNotch", tool: "Edit")
+        again.key = "ai:s1"
+        q.add([first], now: t0)
+        let id = q.toasts[0].id
+        q.add([again], now: t0.addingTimeInterval(10))
+        #expect(q.toasts.count == 1)
+        #expect(q.toasts[0].id == id)
+        #expect(q.toasts[0].item.tool == "Edit")
+    }
+
+    @Test("the same session renamed between turns refreshes its card with the new name")
+    func sameSessionRenamed() {
+        var q = queue()
+        var first = item("old-folder", tool: "Read")
+        first.key = "ai:s1"
+        var renamed = item("new-folder")
+        renamed.key = "ai:s1"
+        q.add([first], now: t0)
+        q.add([renamed], now: t0.addingTimeInterval(5))
+        #expect(q.toasts.map(\.item.name) == ["new-folder"])
+        #expect(q.toasts.first?.item.tool == "Read") // nil newer field keeps the older value
     }
 
     @Test("beyond capacity the oldest card is evicted")

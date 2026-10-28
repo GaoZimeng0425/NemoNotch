@@ -13,6 +13,9 @@ enum CompletionSource: Equatable, Hashable {
 /// and optional rich detail (task title, last tool, model, tokens, duration)
 /// carried through from the AI session that completed.
 struct CompletionItem: Equatable {
+    /// The unit that finished — the candidate key ("ai:<sessionID>" /
+    /// "agent:<agentID>"). nil for sources with no session (Pomodoro, calendar).
+    var key: String?
     let name: String
     let source: CompletionSource
     var subtitle: String?
@@ -25,6 +28,7 @@ struct CompletionItem: Equatable {
 
     /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
     init(name: String, source: CompletionSource) {
+        key = nil
         self.name = name
         self.source = source
         subtitle = nil
@@ -45,6 +49,7 @@ struct CompletionItem: Equatable {
         duration: TimeInterval?,
         path: String? = nil
     ) {
+        key = nil
         self.name = name
         self.source = source
         self.subtitle = subtitle
@@ -128,7 +133,7 @@ struct CompletionDetector {
         for candidate in candidates {
             next[candidate.key] = candidate.isActive
             if prior[candidate.key] == true, !candidate.isActive {
-                completed.append(CompletionItem(
+                var item = CompletionItem(
                     name: candidate.name,
                     source: candidate.source,
                     subtitle: candidate.subtitle,
@@ -137,11 +142,21 @@ struct CompletionDetector {
                     tokenDisplay: candidate.tokenDisplay,
                     duration: candidate.duration,
                     path: candidate.path
-                ))
+                )
+                item.key = candidate.key
+                completed.append(item)
             }
         }
         prior = next
         return completed
+    }
+}
+
+extension CompletionItem {
+    /// What makes two completions "the same card": the session/agent when
+    /// known, else the name (session-less sources such as Pomodoro).
+    var toastKey: String {
+        key ?? "name:\(name)"
     }
 }
 
@@ -160,32 +175,23 @@ enum CompletionPath {
 
 /// Item-list helpers for the toast.
 enum CompletionFlashNames {
-    /// Append `new` items to `existing`, skipping duplicate names, preserving order.
-    /// When a `new` item matches an existing name, its non-nil rich fields overwrite
-    /// the existing item's fields (newer data wins); nil fields leave existing values.
+    /// Append `new` items to `existing`, one per `toastKey` (session/agent,
+    /// else name), preserving order. When a `new` item matches an existing
+    /// key it replaces it — name included, since a session's folder or title
+    /// can change between turns — but a nil rich field keeps the older value.
     static func merge(existing: [CompletionItem], new: [CompletionItem]) -> [CompletionItem] {
         var result = existing
         for item in new {
-            if let idx = result.firstIndex(where: { $0.name == item.name }) {
-                // Field-level merge: newer non-nil values win.
-                if let v = item.subtitle {
-                    result[idx].subtitle = v
-                }
-                if let v = item.tool {
-                    result[idx].tool = v
-                }
-                if let v = item.model {
-                    result[idx].model = v
-                }
-                if let v = item.tokenDisplay {
-                    result[idx].tokenDisplay = v
-                }
-                if let v = item.duration {
-                    result[idx].duration = v
-                }
-                if let v = item.path {
-                    result[idx].path = v
-                }
+            if let idx = result.firstIndex(where: { $0.toastKey == item.toastKey }) {
+                var merged = item
+                let older = result[idx]
+                merged.subtitle = item.subtitle ?? older.subtitle
+                merged.tool = item.tool ?? older.tool
+                merged.model = item.model ?? older.model
+                merged.tokenDisplay = item.tokenDisplay ?? older.tokenDisplay
+                merged.duration = item.duration ?? older.duration
+                merged.path = item.path ?? older.path
+                result[idx] = merged
             } else {
                 result.append(item)
             }
