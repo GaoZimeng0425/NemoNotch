@@ -43,4 +43,18 @@ enum UITestMode {
             || env["XCTestConfigurationFilePath"] != nil
             || NSClassFromString("XCTestCase") != nil
     }
+
+    /// Whether this process may write the hook config every CLI shares —
+    /// the persisted port and the sender scripts (`hook-sender.sh`,
+    /// `hermes-hook-sender.sh`, the opencode plugin). A test host or a
+    /// `--uitest` instance runs beside the user's real app, falls back to the
+    /// next port, and used to rewrite those files to it and then exit: every
+    /// CLI's events then went to a dead port until the user noticed.
+    static func ownsSharedHookConfig(uiTest: Bool, testHost: Bool) -> Bool {
+        true
+    }
+
+    static var ownsSharedHookConfig: Bool {
+        ownsSharedHookConfig(uiTest: isActive, testHost: isTestHost)
+    }
 }
