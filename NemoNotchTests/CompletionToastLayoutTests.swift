@@ -14,7 +14,7 @@ struct CompletionToastLayoutTests {
     @Test("a single card is centered")
     func singleCentered() {
         let layout = CompletionToastLayout(panelWidth: width, count: 1)
-        #expect(layout.cardRect(at: 0) == CGRect(x: 432, y: 0, width: 280, height: 52))
+        #expect(layout.cardRect(at: 0) == CGRect(x: 432, y: 0, width: 280, height: 66))
     }
 
     @Test("two cards sit side by side, centered as a group")
@@ -39,6 +39,6 @@ struct CompletionToastLayoutTests {
         let layout = CompletionToastLayout(panelWidth: width, count: 2)
         #expect(layout.hit(CGPoint(x: 572, y: 20)) == nil) // gap between cards
         #expect(layout.hit(CGPoint(x: 100, y: 20)) == nil) // beside the row
-        #expect(layout.hit(CGPoint(x: 300, y: 60)) == nil) // below the cards
+        #expect(layout.hit(CGPoint(x: 300, y: 70)) == nil) // below the cards (66pt tall)
     }
 }

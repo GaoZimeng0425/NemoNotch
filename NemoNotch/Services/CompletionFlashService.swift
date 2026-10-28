@@ -69,7 +69,8 @@ final class CompletionFlashService {
                 tool: session.currentTool,
                 model: session.displayModel,
                 tokenDisplay: session.tokenDisplay,
-                duration: Date().timeIntervalSince(session.sessionStart)
+                duration: Date().timeIntervalSince(session.sessionStart),
+                path: session.cwd
             ))
         }
         for monitor in registry.installedMonitors {
@@ -181,7 +182,11 @@ final class CompletionFlashService {
     func holdForUITest(names: [String]) {
         flashLevel = 1
         // Show a Claude-sourced item so the screenshot demonstrates the source logo.
-        toastQueue.add(names.map { CompletionItem(name: $0, source: .ai(.claude)) }, now: Date())
+        toastQueue.add(names.map { name in
+            var item = CompletionItem(name: name, source: .ai(.claude))
+            item.path = NSHomeDirectory() + "/Documents/Learn/macos/" + name
+            return item
+        }, now: Date())
         // Screenshot mode never decays: a paused queue expires nothing.
         toastQueue.pause()
         syncToasts()

@@ -12,7 +12,7 @@ struct CompletionToastLayout {
     }
 
     static let cardWidth: CGFloat = 280
-    static let cardHeight: CGFloat = 52
+    static let cardHeight: CGFloat = 66
     static let spacing: CGFloat = 8
     /// Gap between the notch's bottom edge and the top of the row. Clears
     /// the notch's hover hitbox (`hitboxPadding` below the notch) — a card
