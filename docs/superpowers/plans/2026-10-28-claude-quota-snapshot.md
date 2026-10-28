@@ -121,11 +121,11 @@
 - Modify: `NemoNotch/Tabs/UsageQuotaCardView.swift:207-213`(`statusKey` switch 加两 case → `quota.status.snapshot_missing` / `quota.status.snapshot_stale`)
 - Modify: `NemoNotch/Resources/Localizable.xcstrings`
 
-- [ ] **Step 1: statusKey 两新 case;文案**:en `Configure claude-hud usage snapshot` / `Waiting for a Claude session`;zh-Hans `需配置 claude-hud 快照` / `等待 Claude 会话刷新`(经 `python3 scripts/xcstrings.py format` 归一,目录格式零 churn)
+- [x] **Step 1: statusKey 两新 case;文案**:en `Configure claude-hud usage snapshot` / `Waiting for a Claude session`;zh-Hans `需配置 claude-hud 快照` / `等待 Claude 会话刷新`(经 `python3 scripts/xcstrings.py format` 归一,目录格式零 churn)
 
-- [ ] **Step 2: 跑 `python3 scripts/xcstrings.py check` + `sh scripts/affected-tests.sh` 守绿**
+- [x] **Step 2: 跑 `python3 scripts/xcstrings.py check` + `sh scripts/affected-tests.sh` 守绿**
 
-- [ ] **Step 3: Commit** — `feat(quota): snapshot status copy (en/zh-Hans)`
+- [x] **Step 3: Commit** — `feat(quota): snapshot status copy (en/zh-Hans)`
 
 ### Task 5: 文档对账
 
