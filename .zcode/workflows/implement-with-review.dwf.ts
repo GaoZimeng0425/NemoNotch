@@ -2,8 +2,9 @@
 description: NemoNotch 开发执行环,双入口。①feature 入口(task/worktree/branch/planPath
   四参):实现子代理按 executing-plans 逐任务实现,双席评审并行(评审员按仓库清单+挑战者四镜头),findings 合并写
   .reviews,P1/P2 回流修复 ≤3 轮。②bug 入口(symptom 一参,与四参二选一):先诊断——只读复现+≤3
-  假设并行探针(单变量,证据标梯级)+单席证据链挑战;复现确凿且修法机械免闸直通,否则根因拍板闸停下问运行方(未复现的根因系推断,须用户确认);建环段自建
-  worktree+plan(首任务=失败测试)后合流 feature 开发段。脑暴、合并与 push 留在主对话。
+  假设并行探针(单变量,证据标梯级)+单席证据链挑战;复现确凿、证据链审计成立、修法机械、有确认探针且挑战者建议 proceed
+  五者俱全才免闸直通,否则根因拍板闸停下问运行方(未复现的根因系推断,须用户确认);建环段自建 worktree+plan(首任务=失败测试)后合流
+  feature 开发段,合流评审含 bug 专项镜头(失败测试必须由红转绿、修复与根因因果对应)。脑暴、合并与 push 留在主对话。
 whenToUse: feature 类任务(主对话已 brainstorming 脑暴、git feat 建 worktree、writing-plans
   写好 plan)以四参启动;bug 类任务(有可观察症状、根因未知)以 symptom 启动,先诊断后修。investigation
   只读调查不启动本工作流。
@@ -239,8 +240,14 @@ if (symptom) {
   );
   report(audit);
 
+  // 免闸五合取:挑战者的建议动作必须被消费——sound+机械+复现+确认探针俱全
+  // 但建议 not-a-bug / no-fix / needs-user 时,否决表态不能被静默丢弃。
   const autoProceed =
-    audit.sound && survey.reproduced && audit.mechanicalFix && confirmed !== undefined;
+    audit.sound &&
+    survey.reproduced &&
+    audit.mechanicalFix &&
+    audit.recommendation === "proceed" &&
+    confirmed !== undefined;
   let proceed = autoProceed;
   let gateNote = "";
   if (!autoProceed) {
@@ -265,7 +272,7 @@ if (symptom) {
         `bug「${symptom}」在根因拍板闸中止,未修复。诊断结论:` +
         `${confirmed ? confirmed.summary : "无确认根因(探针:" + probes.map((p) => p.verdict).join("/") + ")"}` +
         `;挑战者:${audit.recommendation}(${audit.gaps.join(";") || "无保留意见"})。` +
-        "若用户后续确认根因,重跑本工作流并在闸门放行即可(探针结论已记录,重跑会快)。",
+        "诊断 findings 已随本报告交付;若用户后续确认根因,重跑本工作流从诊断段重新开始(无跨 run 记忆)。",
       findings: probes.map((p) => ({
         where: "诊断",
         what: `${p.summary}`,
@@ -284,9 +291,25 @@ if (symptom) {
       `根因(探针确认):${confirmed ? confirmed.summary : "无确认探针——按拍板闸 note 的根因走"}\n` +
       `证据链:${JSON.stringify(confirmed ? confirmed.evidence : probes.map((p) => p.summary))}\n` +
       `挑战者审计:${JSON.stringify(audit)}\n` +
-      `拍板闸补充:${gateNote || "(免闸直通:复现确凿+修法机械)"}\n` +
+      `拍板闸补充:${gateNote || (autoProceed ? "(免闸直通:复现确凿+证据链成立+修法机械+探针确认+挑战者放行)" : "(拍板闸放行,无补充说明)")}\n` +
       `复现状态:${survey.reproduced ? "真机/日志确凿" : "未复现——plan 首部必须写明根因系推断且已经用户确认"}`
   );
+  if (!scaffold.branch || !scaffold.worktree || !scaffold.planPath || !scaffold.task) {
+    return {
+      conclusion:
+        `建环者输出不完整(branch/worktree/planPath/task 有空值),已中止在衔接段——` +
+        `诊断结论:${confirmed ? confirmed.summary : "见 findings"}。修复未开始,无代码改动。`,
+      findings: probes.map((p) => ({
+        where: "诊断",
+        what: p.summary,
+        evidence: p.evidence.join(";"),
+        status: p.verdict === "confirmed" ? ("verified" as const) : ("unconfirmed" as const),
+        severity: "medium" as const,
+      })),
+      verified: survey.evidence,
+      notCovered: ["建环失败中止(输出缺参,建环者可重试)", "开发段与评审未进入"],
+    };
+  }
   task = scaffold.task;
   worktree = scaffold.worktree;
   branch = scaffold.branch;
