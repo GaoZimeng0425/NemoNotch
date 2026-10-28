@@ -299,7 +299,7 @@ struct EdgeBarColumn: View {
                     .frame(width: EdgeBarMetrics.barWidth)
                     .background(alignment: bar.side.alignment) { ground(row.id) }
                     .overlay(alignment: bar.side.alignment) {
-                        EdgeBarRowLabel(row: row, isOpen: bar.isOpen, side: bar.side)
+                        EdgeBarRowLabel(row: row, isOpen: bar.isOpen, side: bar.side, openWidth: bar.openWidth)
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: bar.side.unitPoint)))
             }
@@ -371,21 +371,29 @@ struct EdgeBarColumn: View {
     }
 }
 
-/// A row's name and status line, beside its ring (on the open side; text
-/// hugs the ring). Comes in from under the ring (`nameTravel`) just after
+/// A row's name and status line, beside its ring on the open side. Text is
+/// always left-aligned: on the left side it hugs the ring; on the right side
+/// the column spans the open body (`namesColumnWidth`) so every row starts on
+/// the same line instead of ragged against the ring. Comes in from under the
+/// ring (`nameTravel`) just after
 /// the body starts to open, leaves before it starts to close — so no name
 /// is ever drawn past the body's edge.
 struct EdgeBarRowLabel: View {
     let row: EdgeBarRow
     let isOpen: Bool
     let side: EdgeBarSide
+    let openWidth: CGFloat
+
+    private var columnWidth: CGFloat {
+        side == .left ? EdgeBarMetrics.nameMaxWidth : EdgeBarMetrics.namesColumnWidth(openWidth: openWidth)
+    }
 
     private var lead: CGFloat {
         EdgeBarMetrics.barWidth - EdgeBarMetrics.ringLead + EdgeBarMetrics.nameGap
     }
 
     var body: some View {
-        VStack(alignment: side.horizontal, spacing: 1) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(verbatim: row.name)
                 .font(Font(EdgeBarModel.nameFont))
                 .foregroundStyle(row.phase.isEngaged ? EdgeBarPalette.textPrimary : EdgeBarPalette.textSecondary)
@@ -408,7 +416,7 @@ struct EdgeBarRowLabel: View {
                 .transition(.opacity)
             }
         }
-        .frame(width: EdgeBarMetrics.nameMaxWidth, height: EdgeBarMetrics.labelHeight, alignment: side.topAlignment)
+        .frame(width: columnWidth, height: EdgeBarMetrics.labelHeight, alignment: .topLeading)
         .offset(x: side.sign * (lead - (isOpen ? 0 : EdgeBarMetrics.nameTravel)))
         .opacity(isOpen ? 1 : 0)
         .animation(isOpen ? EdgeBarMotion.namesIn : EdgeBarMotion.namesOut, value: isOpen)

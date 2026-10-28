@@ -62,4 +62,14 @@ struct EdgeBarMetricsTests {
         let tall = Geo.cardTop(slot: 1, offset: 0, height: 500, barTop: 400, canvasHeight: 800)
         #expect(tall == 800 - 500 - Geo.gutter)
     }
+
+    @Test func namesColumnSpansTheOpenBodyForRightSideLeftAlignment() {
+        // lead = bar 54 − ringLead 17 + gap 8 = 45; inset 14.
+        #expect(Geo.openWidth(namesWidth: 150) == 209.0)
+        #expect(Geo.namesColumnWidth(openWidth: 209) == 150.0)
+        // Short names: the body is held at minOpenWidth 110, and the column
+        // widens with it (110 − 45 − 14) so it still starts at the far inset.
+        #expect(Geo.namesColumnWidth(openWidth: Geo.openWidth(namesWidth: 20)) == 51.0)
+        #expect(Geo.namesColumnWidth(openWidth: 0) == 0.0)
+    }
 }

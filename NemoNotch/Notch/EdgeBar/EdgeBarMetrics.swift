@@ -97,6 +97,14 @@ enum EdgeBarMetrics {
         max(minOpenWidth, barWidth - ringLead + nameGap + namesWidth + nameInset)
     }
 
+    /// The names column inside an open body this wide: from the ring's
+    /// name gap to the far inset. Inverse of `openWidth(namesWidth:)`, so on
+    /// the right side a left-aligned column starts at the body's far edge
+    /// plus `nameInset` — every row's text on one line, never past the body.
+    static func namesColumnWidth(openWidth: CGFloat) -> CGFloat {
+        max(0, openWidth - (barWidth - ringLead + nameGap) - nameInset)
+    }
+
     static var maxOpenWidth: CGFloat {
         openWidth(namesWidth: nameMaxWidth)
     }
