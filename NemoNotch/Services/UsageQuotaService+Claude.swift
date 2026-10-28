@@ -3,24 +3,34 @@ import Foundation
 extension UsageQuotaService {
     // MARK: - Claude
 
-    /// Claude quota source: the snapshot claude-hud mirrors out of Claude
-    /// Code's statusline stdin. Deliberately credential-free and network-free —
-    /// no token read, no usage API call. A missing snapshot reads as
-    /// `.snapshotMissing`, one no session has refreshed within the fresh
-    /// interval as `.snapshotStale` (old percentages are withheld).
     func fetchClaude() async -> ProviderUsageQuota {
         let now = Date()
-        // ~200B file, atomically written by claude-hud — an inline read costs
-        // less than hopping off the main actor for it.
-        let data = try? Data(contentsOf: claudeSnapshotURL)
-        let quota = ClaudeUsageSnapshotParser.parse(data: data, now: now)
+        let quota: ProviderUsageQuota
+        if !FileManager.default.fileExists(atPath: claudeSnapshotURL.path) {
+            quota = ClaudeUsageSnapshotParser.parse(data: nil, now: now)
+        } else {
+            do {
+                let data = try Data(contentsOf: claudeSnapshotURL)
+                quota = ClaudeUsageSnapshotParser.parse(data: data, now: now)
+            } catch {
+                // Present but unreadable (permissions/IO) is distinct from "not
+                // configured": surface the reason instead of a configure hint.
+                LogService.warn(
+                    "Claude quota snapshot unreadable: \(error.localizedDescription)",
+                    category: "UsageQuotaService"
+                )
+                quota = ProviderUsageQuota(
+                    provider: .claude,
+                    status: .parseError,
+                    fetchedAt: now,
+                    errorMessage: "Snapshot unreadable: \(error.localizedDescription)"
+                )
+            }
+        }
         logClaudeQuotaState(quota)
         return quota
     }
 
-    /// Logs the Claude quota result only when its state (status + tier count)
-    /// changes; unchanged states log `.debug`. Prevents the 60s refresh loop
-    /// from re-logging the same line every tick.
     private func logClaudeQuotaState(_ quota: ProviderUsageQuota) {
         let state = "\(quota.status) tiers=\(quota.tiers.count)"
         if state != lastClaudeQuotaLogState {

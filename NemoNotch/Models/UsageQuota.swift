@@ -424,6 +424,14 @@ enum ClaudeUsageSnapshotParser {
                 errorMessage: "Usage snapshot has no usable window"
             )
         }
+        // A tier whose server-side reset already passed describes a window that
+        // rolled over after the snapshot's last write: its percentages are old
+        // even while updated_at is still within the interval (no session has
+        // rendered since the rollover). updated_at is only the fallback
+        // freshness signal for tiers without a resets_at.
+        if tiers.contains(where: { $0.resetsAt.map { $0 < now } == true }) {
+            return ProviderUsageQuota(provider: .claude, status: .snapshotStale, fetchedAt: now)
+        }
         return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: now)
     }
 

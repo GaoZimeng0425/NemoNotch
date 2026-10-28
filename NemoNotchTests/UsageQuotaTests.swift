@@ -237,12 +237,15 @@ struct UsageQuotaTests {
 
     // MARK: - Claude usage snapshot (claude-hud statusline mirror)
 
-    /// The literal e2e-verified snapshot claude-hud writes (2026-10-28).
+    /// The e2e-verified snapshot shape claude-hud writes (2026-10-28), with
+    /// coherent dates: both resets lie in the future of `updated_at`, as real
+    /// server data does (the original synthetic capture had arbitrary past
+    /// resets, which the rolled-window rule now reads as stale).
     private static let snapshotFixtureJSON = """
     {
       "updated_at": "2026-10-28T09:45:53.129Z",
-      "five_hour": { "used_percentage": 42, "resets_at": "2026-09-21T14:13:20.000Z" },
-      "seven_day": { "used_percentage": 17, "resets_at": "2026-09-28T12:53:20.000Z" }
+      "five_hour": { "used_percentage": 42, "resets_at": "2026-10-28T12:13:20.000Z" },
+      "seven_day": { "used_percentage": 17, "resets_at": "2026-11-04T12:53:20.000Z" }
     }
     """
 
@@ -257,36 +260,57 @@ struct UsageQuotaTests {
         #expect(quota.fetchedAt == Self.snapshotUpdatedAt)
     }
 
-    @Test func snapshotHappyPathBothWindows() {
+    @Test func snapshotHappyPathBothWindows() throws {
         let now = Self.snapshotUpdatedAt.addingTimeInterval(4 * 60)
         let quota = ClaudeUsageSnapshotParser.parse(data: Data(Self.snapshotFixtureJSON.utf8), now: now)
         #expect(quota.provider == .claude)
         #expect(quota.status == .valid)
         #expect(quota.tiers.map(\.window) == [.fiveHour, .sevenDay])
-        #expect(quota.tiers[0].utilization == 42)
-        #expect(quota.tiers[1].utilization == 17)
-        // millisecond ISO (…53.129Z / …20.000Z) must parse to real Dates
-        #expect(quota.tiers[0].resetsAt != nil)
-        #expect(quota.tiers[1].resetsAt != nil)
+        let fiveHour = try #require(quota.tiers.first)
+        #expect(fiveHour.utilization == 42)
+        // millisecond ISO (…20.000Z) must parse to the exact second
+        #expect(fiveHour.resetsAt == ISO8601DateFormatter().date(from: "2026-10-28T12:13:20Z"))
+        let sevenDay = try #require(quota.tiers.last)
+        #expect(sevenDay.utilization == 17)
+        #expect(sevenDay.resetsAt == ISO8601DateFormatter().date(from: "2026-11-04T12:53:20Z"))
         #expect(quota.fetchedAt == now)
     }
 
-    @Test func snapshotStaleWhenOlderThanFiveHours() {
-        let now = Self.snapshotUpdatedAt.addingTimeInterval(5 * 3600 + 1)
-        let quota = ClaudeUsageSnapshotParser.parse(data: Data(Self.snapshotFixtureJSON.utf8), now: now)
+    @Test func snapshotStaleWhenOlderThanFiveHours() throws {
+        // resets_at lies past the 5h+ε read so ONLY the updated_at rule can
+        // decide staleness here (guards the threshold's mutation test).
+        let json = #"{"updated_at":"2026-10-28T09:45:53Z","five_hour":{"used_percentage":42,"resets_at":"2026-10-28T16:45:53Z"}}"#
+        let base = try #require(ISO8601DateFormatter().date(from: "2026-10-28T09:45:53Z"))
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: base.addingTimeInterval(5 * 3600 + 1))
         #expect(quota.status == .snapshotStale)
         // stale percentages are withheld, never shown
         #expect(quota.tiers.isEmpty)
     }
 
+    @Test func snapshotRolledWindowIsStaleDespiteFreshUpdatedAt() throws {
+        // Real capture (review round 1): updated_at 11:40, five-hour reset 12:00.
+        // Read at 12:20 the window has rolled, yet updated_at is only 40min old —
+        // the rolled percentage must not display as fresh data.
+        let json = """
+        {"updated_at":"2026-10-28T11:40:14.129Z",
+         "five_hour":{"used_percentage":49,"resets_at":"2026-10-28T12:00:00.000Z"},
+         "seven_day":{"used_percentage":11,"resets_at":"2026-11-01T12:00:00.000Z"}}
+        """
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-28T12:20:00Z"))
+        let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
+        #expect(quota.status == .snapshotStale)
+        #expect(quota.tiers.isEmpty)
+    }
+
     @Test func snapshotFreshAtExactlyFiveHours() throws {
-        // updated_at without milliseconds so the boundary is exact: 5h is still fresh.
+        // updated_at without milliseconds so the boundary is exact: 5h is still
+        // fresh (null resets_at → updated_at is the freshness signal).
         let json = #"{"updated_at":"2026-10-28T09:45:53Z","five_hour":{"used_percentage":10,"resets_at":null}}"#
         let base = try #require(ISO8601DateFormatter().date(from: "2026-10-28T09:45:53Z"))
         let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: base.addingTimeInterval(5 * 3600))
         #expect(quota.status == .valid)
-        #expect(quota.tiers.count == 1)
-        #expect(quota.tiers[0].resetsAt == nil) // resets_at may be null
+        let tier = try #require(quota.tiers.first)
+        #expect(tier.resetsAt == nil) // resets_at may be null
     }
 
     @Test func snapshotStaleWhenUpdatedAtMissing() {
@@ -307,22 +331,22 @@ struct UsageQuotaTests {
     }
 
     @Test func snapshotSingleWindowYieldsOneTier() {
-        let json = #"{"updated_at":"2026-10-28T09:45:53.129Z","five_hour":{"used_percentage":42,"resets_at":"2026-09-21T14:13:20.000Z"}}"#
+        let json = #"{"updated_at":"2026-10-28T09:45:53.129Z","five_hour":{"used_percentage":42,"resets_at":"2026-10-28T12:13:20.000Z"}}"#
         let now = Self.snapshotUpdatedAt.addingTimeInterval(60)
         let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
         #expect(quota.status == .valid)
         #expect(quota.tiers.map(\.window) == [.fiveHour])
     }
 
-    @Test func snapshotUnparseableResetKeepsTier() {
+    @Test func snapshotUnparseableResetKeepsTier() throws {
         // A resets_at we can't parse must not drop the whole window.
         let json = #"{"updated_at":"2026-10-28T09:45:53.129Z","five_hour":{"used_percentage":42,"resets_at":"not-a-date"}}"#
         let now = Self.snapshotUpdatedAt.addingTimeInterval(60)
         let quota = ClaudeUsageSnapshotParser.parse(data: Data(json.utf8), now: now)
         #expect(quota.status == .valid)
-        #expect(quota.tiers.count == 1)
-        #expect(quota.tiers[0].utilization == 42)
-        #expect(quota.tiers[0].resetsAt == nil)
+        let tier = try #require(quota.tiers.first)
+        #expect(tier.utilization == 42)
+        #expect(tier.resetsAt == nil)
     }
 
     @Test func snapshotBothWindowsMissingIsParseError() {
