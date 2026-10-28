@@ -210,6 +210,8 @@ struct UsageQuotaCardView: View {
         case .notFound: return "quota.status.not_logged_in"
         case .parseError: return "quota.status.error"
         case .needsAuthorization: return "quota.status.needs_authorization"
+        case .snapshotMissing: return "quota.status.snapshot_missing"
+        case .snapshotStale: return "quota.status.snapshot_stale"
         }
     }
 }

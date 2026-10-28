@@ -68,17 +68,17 @@
   - 两个窗口都缺 → `.parseError`
   - `provider: .claude`,`fetchedAt: now`
 
-- [ ] **Step 1: 写失败测试**(fixture 用「设计事实」第 1 条的实测 JSON 原文;覆盖 Review Focus 1–4 + happy path 双窗)
+- [x] **Step 1: 写失败测试**(fixture 用「设计事实」第 1 条的实测 JSON 原文;覆盖 Review Focus 1–4 + happy path 双窗)
 
-- [ ] **Step 2: 跑 `sh scripts/affected-tests.sh` 确认新测试红**(parser 未定义)
+- [x] **Step 2: 跑 `sh scripts/affected-tests.sh` 确认新测试红**(parser 未定义)
 
-- [ ] **Step 3: 实现 parser**。ISO 解析用两个 `ISO8601DateFormatter`(带 `.withFractionalSeconds` 与不带,先后尝试)
+- [x] **Step 3: 实现 parser**。ISO 解析用两个 `ISO8601DateFormatter`(带 `.withFractionalSeconds` 与不带,先后尝试)
 
-- [ ] **Step 4: 跑 `sh scripts/affected-tests.sh` 确认绿**(引退出码)
+- [x] **Step 4: 跑 `sh scripts/affected-tests.sh` 确认绿**(引退出码)
 
-- [ ] **Step 5: 变异验证 staleness 规则有牙**:`sh scripts/mutate.sh NemoNotch/Models/UsageQuota.swift "5 * 3600" "5 * 36000" --only UsageQuotaTests`(阈值放宽 10 倍,超龄测试必须变红;文件由脚本 trap 恢复)
+- [x] **Step 5: 变异验证 staleness 规则有牙**:`sh scripts/mutate.sh NemoNotch/Models/UsageQuota.swift "5 * 3600" "5 * 36000" --only UsageQuotaTests`(阈值放宽 10 倍,超龄测试必须变红;文件由脚本 trap 恢复)
 
-- [ ] **Step 6: Commit** — `feat(quota): claude snapshot parser + snapshotMissing/Stale status`
+- [x] **Step 6: Commit** — `feat(quota): claude snapshot parser + snapshotMissing/Stale status`
 
 ### Task 2: fetchClaude 换轨(读快照)
 

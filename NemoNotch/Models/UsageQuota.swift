@@ -27,6 +27,14 @@ enum CredentialStatus: Equatable, Sendable {
     /// Keychain item exists but this app isn't authorized to read it yet.
     /// Surfaces a "Authorize" button rather than auto-prompting.
     case needsAuthorization
+    /// Claude's usage snapshot file (`~/.claude/usage-snapshot.json`, written
+    /// by claude-hud) is absent — claude-hud isn't installed/configured, or it
+    /// has never written a snapshot.
+    case snapshotMissing
+    /// The snapshot exists but its `updated_at` is older than the fresh
+    /// interval: no Claude session has rendered the statusline recently.
+    /// Stale percentages are withheld (no tiers), not shown.
+    case snapshotStale
 }
 
 /// A usage rolling-window. Claude uses named windows (localized labels);
@@ -408,6 +416,61 @@ enum CodexRateWindowNormalizer {
                 return lr != rr ? lr < rr : lhs.offset < rhs.offset
             }
             .map(\.element)
+    }
+}
+
+/// Parses the usage snapshot written by claude-hud (`~/.claude/usage-snapshot.json`).
+/// Claude Code pushes server-side `rate_limits` to statusline scripts over stdin;
+/// claude-hud mirrors them into that file (atomic write, 0600, refreshed at most
+/// every 30s while a Claude session renders its statusline; not written while
+/// no session runs). This is Claude's ONLY quota source — reading it touches no
+/// credential and makes no network call.
+enum ClaudeUsageSnapshotParser {
+    /// A snapshot older than the rolling five-hour window describes a window
+    /// that has already rolled over, so its percentages can't be trusted:
+    /// treat it as "waiting for a session to refresh" instead of showing stale
+    /// numbers.
+    static let claudeSnapshotFreshInterval: TimeInterval = 5 * 3600
+
+    static func parse(data: Data?, now: Date = Date()) -> ProviderUsageQuota {
+        guard let data else {
+            return ProviderUsageQuota(provider: .claude, status: .snapshotMissing, fetchedAt: now)
+        }
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return ProviderUsageQuota(
+                provider: .claude, status: .parseError, fetchedAt: now,
+                errorMessage: "Usage snapshot is not a JSON object"
+            )
+        }
+        guard let updatedAt = (root["updated_at"] as? String).flatMap(UsageQuotaParser.parseResetDate),
+              now.timeIntervalSince(updatedAt) <= claudeSnapshotFreshInterval
+        else {
+            return ProviderUsageQuota(provider: .claude, status: .snapshotStale, fetchedAt: now)
+        }
+        let tiers = [
+            tier(root["five_hour"], window: .fiveHour),
+            tier(root["seven_day"], window: .sevenDay),
+        ].compactMap(\.self)
+        guard !tiers.isEmpty else {
+            return ProviderUsageQuota(
+                provider: .claude, status: .parseError, fetchedAt: now,
+                errorMessage: "Usage snapshot has no usable window"
+            )
+        }
+        return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: now)
+    }
+
+    /// `{"used_percentage": 0-100, "resets_at": ISO8601-or-null}` → tier.
+    /// An unparseable `resets_at` yields nil, never a dropped window.
+    private static func tier(_ raw: Any?, window: QuotaWindow) -> QuotaTier? {
+        guard let entry = raw as? [String: Any],
+              let used = entry["used_percentage"] as? Double, used.isFinite
+        else { return nil }
+        return QuotaTier(
+            window: window,
+            utilization: used,
+            resetsAt: (entry["resets_at"] as? String).flatMap(UsageQuotaParser.parseResetDate)
+        )
     }
 }
 
