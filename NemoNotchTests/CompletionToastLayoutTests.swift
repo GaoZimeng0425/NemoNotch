@@ -39,6 +39,6 @@ struct CompletionToastLayoutTests {
         let layout = CompletionToastLayout(panelWidth: width, count: 2)
         #expect(layout.hit(CGPoint(x: 572, y: 20)) == nil) // gap between cards
         #expect(layout.hit(CGPoint(x: 100, y: 20)) == nil) // beside the row
-        #expect(layout.hit(CGPoint(x: 300, y: 60)) == nil) // below the cards
+        #expect(layout.hit(CGPoint(x: 300, y: 70)) == nil) // below the cards (66pt tall)
     }
 }
