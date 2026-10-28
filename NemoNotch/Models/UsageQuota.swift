@@ -136,25 +136,6 @@ struct GeminiOAuthCredential: Equatable, Sendable {
 }
 
 enum UsageCredentialParser {
-    /// Parses `~/.claude/.credentials.json` or the Keychain blob.
-    /// Shape: `{ "claudeAiOauth": { "accessToken": "...", "expiresAt": <ms epoch> } }`.
-    static func parseClaudeCredentials(data: Data, now: Date = Date()) throws -> UsageCredential {
-        let object = try JSONSerialization.jsonObject(with: data)
-        guard let root = object as? [String: Any] else {
-            return UsageCredential(token: nil, status: .parseError, message: "Claude credentials JSON is not an object")
-        }
-        guard let entry = (root["claudeAiOauth"] ?? root["claude.ai_oauth"]) as? [String: Any] else {
-            return UsageCredential(token: nil, status: .parseError, message: "No OAuth entry in Claude credentials")
-        }
-        guard let token = entry["accessToken"] as? String, !token.isEmpty else {
-            return UsageCredential(token: nil, status: .parseError, message: "accessToken is empty or missing")
-        }
-        if let expiresAt = entry["expiresAt"], isExpired(expiresAt, now: now) {
-            return UsageCredential(token: token, status: .expired, message: "OAuth token has expired")
-        }
-        return UsageCredential(token: token, status: .valid)
-    }
-
     /// Parses Codex's `~/.codex/auth.json`:
     /// `{ "auth_mode": "chatgpt", "tokens": { "access_token": "...", "account_id": "..." } }`.
     static func parseCodexCredentials(data: Data, now: Date = Date()) throws -> UsageCredential {
@@ -202,20 +183,6 @@ enum UsageCredentialParser {
         return GeminiOAuthCredential(
             accessToken: access, refreshToken: refresh, expiryDate: expiry, status: .valid
         )
-    }
-
-    private static func isExpired(_ value: Any, now: Date) -> Bool {
-        let raw: Double
-        if let d = value as? Double {
-            raw = d
-        } else if let i = value as? Int {
-            raw = Double(i)
-        } else {
-            return false
-        }
-        // Claude stores milliseconds (13 digits); normalize to seconds.
-        let seconds = raw > 1_000_000_000_000 ? raw / 1000 : raw
-        return Date(timeIntervalSince1970: seconds) < now
     }
 }
 

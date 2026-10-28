@@ -107,13 +107,13 @@
 - Modify: `NemoNotch/Models/UsageQuota.swift`(删 `parseClaudeCredentials`)
 - Modify: `NemoNotchTests/UsageQuotaTests.swift`(删旧 claude credential 测试)
 
-- [ ] **Step 1: 删除上述代码**(编译器引导清干净;`authorize(provider)` 与 `keychainService(for:)` 的 switch 更新)
+- [x] **Step 1: 删除上述代码**(编译器引导清干净;`authorize(provider)` 与 `keychainService(for:)` 的 switch 更新)
 
-- [ ] **Step 2: 跑 `sh scripts/affected-tests.sh` 守绿**
+- [x] **Step 2: 跑 `sh scripts/affected-tests.sh` 守绿**
 
-- [ ] **Step 3: 残留 grep(Review Focus 5)**:`rg -n "claude-cred|\.credentials\.json|useSecurityCLI|claudeKeychainService|parseClaudeCredentials|claudeUsageURL" NemoNotch/ NemoNotchTests/` 逐条人工核验为 codex/gemini 合法引用或迁移清理注释
+- [x] **Step 3: 残留 grep(Review Focus 5)**:`rg -n "claude-cred|\.credentials\.json|useSecurityCLI|claudeKeychainService|parseClaudeCredentials|claudeUsageURL" NemoNotch/ NemoNotchTests/` 逐条人工核验为 codex/gemini 合法引用或迁移清理注释
 
-- [ ] **Step 4: Commit** — `refactor(quota): remove claude credential access entirely`
+- [x] **Step 4: Commit** — `refactor(quota): remove claude credential access entirely`
 
 ### Task 4: UI 状态文案 + 本地化
 

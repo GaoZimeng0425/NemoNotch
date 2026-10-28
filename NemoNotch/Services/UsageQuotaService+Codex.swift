@@ -69,7 +69,8 @@ extension UsageQuotaService {
     }
 
     func readCodexCredential() -> UsageCredential {
-        // File first — see readClaudeCredential for the rationale (avoids the prompt).
+        // File first — reading the CLI's own file never touches the Keychain,
+        // so this path can't surface its cross-app consent prompt.
         if FileManager.default.fileExists(atPath: codexAuthURL.path) {
             do {
                 let data = try Data(contentsOf: codexAuthURL)

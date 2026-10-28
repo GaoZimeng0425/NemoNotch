@@ -3,31 +3,6 @@ import Foundation
 import Testing
 
 struct UsageQuotaTests {
-    // MARK: - Credential parsing
-
-    @Test func parseCredentialValid() throws {
-        let json = #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":1780988250441}}"#
-        let now = Date(timeIntervalSince1970: 1_700_000_000) // before expiry
-        let cred = try UsageCredentialParser.parseClaudeCredentials(data: Data(json.utf8), now: now)
-        #expect(cred.token == "tok-abc")
-        #expect(cred.status == .valid)
-    }
-
-    @Test func parseCredentialExpired() throws {
-        let json = #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":1700000000000}}"#
-        let now = Date(timeIntervalSince1970: 1_800_000_000) // after expiry
-        let cred = try UsageCredentialParser.parseClaudeCredentials(data: Data(json.utf8), now: now)
-        #expect(cred.token == "tok-abc")
-        #expect(cred.status == .expired)
-    }
-
-    @Test func parseCredentialMissingToken() throws {
-        let json = #"{"claudeAiOauth":{"expiresAt":1780988250441}}"#
-        let cred = try UsageCredentialParser.parseClaudeCredentials(data: Data(json.utf8), now: Date())
-        #expect(cred.token == nil)
-        #expect(cred.status == .parseError)
-    }
-
     // MARK: - Quota parsing (real payload shape, incl. microsecond resets_at)
 
     @Test func parseQuotaRealPayload() throws {
@@ -67,12 +42,6 @@ struct UsageQuotaTests {
 
     @Test func parseResetDateNoFraction() {
         #expect(UsageQuotaParser.parseResetDate("2026-06-09T08:00:00+00:00") != nil)
-    }
-
-    @Test func parseCredentialNonJSONThrows() {
-        #expect(throws: (any Error).self) {
-            try UsageCredentialParser.parseClaudeCredentials(data: Data("not json".utf8), now: Date())
-        }
     }
 
     // MARK: - Countdown formatting
