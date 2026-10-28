@@ -187,17 +187,6 @@ enum UsageCredentialParser {
 }
 
 enum UsageQuotaParser {
-    static func parseClaudeCodeQuota(data: Data, fetchedAt: Date = Date()) throws -> ProviderUsageQuota {
-        let response = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
-        let tiers: [QuotaTier] = [
-            response.fiveHour.map { tier(.fiveHour, $0) },
-            response.sevenDay.map { tier(.sevenDay, $0) },
-            response.sevenDayOpus.map { tier(.sevenDayOpus, $0) },
-            response.sevenDaySonnet.map { tier(.sevenDaySonnet, $0) },
-        ].compactMap(\.self)
-        return ProviderUsageQuota(provider: .claude, status: .valid, tiers: tiers, fetchedAt: fetchedAt)
-    }
-
     /// Parses Gemini's `retrieveUserQuota` response. Collapses each model's
     /// buckets to the lowest `remainingFraction` (most-constrained token type)
     /// and maps to `utilization = (1 - fraction) * 100`, descending.
@@ -294,10 +283,6 @@ enum UsageQuotaParser {
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
         return plain.date(from: value)
-    }
-
-    private static func tier(_ window: QuotaWindow, _ source: ClaudeUsageTier) -> QuotaTier {
-        QuotaTier(window: window, utilization: source.utilization, resetsAt: source.resetsAt.flatMap(parseResetDate))
     }
 
     /// Trims fractional seconds to 3 digits: `...00.858062+00:00` → `...00.858+00:00`.
@@ -450,30 +435,6 @@ enum ClaudeUsageSnapshotParser {
 }
 
 // MARK: - Wire decoding
-
-private struct ClaudeUsageResponse: Decodable {
-    let fiveHour: ClaudeUsageTier?
-    let sevenDay: ClaudeUsageTier?
-    let sevenDayOpus: ClaudeUsageTier?
-    let sevenDaySonnet: ClaudeUsageTier?
-
-    enum CodingKeys: String, CodingKey {
-        case fiveHour = "five_hour"
-        case sevenDay = "seven_day"
-        case sevenDayOpus = "seven_day_opus"
-        case sevenDaySonnet = "seven_day_sonnet"
-    }
-}
-
-private struct ClaudeUsageTier: Decodable {
-    let utilization: Double
-    let resetsAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case utilization
-        case resetsAt = "resets_at"
-    }
-}
 
 private struct CodexUsageResponse: Decodable {
     let rateLimit: CodexRateLimit?

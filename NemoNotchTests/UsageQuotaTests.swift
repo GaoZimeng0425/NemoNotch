@@ -3,33 +3,9 @@ import Foundation
 import Testing
 
 struct UsageQuotaTests {
-    // MARK: - Quota parsing (real payload shape, incl. microsecond resets_at)
+    // MARK: - ISO8601 reset parsing (microsecond + offset shapes still live in
 
-    @Test func parseQuotaRealPayload() throws {
-        let json = """
-        {
-          "five_hour": {"utilization": 6.0, "resets_at": "2026-06-09T08:00:00.858062+00:00"},
-          "seven_day": {"utilization": 3.0, "resets_at": "2026-06-15T13:00:00.858087+00:00"},
-          "seven_day_opus": null,
-          "seven_day_sonnet": {"utilization": 0.0, "resets_at": "2026-06-15T13:00:00.858099+00:00"},
-          "extra_usage": {"is_enabled": false}
-        }
-        """
-        let quota = try UsageQuotaParser.parseClaudeCodeQuota(data: Data(json.utf8))
-        #expect(quota.status == .valid)
-        #expect(quota.provider == .claude)
-        // null tiers dropped → 3 tiers, in declared order
-        #expect(quota.tiers.map(\.window) == [.fiveHour, .sevenDay, .sevenDaySonnet])
-        #expect(quota.tiers[0].utilization == 6.0)
-        // regression: microsecond + offset resets_at MUST parse to a non-nil Date
-        #expect(quota.tiers[0].resetsAt != nil)
-    }
-
-    @Test func parseQuotaMalformedThrows() {
-        #expect(throws: (any Error).self) {
-            try UsageQuotaParser.parseClaudeCodeQuota(data: Data("not json".utf8))
-        }
-    }
+    // Gemini/Codex payloads and the claude-hud snapshot)
 
     @Test func parseResetDateMicroseconds() {
         let d = UsageQuotaParser.parseResetDate("2026-06-09T08:00:00.858062+00:00")
