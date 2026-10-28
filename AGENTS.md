@@ -180,7 +180,7 @@ graph LR
 
 ### Hook 端口与发送脚本
 
-- **只有用户的真实 app 写共享 hook 配置**(UserDefaults `hookServerPort` + `hook-sender.sh`/`hermes-hook-sender.sh`/opencode 插件,纯 `UITestMode.ownsSharedHookConfig`,已单测)。单测宿主与 `--uitest` 实例同 bundle id、同 UserDefaults、同 `~/.NemoNotch/hooks`:它们撞 45831 回落 45832 后曾把端口和三份脚本都改写过去然后退出,**所有 CLI 的事件发往死端口**(2026-10-28 实锤:一天的测试/截图运行反复改坏,zcode/Claude 完成提醒「没了」;跑一次 `test.sh` 即可现场复现)。真实 app 每次 listener ready 都按实际端口核对脚本(版本+端口一致即 no-op),被改坏的脚本下次启动自愈——旧版只在回落时重写,默认端口启动修不回来。排查「事件没到」先看 `grep URL_BASE ~/.NemoNotch/hooks/hook-sender.sh` 与 `lsof -iTCP:45831 -sTCP:LISTEN` 是否一致。
+- **只有用户的真实 app 写共享 hook 配置**(UserDefaults `hookServerPort` + `hook-sender.sh`/`hermes-hook-sender.sh`/opencode 插件,纯 `UITestMode.ownsSharedHookConfig`,已单测)。单测宿主与 `--uitest` 实例同 bundle id、同 UserDefaults、同 `~/.NemoNotch/hooks`:单测宿主撞 45831 回落 45832 后曾把端口和三份脚本都改写过去然后退出(ready 回调还顺手重装各 CLI 的 hook 配置),**所有 CLI 的事件发往死端口**;`--uitest` 不起 server,但启动时的脚本刷新同样会写。现在非真实 app **不起 hook server**(`AppDependencies`),启动刷新(`AICLIMonitorService`/`HermesService`)与 ready 分支也各自门禁(2026-10-28 实锤:一天的测试/截图运行反复改坏,zcode/Claude 完成提醒「没了」;跑一次 `test.sh` 即可现场复现)。真实 app 每次 listener ready 都按实际端口核对脚本(版本+端口一致即 no-op),被改坏的脚本下次启动自愈——旧版只在回落时重写,默认端口启动修不回来。排查「事件没到」先看 `grep URL_BASE ~/.NemoNotch/hooks/hook-sender.sh` 与 `lsof -iTCP:45831 -sTCP:LISTEN` 是否一致。
 
 ### 日志
 

@@ -77,7 +77,10 @@ struct AppDependencies {
         aiMonitor.startSessionDiscovery()
         let launcher = LauncherService(settings: settings)
 
-        if !UITestMode.isActive {
+        // Only the user's real app listens: on ready the server installs
+        // every CLI's hooks and rewrites the shared sender scripts — a test
+        // host doing that redirected all CLIs to its own soon-dead port.
+        if UITestMode.ownsSharedHookConfig {
             aiMonitor.startServer()
         }
 

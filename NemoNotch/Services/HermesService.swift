@@ -46,7 +46,7 @@ final class HermesService: MultiAgentMonitor {
 
         // Refresh hermes-hook-sender.sh on launch when hooks are installed, so
         // socket path migrations take effect without requiring re-install.
-        if isHookInstalled {
+        if isHookInstalled, UITestMode.ownsSharedHookConfig {
             do {
                 try HermesHookInstaller.refreshScript()
             } catch {
