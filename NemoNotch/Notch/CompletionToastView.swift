@@ -118,37 +118,100 @@ struct CompletionToastView: View {
     }
 }
 
-/// The card's border: a multi-color angular gradient that slowly rotates.
-/// Driven by `TimelineView(.animation)` with the angle derived from the date
-/// — never `repeatForever` (can't be stopped, see AGENTS.md SwiftUI pitfalls).
-/// Capped at 30fps; frozen under Reduce Motion. Costs nothing while hidden:
-/// the toast panels are torn down whenever the row is empty or off-screen.
-private struct CompletionToastRing: View {
+/// The card's border: a multi-color conic gradient that slowly rotates, seen
+/// through a 1.5pt rounded-rect stroke mask. Turned by Core Animation (the
+/// `EdgeBarSpinningArc` pattern), not SwiftUI: a `TimelineView` ring measured
+/// 12–18% of a core for four cards (isolated bench, 20s × 3), the CA version
+/// leaves the app process ~idle — the turn runs in the render server. No
+/// rotation under Reduce Motion (the colored ring still shows). Torn down
+/// with the panel whenever the row is empty or off-screen.
+private struct CompletionToastRing: NSViewRepresentable {
     let cornerRadius: CGFloat
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeNSView(context: Context) -> CompletionToastRingView {
+        CompletionToastRingView(cornerRadius: cornerRadius)
+    }
 
+    func updateNSView(_ view: CompletionToastRingView, context: Context) {}
+}
+
+final class CompletionToastRingView: NSView {
+    static let lineWidth: CGFloat = 1.5
     /// Seconds per full turn.
-    private static let period: TimeInterval = 4
-    private static let colors: [Color] = [
-        NotchTheme.accent,
-        Color(red: 1.0, green: 0.36, blue: 0.62),
-        Color(red: 0.62, green: 0.42, blue: 1.0),
-        Color(red: 0.25, green: 0.62, blue: 1.0),
-        Color(red: 0.2, green: 0.86, blue: 0.78),
-        NotchTheme.accent,
+    static let period: CFTimeInterval = 4
+    private static let key = "turn"
+    private static let colors: [NSColor] = [
+        NSColor(NotchTheme.accent),
+        NSColor(red: 1.0, green: 0.36, blue: 0.62, alpha: 1),
+        NSColor(red: 0.62, green: 0.42, blue: 1.0, alpha: 1),
+        NSColor(red: 0.25, green: 0.62, blue: 1.0, alpha: 1),
+        NSColor(red: 0.2, green: 0.86, blue: 0.78, alpha: 1),
+        NSColor(NotchTheme.accent),
     ]
 
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
-            let turns = context.date.timeIntervalSinceReferenceDate / Self.period
-            let degrees = (turns - turns.rounded(.down)) * 360
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(
-                    AngularGradient(colors: Self.colors, center: .center, angle: .degrees(degrees)),
-                    lineWidth: 1.5
-                )
-        }
-        .allowsHitTesting(false)
+    private let cornerRadius: CGFloat
+    private let gradient = CAGradientLayer()
+    private let strokeMask = CAShapeLayer()
+
+    init(cornerRadius: CGFloat) {
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
+        wantsLayer = true
+        gradient.type = .conic
+        gradient.startPoint = CGPoint(x: 0.5, y: 0.5)
+        gradient.endPoint = CGPoint(x: 0.5, y: 0)
+        gradient.colors = Self.colors.map(\.cgColor)
+        strokeMask.fillColor = nil
+        strokeMask.strokeColor = NSColor.black.cgColor
+        strokeMask.lineWidth = Self.lineWidth
+        layer?.addSublayer(gradient)
+        layer?.mask = strokeMask
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("not built from a nib")
+    }
+
+    /// Never a click target: the toast host resolves clicks from geometry.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // A square as wide as the card's diagonal, so the rotating gradient
+        // always covers every corner of the stroke.
+        let side = hypot(bounds.width, bounds.height)
+        gradient.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        gradient.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        strokeMask.frame = bounds
+        let inset = Self.lineWidth / 2
+        strokeMask.path = CGPath(
+            roundedRect: bounds.insetBy(dx: inset, dy: inset),
+            cornerWidth: cornerRadius - inset,
+            cornerHeight: cornerRadius - inset,
+            transform: nil
+        )
+        CATransaction.commit()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window else { return }
+        gradient.contentsScale = window.backingScaleFactor
+        strokeMask.contentsScale = window.backingScaleFactor
+        guard gradient.animation(forKey: Self.key) == nil,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+        turn.fromValue = 0
+        turn.toValue = (layer?.contentsAreFlipped() ?? false) ? 2 * Double.pi : -2 * Double.pi
+        turn.duration = Self.period
+        turn.repeatCount = .infinity
+        turn.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+        turn.isRemovedOnCompletion = false
+        gradient.add(turn, forKey: Self.key)
     }
 }
