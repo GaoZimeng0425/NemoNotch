@@ -6,69 +6,31 @@ import Security
 extension UsageQuotaService {
     // MARK: - Claude
 
+    /// Claude quota source: the snapshot claude-hud mirrors out of Claude
+    /// Code's statusline stdin. Deliberately credential-free and network-free —
+    /// no token read, no usage API call. A missing snapshot reads as
+    /// `.snapshotMissing`, one no session has refreshed within the fresh
+    /// interval as `.snapshotStale` (old percentages are withheld).
     func fetchClaude() async -> ProviderUsageQuota {
         let now = Date()
-        let credential = readClaudeCredential(now: now)
-        guard let token = credential.token else {
-            LogService.warn("Claude quota: no credential (status \(credential.status))", category: "UsageQuotaService")
-            return ProviderUsageQuota(
-                provider: .claude,
-                status: credential.status,
-                fetchedAt: now,
-                errorMessage: credential.message
-            )
-        }
-        if credential.status == .expired {
-            return ProviderUsageQuota(
-                provider: .claude,
-                status: .expired,
-                fetchedAt: now,
-                errorMessage: credential.message
-            )
-        }
+        // ~200B file, atomically written by claude-hud — an inline read costs
+        // less than hopping off the main actor for it.
+        let data = try? Data(contentsOf: claudeSnapshotURL)
+        let quota = ClaudeUsageSnapshotParser.parse(data: data, now: now)
+        logClaudeQuotaState(quota)
+        return quota
+    }
 
-        var request = URLRequest(url: claudeUsageURL, timeoutInterval: 10)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if status == 401 {
-                LogService.warn("Claude quota: HTTP 401", category: "UsageQuotaService")
-                // The cached token was accepted by our clock check but rejected by
-                // the server — drop the cache so the next refresh re-resolves a fresh
-                // token from the CLI file / Keychain.
-                invalidateClaudeCache()
-                return ProviderUsageQuota(
-                    provider: .claude,
-                    status: .expired,
-                    fetchedAt: now,
-                    errorMessage: "Re-login required"
-                )
-            }
-            guard (200 ..< 300).contains(status) else {
-                LogService.error("Claude quota: HTTP \(status)", category: "UsageQuotaService")
-                return ProviderUsageQuota(
-                    provider: .claude,
-                    status: .valid,
-                    fetchedAt: now,
-                    errorMessage: "HTTP \(status)"
-                )
-            }
-            let parsed = try UsageQuotaParser.parseClaudeCodeQuota(data: data, fetchedAt: now)
-            LogService.info("Claude quota fetched: \(parsed.tiers.count) tiers", category: "UsageQuotaService")
-            return parsed
-        } catch {
-            LogService.error("Claude quota fetch failed: \(error.localizedDescription)", category: "UsageQuotaService")
-            return ProviderUsageQuota(
-                provider: .claude,
-                status: .valid,
-                fetchedAt: now,
-                errorMessage: error.localizedDescription
-            )
+    /// Logs the Claude quota result only when its state (status + tier count)
+    /// changes; unchanged states log `.debug`. Prevents the 60s refresh loop
+    /// from re-logging the same line every tick.
+    private func logClaudeQuotaState(_ quota: ProviderUsageQuota) {
+        let state = "\(quota.status) tiers=\(quota.tiers.count)"
+        if state != lastClaudeQuotaLogState {
+            LogService.info("Claude quota snapshot: \(state)", category: "UsageQuotaService")
+            lastClaudeQuotaLogState = state
+        } else {
+            LogService.debug("Claude quota snapshot unchanged: \(state)", category: "UsageQuotaService")
         }
     }
 

@@ -90,13 +90,13 @@
 - Consumes: Task 1 的 `ClaudeUsageSnapshotParser.parse(data:now:)`。
 - Produces: `fetchClaude() async -> ProviderUsageQuota` 签名不变,`refresh()` 零改。实现 = 内联读文件(`try? Data(contentsOf:)`,约 200B,主线程可忽略,注释写明)→ parser → 按状态变化打日志。
 
-- [ ] **Step 1: 实现换轨**(fetchClaude 不再引用 token/URLSession;`+Claude.swift` 里 `import Security` 等若仅凭证路径使用可留待 Task 3 一并清)
+- [x] **Step 1: 实现换轨**(fetchClaude 不再引用 token/URLSession;`+Claude.swift` 里 `import Security` 等若仅凭证路径使用可留待 Task 3 一并清)
 
-- [ ] **Step 2: 跑 `sh scripts/affected-tests.sh` 守绿**(接线薄层,逻辑已在 Task 1 测过——判别剃刀不满足的凑数测试不写)
+- [x] **Step 2: 跑 `sh scripts/affected-tests.sh` 守绿**(接线薄层,逻辑已在 Task 1 测过——判别剃刀不满足的凑数测试不写)
 
-- [ ] **Step 3: 核验零网络**:`rg -n "URLSession|api.anthropic" NemoNotch/Services/UsageQuotaService+Claude.swift` 零命中
+- [x] **Step 3: 核验零网络**:`rg -n "URLSession|api.anthropic" NemoNotch/Services/UsageQuotaService+Claude.swift` 零命中
 
-- [ ] **Step 4: Commit** — `feat(quota): claude quota reads statusline snapshot`
+- [x] **Step 4: Commit** — `feat(quota): claude quota reads statusline snapshot`
 
 ### Task 3: 删除凭证机器 + 遗留秘密清理
 
