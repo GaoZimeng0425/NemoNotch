@@ -134,11 +134,11 @@
 - Modify: `README.md` / `README_CN.md`(grep `凭证|credentials|Keychain` 中 claude quota 相关表述,有则同步)
 - 检查: `docs/experience-playbook.md`(引用 claude 凭证现状的段落)
 
-- [ ] **Step 1: 全仓 grep 旧口径**(AGENTS.md、docs/、代码注释、测试注释:`claude-cred`、`credentials.json` 的 claude 语境、`security CLI`、`Claude Code-credentials`),逐一改写或确认保留理由
+- [x] **Step 1: 全仓 grep 旧口径**(AGENTS.md、docs/、代码注释、测试注释:`claude-cred`、`credentials.json` 的 claude 语境、`security CLI`、`Claude Code-credentials`),逐一改写或确认保留理由
 
-- [ ] **Step 2: `sh scripts/doc-audit.sh` 绿**(引退出码)
+- [x] **Step 2: `sh scripts/doc-audit.sh` 绿**(引退出码)
 
-- [ ] **Step 3: Commit** — `docs(quota): claude snapshot source replaces credential path`
+- [x] **Step 3: Commit** — `docs(quota): claude snapshot source replaces credential path`
 
 ## 部署后机器侧步骤(主对话执行,不在 worktree)
 
