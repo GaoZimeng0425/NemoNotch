@@ -51,7 +51,7 @@ enum UITestMode {
     /// next port, and used to rewrite those files to it and then exit: every
     /// CLI's events then went to a dead port until the user noticed.
     static func ownsSharedHookConfig(uiTest: Bool, testHost: Bool) -> Bool {
-        true
+        !uiTest && !testHost
     }
 
     static var ownsSharedHookConfig: Bool {

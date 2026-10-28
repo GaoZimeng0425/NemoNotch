@@ -100,15 +100,24 @@ final class HookServer {
             isRunning = true
             hasReadied = true
             LogService.info("Hook server listening on 127.0.0.1:\(port)", category: "HookServer")
-            // If we landed on a non-default port, persist it and rewrite the
-            // hook script so external callers find the right port.
-            if port != NotchConstants.hookServerDefaultPort {
+            // Persist the port and bring every sender script in line with it —
+            // on the default port too, so a script left pointing elsewhere
+            // heals on the next launch (the rewrite is a no-op when the
+            // script's version and port already match). Only the user's real
+            // app may do this: a test host / --uitest instance sits on the
+            // next port and would redirect every CLI to it, then exit.
+            if UITestMode.ownsSharedHookConfig {
                 NotchConstants.setHookServerPort(port)
                 try? HookInstaller.ensureScriptExists()
-                try? HermesHookInstaller.refreshScript()
+                if HermesHookInstaller.isInstalled {
+                    try? HermesHookInstaller.refreshScript()
+                }
                 try? OpencodePluginInstaller.refreshScript()
             } else {
-                NotchConstants.setHookServerPort(port)
+                LogService.info(
+                    "Test/UI-test instance on \(port): shared hook config left alone",
+                    category: "HookServer"
+                )
             }
             onReady?()
         case let .failed(error):

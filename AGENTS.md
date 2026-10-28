@@ -178,6 +178,10 @@ graph LR
 - 权限弹窗只在用户动作那一刻出现(用户明示原则):日历/定位/通知一律 PermissionCard + Grant 按钮,不自动请求;AX 只给系统设置链接(无程序化请求 API);被拒用静默探测渲染提示,绝不自动重试。
 - **拖拽授权引导**(列表式隐私面板,`PermissionFlow/`):跟随系统设置窗口用 `CGWindowListCopyWindowInfo`,**不是 AX**——用 AX 读别 app 窗口 frame 自己就需要正在申请的可访问性授权(死锁);窗口服务查询不过 TCC。按 **PID**(从 bundle id `com.apple.systempreferences` 解析)匹配,**绝不用 `kCGWindowOwnerName`**(本地化——中文系统是"系统设置")。CG→AppKit y 翻转:`mainScreenHeight - cgY - cgHeight`。**成功检测只存在于有静默预检的能力**:`AXIsProcessTrusted()`(裸调,不带 Options+prompt)和 `CGPreflightScreenCaptureAccess()`;其余 pane 挂到设置窗关/ESC/3 分钟超时。只有 8 个**有列表可拖**的 pane 显示引导(Accessibility/Full Disk Access/Input Monitoring/Screen Recording/App Management/Developer Tools/Bluetooth/Media & Apple Music);prompt-on-first-use 的能力(摄像头/麦克风/日历…)没有列表,不许显示引导。细节 `docs/permission-drag-guide.md`。
 
+### Hook 端口与发送脚本
+
+- **只有用户的真实 app 写共享 hook 配置**(UserDefaults `hookServerPort` + `hook-sender.sh`/`hermes-hook-sender.sh`/opencode 插件,纯 `UITestMode.ownsSharedHookConfig`,已单测)。单测宿主与 `--uitest` 实例同 bundle id、同 UserDefaults、同 `~/.NemoNotch/hooks`:它们撞 45831 回落 45832 后曾把端口和三份脚本都改写过去然后退出,**所有 CLI 的事件发往死端口**(2026-10-28 实锤:一天的测试/截图运行反复改坏,zcode/Claude 完成提醒「没了」;跑一次 `test.sh` 即可现场复现)。真实 app 每次 listener ready 都按实际端口核对脚本(版本+端口一致即 no-op),被改坏的脚本下次启动自愈——旧版只在回落时重写,默认端口启动修不回来。排查「事件没到」先看 `grep URL_BASE ~/.NemoNotch/hooks/hook-sender.sh` 与 `lsof -iTCP:45831 -sTCP:LISTEN` 是否一致。
+
 ### 日志
 
 - 用 CocoaLumberjack(`LogService`),`~/.NemoNotch/logs/`。**保留不是配置的 7 天**:`DDFileLogger` 默认还有 **1MB 单文件上限**,`maximumNumberOfLogFiles = 7` 下真正驱动滚动的是大小——正常工作日 3–4 个文件,**有效窗口不到两天**。要审计数周的(盖事件、崩溃重启审计)放独立文件(`KeepAwakeEventLog` 思路)。
