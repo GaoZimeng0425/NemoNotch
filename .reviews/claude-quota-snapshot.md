@@ -1,10 +1,10 @@
 # Code Review — feature/claude-quota-snapshot
 
-Reviewer: 评审员-第1轮(dynamic-workflow 独立子代理;未参与本分支任何实现——judge ≠ author)
-Date: 2026-10-28
-Reviewed-Head: 85d16d9
-Verdict: CHANGES_NEEDED
-Scope:  12 files changed, 390 insertions(+), 238 deletions(-)
+Reviewer: 评审员-第1轮 + 评审员-第2轮(均为 dynamic-workflow 独立子代理;未参与本分支任何实现——judge ≠ author)
+Date: 2026-10-28(第 2 轮同日)
+Reviewed-Head: 3dee6d3
+Verdict: APPROVED
+Scope:  第 1 轮 @ 85d16d9 — 12 files changed, 390 insertions(+), 238 deletions(-);第 2 轮 @ 3dee6d3 — 修复 4 commits 后回归(见第 2 轮小节)
 
 ```
 AGENTS.md
@@ -101,6 +101,64 @@ docs/superpowers/plans/2026-10-28-claude-quota-snapshot.md
 ### 复审指引
 
 修 P1 后在 worktree:`sh scripts/affected-tests.sh`(引退出码)+ `rg -n "readKeychainCredentialViaSecurityCLI|securityCLICredentialBlob|Claude Code-credentials|Claude keychain" NemoNotch/ NemoNotchTests/` 零命中。然后把本记录的 `Reviewed-Head:` 更新为新 head,在下方追加「第 2 轮」小节(**不要重跑 review.sh 覆盖本文**)。P3 项可选处理,不阻塞。
+
+## 第 2 轮(Reviewed-Head 3dee6d3)—— 2026-10-28
+
+> Reviewed-Head 写 `3dee6d3`(最近一次非 .reviews 提交,feat-done 门禁的比对目标);`git rev-parse --short HEAD` 此时输出 `965ff80`(第 1 轮记录的 docs commit,非代码)。
+
+### 结论先行
+
+第 1 轮唯一阻塞项(P1 security-CLI Keychain 死码)已删干净;两条 P2(rolled-window stale、api.anthropic wire 死码)均已修且有鉴别力守卫;P3 全部处理或按建议记录在案。回归全绿(下表全部亲跑)。新发现仅 1 条 P3(注释/AGENTS 对新鲜度双信号的主从表述与代码行为在罕见场景分歧——行为正确,仅措辞)。**Verdict: APPROVED**。
+
+### 上轮意见逐条核验
+
+| 上轮 | 修复 commit / 状态 | 本轮证据 |
+|---|---|---|
+| P1 security-CLI reader 死码(+Codex.swift:91-141) | `aa2094a` 删除 52 行 | `rg -n "readKeychainCredentialViaSecurityCLI\|securityCLICredentialBlob\|Claude Code-credentials\|Claude keychain\|api\.anthropic\|claudeAiOauth\|useSecurityCLI\|readClaudeCredential\|writeClaudeCache\|invalidateClaudeCache" NemoNotch/ NemoNotchTests/` → **零命中**(EXIT=1);commit message 补记了偏差 5(Codex.swift:72 注释越界)——上轮 P3 的「记一笔」落实 |
+| P2 resets_at 已过 → stale | `31c44c7` 双信号:任一 tier `resetsAt < now` → `.snapshotStale`(UsageQuota.swift rolled 检查);守卫测试 `snapshotRolledWindowIsStaleDespiteFreshUpdatedAt`(用第 1 轮实捕数据形状:updated_at 11:40 / 5h reset 12:00 / 读于 12:20) | 变异 `$0 < now` → `_ in false`(禁用 rolled 规则)→ EXIT=0 变异被抓住,失败正是该测试,干净断言失败 |
+| P2 wire decoder 死码 | `6ff0c7f` 删 `parseClaudeCodeQuota` + 私有 `tier(_:_:)` + `ClaudeUsageResponse/ClaudeUsageTier`(−65 行,含 2 个死码测试);`parseResetDate` 保留(Gemini/Codex/快照共用),其测试移至重命名 MARK | 上方 grep 零命中;`.sevenDayOpus/.sevenDaySonnet` 及 UI 分支 **deferred with record**(commit message 明示"touch four UI files — a follow-up cleanup feature")——符合上轮「允许拆开但要有记录」 |
+| P3 测试裸下标 / resetsAt 不钉值 | `31c44c7` 改 `try #require(...first/last)` + 钉字面 Date;`snapshotStaleWhenOlderThanFiveHours` 重构为「resets_at 在未来、只有 updated_at 能判」(护住阈值变异的鉴别力) | 边界变异 `<=`→`<`:EXIT=0 被抓住,失败 `snapshotFreshAtExactlyFiveHours`,**0 crash/0 trap**(上轮同变异是 trap 杀进程);阈值变异 `5*3600`→`5*36000`:失败 `snapshotStaleWhenOlderThanFiveHours`——重构后的特异性别丢了 |
+| P3 读失败吞成 missing | `31c44c7` `fetchClaude()` 先 `fileExists`,读错误 catch → `.parseError` 带 errorMessage + `.warn`(与「未配置」区分) | `+Claude.swift:8-27` 亲读;AGENTS.md 同步该语义 |
+| P3 注释审判 MUST KILL ①-⑥ | ①②③ 于 `31c44c7`、④⑤⑥ 于 `3dee6d3` 全删 | 亲读:fetchClaude/logClaudeQuotaState/claudeSnapshotURL/lastClaudeQuotaLogState 均无 doc,"ONLY quota source" 句已删;白名单项(外部格式契约 4 行、5h 理由、枚举 case doc、init 迁移 why、Keychain 行内注释)**全部保留未误删** |
+| P3 updated_at 坏格式 → stale(不要求改) | 未改(维持上轮决定) | — |
+
+### Findings(第 2 轮新发现)
+
+**[P3] `NemoNotch/Models/UsageQuota.swift` rolled 规则注释末句 + `AGENTS.md` Usage quota 条目 — 「updated_at 只作兜底」的表述与代码行为在罕见场景分歧(行为正确,仅措辞)**
+- 代码事实(亲读):updated_at 超 5h 是**无条件第一道闸**(在 tier 解析之前,UsageQuota.swift parse 前段),rolled 检查是第二道;注释末句 "updated_at is only the fallback freshness signal for tiers without a resets_at" 与 AGENTS「`updated_at` 超 5h 只作 resets_at 为 nil 的兜底」都把它说成从属兜底。
+- 分歧场景(罕见但存在):快照只有 7d 窗、其 resets 在未来、updated_at 超 5h → 代码判 `.snapshotStale`(正确:5h 没会话就该等刷新,plan 原语义),按「兜底」读法则是 `.valid`。两窗齐全时两者等价(5h 窗 resets_at ≤ updated_at+5h,updated_at 超 5h ⇒ 该窗必已滚动)。
+- 顺带:`snapshotStale` 枚举 doc 仍只列 updated_at 一个成因,没提 rolled 来源。日后有人按注释/手册「优化」会把上述场景改坏——建议改为「updated_at 超 5h、或任一 tier 的 resets_at 已过,任一即 stale」。不阻塞。
+
+**[观察,不计 finding] `fetchClaude` 的 `fileExists` + `try Data` 两步间存在 TOCTOU**:文件恰在两步之间被删 → 一拍 `.parseError`(而非 missing),下一拍自愈。原子 rename 写不删文件,仅用户手删可触发;为修复上轮「读失败归并」而引入的形状,代价可接受。
+
+### 亲跑证据(全部在 worktree,输入文件先经 `git status` + 与 HEAD diff 验证干净)
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| **作废声明** | 首轮 `affected-tests.sh` | 首跑 60/0 **作废**:跑后发现工作树 UsageQuota.swift 曾处变异态(`$0 < now`→`_ in false`,20:27 出现 `nemonotch-mutate.bak`、20:28 消失)——实现侧会话与本次评审**并发**使用同一 worktree,编译时刻无法确证在变异窗口外。文件恢复、与 HEAD 逐字节一致后**重跑** |
+| 影响面测试(重跑) | `sh scripts/affected-tests.sh` | **EXIT=0**;60 passed / 0 failed(test.log 实数);账目吻合:61 − 删 2 死码测试 + 1 新 rolled 测试 = 60 |
+| QuotaAlert 门禁套件(上轮 L1,affected-tests 仍漏选) | `sh scripts/test.sh --only QuotaAlertDetectorTests,QuotaAlertsTests,EdgeBarUsageFittingTests` | **EXIT=0**,14/0 |
+| 变异①(rolled 规则禁用) | `sh scripts/mutate.sh NemoNotch/Models/UsageQuota.swift '$0 < now' '_ in false' --only UsageQuotaTests` | **EXIT=0** 被抓住(失败 1 = `snapshotRolledWindowIsStaleDespiteFreshUpdatedAt` / 通过 38);文件 trap 恢复 |
+| 变异②(阈值 ×10) | 同脚本 `"5 * 3600"` → `"5 * 36000"` | **EXIT=0** 被抓住(失败 1 = `snapshotStaleWhenOlderThanFiveHours` / 通过 38)——重构后特异性别未丢 |
+| 变异③(边界 `<=`→`<`) | 同脚本 | **EXIT=0** 被抓住(失败 1 = `snapshotFreshAtExactlyFiveHours`);**0 crash/0 trap**(上轮同变异双 trap) |
+| 死码/凭证残留(扩词) | `rg` 见上表 P1 行 | **零命中** |
+| String Catalog | `python3 scripts/xcstrings.py check` | **EXIT=0**;两个新 key 的 zh-Hans 文案在位 |
+| 文档对账 | `sh scripts/doc-audit.sh` | **EXIT=0** |
+| 架构围栏 | `sh scripts/check-arch.sh` | **EXIT=0**(A+B 档全过) |
+| Lint(全树 check) | `sh scripts/lint.sh` | **EXIT=1,但不计入本分支**:本分支 7 个改动 .swift `swiftformat --lint` **0/7 需格式化**;全树唯一命中 `HookInstaller.swift` 系分叉点(7405ba2)旧 develop 漂移——develop 侧已修(9db7171),本分支对该文件零改动,`--no-ff` 合并自取 develop 版;SwiftLint 0 error(27 存量 warning) |
+| plan checkbox | `grep -c '^\s*- \[ \]'` / `'- \[x\]'` | 0 裸框 / 20 勾 |
+| 工作树 | `git status --porcelain`(每步后) | 除本文件外全程干净;3 次变异后均恢复 |
+
+未做:真机 GUI 验证(与第 1 轮相同,按 plan「部署后机器侧步骤」在合并部署后执行);claude-hud 机器侧配置不在 worktree 范围。
+
+### 教训候选(第 2 轮追加)
+
+- **L6(guardrail-backlog 候选)评审与实现侧验证并发共享 worktree 会互相污染**:本轮首跑 affected-tests 期间,实现侧的 mutate.sh 恰好把 UsageQuota.swift 置于变异态(20:27 注入 .bak、20:28 恢复),测试结果的编译输入无法确证——只能作废重跑。判据/修法候选:mutate.sh 跑时落锁文件(如 `.nemonotch-mutate.lock`),affected-tests/test.sh 见锁即拒跑或等待;或评审期间约定 worktree 独占。同一 DerivedData 的并发 xcodebuild 同理。
+- L1(affected-tests 漏选)本轮复现依旧:摘要仍列出 `QuotaAlertTests`(0 例的类名),门禁套件靠手动补跑——硬化优先级应提高。
+
+### Verdict(第 2 轮)
+
+**APPROVED** — P1/P2 全修、P3 处置得当、回归全绿、两条变异守卫(rolled + 阈值)经本轮独立变异实证有牙且红得干净。唯一新 finding 为 P3 措辞项(不阻塞,建议随手改或并入后续 opus/sonnet 清理 feature)。合并部署后仍须走 plan「部署后机器侧步骤」(claude-hud `externalUsageWritePath` 绝对路径 + 真机 5h/7d 显示验证)。
 
 ## 评审方法提示(给评审会话)
 
