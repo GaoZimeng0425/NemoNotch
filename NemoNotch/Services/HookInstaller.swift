@@ -129,12 +129,10 @@ enum HookInstaller {
             } else {
                 settings["hooks"] = hooks
             }
+        } else if events.isEmpty {
+            settings.removeValue(forKey: "hooks")
         } else {
-            if events.isEmpty {
-                settings.removeValue(forKey: "hooks")
-            } else {
-                settings["hooks"] = events
-            }
+            settings["hooks"] = events
         }
     }
 
