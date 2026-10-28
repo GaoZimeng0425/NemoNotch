@@ -25,7 +25,7 @@ struct CompletionToastQueueTests {
         #expect(Set(q.toasts.map(\.id)).count == 3)
     }
 
-    @Test("same name refreshes its card in place: fields merge, timer restarts")
+    @Test("without a session key, same name refreshes its card in place: fields merge, timer restarts")
     func sameNameRefreshes() {
         var q = queue()
         q.add([item("A", tool: "Read")], now: t0)
@@ -65,6 +65,19 @@ struct CompletionToastQueueTests {
         #expect(q.toasts.count == 1)
         #expect(q.toasts[0].id == id)
         #expect(q.toasts[0].item.tool == "Edit")
+    }
+
+    @Test("the same session renamed between turns refreshes its card with the new name")
+    func sameSessionRenamed() {
+        var q = queue()
+        var first = item("old-folder", tool: "Read")
+        first.key = "ai:s1"
+        var renamed = item("new-folder")
+        renamed.key = "ai:s1"
+        q.add([first], now: t0)
+        q.add([renamed], now: t0.addingTimeInterval(5))
+        #expect(q.toasts.map(\.item.name) == ["new-folder"])
+        #expect(q.toasts.first?.item.tool == "Read") // nil newer field keeps the older value
     }
 
     @Test("beyond capacity the oldest card is evicted")

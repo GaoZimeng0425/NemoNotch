@@ -175,32 +175,23 @@ enum CompletionPath {
 
 /// Item-list helpers for the toast.
 enum CompletionFlashNames {
-    /// Append `new` items to `existing`, skipping duplicate names, preserving order.
-    /// When a `new` item matches an existing name, its non-nil rich fields overwrite
-    /// the existing item's fields (newer data wins); nil fields leave existing values.
+    /// Append `new` items to `existing`, one per `toastKey` (session/agent,
+    /// else name), preserving order. When a `new` item matches an existing
+    /// key it replaces it — name included, since a session's folder or title
+    /// can change between turns — but a nil rich field keeps the older value.
     static func merge(existing: [CompletionItem], new: [CompletionItem]) -> [CompletionItem] {
         var result = existing
         for item in new {
-            if let idx = result.firstIndex(where: { $0.name == item.name }) {
-                // Field-level merge: newer non-nil values win.
-                if let v = item.subtitle {
-                    result[idx].subtitle = v
-                }
-                if let v = item.tool {
-                    result[idx].tool = v
-                }
-                if let v = item.model {
-                    result[idx].model = v
-                }
-                if let v = item.tokenDisplay {
-                    result[idx].tokenDisplay = v
-                }
-                if let v = item.duration {
-                    result[idx].duration = v
-                }
-                if let v = item.path {
-                    result[idx].path = v
-                }
+            if let idx = result.firstIndex(where: { $0.toastKey == item.toastKey }) {
+                var merged = item
+                let older = result[idx]
+                merged.subtitle = item.subtitle ?? older.subtitle
+                merged.tool = item.tool ?? older.tool
+                merged.model = item.model ?? older.model
+                merged.tokenDisplay = item.tokenDisplay ?? older.tokenDisplay
+                merged.duration = item.duration ?? older.duration
+                merged.path = item.path ?? older.path
+                result[idx] = merged
             } else {
                 result.append(item)
             }
