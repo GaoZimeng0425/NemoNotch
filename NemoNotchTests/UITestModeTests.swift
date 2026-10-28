@@ -27,4 +27,12 @@ struct UITestModeTests {
     func invalidTab() {
         #expect(UITestMode.tab(in: ["--tab=nope"]) == .overview)
     }
+
+    @Test("only the user's real app writes the shared hook port and scripts")
+    func sharedHookConfigOwner() {
+        #expect(UITestMode.ownsSharedHookConfig(uiTest: false, testHost: false))
+        #expect(!UITestMode.ownsSharedHookConfig(uiTest: false, testHost: true))
+        #expect(!UITestMode.ownsSharedHookConfig(uiTest: true, testHost: false))
+        #expect(!UITestMode.ownsSharedHookConfig(uiTest: true, testHost: true))
+    }
 }

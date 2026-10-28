@@ -34,7 +34,8 @@ final class AICLIMonitorService {
         // Refresh hook-sender.sh on launch when hooks are installed, so socket
         // path / script version migrations take effect without requiring the
         // user to click Reinstall in Settings.
-        if claude.isHookInstalled || gemini.isHookInstalled || opencode.isHookInstalled || zcode.isHookInstalled {
+        if UITestMode.ownsSharedHookConfig,
+           claude.isHookInstalled || gemini.isHookInstalled || opencode.isHookInstalled || zcode.isHookInstalled {
             do {
                 try HookInstaller.ensureScriptExists()
                 // 令牌头是脚本模板的一部分:发送方必须与服务器同步刷新,否则

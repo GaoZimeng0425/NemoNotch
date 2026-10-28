@@ -34,3 +34,5 @@
   命中样本取自真实易误写形状")开了先例(octok local-ci.test.mts 借鉴,
   2026-10-27);doc-audit/plan-audit 尚无同款 red/green 用例表,模式腐化只能
   靠人工发现。做一版 scripts/test-gates.sh 统一喂样本。
+
+- **test.sh 共享文件篡改哨兵**(来源:hook-port-guard 评审教训候选,2026-10-28)。单测宿主与用户真实 app 共享 `~/.NemoNotch/hooks/*`、`~/.claude/settings.json`、`~/.gemini/settings.json`、`~/.zcode/cli/config.json`、opencode 插件、UserDefaults `hookServerPort`;一次测试把它们改坏就会让所有 CLI 事件静默丢失。拟:`test.sh` 前后对这些文件取 mtime/哈希快照,变化即响亮告警并列出文件——把「这个进程不写 X」从口头声明变成每次测试都验证的事实。
