@@ -13,8 +13,11 @@ struct CompletionToast: Identifiable, Equatable {
 /// hovering the row pauses every timer, and leaving restarts them from full
 /// (so a card the user was reading never vanishes the instant they look away).
 ///
-/// - A completion whose name already has a card refreshes that card in place
-///   (newer non-nil fields win, timer restarts) instead of adding a duplicate.
+/// - One card per session/agent (`CompletionItem.toastKey`): the same session
+///   finishing again refreshes its card in place (newer non-nil fields win,
+///   timer restarts); another session in the same project — another app or
+///   the same app — gets its own card. Session-less sources (Pomodoro,
+///   calendar) fall back to the name.
 /// - At most `capacity` cards: a new arrival beyond it evicts the card that
 ///   last arrived longest ago (earliest deadline) — a just-refreshed card
 ///   keeps its slot even if it sits first in the row.
@@ -34,7 +37,7 @@ struct CompletionToastQueue {
         // A paused row stays paused; the new card's clock starts on resume.
         let deadline = now.addingTimeInterval(duration)
         for item in items {
-            if let idx = toasts.firstIndex(where: { $0.item.name == item.name }) {
+            if let idx = toasts.firstIndex(where: { $0.item.toastKey == item.toastKey }) {
                 toasts[idx].item = CompletionFlashNames.merge(existing: [toasts[idx].item], new: [item])[0]
                 toasts[idx].deadline = deadline
             } else {
