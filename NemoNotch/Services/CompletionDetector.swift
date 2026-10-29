@@ -9,9 +9,6 @@ enum CompletionSource: Equatable, Hashable {
     case calendar // Calendar event due
 }
 
-/// A finished unit of work: the name shown in the toast plus its source logo,
-/// and optional rich detail (task title, last tool, model, tokens, duration)
-/// carried through from the AI session that completed.
 /// The session's host app as `AppActivator.activate` takes it: tab link →
 /// pid → bundle id, each optional.
 struct CompletionJump: Equatable {
@@ -26,6 +23,9 @@ struct CompletionJump: Equatable {
     }
 }
 
+/// A finished unit of work: the name shown in the toast plus its source logo,
+/// and optional rich detail (task title, last tool, model, tokens, duration)
+/// carried through from the AI session that completed.
 struct CompletionItem: Equatable {
     /// The unit that finished — the candidate key ("ai:<sessionID>" /
     /// "agent:<agentID>"). nil for sources with no session (Pomodoro, calendar).
