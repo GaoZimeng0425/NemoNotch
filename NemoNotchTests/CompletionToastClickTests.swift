@@ -44,6 +44,9 @@ struct CompletionToastClickTests {
         #expect(CompletionJump.make(hostPID: nil, hostBundleId: nil, tabLink: nil) == nil)
         #expect(CompletionJump.make(hostPID: nil, hostBundleId: "dev.zcode.app", tabLink: nil)?
             .hostBundleId == "dev.zcode.app")
+        // A tab link alone is enough — the terminal reveals its own tab.
+        #expect(CompletionJump.make(hostPID: nil, hostBundleId: nil, tabLink: "iterm2://tab/1")?
+            .tabLink == "iterm2://tab/1")
     }
 
     @Test("the detector snapshots the jump target onto the completed item")
