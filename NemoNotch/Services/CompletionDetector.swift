@@ -9,6 +9,20 @@ enum CompletionSource: Equatable, Hashable {
     case calendar // Calendar event due
 }
 
+/// The session's host app as `AppActivator.activate` takes it: tab link →
+/// pid → bundle id, each optional.
+struct CompletionJump: Equatable {
+    let hostPID: Int32?
+    let hostBundleId: String?
+    let tabLink: String?
+
+    /// nil when there is nothing to jump to.
+    static func make(hostPID: Int32?, hostBundleId: String?, tabLink: String?) -> CompletionJump? {
+        guard hostPID != nil || hostBundleId != nil || tabLink != nil else { return nil }
+        return CompletionJump(hostPID: hostPID, hostBundleId: hostBundleId, tabLink: tabLink)
+    }
+}
+
 /// A finished unit of work: the name shown in the toast plus its source logo,
 /// and optional rich detail (task title, last tool, model, tokens, duration)
 /// carried through from the AI session that completed.
@@ -25,6 +39,9 @@ struct CompletionItem: Equatable {
     var duration: TimeInterval?
     /// Working directory the session ran in (AI sessions only).
     var path: String?
+    /// Where a click on the card jumps (AI sessions only), snapshotted at
+    /// completion so it still works after the session itself is reaped.
+    var jump: CompletionJump?
 
     /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -37,6 +54,7 @@ struct CompletionItem: Equatable {
         tokenDisplay = nil
         duration = nil
         path = nil
+        jump = nil
     }
 
     init(
@@ -47,7 +65,8 @@ struct CompletionItem: Equatable {
         model: String?,
         tokenDisplay: String?,
         duration: TimeInterval?,
-        path: String? = nil
+        path: String? = nil,
+        jump: CompletionJump? = nil
     ) {
         key = nil
         self.name = name
@@ -58,6 +77,7 @@ struct CompletionItem: Equatable {
         self.tokenDisplay = tokenDisplay
         self.duration = duration
         self.path = path
+        self.jump = jump
     }
 }
 
@@ -79,6 +99,9 @@ struct CompletionCandidate: Equatable {
     var duration: TimeInterval?
     /// Working directory the session ran in (AI sessions only).
     var path: String?
+    /// Where a click on the card jumps (AI sessions only), snapshotted at
+    /// completion so it still works after the session itself is reaped.
+    var jump: CompletionJump?
 
     /// Convenience for callers that only have the identity fields.
     init(key: String, name: String, isActive: Bool, source: CompletionSource) {
@@ -92,6 +115,7 @@ struct CompletionCandidate: Equatable {
         tokenDisplay = nil
         duration = nil
         path = nil
+        jump = nil
     }
 
     init(
@@ -104,7 +128,8 @@ struct CompletionCandidate: Equatable {
         model: String?,
         tokenDisplay: String?,
         duration: TimeInterval?,
-        path: String? = nil
+        path: String? = nil,
+        jump: CompletionJump? = nil
     ) {
         self.key = key
         self.name = name
@@ -116,6 +141,7 @@ struct CompletionCandidate: Equatable {
         self.tokenDisplay = tokenDisplay
         self.duration = duration
         self.path = path
+        self.jump = jump
     }
 }
 
@@ -141,7 +167,8 @@ struct CompletionDetector {
                     model: candidate.model,
                     tokenDisplay: candidate.tokenDisplay,
                     duration: candidate.duration,
-                    path: candidate.path
+                    path: candidate.path,
+                    jump: candidate.jump
                 )
                 item.key = candidate.key
                 completed.append(item)
@@ -191,6 +218,7 @@ enum CompletionFlashNames {
                 merged.tokenDisplay = item.tokenDisplay ?? older.tokenDisplay
                 merged.duration = item.duration ?? older.duration
                 merged.path = item.path ?? older.path
+                merged.jump = item.jump ?? older.jump
                 result[idx] = merged
             } else {
                 result.append(item)

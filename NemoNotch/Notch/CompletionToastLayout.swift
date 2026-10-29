@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// Geometry of the toast row under the notch, in the toast panel's flipped
 /// (top-left origin) coordinates. One source for both drawing and pointer
@@ -62,5 +63,28 @@ struct CompletionToastLayout {
             }
         }
         return nil
+    }
+}
+
+/// What a click on the toast row does — pure, so the controller only executes.
+/// × always just closes; the card body jumps to the session's host app and
+/// closes the card, or only closes it when there is nowhere to jump.
+enum CompletionToastClick: Equatable {
+    case dismiss(UUID)
+    case jump(UUID, CompletionJump)
+
+    static func action(for hit: CompletionToastLayout.Hit?, toasts: [CompletionToast]) -> CompletionToastClick? {
+        switch hit {
+        case let .close(index):
+            guard toasts.indices.contains(index) else { return nil }
+            return .dismiss(toasts[index].id)
+        case let .card(index):
+            guard toasts.indices.contains(index) else { return nil }
+            let toast = toasts[index]
+            guard let jump = toast.item.jump else { return .dismiss(toast.id) }
+            return .jump(toast.id, jump)
+        case nil:
+            return nil
+        }
     }
 }
