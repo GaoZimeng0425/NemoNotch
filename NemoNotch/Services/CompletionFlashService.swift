@@ -70,7 +70,12 @@ final class CompletionFlashService {
                 model: session.displayModel,
                 tokenDisplay: session.tokenDisplay,
                 duration: Date().timeIntervalSince(session.sessionStart),
-                path: session.cwd
+                path: session.cwd,
+                jump: CompletionJump.make(
+                    hostPID: session.launchingAppPID,
+                    hostBundleId: session.launchingAppBundleId,
+                    tabLink: session.tabLinkURL
+                )
             ))
         }
         for monitor in registry.installedMonitors {

@@ -348,8 +348,19 @@ final class CompletionToastWindowController {
     }
 
     private func handleClick(_ point: CGPoint, layout: CompletionToastLayout) {
-        guard case let .close(index) = layout.hit(point), service.toasts.indices.contains(index) else { return }
-        service.dismissToast(id: service.toasts[index].id)
+        switch CompletionToastClick.action(for: layout.hit(point), toasts: service.toasts) {
+        case let .dismiss(id):
+            service.dismissToast(id: id)
+        case let .jump(id, target):
+            AppActivator.activate(
+                pid: target.hostPID,
+                expectedBundleId: target.hostBundleId,
+                tabLink: target.tabLink
+            )
+            service.dismissToast(id: id)
+        case nil:
+            break
+        }
     }
 
     private func setHover(_ inside: Bool, screen id: UInt32) {
