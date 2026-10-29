@@ -2,7 +2,7 @@
 
 Reviewer: 独立评审子代理(Claude Opus 5.5,未参与开发,只读 worktree)
 Date: 2026-10-29
-Reviewed-Head: 7110558
+Reviewed-Head: 55526b0
 Verdict: APPROVED
 Scope:  9 files changed, 168 insertions(+), 9 deletions(-)
 
@@ -20,10 +20,12 @@ docs/superpowers/specs/2026-10-29-toast-click-jump-design.md
 
 ## Findings
 
-无 P1 / P2。以下均为 P3(记录,不拦合并):
+第 2 轮(head 55526b0,复审 7110558..55526b0):无 P1 / P2。P3-1、P3-2 已修并经评审员复验(见文末「第 2 轮运行证据」);P3-3、P3-4 按作者说明保留,接受。
 
-- `NemoNotch/Services/CompletionDetector.swift:12-16` — 新 `CompletionJump` 插在 `CompletionItem` 的文档注释与 struct 之间,"A finished unit of work…" 三行现在挂在 `CompletionJump` 上,`CompletionItem` 失去文档注释。把那三行挪回 `struct CompletionItem` 之上即可。[P3]
-- `NemoNotch/Services/CompletionDetector.swift:24` — `CompletionJump.make` 的「只有 tab 链接也算可跳」分支无测试守护:变异 `|| tabLink != nil else` → `else` **存活**(mutate.sh exit 1,20 例全绿)。边栏 `EdgeBarModel.swift:159-161` 明确把「只有 tab link」当可跳,两处语义一致性目前只靠代码自觉。建议在 `makeRequiresSomeField` 加一行 tabLink-only 断言。[P3]
+第 1 轮(head 7110558)原始记录如下:
+
+- `NemoNotch/Services/CompletionDetector.swift:12-16` — 新 `CompletionJump` 插在 `CompletionItem` 的文档注释与 struct 之间,"A finished unit of work…" 三行现在挂在 `CompletionJump` 上,`CompletionItem` 失去文档注释。把那三行挪回 `struct CompletionItem` 之上即可。[P3] **已修(d4fc0ff)**:注释回到 `CompletionDetector.swift:26-28` 的 `struct CompletionItem` 之上,`CompletionJump` 保留自己的两行注释。
+- `NemoNotch/Services/CompletionDetector.swift:24` — `CompletionJump.make` 的「只有 tab 链接也算可跳」分支无测试守护:变异 `|| tabLink != nil else` → `else` **存活**(mutate.sh exit 1,20 例全绿)。边栏 `EdgeBarModel.swift:159-161` 明确把「只有 tab link」当可跳,两处语义一致性目前只靠代码自觉。建议在 `makeRequiresSomeField` 加一行 tabLink-only 断言。[P3] **已修(55526b0)**:`CompletionToastClickTests.swift:47-49` 新增 tab-link-only 断言;评审员复跑同一变异 → 被抓住(exit 0,1 失败)。
 - `NemoNotch/Services/CompletionFlashService.swift:74-78` — 会话字段 → `CompletionJump` 的映射无测试:变异 `hostBundleId: session.launchingAppBundleId` → `nil` 全量 579 例**存活**(exit 1)。这是 private 服务方法,测它要起 store+service,属"无廉价测试目标",可接受;但要明说:接线正确性目前只有梯级 2(读代码)。[P3]
 - 快照 vs 点击时回查(设计选择,判定为对):`AICLIMonitorService.swift:170-178` 在 dispatch **之后**另起一次 `store.mutate` 记录宿主,但两次突变都在 `routeEvent` 同一同步段内,而 `CompletionFlashService.observe` 的 onChange 经 `Task { @MainActor }` 跳一拍才 `evaluate()`(`CompletionFlashService.swift:105-113`),所以快照时宿主已落地;`ClaudeCodeService.swift:133` 的 record 路径在同一 mutate 里记录。残余盲区只有"宿主在完成**之后**才首次解析出来"(例如此前每次进程树上溯都没找到 GUI 祖先),这种情况点击时回查也大概率同样拿不到;反过来快照能熬过 stale 回收,回查不能。若想两全可点击时先查 store、缺了再用快照——非必要。[P3 观察]
 - 与边栏 Go 的激活路径对比:同一个 `AppActivator.activate`、同样从 never-active app 的非激活面板里由真实 mouseDown 触发(边栏经 `press` 的 asyncAfter 延迟,toast 同步执行),激活条件等价。顺序上边栏先 `hover.closeNow()` 再 activate,这里先 activate 再 `dismissToast`;`dismissToast` 只动 `toastQueue`/`toasts`,与激活无耦合,两种顺序在同一 runloop turn 内结果相同,不存在先收卡导致点击上下文丢失的问题(卡在面板里收起不 orderOut 面板,最后一张卡的 orderOut 还有 `hudAppearDuration+0.1s` 延迟)。梯级 2–3(读代码推断),未在运行中的 app 复现(梯级 5 未达)。[P3 观察]
@@ -62,3 +64,10 @@ docs/superpowers/specs/2026-10-29-toast-click-jump-design.md
 在 worktree 里:`git diff 8189b0bb05da63a9e2324d373c0f7ac32d28544f...HEAD` 看全量改动;重要文件直接读上下文,
 别只看 diff 片段。发现问题先列 Findings(标 CHANGES_NEEDED),修完复审再改
 APPROVED。APPROVED 意味着:"我愿意为这个合并背书"——不是"看起来没毛病"。
+
+## 第 2 轮运行证据(head 55526b0,梯级 4)
+
+- `sh scripts/affected-tests.sh` → exit 0;同 5 个测试类,44 通过 0 失败。
+- `scripts/mutate.sh NemoNotch/Services/CompletionDetector.swift '|| tabLink != nil else' 'else' --only CompletionDetectorTests,CompletionToastClickTests` → **变异被抓住**,exit 0(测试 exit 65,1 失败 19 通过)。由评审员复跑,不采信作者自述。
+- `check-arch.sh` exit 0;`doc-audit.sh` exit 0;`lint.sh` exit 0。
+- 跑后 `grep -E '^# port' ~/.NemoNotch/hooks/hook-sender.sh` → `# port: 45831`。
