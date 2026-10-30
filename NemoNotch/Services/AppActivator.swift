@@ -99,21 +99,39 @@ enum AppActivator {
     }
 
     /// Walk the process tree upward from `pid` and return the first entry
-    /// (including `pid` itself) that belongs to a GUI app — i.e. the terminal
-    /// or IDE hosting the CLI. `NSRunningApplication` is documented
+    /// (including `pid` itself) that is the user-facing host — i.e. the
+    /// terminal or IDE hosting the CLI. `NSRunningApplication` is documented
     /// thread-safe; callers are on the main actor anyway.
     static func hostAppPID(of pid: pid_t) -> Int32? {
+        hostAppPID(
+            of: pid,
+            parent: { parentPID(of: $0) },
+            policy: { NSRunningApplication(processIdentifier: $0)?.activationPolicy }
+        )
+    }
+
+    /// The walk itself, with the process tree and each pid's app activation
+    /// policy injected (nil = not an app) so it can be tested on real shapes.
+    static func hostAppPID(
+        of pid: pid_t,
+        parent: (pid_t) -> pid_t?,
+        policy: (pid_t) -> NSApplication.ActivationPolicy?
+    ) -> Int32? {
         var current = pid
         // Bound guards against pathological depth; real chains are ≤ ~6 hops
         // (hook bash → CLI → shell → login → terminal app).
         for _ in 0 ..< 16 {
-            if NSRunningApplication(processIdentifier: current) != nil {
+            if isHostCandidate(policy(current)) {
                 return current
             }
-            guard let parent = parentPID(of: current), parent > 1 else { return nil }
+            guard let parent = parent(current), parent > 1 else { return nil }
             current = parent
         }
         return nil
+    }
+
+    static func isHostCandidate(_ policy: NSApplication.ActivationPolicy?) -> Bool {
+        policy != nil
     }
 
     /// The hosting app's display name ("Zap", "iTerm2") for the card's

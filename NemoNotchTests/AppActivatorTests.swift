@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @testable import NemoNotch
 import Testing
@@ -69,5 +70,43 @@ struct AppActivatorTests {
         let session = service.store.get("sess_appactivator_1")
         #expect(session != nil)
         #expect(session?.launchingAppPID == nil)
+    }
+
+    @Test("a zcode session resolves to the ZCode app, not its background helper")
+    func skipsBackgroundHelper() {
+        // Real tree (2026-10-30): zcode-cli 70919 lives in ZCode Helper.app
+        // (LSUIElement, activationPolicy .prohibited) → zcode-host-local-1
+        // 70909 (not an app) → ZCode 70848 (.regular).
+        let parents: [pid_t: pid_t] = [70919: 70909, 70909: 70848, 70848: 1]
+        let policies: [pid_t: NSApplication.ActivationPolicy] = [70919: .prohibited, 70848: .regular]
+        let host = AppActivator.hostAppPID(
+            of: 70919,
+            parent: { parents[$0] },
+            policy: { policies[$0] }
+        )
+        #expect(host == 70848)
+    }
+
+    @Test("a terminal-hosted CLI still resolves to the terminal")
+    func terminalHost() {
+        // claude 500 → zsh 400 → login 300 → iTerm2 200 (.regular)
+        let parents: [pid_t: pid_t] = [500: 400, 400: 300, 300: 200, 200: 1]
+        let host = AppActivator.hostAppPID(
+            of: 500,
+            parent: { parents[$0] },
+            policy: { $0 == 200 ? .regular : nil }
+        )
+        #expect(host == 200)
+    }
+
+    @Test("an accessory-only chain has no host to jump to")
+    func noRegularAncestor() {
+        let parents: [pid_t: pid_t] = [10: 20, 20: 1]
+        let host = AppActivator.hostAppPID(
+            of: 10,
+            parent: { parents[$0] },
+            policy: { $0 == 20 ? .accessory : nil }
+        )
+        #expect(host == nil)
     }
 }
