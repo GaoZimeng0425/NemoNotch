@@ -2,8 +2,8 @@
 
 Reviewer: independent review subagent (Opus 5.5, fresh context; did not author the branch)
 Date: 2026-10-30
-Reviewed-Head: f4b0649
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 093b859
+Verdict: APPROVED
 Scope:  3 files changed, 66 insertions(+), 5 deletions(-)
 
 ```
@@ -13,6 +13,17 @@ NemoNotchTests/AppActivatorTests.swift
 ```
 
 ## Findings
+
+### Round 2(复审 093b859,`git diff f4b0649..HEAD`)
+
+- [已修 P2] 两级遍历 — `NemoNotch/Services/AppActivator.swift:124-147`:最近的 `.regular` 优先;一个都没有时回落最近的任意 app;排除本进程(`exclude: getpid()`)。走查:zcode 链 70919(acc)→70909(acc)→70848(regular) → 70848;accessory 终端链 → 回落到终端;气泡链 claude→NemoNotch(本进程)→launchd → nil;tmux/ssh → nil(不变)。循环出口 `:142` 与界外出口 `:146` 都返回 `firstApp`,一致。
+- [已定 P3] 气泡取舍已拍板(无宿主,不出无用的「Open in NemoNotch」),且有 `ownProcessIsNeverTheHost` 钉住(`NemoNotchTests/AppActivatorTests.swift:115-126`)。AGENTS.md zcode 节已同步为两级口径。
+- [P3] `skipsBackgroundHelper`/`terminalHost`(`AppActivatorTests.swift:75-100`)沿用默认 `exclude: getpid()`:测试宿主 pid 恰好等于 70919/70848/200 等假 pid 时会误判。概率极低,建议显式传 `exclude: 999` 与另两条对齐。不阻塞。
+- [P3] 开发期从终端/Xcode 直接启动 NemoNotch 时,气泡 CLI 会越过本进程爬到该终端/Xcode(regular),出现「Open in Xcode」。正式安装由 launchd 拉起,不受影响。仅备注。
+- [P3,沿用] 部署前已弹出的 toast 仍持有 helper pid 快照(`CompletionFlashService.swift:75`),一次性。
+- 本轮运行(梯级 4):`sh scripts/affected-tests.sh` → AppActivatorTests,exit 0(10 过 0 败)。三处变异各自被抓,均为内层 exit 65、1 败 9 过,文件已恢复:① `if appPolicy == .regular {`→`if false {`(regular 层);② `else { return firstApp }`→`else { return nil }`(回落层);③ `if current != exclude, let appPolicy`→`if true, let appPolicy`(排除本进程)。之后 `# port: 45831`。
+
+### Round 1(f4b0649)
 
 - **[P2] 无 `.regular` 祖先时整条宿主丢失,回归了「隐藏 Dock 的终端」** — `NemoNotch/Services/AppActivator.swift:124-129,137-139`。旧谓词「任何 NSRunningApplication」在这类链上能跳,新谓词 `policy == .regular` 爬过它们直到 launchd → `nil` → `recordHost` 不写宿主(`:92`)→ 边栏 `hasHost` 为假、Go 按钮消失(`EdgeBarModel.swift:160`),toast `CompletionJump.make` 返回 nil(`CompletionDetector.swift:21`)。受影响形状:终端被用户设为不进 Dock(Ghostty `macos-hidden = always`——本机 Ghostty 二进制 `strings` 可见 `macos-hidden` 与 `setActivationPolicy:`;iTerm2「Exclude from Dock and App Switcher」同理,本机未装,系推断),此时终端本体就是 `.accessory`,激活它确实会把窗口提到前台。证据梯级 2–3(代码路径 + 二进制字符串),未在运行中复现。修法机械、对 zcode 无副作用:走一遍记下第一个 `.regular`,同时记下第一个任意 app(旧行为);有 regular 返回 regular,否则回落第一个 app。zcode 链有 ZCode(regular)不受影响;ZCode 本体退出而 cli 仍活时回落 helper,等于旧行为。`noRegularAncestor` 用例(`NemoNotchTests/AppActivatorTests.swift:102-111`)需相应改为断言回落到 20(或另设「零 app 链 → nil」用例),并补一条「accessory 终端仍可跳」用例。
 - [P3] 聊天气泡会话行为静默改变 — `AppActivator.swift:127`。气泡的 `claude` 子进程父进程是 NemoNotch 自身(实测 pid 24051 `com.nemo.BrightnessApp.NemoNotch`,`.accessory`),旧逻辑把宿主记成 NemoNotch(卡片「Open in NemoNotch」,点了基本无效),新逻辑记为 nil(Go 按钮消失)。这其实更诚实;若采纳上条 P2 的回落,会恢复旧行为——两者择一时请明示取舍,别让它成为附带结果。
@@ -31,10 +42,10 @@ NemoNotchTests/AppActivatorTests.swift
 - [x] **证据纪律**(日志/ps/policy 实读复核到 4 级):提交信息里的验证声明到第 4 级了吗(真跑过、有退出码/日志)?
 - [x] **Swift 6 并发**(纯函数注入闭包,非逃逸,无新隔离面):隔离标注正确?Sendable 边界清楚?回调线程假设实测过?
 - [x] **最小改动**:每行可追溯到任务;没有顺手"改进"邻近代码
-- [ ] **错误路径**(见 P2:无 regular 祖先时静默丢宿主):失败会响(非零退出/日志),没有吞错、没有假绿
+- [x] **错误路径**(R1 P2 已修:无 regular 祖先时回落任意 app):失败会响(非零退出/日志),没有吞错、没有假绿
 - [x] **坑总目录对照**(zcode 节、Edge Bar Go、toast 跳转快照):改到的区域在 AGENTS.md 有已知坑吗?对照过了吗?
 - [x] **教训候选**:有「这段以后会再咬人」的新坑/新判据吗?没有写"无";有就记到 Findings 尾部「教训候选」小节(位置 file:line + 一句话判据)——收尾 reflect 会分流进 guardrail-backlog(能门禁化的)或 AGENTS.md 坑总目录
-- [x] **文档同步**(AGENTS.md zcode 节已加;若采纳 P2 回落需同步措辞「只认 .regular」):行为变了的话 AGENTS.md / README 跟上了吗?
+- [x] **文档同步**(AGENTS.md zcode 节已改为两级口径):行为变了的话 AGENTS.md / README 跟上了吗?
 
 ## 评审方法提示(给评审会话)
 
