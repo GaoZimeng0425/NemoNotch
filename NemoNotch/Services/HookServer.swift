@@ -59,15 +59,11 @@ final class HookServer {
         listener?.cancel()
         listener = nil
 
-        let params = NWParameters.tcp
-        params.allowLocalEndpointReuse = true
-        params.acceptLocalOnly = true
-        params.includePeerToPeer = false
-
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             LogService.error("Invalid hook port \(port)", category: "HookServer")
             return
         }
+        let params = Self.listenerParameters(port: nwPort)
 
         let newListener: NWListener
         do {
@@ -92,6 +88,15 @@ final class HookServer {
         }
 
         newListener.start(queue: .global(qos: .userInitiated))
+    }
+
+    /// Listener parameters for the hook port.
+    nonisolated static func listenerParameters(port: NWEndpoint.Port) -> NWParameters {
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        params.acceptLocalOnly = true
+        params.includePeerToPeer = false
+        return params
     }
 
     private func handleListenerState(_ state: NWListener.State) {
