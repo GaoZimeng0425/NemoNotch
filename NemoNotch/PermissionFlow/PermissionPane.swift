@@ -27,8 +27,7 @@ enum PermissionPane {
     /// Deep link that opens this pane in System Settings.
     ///
     /// `com.apple.preference.security` + `Privacy_*` is the anchor form that
-    /// works from Ventura through Tahoe (matches what NotificationService
-    /// already used for Accessibility).
+    /// works from Ventura through Tahoe.
     var settingsURL: URL {
         let anchor = switch self {
         case .accessibility: "Privacy_Accessibility"
@@ -54,8 +53,7 @@ enum PermissionPane {
             // Plain `AXIsProcessTrusted()` rather than
             // `AXIsProcessTrustedWithOptions`: the `kAXTrustedCheckOptionPrompt`
             // global is a C mutable variable and is rejected as unsafe shared
-            // state under Swift 6 strict concurrency. This also matches what
-            // NotificationService already polls with.
+            // state under Swift 6 strict concurrency. Silent preflight check.
             return { AXIsProcessTrusted() }
         case .screenRecording:
             return { CGPreflightScreenCaptureAccess() }

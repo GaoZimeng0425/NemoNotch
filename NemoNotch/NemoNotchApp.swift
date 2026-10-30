@@ -112,7 +112,6 @@ struct SettingsSceneRoot: View {
                     .environment(deps.settings)
                     .environment(deps.aiMonitor)
                     .environment(deps.launcher)
-                    .environment(deps.notification)
                     .environment(deps.weather)
                     .environment(deps.hermes)
                     .environment(deps.openClaw)

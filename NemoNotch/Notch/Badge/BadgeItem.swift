@@ -9,7 +9,6 @@ enum NotchGlow: Equatable {
 }
 
 enum BadgeItem: Identifiable, Equatable {
-    case notification(bundleID: String, count: Int)
     case media
     case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool, sessionID: String)
     case agents(agentID: String, state: AgentMonitorState, emoji: String)
@@ -18,7 +17,6 @@ enum BadgeItem: Identifiable, Equatable {
 
     var id: String {
         switch self {
-        case let .notification(bundleID, _): "notification:\(bundleID)"
         case .media: "media"
         case let .ai(source, status, tool, waitingApproval, sessionID):
             "ai:\(sessionID):\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
@@ -30,7 +28,6 @@ enum BadgeItem: Identifiable, Equatable {
 
     var tab: Tab {
         switch self {
-        case .notification: .overview
         case .media: .overview
         case .ai: .claude
         case .agents: .claude
@@ -44,8 +41,6 @@ enum BadgeItem: Identifiable, Equatable {
         switch self {
         case let .ai(_, _, _, waitingApproval, _) where waitingApproval:
             return 0
-        case .notification:
-            return 1
         case .pomodoro:
             return 2
         case .agents:

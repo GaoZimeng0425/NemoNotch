@@ -31,7 +31,6 @@ struct AppDependencies {
 
     // MARK: Interface data sources
 
-    let notification: NotificationService
     let weather: WeatherService
     let usageQuota: UsageQuotaService
     let hud: HUDService
@@ -98,8 +97,6 @@ struct AppDependencies {
         let registry = AgentMonitorRegistry()
         registry.register(openClaw)
         registry.register(hermes)
-
-        let notification = NotificationService(monitoredApps: settings.monitoredApps)
 
         let weather = WeatherService()
         if !UITestMode.isActive, !settings.weatherCity.isEmpty {
@@ -215,7 +212,6 @@ struct AppDependencies {
             openClaw: openClaw,
             hermes: hermes,
             registry: registry,
-            notification: notification,
             weather: weather,
             usageQuota: usageQuota,
             hud: hud,
@@ -257,7 +253,6 @@ struct AppDependencies {
                     .environment(registry)
                     .environment(hermes)
                     .environment(launcher)
-                    .environment(notification)
                     .environment(weather)
                     .environment(hud)
                     .environment(completionFlash)

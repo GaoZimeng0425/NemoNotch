@@ -45,7 +45,6 @@ struct BadgeDebounceTests {
             mediaService: MediaService(disableLiveUpdates: true),
             calendarService: CalendarService(),
             aiService: AICLIMonitorService(),
-            notificationService: NotificationService(),
             agentRegistry: AgentMonitorRegistry(),
             pomodoroService: PomodoroTimerService(
                 taskStore: TaskStore(),

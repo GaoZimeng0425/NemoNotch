@@ -9,7 +9,6 @@ struct NotchView: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(MediaService.self) var mediaService
     @Environment(AICLIMonitorService.self) var aiService
-    @Environment(NotificationService.self) var notificationService
     @Environment(AgentMonitorRegistry.self) var agentRegistry
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
@@ -257,7 +256,6 @@ struct NotchView: View {
             mediaService: mediaService,
             calendarService: calendarService,
             aiService: aiService,
-            notificationService: notificationService,
             agentRegistry: agentRegistry,
             pomodoroService: pomodoroService,
             appSettings: appSettings
@@ -269,13 +267,7 @@ struct NotchView: View {
     // MARK: - Badge interaction
 
     private func handleBadgeTap(_ item: BadgeItem) {
-        switch item {
-        case let .notification(bundleID, _):
-            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
-            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-        default:
-            coordinator.notchOpen(tab: item.tab)
-        }
+        coordinator.notchOpen(tab: item.tab)
     }
 
     // MARK: - Chin bar (extracted to keep body type-checkable)
@@ -418,7 +410,6 @@ struct NotchView: View {
             notchMinWidth: notchCore,
             notchCoreWidth: notchCore,
             onBadgeTap: handleBadgeTap,
-            notificationService: notificationService,
             mediaService: mediaService,
             pomodoroService: pomodoroService,
             morphNamespace: notchMorph

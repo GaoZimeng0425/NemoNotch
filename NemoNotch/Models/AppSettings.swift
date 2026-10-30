@@ -36,10 +36,6 @@ final class AppSettings {
         }
     }
 
-    var monitoredApps: [String] {
-        didSet { UserDefaults.standard.set(monitoredApps, forKey: "monitoredApps") }
-    }
-
     var weatherCity: String {
         didSet { UserDefaults.standard.set(weatherCity, forKey: "weatherCity") }
     }
@@ -240,7 +236,6 @@ final class AppSettings {
             launcherApps = Self.defaultApps
         }
 
-        monitoredApps = UserDefaults.standard.stringArray(forKey: "monitoredApps") ?? []
         weatherCity = UserDefaults.standard.string(forKey: "weatherCity") ?? ""
 
         let storedLang = UserDefaults.standard.string(forKey: "language").flatMap { AppLanguage(rawValue: $0) }
