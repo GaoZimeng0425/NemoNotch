@@ -98,14 +98,7 @@ final class CalendarDueMonitor {
         for event in fresh {
             firedKeys.insert(CalendarDueDetector.dedupKey(event))
         }
-        let items = fresh.map { event in
-            CompletionItem(
-                name: event.title.isEmpty
-                    ? String(localized: "calendar.untitled_event")
-                    : event.title,
-                source: .calendar
-            )
-        }
+        let items = fresh.map { CalendarToastCard.item(for: $0) }
         LogService.info("Calendar event(s) due: \(items.map(\.name))", category: "CalendarDueMonitor")
         completionFlash.showCompletionFlash(items: items)
     }

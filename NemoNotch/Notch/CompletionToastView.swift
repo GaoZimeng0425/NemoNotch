@@ -34,6 +34,8 @@ struct CompletionToastView: View {
 
             if let notice = item.notice {
                 noticeText(notice)
+            } else if let calendar = item.calendar {
+                calendarText(calendar)
             } else {
                 completionText
             }
@@ -86,6 +88,30 @@ struct CompletionToastView: View {
                     .foregroundStyle(NotchTheme.textTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Calendar card: title, time (· place), and the link it opens on click.
+    private func calendarText(_ calendar: CalendarCard) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: item.name)
+                .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(verbatim: calendar.timeLine)
+                .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let link = calendar.linkLabel {
+                Label(link, systemImage: "link")
+                    .font(.system(size: NotchConstants.completionToastFontSize - 3))
+                    .foregroundStyle(NotchTheme.accent)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
