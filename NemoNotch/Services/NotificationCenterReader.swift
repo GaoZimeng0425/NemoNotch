@@ -25,12 +25,8 @@ enum NotificationCenterReader {
         // CANTOPEN, and the TCC refusal is the one case the UI must tell apart.
         do {
             try FileHandle(forReadingFrom: databaseURL).close()
-        } catch let error as CocoaError where error.code == .fileReadNoPermission {
-            return .noAccess
-        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            return .unavailable("database not found")
         } catch {
-            return .unavailable(error.localizedDescription)
+            return classifyOpenFailure(error)
         }
 
         var db: OpaquePointer?
@@ -67,6 +63,17 @@ enum NotificationCenterReader {
             LogService.debug("Skipped \(skipped) undecodable notification records", category: "NotificationToast")
         }
         return .records(records)
+    }
+
+    /// Maps a failed probe open to a result (current, pre-fix mapping).
+    static func classifyOpenFailure(_ error: Error) -> NotificationCenterReadResult {
+        if let cocoa = error as? CocoaError, cocoa.code == .fileReadNoPermission {
+            return .noAccess
+        }
+        if let cocoa = error as? CocoaError, cocoa.code == .fileReadNoSuchFile {
+            return .unavailable("database not found")
+        }
+        return .unavailable(error.localizedDescription)
     }
 
     /// (mtime, size) of the database and its WAL — a new notification lands
