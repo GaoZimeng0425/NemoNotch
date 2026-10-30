@@ -99,13 +99,28 @@ struct AppActivatorTests {
         #expect(host == 200)
     }
 
-    @Test("an accessory-only chain has no host to jump to")
-    func noRegularAncestor() {
-        let parents: [pid_t: pid_t] = [10: 20, 20: 1]
+    @Test("a terminal hiding its Dock icon (accessory) is still the host when nothing regular is above it")
+    func accessoryTerminalFallback() {
+        // claude 500 → zsh 400 → Ghostty 300 (.accessory, macos-hidden) → launchd
+        let parents: [pid_t: pid_t] = [500: 400, 400: 300, 300: 1]
         let host = AppActivator.hostAppPID(
-            of: 10,
+            of: 500,
             parent: { parents[$0] },
-            policy: { $0 == 20 ? .accessory : nil }
+            policy: { $0 == 300 ? .accessory : nil },
+            exclude: 999
+        )
+        #expect(host == 300)
+    }
+
+    @Test("a chat-bubble CLI whose only app ancestor is NemoNotch itself has no host")
+    func ownProcessIsNeverTheHost() {
+        // claude 500 → NemoNotch 24051 (.accessory, this process) → launchd
+        let parents: [pid_t: pid_t] = [500: 24051, 24051: 1]
+        let host = AppActivator.hostAppPID(
+            of: 500,
+            parent: { parents[$0] },
+            policy: { $0 == 24051 ? .accessory : nil },
+            exclude: 24051
         )
         #expect(host == nil)
     }

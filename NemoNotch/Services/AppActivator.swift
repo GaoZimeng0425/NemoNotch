@@ -112,30 +112,38 @@ enum AppActivator {
 
     /// The walk itself, with the process tree and each pid's app activation
     /// policy injected (nil = not an app) so it can be tested on real shapes.
+    ///
+    /// Two tiers: the nearest `.regular` (Dock) app wins — background
+    /// helpers also count as running apps (zcode-cli lives inside
+    /// ZCode Helper.app, `.accessory`) and activating one shows nothing, so
+    /// the walk climbs past them to ZCode itself. With no regular ancestor
+    /// at all (a terminal set to hide its Dock icon is `.accessory` itself),
+    /// fall back to the nearest app of any kind — except `exclude` (this
+    /// process: a chat-bubble CLI is our own child, and "jumping" to
+    /// NemoNotch does nothing).
     static func hostAppPID(
         of pid: pid_t,
         parent: (pid_t) -> pid_t?,
-        policy: (pid_t) -> NSApplication.ActivationPolicy?
+        policy: (pid_t) -> NSApplication.ActivationPolicy?,
+        exclude: pid_t = getpid()
     ) -> Int32? {
         var current = pid
+        var firstApp: Int32?
         // Bound guards against pathological depth; real chains are ≤ ~6 hops
         // (hook bash → CLI → shell → login → terminal app).
         for _ in 0 ..< 16 {
-            if isHostCandidate(policy(current)) {
-                return current
+            if current != exclude, let appPolicy = policy(current) {
+                if appPolicy == .regular {
+                    return current
+                }
+                if firstApp == nil {
+                    firstApp = current
+                }
             }
-            guard let parent = parent(current), parent > 1 else { return nil }
+            guard let parent = parent(current), parent > 1 else { return firstApp }
             current = parent
         }
-        return nil
-    }
-
-    /// Only a regular (Dock-visible) app can be brought forward. Background
-    /// helpers also count as running apps — zcode-cli lives inside
-    /// ZCode Helper.app (LSUIElement) — and activating one shows nothing, so
-    /// the walk keeps climbing past them to the real ZCode app.
-    static func isHostCandidate(_ policy: NSApplication.ActivationPolicy?) -> Bool {
-        policy == .regular
+        return firstApp
     }
 
     /// The hosting app's display name ("Zap", "iTerm2") for the card's
