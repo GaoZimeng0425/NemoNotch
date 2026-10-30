@@ -45,6 +45,8 @@ struct CompletionItem: Equatable {
     var jump: CompletionJump?
     /// Card text for a Notification Center card (`.notification` source only).
     var notice: NotificationCard?
+    /// Time/place and link lines for a calendar-due card (`.calendar` source only).
+    var calendar: CalendarCard?
 
     /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -59,6 +61,7 @@ struct CompletionItem: Equatable {
         path = nil
         jump = nil
         notice = nil
+        calendar = nil
     }
 
     init(
@@ -83,6 +86,7 @@ struct CompletionItem: Equatable {
         self.path = path
         self.jump = jump
         notice = nil
+        calendar = nil
     }
 }
 
