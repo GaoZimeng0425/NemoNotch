@@ -2,8 +2,8 @@
 
 Reviewer: independent review subagent (Claude, fresh context; did not author the change)
 Date: 2026-10-30
-Reviewed-Head: a1d798f
-Verdict: CHANGES_NEEDED
+Reviewed-Head: a2464c7
+Verdict: APPROVED
 Scope:  4 files changed, 384 insertions(+), 64 deletions(-)
 
 ```
@@ -14,6 +14,21 @@ NemoNotchTests/EqualizerKeyframesTests.swift
 ```
 
 ## Findings
+
+### 复审(a2464c7,2026-10-30)
+
+首轮(a1d798f)判 CHANGES_NEEDED;作者补提交 `a2464c7 fix: share one vinyl phase across disc instances`。逐条处置:
+
+- **Finding 1 [P2] — 已解决。** 新增纯 `VinylClock`(`MediaLayerViews.swift:51-78`)作为全部唱片共享的唯一相位(`private static var clock`,NSView 子类即 MainActor 隔离,无并发问题);`applyClock()`(`:146-168`)暂停时摆静态角、播放时以 `spin.timeOffset = phase` 起转,入窗/播停变化都重新对齐。墨菲两端与每次重建的实例读同一相位,封面不再跳正。数学核对:播放时 anchor=相位 0 的媒体时间,暂停/恢复同一表达式 `anchor = now - anchor` 互逆,`setPlaying` 幂等(两端各报一次不重置)。证据:2 级(file:line 推导)+ 4 级(`VinylClockTests` 6 例;`sh scripts/mutate.sh … 'anchor = now - anchor' 'anchor = now' --only VinylClockTests` → 3 败 3 过,退出码 65,已恢复原文件)。未到 5 级:没在运行中的 app 里录屏看开合。
+- **Finding 2 [P3] — 接受,延后。** 改后性能读数需要放歌的真实运行环境,作者承诺部署后在运行中的 app 采样。合并后请补记(主线程 `sample` 占比 / `NEMONOTCH_PERF=1` 的 `VinylDiscView.body` 频率);在此之前 AGENTS 条目里的「~23%」只是改前数字,不是改后结论。
+- **Finding 3 [P3] — 接受,不改。** 变形中硬币位图拉伸仅视觉、交叉淡化掩盖,不阻塞。
+- **Finding 4 [P3] — 接受,不改。** 均衡器几何参数只在创建时读;唯一调用点全传常量,属潜在坑。
+
+**复审新发现:无。** 次要观察(不算 finding):`applyClock` 取相位用的 `CACurrentMediaTime()` 与动画实际 beginTime(事务提交时)差几毫秒,角度误差 <1°,不可见。
+
+复审验证:`sh scripts/affected-tests.sh` 选出 `EqualizerKeyframesTests` + `VinylClockTests`,12 过 0 败,退出码 0(`build/test.log`);`sh scripts/check-arch.sh` 退出码 0。4 级。
+
+### 首轮(a1d798f)
 
 1. **[P2] 每次开合刘海,唱片角度都会跳回 0(墨菲变形两端不再同相)** — `NemoNotch/Helpers/MediaLayerViews.swift:57-67,119-133`(配合 `BadgeIconView.swift:45-53` 与 `OverviewTab.swift:312-322` 的 `matchedGeometryEffect`)。
    旧实现角度由挂钟推导(`angle(at: context.date)`),收起态硬币与展开面板唱片是两个实例但任一时刻同角度,飞入/飞出的墨菲在转动中连续。新实现每个 `VinylSpinnerView` 实例从 `speed = 0`、`timeOffset = 0`、`fromValue = 0` 起步,角度是**实例局部状态**;收起↔展开每次都卸载旧实例、新建新实例(`NotchView.swift:148-160` 条件挂载),所以放歌时每次开/合刘海封面都会从任意角度跳回正上方,且变形中两端角度不一致。
@@ -45,7 +60,7 @@ NemoNotchTests/EqualizerKeyframesTests.swift
 ## 审查清单(评审者逐项过,不适用项标 N/A)
 
 - [x] **判别剃刀**:EqualizerKeyframes 测试以种子 RNG 调纯函数断言字面形状;mutate.sh 注入变异变红(4 级)。VinylSpinner 无测试——AppKit/CA 集成,按规则跳过
-- [ ] **证据纪律**:改前采样有,改后无实测(Finding 2)
+- [x] **证据纪律**:单测/变异 4 级;改后性能实测接受延后至部署后(Finding 2,已记录待补)
 - [x] **Swift 6 并发**:全 MainActor,无回调线程/Sendable 边界
 - [x] **最小改动**:改动限于两视图内部与一条 AGENTS 坑条目;调用点零改动
 - [x] **错误路径**:N/A(无可失败 I/O;`ImageRenderer` 返回 nil 时面为空,无崩溃)
