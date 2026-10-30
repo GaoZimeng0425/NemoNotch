@@ -144,4 +144,47 @@ struct CompletionToastQueueTests {
         q.dismiss(id: q.toasts[0].id)
         #expect(q.toasts.map(\.item.name) == ["B"])
     }
+
+    // MARK: - Notification cards
+
+    private func notice(_ app: String, count: Int) -> CompletionItem {
+        var item = CompletionItem(name: app, source: .notification(bundleID: app))
+        item.key = "notify:\(app)"
+        item.notice = NotificationCard(count: count, line1: nil, line2: "x")
+        return item
+    }
+
+    @Test("replace swaps a card's content without restarting its timer")
+    func replaceKeepsDeadline() {
+        var q = queue()
+        q.add([notice("slack", count: 2)], now: t0)
+        let id = q.toasts[0].id
+        let replaced = q.replace(key: "notify:slack", with: notice("slack", count: 1))
+        #expect(replaced)
+        #expect(q.toasts[0].id == id)
+        #expect(q.toasts[0].item.notice?.count == 1)
+        #expect(q.toasts[0].deadline == t0.addingTimeInterval(30))
+    }
+
+    @Test("replace with nil removes the card; an unknown key changes nothing")
+    func replaceNilRemoves() {
+        var q = queue()
+        q.add([item("A"), notice("slack", count: 1)], now: t0)
+        let missing = q.replace(key: "notify:mail", with: nil)
+        #expect(missing == false)
+        #expect(q.toasts.count == 2)
+        let removed = q.replace(key: "notify:slack", with: nil)
+        #expect(removed)
+        #expect(q.toasts.map(\.item.name) == ["A"])
+    }
+
+    @Test("notification cards share the row's capacity with completion cards")
+    func notificationCardsShareCapacity() {
+        var q = queue()
+        q.add([item("A")], now: t0)
+        q.add([item("B")], now: t0.addingTimeInterval(1))
+        q.add([item("C")], now: t0.addingTimeInterval(2))
+        q.add([notice("slack", count: 1)], now: t0.addingTimeInterval(3))
+        #expect(q.toasts.map(\.item.name) == ["B", "C", "slack"])
+    }
 }

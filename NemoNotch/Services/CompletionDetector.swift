@@ -7,6 +7,7 @@ enum CompletionSource: Equatable, Hashable {
     case agent // OpenClaw / Hermes multi-agent monitors
     case pomodoro // Pomodoro phase end
     case calendar // Calendar event due
+    case notification(bundleID: String) // Notification Center message (Mail / Slack / WeChat …)
 }
 
 /// The session's host app as `AppActivator.activate` takes it: tab link →
@@ -42,6 +43,8 @@ struct CompletionItem: Equatable {
     /// Where a click on the card jumps (AI sessions only), snapshotted at
     /// completion so it still works after the session itself is reaped.
     var jump: CompletionJump?
+    /// Card text for a Notification Center card (`.notification` source only).
+    var notice: NotificationCard?
 
     /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -55,6 +58,7 @@ struct CompletionItem: Equatable {
         duration = nil
         path = nil
         jump = nil
+        notice = nil
     }
 
     init(
@@ -78,6 +82,7 @@ struct CompletionItem: Equatable {
         self.duration = duration
         self.path = path
         self.jump = jump
+        notice = nil
     }
 }
 

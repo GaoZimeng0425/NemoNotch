@@ -181,6 +181,21 @@ enum AppActivator {
         return ppid > 1 ? ppid : nil
     }
 
+    /// Brings the app forward, launching it when it is not running (a
+    /// notification can outlive its app).
+    @MainActor
+    static func openApp(bundleId: String) {
+        if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first {
+            app.activate()
+            return
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+            LogService.warn("No app installed for \(bundleId)", category: "AppActivator")
+            return
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
     private static func activateBundle(_ bundleId: String) {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
             .first?

@@ -50,6 +50,20 @@ struct CompletionToastQueue {
         }
     }
 
+    /// Swaps the content of the card keyed `key` without touching its timer
+    /// (content changed, nothing new arrived); nil removes the card. Returns
+    /// false when no card has that key.
+    @discardableResult
+    mutating func replace(key: String, with item: CompletionItem?) -> Bool {
+        guard let idx = toasts.firstIndex(where: { $0.item.toastKey == key }) else { return false }
+        if let item {
+            toasts[idx].item = item
+        } else {
+            toasts.remove(at: idx)
+        }
+        return true
+    }
+
     mutating func dismiss(id: UUID) {
         toasts.removeAll { $0.id == id }
     }

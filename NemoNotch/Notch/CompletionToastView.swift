@@ -32,37 +32,11 @@ struct CompletionToastView: View {
                     height: NotchConstants.completionToastIconSize + 4
                 )
 
-            VStack(alignment: .leading, spacing: 2) {
-                // Prefer the task title (firstUserMessage-derived); fall back to name.
-                Text(item.subtitle ?? item.name)
-                    .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
-                    .foregroundStyle(NotchTheme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                if let detail = detailLine(for: item) {
-                    Text(detail)
-                        .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
-                        .foregroundStyle(NotchTheme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                // Where it ran: `~`-folded, middle-truncated so both the root
-                // and the project folder stay readable.
-                if let path = CompletionPath.display(item.path) {
-                    Text(verbatim: path)
-                        .font(.system(
-                            size: NotchConstants.completionToastFontSize - 3,
-                            weight: .regular,
-                            design: .monospaced
-                        ))
-                        .foregroundStyle(NotchTheme.textTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+            if let notice = item.notice {
+                noticeText(notice)
+            } else {
+                completionText
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.leading, 14)
         // Keep text clear of the close glyph's hit square.
@@ -81,6 +55,80 @@ struct CompletionToastView: View {
     }
 
     private static let cornerRadius: CGFloat = 14
+
+    /// Title, tool·model·tokens·duration, and working directory.
+    private var completionText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // Prefer the task title (firstUserMessage-derived); fall back to name.
+            Text(item.subtitle ?? item.name)
+                .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                .foregroundStyle(NotchTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            if let detail = detailLine(for: item) {
+                Text(detail)
+                    .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            // Where it ran: `~`-folded, middle-truncated so both the root
+            // and the project folder stay readable.
+            if let path = CompletionPath.display(item.path) {
+                Text(verbatim: path)
+                    .font(.system(
+                        size: NotchConstants.completionToastFontSize - 3,
+                        weight: .regular,
+                        design: .monospaced
+                    ))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Notification card: app name (+ red count when several), then the
+    /// two `NotificationCard` lines.
+    private func noticeText(_ notice: NotificationCard) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(verbatim: item.name)
+                    .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+                if notice.count > 1 {
+                    Text(verbatim: "\(notice.count)")
+                        .font(.system(
+                            size: NotchConstants.completionToastFontSize - 3,
+                            weight: .bold,
+                            design: .rounded
+                        ))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .background(Capsule().fill(Color.red))
+                }
+            }
+            if let line1 = notice.line1 {
+                Text(verbatim: line1)
+                    .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
+                    .foregroundStyle(NotchTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            if let line2 = notice.line2 {
+                Text(verbatim: line2)
+                    .font(.system(size: NotchConstants.completionToastFontSize - 3))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     /// "tool · model · tokens · duration" for the single-item detail line,
     /// skipping nil fields. Returns nil when there is no detail at all.
@@ -129,7 +177,33 @@ struct CompletionToastView: View {
             Image(systemName: "calendar")
                 .font(.system(size: s * 0.9, weight: .semibold))
                 .foregroundStyle(NotchTheme.accent)
+        case let .notification(bundleID):
+            if let icon = AppIconCache.icon(bundleID: bundleID) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: s + 4, height: s + 4)
+            } else {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: s * 0.9, weight: .semibold))
+                    .foregroundStyle(NotchTheme.accent)
+            }
         }
+    }
+}
+
+/// App icons for notification cards, resolved once per bundle id.
+@MainActor
+enum AppIconCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func icon(bundleID: String) -> NSImage? {
+        if let cached = cache[bundleID] {
+            return cached
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        cache[bundleID] = icon
+        return icon
     }
 }
 

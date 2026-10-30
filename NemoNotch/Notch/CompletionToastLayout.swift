@@ -72,6 +72,8 @@ struct CompletionToastLayout {
 enum CompletionToastClick: Equatable {
     case dismiss(UUID)
     case jump(UUID, CompletionJump)
+    /// A Notification Center card: bring its app forward (launching it if needed).
+    case open(UUID, bundleID: String)
 
     static func action(for hit: CompletionToastLayout.Hit?, toasts: [CompletionToast]) -> CompletionToastClick? {
         switch hit {
@@ -81,6 +83,9 @@ enum CompletionToastClick: Equatable {
         case let .card(index):
             guard toasts.indices.contains(index) else { return nil }
             let toast = toasts[index]
+            if case let .notification(bundleID) = toast.item.source {
+                return .open(toast.id, bundleID: bundleID)
+            }
             guard let jump = toast.item.jump else { return .dismiss(toast.id) }
             return .jump(toast.id, jump)
         case nil:

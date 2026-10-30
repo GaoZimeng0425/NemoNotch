@@ -358,6 +358,9 @@ final class CompletionToastWindowController {
                 tabLink: target.tabLink
             )
             service.dismissToast(id: id)
+        case let .open(id, bundleID):
+            AppActivator.openApp(bundleId: bundleID)
+            service.dismissToast(id: id)
         case nil:
             break
         }

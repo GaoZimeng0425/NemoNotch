@@ -21,6 +21,16 @@ final class CompletionFlashService {
     /// run. Ordering the window out on the assignment would cut the fade off.
     private(set) var overlayVisible = false
 
+    /// Why a card left the row on its own terms. Eviction by a newer card is
+    /// deliberately not reported — the user never got to see that card.
+    enum ToastRemoval {
+        case dismissed // close button, or a click that jumped/opened then closed it
+        case expired
+    }
+
+    /// Called after a card is dismissed or expires (not when evicted).
+    var onToastRemoved: ((CompletionItem, ToastRemoval) -> Void)?
+
     private let store: AISessionStore
     private let registry: AgentMonitorRegistry
     private let settings: AppSettings
@@ -159,13 +169,36 @@ final class CompletionFlashService {
         LogService.debug("Completion toast shown (no flash): \(names)", category: "CompletionFlash")
     }
 
+    // MARK: - Notification Center cards
+
+    /// A notification card with new arrivals: shown (or refreshed with a full
+    /// timer) without the edge glow and without touching the flash throttle.
+    /// Not gated on `completionFlashEnabled` — `NotificationToastService`
+    /// owns this feature's switch.
+    func showNotificationToast(_ item: CompletionItem) {
+        addToasts([item])
+        LogService.debug("Notification toast shown: \(item.toastKey)", category: "CompletionFlash")
+    }
+
+    /// A notification card whose content changed with nothing new arriving
+    /// (records left Notification Center): updated in place, timer kept; nil
+    /// removes it. No card under `key` → nothing happens.
+    func updateNotificationToast(key: String, item: CompletionItem?) {
+        guard toastQueue.replace(key: key, with: item) else { return }
+        syncToasts()
+    }
+
     // MARK: - Toast row interaction
 
     /// The close button on one card.
     func dismissToast(id: UUID) {
+        let item = toastQueue.toasts.first { $0.id == id }?.item
         toastQueue.dismiss(id: id)
         syncToasts()
         LogService.debug("Toast dismissed by user", category: "CompletionFlash")
+        if let item {
+            onToastRemoved?(item, .dismissed)
+        }
     }
 
     /// Pointer over the toast row: freeze every card's timer. Leaving restarts
@@ -271,8 +304,11 @@ final class CompletionFlashService {
         toastExpiryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(max(deadline.timeIntervalSinceNow, 0)))
             guard let self, !Task.isCancelled else { return }
-            toastQueue.expire(now: Date())
+            let expired = toastQueue.expire(now: Date())
             syncToasts()
+            for toast in expired {
+                onToastRemoved?(toast.item, .expired)
+            }
         }
     }
 
