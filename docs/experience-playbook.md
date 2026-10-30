@@ -239,8 +239,8 @@ NemoNotch 是一个 macOS 刘海(notch)工具:在 MacBook 刘海区提供交互�
 
 ### 4.2 repeatForever 停不掉且对移动布局渲染鬼影
 
-- **通用原则**:repeatForever 动画赋新值停不下来(属性已被插值到目标,连当前值都被隐藏),只能 reset 回去(硬切);布局位置会变的元素上还会按陈旧原点渲染鬼影帧。可控循环用 TimelineView(.animation(paused:))(暂停时末帧保持、无状态可失,值从 context.date 派生);位移动效交给 Core Animation 子层随布局走;只有位置稳定的元素才允许 repeatForever。(本条为该项目对此问题的唯一完整叙述,第七章修复簇仅引用不重写。)
-- **本项目战例**:黑胶唱盘暂停后继续转,TimelineView(paused:) + angle(at: context.date) 解决;FAB 会话环在 chip 因注意力排序重排时按旧布局原点渲染,捕获到「四个 chip 五个环」的鬼影(仓库外 memory 存有截图线索);边栏的工作环转而用 CABasicAnimation 子层(hitTest → nil)承载。
+- **通用原则**:repeatForever 动画赋新值停不下来(属性已被插值到目标,连当前值都被隐藏),只能 reset 回去(硬切);布局位置会变的元素上还会按陈旧原点渲染鬼影帧。可控循环用 TimelineView(.animation(paused:))(暂停时末帧保持、无状态可失,值从 context.date 派生);位移动效交给 Core Animation 子层随布局走;只有位置稳定的元素才允许 repeatForever。**TimelineView 解决的是"停得住",不是"便宜"**:跑着时它照样每帧全树重走,常驻(收起态/长时挂载)的循环动画要下沉 Core Animation。**下沉时相位要跟着搬出实例**:TimelineView 的值从挂钟推导,天然所有实例同相;改成每视图一个 CA 动画后相位变成按实例,同一视觉同时出现在两处(matchedGeometry 两端、每屏一份)就会对不上——相位放进实例外的共享纯时钟,各视图按它摆位。(本条为该项目对此问题的唯一完整叙述,第七章修复簇仅引用不重写。)
+- **本项目战例**:黑胶唱盘暂停后继续转,TimelineView(paused:) + angle(at: context.date) 解决;但它挂在收起态媒体徽章上,连同背靠背 withAnimation 的均衡器,放歌时主进程 ~23% 单核,2026-10-30 下沉 CA(`VinylSpinner`/`EqualizerBars`)后 ~1%;首版按实例从 0° 起转,收起小盘与展开大盘每次开合都重建、封面跳回正上方,评审抓到后改共享 `VinylClock`;FAB 会话环在 chip 因注意力排序重排时按旧布局原点渲染,捕获到「四个 chip 五个环」的鬼影(仓库外 memory 存有截图线索);边栏的工作环转而用 CABasicAnimation 子层(hitTest → nil)承载。
 - **证据**:AGENTS.md「Collapsed-State View Tree」末两条、「Edge Bar → Three load-bearing pitfalls」第 3 条;memory fab-evlat-chips-refactor.md(仓库外)。
 
 ---
@@ -468,7 +468,7 @@ NemoNotch 是一个 macOS 刘海(notch)工具:在 MacBook 刘海区提供交互�
 
 ### C. SwiftUI 限定
 
-- [ ] repeatForever 停不掉、移动布局上画鬼影:可控循环用 TimelineView(.animation(paused:));位移动效交 CA 子层
+- [ ] repeatForever 停不掉、移动布局上画鬼影:可控循环用 TimelineView(.animation(paused:));位移动效交 CA 子层;常驻循环动画一律 CA,相位放实例外共享
 - [ ] 挂载树决定渲染成本:条件挂载 + .transition(插入时无前值可插值,状态动画会硬切)
 - [ ] 非激活 NSPanel 里 SwiftUI 手势/悬停不可靠:命中交宿主 NSView tracking area + 几何解析
 
