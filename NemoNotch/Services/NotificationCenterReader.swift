@@ -65,13 +65,21 @@ enum NotificationCenterReader {
         return .records(records)
     }
 
-    /// Maps a failed probe open to a result (current, pre-fix mapping).
+    /// Maps a failed probe open to a result. A TCC refusal surfaces as
+    /// `fileWriteNoPermission` (observed on macOS 27 for a plain read), not
+    /// only `fileReadNoPermission` — any permission code means Full Disk Access.
     static func classifyOpenFailure(_ error: Error) -> NotificationCenterReadResult {
-        if let cocoa = error as? CocoaError, cocoa.code == .fileReadNoPermission {
-            return .noAccess
+        let permissionCodes: Set<CocoaError.Code> = [.fileReadNoPermission, .fileWriteNoPermission]
+        if let cocoa = error as? CocoaError {
+            if permissionCodes.contains(cocoa.code) {
+                return .noAccess
+            }
+            if cocoa.code == .fileReadNoSuchFile || cocoa.code == .fileNoSuchFile {
+                return .unavailable("database not found")
+            }
         }
-        if let cocoa = error as? CocoaError, cocoa.code == .fileReadNoSuchFile {
-            return .unavailable("database not found")
+        if let posix = error as? POSIXError, posix.code == .EPERM || posix.code == .EACCES {
+            return .noAccess
         }
         return .unavailable(error.localizedDescription)
     }
