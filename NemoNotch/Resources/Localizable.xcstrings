@@ -4294,13 +4294,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monitored Apps"
+            "value" : "Apps"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已监控的应用"
+            "value" : "转为 toast 的应用"
           }
         }
       }
@@ -4310,13 +4310,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Select apps to monitor for unread notifications (e.g. Slack, WeChat)"
+            "value" : "New notifications from these apps appear as cards under the notch, one card per app. Reads Notification Center, which needs Full Disk Access."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择需要监控未读通知的应用（如 Slack、微信）"
+            "value" : "这些应用的新通知会以卡片出现在刘海下方，每个应用一张。需要读取通知中心，因此要授予完全磁盘访问权限。"
           }
         }
       }
@@ -6579,6 +6579,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "知道了"
+          }
+        }
+      }
+    },
+    "settings.notificationToast.enabled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Notification Center messages as toasts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知中心消息转为 toast 卡片"
+          }
+        }
+      }
+    },
+    "settings.notificationToast.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notification Center can't be read on this system."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取本机的通知中心。"
+          }
+        }
+      }
+    },
+    "permission.fullDiskAccess.notifications.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Disk Access Required"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要完全磁盘访问权限"
+          }
+        }
+      }
+    },
+    "permission.fullDiskAccess.notifications.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NemoNotch reads Notification Center (read-only) to turn new messages into toast cards. Add NemoNotch under Privacy & Security → Full Disk Access."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NemoNotch 只读读取通知中心，把新消息变成 toast 卡片。请在「隐私与安全性 → 完全磁盘访问权限」中添加 NemoNotch。"
+          }
+        }
+      }
+    },
+    "notification.toast.latest" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Latest: "
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最新："
           }
         }
       }

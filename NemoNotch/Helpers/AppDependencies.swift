@@ -31,7 +31,6 @@ struct AppDependencies {
 
     // MARK: Interface data sources
 
-    let notification: NotificationService
     let weather: WeatherService
     let usageQuota: UsageQuotaService
     let hud: HUDService
@@ -41,6 +40,7 @@ struct AppDependencies {
     // MARK: AI-derived events (cross-domain: consumes `aiMonitor.store` + `registry`)
 
     let completionFlash: CompletionFlashService
+    let notificationToast: NotificationToastService
     let edgeBar: EdgeBarController
     let quotaAlerts: QuotaAlertMonitor
     let chatBubble: ChatBubbleController
@@ -99,8 +99,6 @@ struct AppDependencies {
         registry.register(openClaw)
         registry.register(hermes)
 
-        let notification = NotificationService(monitoredApps: settings.monitoredApps)
-
         let weather = WeatherService()
         if !UITestMode.isActive, !settings.weatherCity.isEmpty {
             weather.updateCity(settings.weatherCity)
@@ -125,6 +123,12 @@ struct AppDependencies {
             registry: registry,
             settings: settings
         )
+        // 通知中心 → toast:只读 usernoted 的私有库。UI 测试与单测宿主不读
+        // (截图运行不该冒出真实消息,宿主也没有完全磁盘访问权限)。
+        let notificationToast = NotificationToastService(settings: settings, flash: completionFlash)
+        if !UITestMode.isActive, !UITestMode.isTestHost {
+            notificationToast.start()
+        }
 
         // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
         // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
@@ -215,13 +219,13 @@ struct AppDependencies {
             openClaw: openClaw,
             hermes: hermes,
             registry: registry,
-            notification: notification,
             weather: weather,
             usageQuota: usageQuota,
             hud: hud,
             system: system,
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
+            notificationToast: notificationToast,
             edgeBar: edgeBar,
             quotaAlerts: quotaAlerts,
             chatBubble: chatBubble,
@@ -257,7 +261,6 @@ struct AppDependencies {
                     .environment(registry)
                     .environment(hermes)
                     .environment(launcher)
-                    .environment(notification)
                     .environment(weather)
                     .environment(hud)
                     .environment(completionFlash)

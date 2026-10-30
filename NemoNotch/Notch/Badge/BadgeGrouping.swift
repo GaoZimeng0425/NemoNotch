@@ -38,7 +38,6 @@ enum BadgeGrouping {
         switch item {
         case let .ai(source, _, _, _, _): "ai:\(source.rawValue)"
         case let .agents(_, _, emoji): "agents:\(emoji)"
-        case .notification: "notification"
         case .media: "media"
         case .pomodoro: "pomodoro"
         case .calendar: "calendar"

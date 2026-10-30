@@ -108,7 +108,6 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 /// `SettingsSearchIndex.swift`。
 struct SettingsView: View {
     @Environment(AppSettings.self) var appSettings
-    @Environment(NotificationService.self) var notificationService
 
     @AppStorage("settings.selectedPage") private var selectedPageRaw = SettingsPage.general.rawValue
 
@@ -137,16 +136,6 @@ struct SettingsView: View {
             SettingsSearchModel.shared.query = ""
         }
         .environment(\.locale, appSettings.currentLocale)
-        .task {
-            // The AX grant happens in System Settings, outside this process.
-            // Poll while Settings is open so the permission card clears itself
-            // the moment the user finishes the drag-and-toggle. Scoped to the
-            // window's lifetime — no timer lingers once Settings closes.
-            while !Task.isCancelled {
-                notificationService.refreshAXTrust()
-                try? await Task.sleep(for: .seconds(1.5))
-            }
-        }
     }
 
     /// macOS 26 玻璃:整窗一块圆角玻璃垫底,侧栏与详情都画在它上面。

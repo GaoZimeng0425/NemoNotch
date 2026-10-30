@@ -10,7 +10,6 @@ enum BadgeRenderStyle {
 struct BadgeIconView: View {
     let item: BadgeItem
     let style: BadgeRenderStyle
-    let notificationService: NotificationService
     let mediaService: MediaService
     let pomodoroService: PomodoroTimerService
     /// Cross-state morph namespace, consumed only by the media coin —
@@ -20,8 +19,6 @@ struct BadgeIconView: View {
     var body: some View {
         let _ = PerfProbe.hit("BadgeIconView.body")
         switch item {
-        case let .notification(bundleID, count):
-            notificationBadge(bundleID: bundleID, count: count)
         case .media:
             mediaBadge
         case let .ai(source, status, tool, waitingApproval, _):
@@ -32,40 +29,6 @@ struct BadgeIconView: View {
             calendarBadge
         case let .pomodoro(phase):
             pomodoroBadge(phase: phase)
-        }
-    }
-
-    // MARK: - Notification
-
-    @ViewBuilder
-    private func notificationBadge(bundleID: String, count: Int) -> some View {
-        switch style {
-        case .compactLeft:
-            if let data = notificationService.badges[bundleID] {
-                ZStack(alignment: .bottomTrailing) {
-                    Image(nsImage: data.icon)
-                        .resizable()
-                        .frame(width: 16, height: 16)
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 7, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 2)
-                            .padding(.vertical, 0.5)
-                            .background(.red)
-                            .clipShape(Capsule())
-                    } else {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 6, height: 6)
-                    }
-                }
-            }
-        case .compactRight:
-            Image(systemName: "bell.fill")
-                .foregroundStyle(.red.opacity(0.9))
-                .frame(width: 14, height: 14)
-                .modifier(PulseModifier(isActive: true))
         }
     }
 
@@ -252,7 +215,6 @@ struct CompactBadgesView: View {
     /// spacer is exactly this wide so the left/right coins sit just outside it.
     let notchCoreWidth: CGFloat
     let onBadgeTap: (BadgeItem) -> Void
-    let notificationService: NotificationService
     let mediaService: MediaService
     let pomodoroService: PomodoroTimerService
     /// Forwarded to the media coin for the vinyl morph —
@@ -323,7 +285,6 @@ struct CompactBadgesView: View {
                 Button { primary.map(onBadgeTap) } label: {
                     BadgeIconView(
                         item: group.representative, style: .compactLeft,
-                        notificationService: notificationService,
                         mediaService: mediaService,
                         pomodoroService: pomodoroService,
                         morphNamespace: morphNamespace
@@ -361,7 +322,6 @@ struct CompactBadgesView: View {
                     } else {
                         BadgeIconView(
                             item: group.representative, style: .compactRight,
-                            notificationService: notificationService,
                             mediaService: mediaService,
                             pomodoroService: pomodoroService
                         )

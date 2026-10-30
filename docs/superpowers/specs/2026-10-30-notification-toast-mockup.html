@@ -1,0 +1,100 @@
+<style>
+  .stage{background:#1b1b1f;border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .notch{width:200px;height:30px;background:#000;border-radius:0 0 14px 14px}
+  .row{display:flex;gap:8px;align-items:flex-start}
+  .tcard{width:280px;box-sizing:border-box;border-radius:14px;background:#0a0a0a;padding:9px 12px;color:#fff;font:12px -apple-system,system-ui,sans-serif;position:relative;
+    border:2px solid transparent;background-image:linear-gradient(#0a0a0a,#0a0a0a),conic-gradient(#ff6b6b,#ffd93d,#6bcb77,#4d96ff,#c56bff,#ff6b6b);background-origin:border-box;background-clip:padding-box,border-box}
+  .h66{height:66px}
+  .head{display:flex;align-items:center;gap:6px;font-weight:600}
+  .ico{width:16px;height:16px;border-radius:4px;display:inline-block}
+  .slack{background:#4a154b}.wx{background:#07c160}.mail{background:#1e88ff}.ai{background:#d97757}
+  .pill{margin-left:auto;background:#e5484d;border-radius:8px;padding:0 6px;font-size:10px;font-weight:700}
+  .x{position:absolute;right:8px;top:6px;color:#777;font-size:11px}
+  .l1{margin-top:4px;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .l2{color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .msg{color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+  .msg b{color:#fff;font-weight:600}
+  .more{color:#888;font-size:11px;margin-top:3px}
+  .note{color:#aaa;font-size:12px;margin-top:6px}
+</style>
+
+<h2>通知卡：同一个 app 有多条未处理通知时，卡片长什么样？</h2>
+<p class="subtitle">四个卡位与 AI 完成卡共用；每个 app 一张卡。单条时三个方案一样（第一行），差别只在多条。内容为虚构示例。</p>
+
+<div class="section">
+  <div class="label">单条（三个方案共用）</div>
+  <div class="stage"><div class="notch"></div>
+    <div class="row">
+      <div class="tcard h66"><span class="x">✕</span>
+        <div class="head"><span class="ico slack"></span>Slack</div>
+        <div class="l1"><b>王小明</b> · #design-review</div>
+        <div class="l2">新版图标已经上传，麻烦今天下班前看一眼</div>
+      </div>
+      <div class="tcard h66"><span class="x">✕</span>
+        <div class="head"><span class="ico ai"></span>NemoNotch</div>
+        <div class="l1">Claude 完成</div>
+        <div class="l2">~/Documents/Learn/macos/NemoNotch</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>计数 + 最新一条（卡高不变）</h3>
+      <div class="stage"><div class="notch"></div>
+        <div class="row">
+          <div class="tcard h66"><span class="x">✕</span>
+            <div class="head"><span class="ico slack"></span>Slack<span class="pill">3</span></div>
+            <div class="l1"><b>李华</b> · #release</div>
+            <div class="l2">构建过了，可以打 tag 了</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">只看得到最新的一条；其余两条要去 app 里看。整排高度一致。</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>计数 + 发送人列表（卡高不变）</h3>
+      <div class="stage"><div class="notch"></div>
+        <div class="row">
+          <div class="tcard h66"><span class="x">✕</span>
+            <div class="head"><span class="ico wx"></span>微信<span class="pill">5</span></div>
+            <div class="l1">李华、王小明、产品群</div>
+            <div class="l2">最新：产品群 — 明天 10 点评审改到 3 点</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">一眼知道「谁」找我，最新一条压成一行。整排高度一致。</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>逐条列出最近 3 条（卡片变高）</h3>
+      <div class="stage"><div class="notch"></div>
+        <div class="row">
+          <div class="tcard"><span class="x">✕</span>
+            <div class="head"><span class="ico mail"></span>邮件<span class="pill">4</span></div>
+            <div class="msg"><b>李华</b> 季度报告终稿</div>
+            <div class="msg"><b>HR</b> 年假余额提醒</div>
+            <div class="msg"><b>GitHub</b> [NemoNotch] CI passed</div>
+            <div class="more">还有 1 条</div>
+          </div>
+          <div class="tcard h66"><span class="x">✕</span>
+            <div class="head"><span class="ico ai"></span>NemoNotch</div>
+            <div class="l1">Claude 完成</div>
+            <div class="l2">~/Documents/…/NemoNotch</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">信息最多；但卡高随条数变（66→~96），同一排卡片高低不齐，点击/悬停区域要按每张卡的实际高度算。</p>
+    </div>
+  </div>
+</div>

@@ -36,10 +36,6 @@ final class AppSettings {
         }
     }
 
-    var monitoredApps: [String] {
-        didSet { UserDefaults.standard.set(monitoredApps, forKey: "monitoredApps") }
-    }
-
     var weatherCity: String {
         didSet { UserDefaults.standard.set(weatherCity, forKey: "weatherCity") }
     }
@@ -123,6 +119,23 @@ final class AppSettings {
 
     var completionFlashEnabled: Bool {
         didSet { UserDefaults.standard.set(completionFlashEnabled, forKey: Self.completionFlashEnabledKey) }
+    }
+
+    // MARK: - Notification Center → toast
+
+    static let notificationToastEnabledKey = "notificationToastEnabled"
+    static let notificationToastAppsKey = "notificationToastApps"
+    static let defaultNotificationToastApps = ["com.apple.mail", "com.tinyspeck.slackmacgap", "com.tencent.xinWeChat"]
+
+    /// Default on: nothing happens until the user grants Full Disk Access,
+    /// which is the real opt-in moment.
+    var notificationToastEnabled: Bool {
+        didSet { UserDefaults.standard.set(notificationToastEnabled, forKey: Self.notificationToastEnabledKey) }
+    }
+
+    /// Bundle ids whose Notification Center messages become toast cards.
+    var notificationToastApps: [String] {
+        didSet { UserDefaults.standard.set(notificationToastApps, forKey: Self.notificationToastAppsKey) }
     }
 
     // MARK: - Event alerts (calendar due / bluetooth audio / charging)
@@ -240,7 +253,6 @@ final class AppSettings {
             launcherApps = Self.defaultApps
         }
 
-        monitoredApps = UserDefaults.standard.stringArray(forKey: "monitoredApps") ?? []
         weatherCity = UserDefaults.standard.string(forKey: "weatherCity") ?? ""
 
         let storedLang = UserDefaults.standard.string(forKey: "language").flatMap { AppLanguage(rawValue: $0) }
@@ -273,6 +285,10 @@ final class AppSettings {
             .object(forKey: Self.hermesEnabledKey) as? Bool ?? true
         completionFlashEnabled = UserDefaults.standard
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
+        notificationToastEnabled = UserDefaults.standard
+            .object(forKey: Self.notificationToastEnabledKey) as? Bool ?? true
+        notificationToastApps = UserDefaults.standard
+            .stringArray(forKey: Self.notificationToastAppsKey) ?? Self.defaultNotificationToastApps
         calendarDueFlashEnabled = UserDefaults.standard
             .object(forKey: Self.calendarDueFlashEnabledKey) as? Bool ?? true
         calendarDueLeadMinutes = UserDefaults.standard

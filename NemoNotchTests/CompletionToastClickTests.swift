@@ -72,4 +72,16 @@ struct CompletionToastClickTests {
         newer.key = "ai:1"
         #expect(CompletionFlashNames.merge(existing: [older], new: [newer]).first?.jump == target)
     }
+
+    @Test("clicking a notification card opens its app; its close button only closes")
+    func notificationCardOpensApp() {
+        let bundleID = "com.tinyspeck.slackmacgap"
+        let card = CompletionToast(
+            id: UUID(),
+            item: CompletionItem(name: "Slack", source: .notification(bundleID: bundleID)),
+            deadline: deadline
+        )
+        #expect(CompletionToastClick.action(for: .card(0), toasts: [card]) == .open(card.id, bundleID: bundleID))
+        #expect(CompletionToastClick.action(for: .close(0), toasts: [card]) == .dismiss(card.id))
+    }
 }

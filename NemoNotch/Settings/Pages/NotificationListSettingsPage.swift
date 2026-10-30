@@ -1,38 +1,32 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 通知监控:AX 权限卡(未授权时)+ 受监控应用列表的增删。
+/// 通知中心 → toast:总开关、读库状态(完全磁盘访问权限卡)、转 toast 的应用列表。
 struct NotificationListSettingsPage: View {
     @Environment(AppSettings.self) var appSettings
     @Environment(LauncherService.self) var launcherService
-    @Environment(NotificationService.self) var notificationService
+    @Environment(NotificationToastService.self) var notificationToast
 
     var body: some View {
+        @Bindable var settings = appSettings
         Form {
-            if !notificationService.isAXTrusted {
-                Section {
-                    PermissionCard(
-                        icon: "exclamationmark.triangle.fill",
-                        titleKey: "permission.accessibility.title",
-                        detailKey: "permission.accessibility.detail",
-                        status: .notDetermined,
-                        primary: .settingsOnly,
-                        // Opens the pane *and* parks the drag guide beside it —
-                        // Accessibility has no programmatic request API, so the
-                        // user has to drop the app into the list themselves.
-                        openSettings: { PermissionFlowController.shared.start(pane: .accessibility) },
-                        style: .adaptive
-                    )
-                    .padding(.vertical, 4)
-                }
+            Section {
+                Toggle("settings.notificationToast.enabled", isOn: $settings.notificationToastEnabled)
+                    .onChange(of: appSettings.notificationToastEnabled) { notificationToast.settingsChanged() }
+            } footer: {
+                Text("settings.monitored_footer")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
+            statusSection
+
             Section("settings.monitored_apps") {
-                if appSettings.monitoredApps.isEmpty {
+                if appSettings.notificationToastApps.isEmpty {
                     Text("settings.no_monitored_apps")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(appSettings.monitoredApps, id: \.self) { bundleID in
+                    ForEach(appSettings.notificationToastApps, id: \.self) { bundleID in
                         HStack {
                             if let icon = launcherService.icon(forBundleID: bundleID) {
                                 Image(nsImage: icon)
@@ -40,15 +34,15 @@ struct NotificationListSettingsPage: View {
                                     .frame(width: 24, height: 24)
                             }
                             VStack(alignment: .leading) {
-                                Text(appName(for: bundleID))
+                                Text(verbatim: NotificationToastService.displayName(bundleID: bundleID))
                                 Text(bundleID)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
                             Button {
-                                appSettings.monitoredApps.removeAll { $0 == bundleID }
-                                notificationService.updateMonitoredApps(appSettings.monitoredApps)
+                                appSettings.notificationToastApps.removeAll { $0 == bundleID }
+                                notificationToast.settingsChanged()
                             } label: {
                                 Image(systemName: "trash")
                                     .foregroundStyle(.red.opacity(0.6))
@@ -56,53 +50,57 @@ struct NotificationListSettingsPage: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .onDelete { offsets in
-                        for index in offsets.sorted().reversed() {
-                            appSettings.monitoredApps.remove(at: index)
-                        }
-                        notificationService.updateMonitoredApps(appSettings.monitoredApps)
-                    }
                 }
-            }
-
-            Section {
-                Button("settings.add_monitored_app") {
-                    let panel = NSOpenPanel()
-                    panel.title = String(localized: "settings.select_monitored_app")
-                    panel.canChooseFiles = true
-                    panel.canChooseDirectories = false
-                    panel.allowsMultipleSelection = false
-                    panel.allowedContentTypes = [.application]
-                    panel.directoryURL = URL(fileURLWithPath: "/Applications")
-
-                    if panel.runModal() == .OK, let url = panel.url {
-                        if let bundle = Bundle(url: url),
-                           let bundleID = bundle.bundleIdentifier {
-                            if !appSettings.monitoredApps.contains(bundleID) {
-                                appSettings.monitoredApps.append(bundleID)
-                                notificationService.updateMonitoredApps(appSettings.monitoredApps)
-                            }
-                        }
-                    }
-                }
-            } header: {
-                Text("settings.add_monitored_app")
-            } footer: {
-                Text("settings.monitored_footer")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Button("settings.add_monitored_app", action: addApp)
             }
         }
         .formStyle(.grouped)
     }
 
-    private func appName(for bundleID: String) -> String {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
-           let bundle = Bundle(url: url),
-           let name = bundle.localizedInfoDictionary?["CFBundleName"] as? String
-           ?? bundle.infoDictionary?["CFBundleName"] as? String {
-            return name
+    @ViewBuilder
+    private var statusSection: some View {
+        switch notificationToast.status {
+        case .noAccess:
+            Section {
+                PermissionCard(
+                    icon: "exclamationmark.triangle.fill",
+                    titleKey: "permission.fullDiskAccess.notifications.title",
+                    detailKey: "permission.fullDiskAccess.notifications.detail",
+                    status: .notDetermined,
+                    primary: .settingsOnly,
+                    // Full Disk Access has no request API: open the pane and park
+                    // the drag guide beside it.
+                    openSettings: { PermissionFlowController.shared.start(pane: .fullDiskAccess) },
+                    style: .adaptive
+                )
+                .padding(.vertical, 4)
+            }
+        case let .unavailable(reason):
+            Section {
+                Text("settings.notificationToast.unavailable")
+                Text(verbatim: reason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .idle, .ok:
+            EmptyView()
         }
-        return bundleID
+    }
+
+    private func addApp() {
+        let panel = NSOpenPanel()
+        panel.title = String(localized: "settings.select_monitored_app")
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundleID = Bundle(url: url)?.bundleIdentifier,
+              !appSettings.notificationToastApps.contains(bundleID)
+        else { return }
+        appSettings.notificationToastApps.append(bundleID)
+        notificationToast.settingsChanged()
     }
 }

@@ -6,7 +6,6 @@ final class BadgeViewModel {
     private let mediaService: MediaService
     private let calendarService: CalendarService
     private let aiService: AICLIMonitorService
-    private let notificationService: NotificationService
     private let agentRegistry: AgentMonitorRegistry
     private let pomodoroService: PomodoroTimerService
     private let appSettings: AppSettings
@@ -24,7 +23,6 @@ final class BadgeViewModel {
         mediaService: MediaService,
         calendarService: CalendarService,
         aiService: AICLIMonitorService,
-        notificationService: NotificationService,
         agentRegistry: AgentMonitorRegistry,
         pomodoroService: PomodoroTimerService,
         appSettings: AppSettings,
@@ -33,7 +31,6 @@ final class BadgeViewModel {
         self.mediaService = mediaService
         self.calendarService = calendarService
         self.aiService = aiService
-        self.notificationService = notificationService
         self.agentRegistry = agentRegistry
         self.pomodoroService = pomodoroService
         self.appSettings = appSettings
@@ -53,10 +50,6 @@ final class BadgeViewModel {
             case .opencode: appSettings.opencodeEnabled
             case .zcode: appSettings.zcodeEnabled
             }
-        }
-
-        if let top = notificationService.badges.values.max(by: { $0.count < $1.count }) {
-            items.append(.notification(bundleID: top.bundleID, count: top.count))
         }
 
         if pomodoroService.state.isActive {

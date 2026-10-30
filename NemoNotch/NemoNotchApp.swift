@@ -112,12 +112,12 @@ struct SettingsSceneRoot: View {
                     .environment(deps.settings)
                     .environment(deps.aiMonitor)
                     .environment(deps.launcher)
-                    .environment(deps.notification)
                     .environment(deps.weather)
                     .environment(deps.hermes)
                     .environment(deps.openClaw)
                     .environment(deps.keepAwake)
                     .environment(deps.notificationPermission)
+                    .environment(deps.notificationToast)
             } else {
                 ProgressView()
                     .frame(width: 680, height: 480)
