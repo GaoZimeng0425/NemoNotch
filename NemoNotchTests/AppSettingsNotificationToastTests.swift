@@ -25,7 +25,7 @@ struct AppSettingsNotificationToastTests {
     @Test func notificationToastDefaults() {
         withCleanKeys {
             let settings = AppSettings()
-            #expect(settings.notificationToastEnabled == true)
+            #expect(settings.notificationToastEnabled == false)
             #expect(settings.notificationToastApps == [
                 "com.apple.mail", "com.tinyspeck.slackmacgap", "com.tencent.xinWeChat",
             ])
@@ -35,10 +35,10 @@ struct AppSettingsNotificationToastTests {
     @Test func notificationToastPersists() {
         withCleanKeys {
             let settings = AppSettings()
-            settings.notificationToastEnabled = false
+            settings.notificationToastEnabled = true
             settings.notificationToastApps = ["x"]
             let reloaded = AppSettings()
-            #expect(reloaded.notificationToastEnabled == false)
+            #expect(reloaded.notificationToastEnabled == true)
             #expect(reloaded.notificationToastApps == ["x"])
         }
     }
