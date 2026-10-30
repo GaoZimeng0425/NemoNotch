@@ -12,8 +12,8 @@ import SwiftUI
 // MARK: - Vinyl spinner
 
 /// Rasterizes `face` once per `faceID` and turns the bitmap with a
-/// `CABasicAnimation`. Pause holds the angle (`speed = 0` + `timeOffset`),
-/// resume continues from it.
+/// `CABasicAnimation` at the shared `VinylClock` phase — pause holds the
+/// angle, resume continues from it, and every disc shows the same angle.
 /// What the rasterized face depends on; a new value re-renders it.
 struct VinylFaceID: Equatable {
     let image: ObjectIdentifier?
@@ -48,22 +48,49 @@ struct VinylSpinner<Face: View>: NSViewRepresentable {
     }
 }
 
-final class VinylSpinnerView: NSView {
+/// The one phase every disc reads. The collapsed coin and the opened-panel
+/// disc are two views morphing into each other, each recreated on every
+/// open/close — per-view angles would snap the cover upright on each morph.
+/// Pure (media time in, phase out) so pause/resume continuity is testable.
+struct VinylClock: Equatable {
     /// Seconds per turn — 60°/s, the speed the disc has always had.
     static let period: CFTimeInterval = 6
+
+    private(set) var isPlaying = false
+    /// Paused: the frozen phase. Playing: the media time at which phase was 0.
+    private var anchor: CFTimeInterval = 0
+
+    /// Seconds into the current turn, in `0 ..< period`.
+    func phase(at now: CFTimeInterval) -> CFTimeInterval {
+        let raw = (isPlaying ? now - anchor : anchor).truncatingRemainder(dividingBy: Self.period)
+        return raw < 0 ? raw + Self.period : raw
+    }
+
+    /// Idempotent: repeated calls with the same value change nothing, so every
+    /// disc can report the shared play state without resetting it.
+    mutating func setPlaying(_ playing: Bool, at now: CFTimeInterval) {
+        guard playing != isPlaying else { return }
+        // Pausing: anchor becomes the current phase. Resuming: anchor becomes
+        // the media time the frozen phase corresponds to. Same expression.
+        anchor = now - anchor
+        isPlaying = playing
+    }
+}
+
+final class VinylSpinnerView: NSView {
     private static let key = "spin"
+    private static var clock = VinylClock()
 
     var faceID: VinylFaceID?
     private let disc = CALayer()
     private var bleed: CGFloat = 0
-    private var isPlaying = false
+    /// What this view last rendered; nil until the first `setPlaying`.
+    private var appliedPlaying: Bool?
 
     init() {
         super.init(frame: .zero)
         wantsLayer = true
         disc.contentsGravity = .resizeAspect
-        // Paused until told otherwise; the angle starts at 0.
-        disc.speed = 0
         layer?.addSublayer(disc)
     }
 
@@ -88,19 +115,10 @@ final class VinylSpinnerView: NSView {
     }
 
     func setPlaying(_ playing: Bool) {
-        guard playing != isPlaying else { return }
-        isPlaying = playing
-        if playing {
-            let pausedAt = disc.timeOffset
-            disc.speed = 1
-            disc.timeOffset = 0
-            disc.beginTime = 0
-            disc.beginTime = disc.convertTime(CACurrentMediaTime(), from: nil) - pausedAt
-        } else {
-            let now = disc.convertTime(CACurrentMediaTime(), from: nil)
-            disc.speed = 0
-            disc.timeOffset = now
-        }
+        Self.clock.setPlaying(playing, at: CACurrentMediaTime())
+        guard playing != appliedPlaying else { return }
+        appliedPlaying = playing
+        applyClock()
     }
 
     override func layout() {
@@ -120,16 +138,33 @@ final class VinylSpinnerView: NSView {
         super.viewDidMoveToWindow()
         guard let window else { return }
         disc.contentsScale = window.backingScaleFactor
-        guard disc.animation(forKey: Self.key) == nil else { return }
-        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-        spin.fromValue = 0
+        // Animations can be dropped while out of a window; re-sync to the clock.
+        applyClock()
+    }
+
+    /// Pose the disc at the shared phase: a static angle while paused, a spin
+    /// that starts at that phase while playing.
+    private func applyClock() {
+        let clock = Self.clock
+        let phase = clock.phase(at: CACurrentMediaTime())
         // Clockwise on screen.
-        spin.toValue = (layer?.contentsAreFlipped() ?? false) ? 2 * Double.pi : -2 * Double.pi
-        spin.duration = Self.period
-        spin.repeatCount = .infinity
-        spin.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
-        spin.isRemovedOnCompletion = false
-        disc.add(spin, forKey: Self.key)
+        let turn = (layer?.contentsAreFlipped() ?? false) ? 2 * Double.pi : -2 * Double.pi
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        disc.removeAnimation(forKey: Self.key)
+        disc.transform = CATransform3DMakeRotation(turn * phase / VinylClock.period, 0, 0, 1)
+        if clock.isPlaying, window != nil {
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = 0
+            spin.toValue = turn
+            spin.duration = VinylClock.period
+            spin.timeOffset = phase
+            spin.repeatCount = .infinity
+            spin.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+            spin.isRemovedOnCompletion = false
+            disc.add(spin, forKey: Self.key)
+        }
+        CATransaction.commit()
     }
 }
 

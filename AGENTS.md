@@ -145,7 +145,7 @@ graph LR
 - **`.animation(value:)` 绑屏幕上真的会变的东西,不是上游数据**:耗时标签绑 0.5s 节拍的 position 而文本只按整秒变,一半动画同串空跑;绑格式化后的字符串直接减半。
 - **`repeatForever` 停不掉**:赋新值(哪怕在 disablesAnimations 事务里)都不行,动画仍挂在属性上继续驱动;且它隐藏当前插值,只能重置(瞬跳)。用 `TimelineView(.animation(paused:))`——驱动停、末帧保持,值从 `context.date` 推导(无状态可丢相位)。注意 TimelineView 只看 paused **不看可见性**,挂载但不可见照样逐帧 tick——别与 opacity 式隐藏搭配。
 - `repeatForever` 在布局位置会变的元素上出鬼影(见 Edge Bar 坑 3)。
-- **常驻动画(收起态/长时挂载)一律 Core Animation,不用任何 SwiftUI 逐帧驱动**:`TimelineView` 能停能续但**跑着时**照样每帧全树重走——收起态媒体徽章的黑胶(TimelineView)+ 均衡器(背靠背 `withAnimation`,时长与间隔同区间 = 几乎无缝连播)放歌时主进程实测 ~23% 单核(2026-10-30 采样)。现为 `VinylSpinner`(静态面 `ImageRenderer` 一次光栅化、`speed = 0`+`timeOffset` 暂停保相位)与 `EqualizerBars`(每条独立 `CAKeyframeAnimation`)。按"一天活多久"分诊:只活几秒的 burst 可留 SwiftUI。
+- **常驻动画(收起态/长时挂载)一律 Core Animation,不用任何 SwiftUI 逐帧驱动**:`TimelineView` 能停能续但**跑着时**照样每帧全树重走——收起态媒体徽章的黑胶(TimelineView)+ 均衡器(背靠背 `withAnimation`,时长与间隔同区间 = 几乎无缝连播)放歌时主进程实测 ~23% 单核(2026-10-30 采样)。现为 `VinylSpinner`(静态面 `ImageRenderer` 一次光栅化;相位走全局共享的纯 `VinylClock`——收起小盘与展开大盘是 matchedGeometry 两端、每次开合都重建,按实例各自从 0° 起转会让封面每次开合跳回正上方,评审抓到)与 `EqualizerBars`(每条独立 `CAKeyframeAnimation`)。按"一天活多久"分诊:只活几秒的 burst 可留 SwiftUI。
 - 动画驱动方式对 CPU 是红鲱鱼:20fps 状态循环改 repeatForever、frame(height:) 改 scaleEffect,实测**零**改善(动画都还"在跑"),只有卸载有用。
 
 ### 窗口与 AppKit
