@@ -25,12 +25,8 @@ enum NotificationCenterReader {
         // CANTOPEN, and the TCC refusal is the one case the UI must tell apart.
         do {
             try FileHandle(forReadingFrom: databaseURL).close()
-        } catch let error as CocoaError where error.code == .fileReadNoPermission {
-            return .noAccess
-        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            return .unavailable("database not found")
         } catch {
-            return .unavailable(error.localizedDescription)
+            return classifyOpenFailure(error)
         }
 
         var db: OpaquePointer?
@@ -67,6 +63,25 @@ enum NotificationCenterReader {
             LogService.debug("Skipped \(skipped) undecodable notification records", category: "NotificationToast")
         }
         return .records(records)
+    }
+
+    /// Maps a failed probe open to a result. A TCC refusal surfaces as
+    /// `fileWriteNoPermission` (observed on macOS 27 for a plain read), not
+    /// only `fileReadNoPermission` — any permission code means Full Disk Access.
+    static func classifyOpenFailure(_ error: Error) -> NotificationCenterReadResult {
+        let permissionCodes: Set<CocoaError.Code> = [.fileReadNoPermission, .fileWriteNoPermission]
+        if let cocoa = error as? CocoaError {
+            if permissionCodes.contains(cocoa.code) {
+                return .noAccess
+            }
+            if cocoa.code == .fileReadNoSuchFile || cocoa.code == .fileNoSuchFile {
+                return .unavailable("database not found")
+            }
+        }
+        if let posix = error as? POSIXError, posix.code == .EPERM || posix.code == .EACCES {
+            return .noAccess
+        }
+        return .unavailable(error.localizedDescription)
     }
 
     /// (mtime, size) of the database and its WAL — a new notification lands
