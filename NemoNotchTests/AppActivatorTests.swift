@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @testable import NemoNotch
 import Testing
@@ -69,5 +70,58 @@ struct AppActivatorTests {
         let session = service.store.get("sess_appactivator_1")
         #expect(session != nil)
         #expect(session?.launchingAppPID == nil)
+    }
+
+    @Test("a zcode session resolves to the ZCode app, not its background helper")
+    func skipsBackgroundHelper() {
+        // Real tree, policies read live (2026-10-30): zcode-cli and
+        // zcode-host-local-1 both report bundle dev.zcode.app.helper with
+        // activationPolicy .accessory; only ZCode (dev.zcode.app) is .regular.
+        let parents: [pid_t: pid_t] = [70919: 70909, 70909: 70848, 70848: 1]
+        let policies: [pid_t: NSApplication.ActivationPolicy] = [70919: .accessory, 70909: .accessory, 70848: .regular]
+        let host = AppActivator.hostAppPID(
+            of: 70919,
+            parent: { parents[$0] },
+            policy: { policies[$0] }
+        )
+        #expect(host == 70848)
+    }
+
+    @Test("a terminal-hosted CLI still resolves to the terminal")
+    func terminalHost() {
+        // claude 500 → zsh 400 → login 300 → iTerm2 200 (.regular)
+        let parents: [pid_t: pid_t] = [500: 400, 400: 300, 300: 200, 200: 1]
+        let host = AppActivator.hostAppPID(
+            of: 500,
+            parent: { parents[$0] },
+            policy: { $0 == 200 ? .regular : nil }
+        )
+        #expect(host == 200)
+    }
+
+    @Test("a terminal hiding its Dock icon (accessory) is still the host when nothing regular is above it")
+    func accessoryTerminalFallback() {
+        // claude 500 → zsh 400 → Ghostty 300 (.accessory, macos-hidden) → launchd
+        let parents: [pid_t: pid_t] = [500: 400, 400: 300, 300: 1]
+        let host = AppActivator.hostAppPID(
+            of: 500,
+            parent: { parents[$0] },
+            policy: { $0 == 300 ? .accessory : nil },
+            exclude: 999
+        )
+        #expect(host == 300)
+    }
+
+    @Test("a chat-bubble CLI whose only app ancestor is NemoNotch itself has no host")
+    func ownProcessIsNeverTheHost() {
+        // claude 500 → NemoNotch 24051 (.accessory, this process) → launchd
+        let parents: [pid_t: pid_t] = [500: 24051, 24051: 1]
+        let host = AppActivator.hostAppPID(
+            of: 500,
+            parent: { parents[$0] },
+            policy: { $0 == 24051 ? .accessory : nil },
+            exclude: 24051
+        )
+        #expect(host == nil)
     }
 }

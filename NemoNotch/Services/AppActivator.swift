@@ -99,21 +99,51 @@ enum AppActivator {
     }
 
     /// Walk the process tree upward from `pid` and return the first entry
-    /// (including `pid` itself) that belongs to a GUI app — i.e. the terminal
-    /// or IDE hosting the CLI. `NSRunningApplication` is documented
+    /// (including `pid` itself) that is the user-facing host — i.e. the
+    /// terminal or IDE hosting the CLI. `NSRunningApplication` is documented
     /// thread-safe; callers are on the main actor anyway.
     static func hostAppPID(of pid: pid_t) -> Int32? {
+        hostAppPID(
+            of: pid,
+            parent: { parentPID(of: $0) },
+            policy: { NSRunningApplication(processIdentifier: $0)?.activationPolicy }
+        )
+    }
+
+    /// The walk itself, with the process tree and each pid's app activation
+    /// policy injected (nil = not an app) so it can be tested on real shapes.
+    ///
+    /// Two tiers: the nearest `.regular` (Dock) app wins — background
+    /// helpers also count as running apps (zcode-cli lives inside
+    /// ZCode Helper.app, `.accessory`) and activating one shows nothing, so
+    /// the walk climbs past them to ZCode itself. With no regular ancestor
+    /// at all (a terminal set to hide its Dock icon is `.accessory` itself),
+    /// fall back to the nearest app of any kind — except `exclude` (this
+    /// process: a chat-bubble CLI is our own child, and "jumping" to
+    /// NemoNotch does nothing).
+    static func hostAppPID(
+        of pid: pid_t,
+        parent: (pid_t) -> pid_t?,
+        policy: (pid_t) -> NSApplication.ActivationPolicy?,
+        exclude: pid_t = getpid()
+    ) -> Int32? {
         var current = pid
+        var firstApp: Int32?
         // Bound guards against pathological depth; real chains are ≤ ~6 hops
         // (hook bash → CLI → shell → login → terminal app).
         for _ in 0 ..< 16 {
-            if NSRunningApplication(processIdentifier: current) != nil {
-                return current
+            if current != exclude, let appPolicy = policy(current) {
+                if appPolicy == .regular {
+                    return current
+                }
+                if firstApp == nil {
+                    firstApp = current
+                }
             }
-            guard let parent = parentPID(of: current), parent > 1 else { return nil }
+            guard let parent = parent(current), parent > 1 else { return firstApp }
             current = parent
         }
-        return nil
+        return firstApp
     }
 
     /// The hosting app's display name ("Zap", "iTerm2") for the card's
