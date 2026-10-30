@@ -130,8 +130,12 @@ enum AppActivator {
         return nil
     }
 
+    /// Only a regular (Dock-visible) app can be brought forward. Background
+    /// helpers also count as running apps — zcode-cli lives inside
+    /// ZCode Helper.app (LSUIElement) — and activating one shows nothing, so
+    /// the walk keeps climbing past them to the real ZCode app.
     static func isHostCandidate(_ policy: NSApplication.ActivationPolicy?) -> Bool {
-        policy != nil
+        policy == .regular
     }
 
     /// The hosting app's display name ("Zap", "iTerm2") for the card's

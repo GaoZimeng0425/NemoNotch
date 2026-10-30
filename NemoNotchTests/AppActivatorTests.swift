@@ -74,11 +74,11 @@ struct AppActivatorTests {
 
     @Test("a zcode session resolves to the ZCode app, not its background helper")
     func skipsBackgroundHelper() {
-        // Real tree (2026-10-30): zcode-cli 70919 lives in ZCode Helper.app
-        // (LSUIElement, activationPolicy .prohibited) → zcode-host-local-1
-        // 70909 (not an app) → ZCode 70848 (.regular).
+        // Real tree, policies read live (2026-10-30): zcode-cli and
+        // zcode-host-local-1 both report bundle dev.zcode.app.helper with
+        // activationPolicy .accessory; only ZCode (dev.zcode.app) is .regular.
         let parents: [pid_t: pid_t] = [70919: 70909, 70909: 70848, 70848: 1]
-        let policies: [pid_t: NSApplication.ActivationPolicy] = [70919: .prohibited, 70848: .regular]
+        let policies: [pid_t: NSApplication.ActivationPolicy] = [70919: .accessory, 70909: .accessory, 70848: .regular]
         let host = AppActivator.hostAppPID(
             of: 70919,
             parent: { parents[$0] },
