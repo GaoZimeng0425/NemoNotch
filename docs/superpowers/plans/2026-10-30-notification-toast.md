@@ -46,9 +46,9 @@
 
 **Interfaces:** Produces 无。删除后 `rg -n "NotificationService|monitoredApps|\.notification\(" NemoNotch NemoNotchTests` 零命中。`PermissionPane.swift` 注释里提到 NotificationService 的两处改成中性描述。
 
-- [ ] **Step 1:** 按上表删除 / 修改。
-- [ ] **Step 2:** `sh scripts/test.sh` → 退出码 0(编译通过 + 现有测试绿;引日志)。
-- [ ] **Step 3:** Commit `refactor: remove Dock-badge notification polling and notch badge`
+- [x] **Step 1:** 按上表删除 / 修改。
+- [x] **Step 2:** `sh scripts/test.sh` → 退出码 0(编译通过 + 现有测试绿;引日志)。
+- [x] **Step 3:** Commit `refactor: remove Dock-badge notification polling and notch badge`
 
 ### Task 2: 通知记录解码(纯)
 
@@ -71,15 +71,15 @@
   ```
   `decode` 用 `PropertyListSerialization`;缺 `uuid`(或不是 16 字节)/ 缺 `app` / 不是 plist → nil。
 
-- [ ] **Step 1: 写测试**(fixture 在测试里用 `PropertyListSerialization.data(fromPropertyList:format:.binary)` 构造,形状照抄实测 Slack / 微信记录):
+- [x] **Step 1: 写测试**(fixture 在测试里用 `PropertyListSerialization.data(fromPropertyList:format:.binary)` 构造,形状照抄实测 Slack / 微信记录):
   - `decodesSlackShape`:`app="com.tinyspeck.slackmacgap"`,`uuid`=16 字节,`date=814968448.7`,`req={titl:"王小明", subt:"#design", body:"hi"}` → 各字段字面相等,`date == Date(timeIntervalSinceReferenceDate: 814968448.7)`。
   - `decodesWeChatWithoutTitle`:`req={body:"你收到了一条消息"}` → `title == nil`、`subtitle == nil`、`body == "你收到了一条消息"`。
   - `emptyStringsBecomeNil`:`titl:""` → `title == nil`。
   - `rejectsMissingUUID` / `rejectsShortUUID`(8 字节)/ `rejectsMissingApp` / `rejectsGarbage`(`Data("x".utf8)`)→ nil。
-- [ ] **Step 2:** `sh scripts/test.sh --only NotificationRecordTests` → 编译失败(类型不存在)。
-- [ ] **Step 3:** 实现 `NotificationRecord.decode`。
-- [ ] **Step 4:** 同命令 → 全绿;`sh scripts/mutate.sh NemoNotch/Services/NotificationRecord.swift '"titl"' '"subt"' --only NotificationRecordTests` → exit 0(变红)。
-- [ ] **Step 5:** Commit `feat: decode Notification Center records`
+- [x] **Step 2:** `sh scripts/test.sh --only NotificationRecordTests` → 编译失败(类型不存在)。
+- [x] **Step 3:** 实现 `NotificationRecord.decode`。
+- [x] **Step 4:** 同命令 → 全绿;`sh scripts/mutate.sh NemoNotch/Services/NotificationRecord.swift '"titl"' '"subt"' --only NotificationRecordTests` → exit 0(变红)。
+- [x] **Step 5:** Commit `feat: decode Notification Center records`
 
 ### Task 3: 收件箱状态机与卡片文案(纯)
 
@@ -119,7 +119,7 @@
   ```
   `watched` 由调用方传小写集合;记录的 `bundleID` 在内部小写化。不在 `watched` 的 app 的新记录也记为已见(否则后来加入监控时会补出旧通知)。
 
-- [ ] **Step 1: 写测试**(用一个 `rec(_ n: UInt8, app:, title:, body:, t:)` helper 造记录,uuid 由 n 决定):
+- [x] **Step 1: 写测试**(用一个 `rec(_ n: UInt8, app:, title:, body:, t:)` helper 造记录,uuid 由 n 决定):
   - `baselineSeedsOnFirstSuccessfulRead`:新建 inbox 先**不**调用 ingest(模拟读失败)→ `isSeeded == false`;`ingest([r1, r2])` → 返回 `[]`、`appsWithPending.isEmpty`;再 `ingest([r1, r2, r3(slack)])` → 返回 `["com.tinyspeck.slackmacgap"]`,`pending(for:)` 只含 r3。
   - `watchedMatchIsCaseInsensitive`:记录 app `"com.tencent.xinwechat"`,watched `["com.tencent.xinwechat"]`(调用方已小写)而记录写 `"com.tencent.xinWeChat"` 也命中。
   - `baselineCoversUnwatchedApps`:基线含 mail 的 m1;之后 watched 加入 mail,`ingest([m1])` → `[]`。
@@ -131,10 +131,10 @@
   - `cardMultipleDedupesSendersNewestFirst`:3 条(t=1 李华、t=2 王小明、t=3 李华)→ `count 3, line1 "李华、王小明", line2 "最新:李华 — <t3 body>"`。
   - `missingTitleFallsBackToAppName`:微信 2 条都无 title/subtitle → `line1 "微信"`(去重后单个),`line2 "最新:微信 — 你收到了一条消息"`;单条无 title → `line1 nil, line2 "你收到了一条消息"`。
   - `cardEmptyIsNil`:`pending: []` → nil。
-- [ ] **Step 2:** `sh scripts/test.sh --only NotificationInboxTests` → 编译失败。
-- [ ] **Step 3:** 实现。
-- [ ] **Step 4:** 同命令全绿;变异:`sh scripts/mutate.sh NemoNotch/Services/NotificationInbox.swift '.lowercased()' '' --only NotificationInboxTests`(取文件中第一处小写化)→ exit 0。
-- [ ] **Step 5:** Commit `feat: notification inbox state machine and card text`
+- [x] **Step 2:** `sh scripts/test.sh --only NotificationInboxTests` → 编译失败。
+- [x] **Step 3:** 实现。
+- [x] **Step 4:** 同命令全绿;变异:`sh scripts/mutate.sh NemoNotch/Services/NotificationInbox.swift '.lowercased()' '' --only NotificationInboxTests`(取文件中第一处小写化)→ exit 0。
+- [x] **Step 5:** Commit `feat: notification inbox state machine and card text`
 
 ### Task 4: toast 管线支持通知卡
 
@@ -175,16 +175,16 @@
   ```
   通知卡的 `CompletionItem`:`key = "notify:<小写 bundle id>"`,`name` = app 显示名,`source = .notification(bundleID: 原样)`,`notice` = 卡片文案。`dismissToast` 与到期路径在移除前取到 item 再回调。
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
   - Queue `replaceKeepsDeadline`:add A(now=0)→ `replace(key:A.key, with:A')` at 任意时刻 → `toasts[0].item == A'` 且 `deadline == 300`。
   - Queue `replaceNilRemoves`:→ `toasts.isEmpty`,返回 true;`replace` 不存在的 key → false、队列不变。
   - Queue `notificationCardsShareCapacity`:4 张 AI 卡 + 1 张 `notify:` 卡 → 共 4 张,最旧 AI 卡被挤出,通知卡在。
   - Click `notificationCardOpensApp`:`.card(0)` 命中 source `.notification(bundleID:"com.tinyspeck.slackmacgap")` 的卡 → `.open(id, bundleID:"com.tinyspeck.slackmacgap")`;`.close(0)` 同卡 → `.dismiss(id)`。
-- [ ] **Step 2:** `sh scripts/test.sh --only CompletionToastQueueTests,CompletionToastClickTests` → 编译失败。
-- [ ] **Step 3:** 实现 queue / click / service / AppActivator;`handleClick` 的 `.open` 分支 = `AppActivator.openApp` + `dismissToast`。
-- [ ] **Step 4:** `CompletionToastView`:`item.notice != nil` 时,图标位放 app 图标(新增 `@MainActor enum AppIconCache { static func icon(bundleID: String) -> NSImage? }`,同文件,按 bundle id 经 `NSWorkspace.urlForApplication` + `icon(forFile:)` 解析并字典缓存);标题行 = app 名 + `count > 1` 时红色计数胶囊;第二行 `line1`(textSecondary);第三行 `line2`(textTertiary);保持 66pt、色环、×。`sourceIcon` switch 补 `.notification` 分支(兜底 `bell.fill`)。
-- [ ] **Step 5:** `sh scripts/affected-tests.sh` → 退出码 0(引日志)。
-- [ ] **Step 6:** Commit `feat: toast pipeline carries per-app notification cards`
+- [x] **Step 2:** `sh scripts/test.sh --only CompletionToastQueueTests,CompletionToastClickTests` → 编译失败。
+- [x] **Step 3:** 实现 queue / click / service / AppActivator;`handleClick` 的 `.open` 分支 = `AppActivator.openApp` + `dismissToast`。
+- [x] **Step 4:** `CompletionToastView`:`item.notice != nil` 时,图标位放 app 图标(新增 `@MainActor enum AppIconCache { static func icon(bundleID: String) -> NSImage? }`,同文件,按 bundle id 经 `NSWorkspace.urlForApplication` + `icon(forFile:)` 解析并字典缓存);标题行 = app 名 + `count > 1` 时红色计数胶囊;第二行 `line1`(textSecondary);第三行 `line2`(textTertiary);保持 66pt、色环、×。`sourceIcon` switch 补 `.notification` 分支(兜底 `bell.fill`)。
+- [x] **Step 5:** `sh scripts/affected-tests.sh` → 退出码 0(引日志)。
+- [x] **Step 6:** Commit `feat: toast pipeline carries per-app notification cards`
 
 ### Task 5: 读库服务、设置与接线
 
@@ -225,12 +225,12 @@
   ```
   服务行为:后台 `DispatchSourceTimer` 每 2s 取 `fingerprint()`,变了(或首次 / 上次失败)才 `read()`;结果回主线程 → `inbox.ingest`;对返回的「新到达」app 调 `flash.showNotificationToast`,对其余仍有卡但 pending 变化的 app 调 `updateNotificationToast`(pending 空传 nil);`flash.onToastRemoved` 对 `.notification` 源的卡调 `inbox.markHandled(app:)`。开关关:停定时器、对所有 `notify:` 卡 `updateNotificationToast(nil)`、`inbox.reset()`、`status = .idle`。app 名用 `FileManager.default.displayName(atPath:)`(由 bundle URL 得),解析不到用 bundle id。`status` 只在变化时写日志(info / warn)。
 
-- [ ] **Step 1: 写测试** `notificationToastDefaults`:清掉两个 key 后新建 `AppSettings` → `notificationToastEnabled == true`、`notificationToastApps == ["com.apple.mail", "com.tinyspeck.slackmacgap", "com.tencent.xinWeChat"]`;写入 `false` / `["x"]` 后新建实例读回相同值(测试前后恢复原 UserDefaults 值)。
-- [ ] **Step 2:** 跑 → 编译失败。实现 AppSettings 两个属性 → 绿。
-- [ ] **Step 3:** 实现 `NotificationCenterReader`(参照 `ZcodeUsageReader` 的 SQLite3 用法)与 `NotificationToastService`;`AppDependencies` 在 `UITestMode.ownsSharedHookConfig` 为真(即真实 app)时 `start()`。
-- [ ] **Step 4:** 设置页:开关行;`status == .noAccess` 时 `PermissionCard`(`openSettings: { PermissionFlowController.shared.start(pane: .fullDiskAccess) }`,新文案 key `permission.fullDiskAccess.notifications.title/detail`);`.unavailable(reason)` 时一行说明 + reason;app 列表增删(沿用旧页的 NSOpenPanel 交互,写 `notificationToastApps` 并调 `settingsChanged()`)。设置窗口激活时调 `settingsChanged()` 以便授权后立即重读(替代旧的 `refreshAXTrust`)。新 key 进 xcstrings(en + zh-Hans)并登记进 `SettingsSearchIndex` 的 `.notifications`。
-- [ ] **Step 5:** `sh scripts/affected-tests.sh` 与 `sh scripts/lint.sh` → 均退出码 0(引日志)。
-- [ ] **Step 6:** Commit `feat: surface Notification Center messages as toast cards`
+- [x] **Step 1: 写测试** `notificationToastDefaults`:清掉两个 key 后新建 `AppSettings` → `notificationToastEnabled == true`、`notificationToastApps == ["com.apple.mail", "com.tinyspeck.slackmacgap", "com.tencent.xinWeChat"]`;写入 `false` / `["x"]` 后新建实例读回相同值(测试前后恢复原 UserDefaults 值)。
+- [x] **Step 2:** 跑 → 编译失败。实现 AppSettings 两个属性 → 绿。
+- [x] **Step 3:** 实现 `NotificationCenterReader`(参照 `ZcodeUsageReader` 的 SQLite3 用法)与 `NotificationToastService`;`AppDependencies` 在 `UITestMode.ownsSharedHookConfig` 为真(即真实 app)时 `start()`。
+- [x] **Step 4:** 设置页:开关行;`status == .noAccess` 时 `PermissionCard`(`openSettings: { PermissionFlowController.shared.start(pane: .fullDiskAccess) }`,新文案 key `permission.fullDiskAccess.notifications.title/detail`);`.unavailable(reason)` 时一行说明 + reason;app 列表增删(沿用旧页的 NSOpenPanel 交互,写 `notificationToastApps` 并调 `settingsChanged()`)。设置窗口激活时调 `settingsChanged()` 以便授权后立即重读(替代旧的 `refreshAXTrust`)。新 key 进 xcstrings(en + zh-Hans)并登记进 `SettingsSearchIndex` 的 `.notifications`。
+- [x] **Step 5:** `sh scripts/affected-tests.sh` 与 `sh scripts/lint.sh` → 均退出码 0(引日志)。
+- [x] **Step 6:** Commit `feat: surface Notification Center messages as toast cards`
 
 ### Task 6: 文档与真机验证
 
@@ -238,7 +238,7 @@
 - Modify: `AGENTS.md`(「完成闪光 / Toast」节加一条通知卡不变量与坑:私有库只读路径、基线只在首次成功读、被挤出 ≠ 已处理、bundle id 小写、不受 completionFlashEnabled 门禁;「Keychain / 权限 / TCC」节加完全磁盘访问用途)、`README.md`、`README_CN.md`(功能描述:通知徽章 → 通知 toast)
 - Modify: 本 plan 勾选
 
-- [ ] **Step 1:** 更新三份文档;`rg -n "Dock 红点|Dock badge|monitoredApps|通知徽章" AGENTS.md README.md README_CN.md docs` 清理旧口径残留。
-- [ ] **Step 2:** `sh scripts/doc-audit.sh` → 退出码 0。
-- [ ] **Step 3:** Commit `docs: notification toast`
-- [ ] **Step 4(合并部署后,真机):** 给 NemoNotch 授完全磁盘访问 → 让 Slack 来一条消息 → 刘海下出 Slack 卡(单条文案);再来两条 → 同一张卡计数 3、发送人列表;点卡 → Slack 前台、卡消失、`log` 里无重复出卡;刘海两侧不再有铃铛 / app 徽章。
+- [x] **Step 1:** 更新三份文档;`rg -n "Dock 红点|Dock badge|monitoredApps|通知徽章" AGENTS.md README.md README_CN.md docs` 清理旧口径残留。
+- [x] **Step 2:** `sh scripts/doc-audit.sh` → 退出码 0。
+- [x] **Step 3:** Commit `docs: notification toast`
+- **合并部署后真机验证(feat-done 之后做,不在分支内勾选):** 给 NemoNotch 授完全磁盘访问 → 让 Slack 来一条消息 → 刘海下出 Slack 卡(单条文案);再来两条 → 同一张卡计数 3、发送人列表;点卡 → Slack 前台、卡消失、`log` 里无重复出卡;刘海两侧不再有铃铛 / app 徽章。
