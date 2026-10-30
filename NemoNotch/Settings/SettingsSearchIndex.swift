@@ -46,9 +46,9 @@ enum SettingsSearchIndex {
         ),
         .notifications: (
             keys: [
-                "settings.nav.notifications", "settings.monitored_apps", "settings.no_monitored_apps",
-                "settings.add_monitored_app", "settings.monitored_footer",
-                "permission.accessibility.title", "permission.accessibility.detail",
+                "settings.nav.notifications", "settings.notificationToast.enabled", "settings.monitored_apps",
+                "settings.no_monitored_apps", "settings.add_monitored_app", "settings.monitored_footer",
+                "permission.fullDiskAccess.notifications.title", "permission.fullDiskAccess.notifications.detail",
             ],
             literals: []
         ),

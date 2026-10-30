@@ -117,6 +117,7 @@ struct SettingsSceneRoot: View {
                     .environment(deps.openClaw)
                     .environment(deps.keepAwake)
                     .environment(deps.notificationPermission)
+                    .environment(deps.notificationToast)
             } else {
                 ProgressView()
                     .frame(width: 680, height: 480)
