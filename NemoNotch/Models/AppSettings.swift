@@ -127,8 +127,8 @@ final class AppSettings {
     static let notificationToastAppsKey = "notificationToastApps"
     static let defaultNotificationToastApps = ["com.apple.mail", "com.tinyspeck.slackmacgap", "com.tencent.xinWeChat"]
 
-    /// Default on: nothing happens until the user grants Full Disk Access,
-    /// which is the real opt-in moment.
+    /// Default off (opt-in, like the other reminders): cards show other apps'
+    /// message text, so turning it on is the user's call.
     var notificationToastEnabled: Bool {
         didSet { UserDefaults.standard.set(notificationToastEnabled, forKey: Self.notificationToastEnabledKey) }
     }
@@ -286,7 +286,7 @@ final class AppSettings {
         completionFlashEnabled = UserDefaults.standard
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
         notificationToastEnabled = UserDefaults.standard
-            .object(forKey: Self.notificationToastEnabledKey) as? Bool ?? true
+            .object(forKey: Self.notificationToastEnabledKey) as? Bool ?? false
         notificationToastApps = UserDefaults.standard
             .stringArray(forKey: Self.notificationToastAppsKey) ?? Self.defaultNotificationToastApps
         calendarDueFlashEnabled = UserDefaults.standard
