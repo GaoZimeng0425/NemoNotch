@@ -59,19 +59,17 @@ final class HookServer {
         listener?.cancel()
         listener = nil
 
-        let params = NWParameters.tcp
-        params.allowLocalEndpointReuse = true
-        params.acceptLocalOnly = true
-        params.includePeerToPeer = false
-
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             LogService.error("Invalid hook port \(port)", category: "HookServer")
             return
         }
+        let params = Self.listenerParameters(port: nwPort)
 
         let newListener: NWListener
         do {
-            newListener = try NWListener(using: params, on: nwPort)
+            // Port comes from `requiredLocalEndpoint`; passing it again via
+            // `on:` would conflict with the pinned endpoint.
+            newListener = try NWListener(using: params)
         } catch {
             LogService.warn("Failed to create NWListener on \(port): \(error)", category: "HookServer")
             tryNextPort()
@@ -92,6 +90,20 @@ final class HookServer {
         }
 
         newListener.start(queue: .global(qos: .userInitiated))
+    }
+
+    /// Listener parameters for the hook port, bound to IPv4 loopback.
+    /// `acceptLocalOnly` alone means "local link" (anyone on the same subnet),
+    /// and without a required endpoint the listener took every interface
+    /// (`*:45831`, reachable on the LAN IP). Every sender — hook-sender.sh,
+    /// the Hermes script, the opencode plugin — targets 127.0.0.1.
+    nonisolated static func listenerParameters(port: NWEndpoint.Port) -> NWParameters {
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        params.acceptLocalOnly = true
+        params.includePeerToPeer = false
+        params.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: port)
+        return params
     }
 
     private func handleListenerState(_ state: NWListener.State) {
