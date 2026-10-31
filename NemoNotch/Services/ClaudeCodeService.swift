@@ -221,12 +221,13 @@ final class ClaudeProvider: AIProvider {
                     session.gitBranch = branch
                 }
 
-                let userMessages = result.messages.filter { $0.role == .user }
-                if let first = userMessages.first {
-                    session.firstUserMessage = String(first.content.prefix(80))
+                // Parsing is incremental: only the first chunk may set the
+                // session's opening prompt; later chunks only move "last".
+                if session.firstUserMessage == nil, let first = UserPrompt.first(in: result.messages) {
+                    session.firstUserMessage = first
                 }
-                if let last = userMessages.last {
-                    session.lastUserMessage = String(last.content.prefix(80))
+                if let last = UserPrompt.last(in: result.messages) {
+                    session.lastUserMessage = last
                 }
 
                 session.phase = .idle
@@ -511,12 +512,11 @@ final class ClaudeProvider: AIProvider {
                     session.gitBranch = branch
                 }
 
-                let userMessages = result.messages.filter { $0.role == .user }
-                if let first = userMessages.first, session.firstUserMessage == nil {
-                    session.firstUserMessage = String(first.content.prefix(80))
+                if session.firstUserMessage == nil, let first = UserPrompt.first(in: result.messages) {
+                    session.firstUserMessage = first
                 }
-                if let last = userMessages.last {
-                    session.lastUserMessage = String(last.content.prefix(80))
+                if let last = UserPrompt.last(in: result.messages) {
+                    session.lastUserMessage = last
                 }
             }
 
