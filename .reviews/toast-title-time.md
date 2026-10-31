@@ -2,8 +2,8 @@
 
 Reviewer: 独立评审子代理(Claude Opus,未参与开发;只读 diff + AGENTS.md + 真实 transcript 抽样)
 Date: 2026-10-31
-Reviewed-Head: 86c298c
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 1bd76ee
+Verdict: APPROVED
 Scope:  12 files changed, 182 insertions(+), 44 deletions(-)
 
 ```
@@ -58,3 +58,12 @@ README_CN.md
 在 worktree 里:`git diff 7e93644d5e313e55f0e5bc5431c8027376cae490...HEAD` 看全量改动;重要文件直接读上下文,
 别只看 diff 片段。发现问题先列 Findings(标 CHANGES_NEEDED),修完复审再改
 APPROVED。APPROVED 意味着:"我愿意为这个合并背书"——不是"看起来没毛病"。
+
+## 复审(86c298c..1bd76ee)
+
+Verdict: APPROVED。证据梯级 4(真跑过)。
+- P1:`ConversationParser` 把 transcript 的 `isMeta` 带进 `ChatMessage.isMeta`,`UserPrompt.first/last` 先滤 isMeta。红提交 740f369 引真实红输出(失败 2:metaLinesAfterThePromptAreNotTheTitle、pastedImagePromptIsTyped),测试走 parseFullResult 真解析 JSONL(parser 级,非手造 ChatMessage)。
+- P2:前缀收窄为 `[Image:`;`[Image #1] …` 判 typed、`[Image: original…]` 判注入,两向都有测试。
+- P3:误置注释已删;新增 `waitingRearrivalStampsShownAt`。变异验证:`card.shownAt = now` → `.addingTimeInterval(0)`,`sh scripts/mutate.sh` 退出码 65,失败 1 通过 23(变异被抓);此前存活的变异现已有牙。
+- `sh scripts/test.sh --only UserPromptTests,CompletionToastQueueTests` 退出码 0。AGENTS.md 同步了 isMeta 与 `[Image:` 口径。
+- 披露:只复核了增量 diff 与上述测试,未重跑 300 份 transcript 抽样。
