@@ -16,6 +16,9 @@ struct ChatMessage: Identifiable {
     let toolName: String?
     let toolInput: String?
     let timestamp: Date
+    /// Claude Code's `isMeta`: a user-role line the user did not type (skill
+    /// bodies, command expansions, caveats, image placeholders).
+    var isMeta = false
 
     init(
         id: String,

@@ -286,4 +286,14 @@ struct CompletionToastQueueTests {
         q.resume(now: t0.addingTimeInterval(200))
         #expect(q.toasts[0].shownAt == t0)
     }
+
+    @Test("a waiting card that arrives again is re-stamped with the new arrival")
+    func waitingRearrivalStampsShownAt() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        q.add([item("A")], now: t0.addingTimeInterval(50))
+        #expect(q.toasts.last?.item.name == "A")
+        #expect(q.toasts.last?.shownAt == t0.addingTimeInterval(50))
+    }
 }

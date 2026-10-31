@@ -221,8 +221,6 @@ final class ClaudeProvider: AIProvider {
                     session.gitBranch = branch
                 }
 
-                // Parsing is incremental: only the first chunk may set the
-                // session's opening prompt; later chunks only move "last".
                 if session.firstUserMessage == nil, let first = UserPrompt.first(in: result.messages) {
                     session.firstUserMessage = first
                 }

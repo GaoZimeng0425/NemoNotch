@@ -53,7 +53,8 @@ struct UserPromptTests {
     private func parse(_ lines: [[String: Any]]) throws -> [ChatMessage] {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jsonl")
         defer { try? FileManager.default.removeItem(at: url) }
-        let body = try lines.map { try String(decoding: JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }
+        let body = try lines
+            .map { try String(bytes: JSONSerialization.data(withJSONObject: $0), encoding: .utf8) ?? "" }
         try (body.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
         return ConversationParser.parseFullResult(filePath: url.path).messages
     }
