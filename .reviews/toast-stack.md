@@ -2,8 +2,8 @@
 
 Reviewer: independent review subagent (Claude, fresh session; did not author this branch)
 Date: 2026-10-31
-Reviewed-Head: ac096fb
-Verdict: CHANGES_REQUESTED
+Reviewed-Head: c2e88a4
+Verdict: APPROVED
 Scope:  8 files changed, 161 insertions(+), 36 deletions(-)
 
 ```
@@ -48,3 +48,9 @@ README_CN.md
 - [x] **坑总目录对照**: the toast and notification-card invariants were updated. 被挤出 ≠ 已处理 is kept and refined.
 - [x] **教训候选**: see above.
 - [ ] **文档同步**: AGENTS.md and the READMEs are in sync, but the code comments are stale (P3).
+
+## Re-review (c2e88a4)
+
+- P2 resolved: `replaceNilRevealsWaiting` fills the row, parks A, removes the shown `notify:slack` card via `replace(key:with:nil,now:)` and asserts A comes back with `deadline == now + 30s`. Evidence (level 4): `sh scripts/test.sh --only CompletionToastQueueTests` exit 0, 21 passed. `sh scripts/mutate.sh ... 'toasts.remove(at: idx)' 'toasts.remove(at: idx); return true'` exit 0, mutation caught (1 failed, 20 passed). The earlier survivor is dead.
+- P3 resolved: the four comments (Constants.swift, CompletionFlashService.swift, NotificationToastService.swift, NotificationInbox.swift) now say waiting off-row / dropped from the full pile. `rg evict NemoNotch` leaves only unrelated HermesService stale-agent eviction.
+- Diff outside .reviews is comments plus one test. No behaviour change.
