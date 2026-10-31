@@ -46,4 +46,46 @@ struct UserPromptTests {
     @Test func onlyInjectedLinesGiveNil() {
         #expect(UserPrompt.last(in: [user("<task-notification>x</task-notification>")]) == nil)
     }
+
+    // MARK: - Transcript-level (isMeta)
+
+    /// Writes JSONL lines to a temp transcript and returns the parsed messages.
+    private func parse(_ lines: [[String: Any]]) throws -> [ChatMessage] {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let body = try lines.map { try String(decoding: JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }
+        try (body.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        return ConversationParser.parseFullResult(filePath: url.path).messages
+    }
+
+    private func userLine(_ text: String, meta: Bool = false) -> [String: Any] {
+        var line: [String: Any] = [
+            "type": "user",
+            "uuid": UUID().uuidString,
+            "timestamp": "2026-10-31T10:00:00.000Z",
+            "message": ["role": "user", "content": text],
+        ]
+        if meta {
+            line["isMeta"] = true
+        }
+        return line
+    }
+
+    @Test func metaLinesAfterThePromptAreNotTheTitle() throws {
+        // A skill loading after the prompt injects an isMeta user line.
+        let messages = try parse([
+            userLine("帮我审查一下胶囊组件"),
+            userLine("Base directory for this skill: /Users/me/.claude/skills/review\n\n# Review", meta: true),
+        ])
+        #expect(UserPrompt.last(in: messages) == "帮我审查一下胶囊组件")
+    }
+
+    @Test func pastedImagePromptIsTyped() {
+        // A prompt with a pasted image is recorded as "[Image #1] …" and is the user's own text.
+        #expect(UserPrompt.isTyped("[Image #1] 看看这里为什么歪了"))
+    }
+
+    @Test func injectedImagePlaceholderIsNot() {
+        #expect(UserPrompt.isTyped("[Image: original 2304x120, displayed at 2000x104.]") == false)
+    }
 }
