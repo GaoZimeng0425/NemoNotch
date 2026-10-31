@@ -184,7 +184,14 @@ enum ConversationParser: ConversationParserProtocol {
         guard let message = json["message"] as? [String: Any] else { return nil }
         let text = extractText(from: message)
         guard !text.isEmpty else { return nil }
-        return ChatMessage(id: "user-\(lineID)", role: .user, content: text, timestamp: parseTimestamp(json) ?? Date())
+        var chat = ChatMessage(
+            id: "user-\(lineID)",
+            role: .user,
+            content: text,
+            timestamp: parseTimestamp(json) ?? Date()
+        )
+        chat.isMeta = json["isMeta"] as? Bool ?? false
+        return chat
     }
 
     private static func parseAssistantMessage(_ json: [String: Any], lineID: String) -> ChatMessage? {

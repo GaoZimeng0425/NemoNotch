@@ -176,7 +176,7 @@ private struct CompletionToastRowView: View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(toasts.enumerated()), id: \.element.id) { index, toast in
                 let rect = layout.cardRect(at: index)
-                CompletionToastView(item: toast.item)
+                CompletionToastView(item: toast.item, shownAt: toast.shownAt)
                     .position(x: rect.midX, y: rect.midY)
                     // Scale from the top edge: stays inside the panel (a move
                     // from above would be clipped by the panel's top).

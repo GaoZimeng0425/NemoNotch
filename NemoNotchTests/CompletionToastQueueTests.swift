@@ -262,4 +262,38 @@ struct CompletionToastQueueTests {
         #expect(q.toasts[0].deadline == t0.addingTimeInterval(330))
         #expect(q.waiting.isEmpty)
     }
+
+    // MARK: - Shown-at (the card's "N minutes ago")
+
+    @Test("a card is stamped when it arrives and re-stamped when the same unit arrives again")
+    func arrivalStampsShownAt() {
+        var q = queue()
+        q.add([item("A")], now: t0)
+        #expect(q.toasts[0].shownAt == t0)
+        q.add([item("A")], now: t0.addingTimeInterval(20))
+        #expect(q.toasts[0].shownAt == t0.addingTimeInterval(20))
+    }
+
+    @Test("a card returning from the waiting pile keeps its original time; resume does not touch it")
+    func refillAndResumeKeepShownAt() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        q.dismiss(id: q.toasts[2].id, now: t0.addingTimeInterval(100))
+        #expect(q.toasts[0].item.name == "A")
+        #expect(q.toasts[0].shownAt == t0)
+        q.pause()
+        q.resume(now: t0.addingTimeInterval(200))
+        #expect(q.toasts[0].shownAt == t0)
+    }
+
+    @Test("a waiting card that arrives again is re-stamped with the new arrival")
+    func waitingRearrivalStampsShownAt() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        q.add([item("A")], now: t0.addingTimeInterval(50))
+        #expect(q.toasts.last?.item.name == "A")
+        #expect(q.toasts.last?.shownAt == t0.addingTimeInterval(50))
+    }
 }

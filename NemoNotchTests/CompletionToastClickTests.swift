@@ -10,7 +10,7 @@ struct CompletionToastClickTests {
     private func toast(jump: CompletionJump?) -> CompletionToast {
         var item = CompletionItem(name: "NemoNotch", source: .ai(.claude))
         item.jump = jump
-        return CompletionToast(id: UUID(), item: item, deadline: deadline)
+        return CompletionToast(id: UUID(), item: item, deadline: deadline, shownAt: deadline)
     }
 
     @Test("clicking a session card jumps to its host app and names that card to close")
@@ -79,7 +79,8 @@ struct CompletionToastClickTests {
         let card = CompletionToast(
             id: UUID(),
             item: CompletionItem(name: "Slack", source: .notification(bundleID: bundleID)),
-            deadline: deadline
+            deadline: deadline,
+            shownAt: deadline
         )
         #expect(CompletionToastClick.action(for: .card(0), toasts: [card]) == .open(card.id, bundleID: bundleID))
         #expect(CompletionToastClick.action(for: .close(0), toasts: [card]) == .dismiss(card.id))

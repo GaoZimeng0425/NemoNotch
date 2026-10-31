@@ -23,6 +23,8 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
 /// same geometry, so nothing here is a SwiftUI button.
 struct CompletionToastView: View {
     let item: CompletionItem
+    /// When the card last arrived, shown as "5 seconds ago" in the title row.
+    let shownAt: Date
 
     var body: some View {
         HStack(spacing: 10) {
@@ -58,15 +60,36 @@ struct CompletionToastView: View {
 
     private static let cornerRadius: CGFloat = 14
 
+    /// A card's first line: its title, truncated first, then how long ago the
+    /// card arrived ("5 seconds ago"). The system re-renders the relative
+    /// time itself — no timer of ours drives it.
+    private func titleRow(@ViewBuilder _ title: () -> some View) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            title()
+            Spacer(minLength: 0)
+            Text(.currentDate, format: .reference(
+                to: shownAt,
+                allowedFields: [.second, .minute, .hour, .day],
+                maxFieldCount: 1
+            ))
+            .font(.system(size: NotchConstants.completionToastFontSize - 3))
+            .foregroundStyle(NotchTheme.textTertiary)
+            .lineLimit(1)
+            .fixedSize()
+        }
+    }
+
     /// Title, tool·model·tokens·duration, and working directory.
     private var completionText: some View {
         VStack(alignment: .leading, spacing: 2) {
-            // Prefer the task title (firstUserMessage-derived); fall back to name.
-            Text(item.subtitle ?? item.name)
-                .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // The prompt the user typed this turn; falls back to the session title / name.
+            titleRow {
+                Text(item.subtitle ?? item.name)
+                    .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
 
             if let detail = detailLine(for: item) {
                 Text(detail)
@@ -96,11 +119,13 @@ struct CompletionToastView: View {
     /// Calendar card: title, time (· place), and the link it opens on click.
     private func calendarText(_ calendar: CalendarCard) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: item.name)
-                .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
-                .foregroundStyle(NotchTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            titleRow {
+                Text(verbatim: item.name)
+                    .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Text(verbatim: calendar.timeLine)
                 .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
                 .foregroundStyle(NotchTheme.textSecondary)
@@ -121,21 +146,23 @@ struct CompletionToastView: View {
     /// two `NotificationCard` lines.
     private func noticeText(_ notice: NotificationCard) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text(verbatim: item.name)
-                    .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
-                    .foregroundStyle(NotchTheme.textPrimary)
-                    .lineLimit(1)
-                if notice.count > 1 {
-                    Text(verbatim: "\(notice.count)")
-                        .font(.system(
-                            size: NotchConstants.completionToastFontSize - 3,
-                            weight: .bold,
-                            design: .rounded
-                        ))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .background(Capsule().fill(Color.red))
+            titleRow {
+                HStack(spacing: 6) {
+                    Text(verbatim: item.name)
+                        .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                        .foregroundStyle(NotchTheme.textPrimary)
+                        .lineLimit(1)
+                    if notice.count > 1 {
+                        Text(verbatim: "\(notice.count)")
+                            .font(.system(
+                                size: NotchConstants.completionToastFontSize - 3,
+                                weight: .bold,
+                                design: .rounded
+                            ))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .background(Capsule().fill(Color.red))
+                    }
                 }
             }
             if let line1 = notice.line1 {

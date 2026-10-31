@@ -76,7 +76,8 @@ final class CompletionFlashService {
                 // Active == .working only; a session merely .waiting is not "working".
                 isActive: session.status == .working,
                 source: .ai(session.source),
-                subtitle: session.displayTitle,
+                // What the user asked this turn; the session title when no prompt is known.
+                subtitle: session.lastUserMessage ?? session.displayTitle,
                 tool: session.currentTool,
                 model: session.displayModel,
                 tokenDisplay: session.tokenDisplay,
