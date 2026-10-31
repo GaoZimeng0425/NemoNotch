@@ -21,14 +21,15 @@ final class CompletionFlashService {
     /// run. Ordering the window out on the assignment would cut the fade off.
     private(set) var overlayVisible = false
 
-    /// Why a card left the row on its own terms. Eviction by a newer card is
-    /// deliberately not reported — the user never got to see that card.
+    /// Why a card left the row on its own terms. A card pushed off-row to wait
+    /// (or dropped from a full waiting pile) is deliberately not reported —
+    /// the user may never have seen it.
     enum ToastRemoval {
         case dismissed // close button, or a click that jumped/opened then closed it
         case expired
     }
 
-    /// Called after a card is dismissed or expires (not when evicted).
+    /// Called after a card is dismissed or expires (not when it waits off-row).
     var onToastRemoved: ((CompletionItem, ToastRemoval) -> Void)?
 
     private let store: AISessionStore
@@ -184,7 +185,7 @@ final class CompletionFlashService {
     /// (records left Notification Center): updated in place, timer kept; nil
     /// removes it. No card under `key` → nothing happens.
     func updateNotificationToast(key: String, item: CompletionItem?) {
-        guard toastQueue.replace(key: key, with: item) else { return }
+        guard toastQueue.replace(key: key, with: item, now: Date()) else { return }
         syncToasts()
     }
 
@@ -193,7 +194,7 @@ final class CompletionFlashService {
     /// The close button on one card.
     func dismissToast(id: UUID) {
         let item = toastQueue.toasts.first { $0.id == id }?.item
-        toastQueue.dismiss(id: id)
+        toastQueue.dismiss(id: id, now: Date())
         syncToasts()
         LogService.debug("Toast dismissed by user", category: "CompletionFlash")
         if let item {

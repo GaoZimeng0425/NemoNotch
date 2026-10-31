@@ -112,7 +112,7 @@ enum NotchConstants {
     /// the row pauses it; own value — the volume/brightness HUD keeps its
     /// shorter `hudDismissDelay`).
     static let completionToastDuration: Double = 300.0
-    /// Most toast cards side by side under the notch; a newer one evicts the oldest.
+    /// Most toast cards shown side by side under the notch; extra cards wait off-row.
     static let completionToastCapacity = 4
     /// Calendar due monitor tick cadence — how late an "on start" reminder can
     /// be in the worst case.

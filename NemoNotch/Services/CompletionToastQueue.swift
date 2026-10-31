@@ -18,13 +18,19 @@ struct CompletionToast: Identifiable, Equatable {
 ///   timer restarts); another session in the same project — another app or
 ///   the same app — gets its own card. Session-less sources (Pomodoro,
 ///   calendar) fall back to the name.
-/// - At most `capacity` cards: a new arrival beyond it evicts the card that
-///   last arrived longest ago (earliest deadline) — a just-refreshed card
-///   keeps its slot even if it sits first in the row.
+/// - A stack, not a conveyor: at most `capacity` cards show. A new arrival
+///   beyond it parks the card that last arrived longest ago (earliest
+///   deadline) in `waiting` instead of dropping it; whenever a shown card is
+///   closed, expires or is removed, the most recently parked card comes back
+///   with a full timer. Parked cards never tick — the user has not seen them.
+///   The pile keeps the newest `waitingLimit` cards.
 struct CompletionToastQueue {
     let duration: TimeInterval
     let capacity: Int
+    var waitingLimit = 20
     private(set) var toasts: [CompletionToast] = []
+    /// Cards pushed off the row, oldest first.
+    private(set) var waiting: [CompletionToast] = []
     private(set) var isPaused = false
 
     /// The earliest deadline that should fire, or nil when nothing can expire
@@ -40,32 +46,52 @@ struct CompletionToastQueue {
             if let idx = toasts.firstIndex(where: { $0.item.toastKey == item.toastKey }) {
                 toasts[idx].item = CompletionFlashNames.merge(existing: [toasts[idx].item], new: [item])[0]
                 toasts[idx].deadline = deadline
+            } else if let idx = waiting.firstIndex(where: { $0.item.toastKey == item.toastKey }) {
+                var card = waiting.remove(at: idx)
+                card.item = CompletionFlashNames.merge(existing: [card.item], new: [item])[0]
+                card.deadline = deadline
+                toasts.append(card)
             } else {
                 toasts.append(CompletionToast(id: makeID(), item: item, deadline: deadline))
             }
         }
         while toasts.count > capacity,
               let stalest = toasts.indices.min(by: { toasts[$0].deadline < toasts[$1].deadline }) {
-            toasts.remove(at: stalest)
+            waiting.append(toasts.remove(at: stalest))
+        }
+        if waiting.count > waitingLimit {
+            waiting.removeFirst(waiting.count - waitingLimit)
         }
     }
 
-    /// Swaps the content of the card keyed `key` without touching its timer
-    /// (content changed, nothing new arrived); nil removes the card. Returns
-    /// false when no card has that key.
+    /// Swaps the content of the card keyed `key` — shown or waiting — without
+    /// touching its timer (content changed, nothing new arrived); nil removes
+    /// the card. Returns false when no card has that key.
     @discardableResult
-    mutating func replace(key: String, with item: CompletionItem?) -> Bool {
-        guard let idx = toasts.firstIndex(where: { $0.item.toastKey == key }) else { return false }
-        if let item {
-            toasts[idx].item = item
-        } else {
-            toasts.remove(at: idx)
+    mutating func replace(key: String, with item: CompletionItem?, now: Date) -> Bool {
+        if let idx = toasts.firstIndex(where: { $0.item.toastKey == key }) {
+            if let item {
+                toasts[idx].item = item
+            } else {
+                toasts.remove(at: idx)
+                refill(now: now)
+            }
+            return true
         }
-        return true
+        if let idx = waiting.firstIndex(where: { $0.item.toastKey == key }) {
+            if let item {
+                waiting[idx].item = item
+            } else {
+                waiting.remove(at: idx)
+            }
+            return true
+        }
+        return false
     }
 
-    mutating func dismiss(id: UUID) {
+    mutating func dismiss(id: UUID, now: Date) {
         toasts.removeAll { $0.id == id }
+        refill(now: now)
     }
 
     mutating func pause() {
@@ -82,12 +108,23 @@ struct CompletionToastQueue {
         }
     }
 
-    /// Removes cards whose deadline has passed. Paused: removes nothing.
+    /// Removes cards whose deadline has passed, then brings waiting cards
+    /// back into the freed slots. Paused: removes nothing.
     @discardableResult
     mutating func expire(now: Date) -> [CompletionToast] {
         guard !isPaused else { return [] }
         let expired = toasts.filter { $0.deadline <= now }
         toasts.removeAll { $0.deadline <= now }
+        refill(now: now)
         return expired
+    }
+
+    /// Most recently parked first; a returning card sits at the head of the
+    /// row (it is older than what is showing) with a full timer.
+    private mutating func refill(now: Date) {
+        while toasts.count < capacity, var card = waiting.popLast() {
+            card.deadline = now.addingTimeInterval(duration)
+            toasts.insert(card, at: 0)
+        }
     }
 }

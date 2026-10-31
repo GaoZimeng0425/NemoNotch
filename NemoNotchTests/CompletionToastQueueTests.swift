@@ -13,7 +13,7 @@ struct CompletionToastQueueTests {
     }
 
     private func queue() -> CompletionToastQueue {
-        CompletionToastQueue(duration: 30, capacity: 3)
+        CompletionToastQueue(duration: 30, capacity: 3, waitingLimit: 2)
     }
 
     @Test("each completion gets its own card, oldest first")
@@ -80,12 +80,60 @@ struct CompletionToastQueueTests {
         #expect(q.toasts.first?.item.tool == "Read") // nil newer field keeps the older value
     }
 
-    @Test("beyond capacity the oldest card is evicted")
-    func capacityEvictsOldest() {
+    @Test("beyond capacity the oldest card waits off-row instead of disappearing")
+    func capacityParksOldest() {
         var q = queue()
         q.add([item("A"), item("B"), item("C")], now: t0)
         q.add([item("D")], now: t0)
         #expect(q.toasts.map(\.item.name) == ["B", "C", "D"])
+        #expect(q.waiting.map(\.item.name) == ["A"])
+    }
+
+    @Test("closing a card brings back the newest waiting card, with a fresh timer")
+    func dismissRevealsWaiting() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        q.add([item("E")], now: t0.addingTimeInterval(2))
+        // A and B wait; B arrived later, so B comes back first.
+        q.dismiss(id: q.toasts[2].id, now: t0.addingTimeInterval(100))
+        #expect(q.toasts.map(\.item.name) == ["B", "C", "D"])
+        #expect(q.toasts[0].deadline == t0.addingTimeInterval(130))
+        #expect(q.waiting.map(\.item.name) == ["A"])
+    }
+
+    @Test("an expired card is replaced by a waiting one")
+    func expiryRevealsWaiting() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(10))
+        q.expire(now: t0.addingTimeInterval(30))
+        // B and C expired at 30; A (waiting) comes back next to D.
+        #expect(q.toasts.map(\.item.name) == ["A", "D"])
+        #expect(q.waiting.isEmpty)
+    }
+
+    @Test("the waiting pile keeps only the newest cards beyond its limit")
+    func waitingLimitDropsOldest() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        q.add([item("E")], now: t0.addingTimeInterval(2))
+        q.add([item("F")], now: t0.addingTimeInterval(3))
+        #expect(q.waiting.map(\.item.name) == ["B", "C"])
+    }
+
+    @Test("a waiting card that arrives again returns to the row as the newest")
+    func waitingCardRearrives() {
+        var q = queue()
+        q.add([item("A"), item("B"), item("C")], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        let aID = q.waiting[0].id
+        q.add([item("A", tool: "Edit")], now: t0.addingTimeInterval(2))
+        #expect(q.toasts.map(\.item.name) == ["C", "D", "A"])
+        #expect(q.toasts[2].id == aID)
+        #expect(q.toasts[2].item.tool == "Edit")
+        #expect(q.waiting.map(\.item.name) == ["B"])
     }
 
     @Test("a just-refreshed card is not the one evicted, even at the head of the row")
@@ -141,7 +189,7 @@ struct CompletionToastQueueTests {
     func dismissOne() {
         var q = queue()
         q.add([item("A"), item("B")], now: t0)
-        q.dismiss(id: q.toasts[0].id)
+        q.dismiss(id: q.toasts[0].id, now: t0)
         #expect(q.toasts.map(\.item.name) == ["B"])
     }
 
@@ -159,7 +207,7 @@ struct CompletionToastQueueTests {
         var q = queue()
         q.add([notice("slack", count: 2)], now: t0)
         let id = q.toasts[0].id
-        let replaced = q.replace(key: "notify:slack", with: notice("slack", count: 1))
+        let replaced = q.replace(key: "notify:slack", with: notice("slack", count: 1), now: t0)
         #expect(replaced)
         #expect(q.toasts[0].id == id)
         #expect(q.toasts[0].item.notice?.count == 1)
@@ -170,10 +218,10 @@ struct CompletionToastQueueTests {
     func replaceNilRemoves() {
         var q = queue()
         q.add([item("A"), notice("slack", count: 1)], now: t0)
-        let missing = q.replace(key: "notify:mail", with: nil)
+        let missing = q.replace(key: "notify:mail", with: nil, now: t0)
         #expect(missing == false)
         #expect(q.toasts.count == 2)
-        let removed = q.replace(key: "notify:slack", with: nil)
+        let removed = q.replace(key: "notify:slack", with: nil, now: t0)
         #expect(removed)
         #expect(q.toasts.map(\.item.name) == ["A"])
     }
@@ -186,5 +234,32 @@ struct CompletionToastQueueTests {
         q.add([item("C")], now: t0.addingTimeInterval(2))
         q.add([notice("slack", count: 1)], now: t0.addingTimeInterval(3))
         #expect(q.toasts.map(\.item.name) == ["B", "C", "slack"])
+    }
+
+    @Test("replace also reaches a waiting card, and nil drops it from the pile")
+    func replaceReachesWaiting() {
+        var q = queue()
+        q.add([notice("slack", count: 1)], now: t0)
+        q.add([item("A"), item("B"), item("C")], now: t0.addingTimeInterval(1))
+        let updated = q.replace(key: "notify:slack", with: notice("slack", count: 2), now: t0)
+        #expect(updated)
+        #expect(q.waiting.first?.item.notice?.count == 2)
+        let dropped = q.replace(key: "notify:slack", with: nil, now: t0)
+        #expect(dropped)
+        #expect(q.waiting.isEmpty)
+    }
+
+    @Test("removing a shown card through replace brings a waiting card back with a fresh timer")
+    func replaceNilRevealsWaiting() {
+        var q = queue()
+        q.add([item("A")], now: t0)
+        q.add([notice("slack", count: 1), item("B")], now: t0.addingTimeInterval(1))
+        q.add([item("C")], now: t0.addingTimeInterval(2))
+        // A waits; slack is shown.
+        let removed = q.replace(key: "notify:slack", with: nil, now: t0.addingTimeInterval(300))
+        #expect(removed)
+        #expect(q.toasts.map(\.item.name) == ["A", "B", "C"])
+        #expect(q.toasts[0].deadline == t0.addingTimeInterval(330))
+        #expect(q.waiting.isEmpty)
     }
 }
