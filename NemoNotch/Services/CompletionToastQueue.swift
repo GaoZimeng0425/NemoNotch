@@ -6,6 +6,10 @@ struct CompletionToast: Identifiable, Equatable {
     var item: CompletionItem
     /// When this card auto-dismisses. Ignored while the queue is paused.
     var deadline: Date
+    /// When this card last arrived (first shown, or refreshed by the same
+    /// unit completing again) — the card's "2 minutes ago". A card coming back
+    /// from the waiting pile keeps it, so the user sees how long it waited.
+    var shownAt: Date
 }
 
 /// Pure state of the toast row under the notch: one card per completion,
@@ -46,13 +50,15 @@ struct CompletionToastQueue {
             if let idx = toasts.firstIndex(where: { $0.item.toastKey == item.toastKey }) {
                 toasts[idx].item = CompletionFlashNames.merge(existing: [toasts[idx].item], new: [item])[0]
                 toasts[idx].deadline = deadline
+                toasts[idx].shownAt = now
             } else if let idx = waiting.firstIndex(where: { $0.item.toastKey == item.toastKey }) {
                 var card = waiting.remove(at: idx)
                 card.item = CompletionFlashNames.merge(existing: [card.item], new: [item])[0]
                 card.deadline = deadline
+                card.shownAt = now
                 toasts.append(card)
             } else {
-                toasts.append(CompletionToast(id: makeID(), item: item, deadline: deadline))
+                toasts.append(CompletionToast(id: makeID(), item: item, deadline: deadline, shownAt: now))
             }
         }
         while toasts.count > capacity,
