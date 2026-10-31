@@ -184,7 +184,7 @@ final class CompletionFlashService {
     /// (records left Notification Center): updated in place, timer kept; nil
     /// removes it. No card under `key` → nothing happens.
     func updateNotificationToast(key: String, item: CompletionItem?) {
-        guard toastQueue.replace(key: key, with: item) else { return }
+        guard toastQueue.replace(key: key, with: item, now: Date()) else { return }
         syncToasts()
     }
 
@@ -193,7 +193,7 @@ final class CompletionFlashService {
     /// The close button on one card.
     func dismissToast(id: UUID) {
         let item = toastQueue.toasts.first { $0.id == id }?.item
-        toastQueue.dismiss(id: id)
+        toastQueue.dismiss(id: id, now: Date())
         syncToasts()
         LogService.debug("Toast dismissed by user", category: "CompletionFlash")
         if let item {

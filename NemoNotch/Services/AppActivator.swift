@@ -47,8 +47,7 @@ enum AppActivator {
                 )
                 activateBundle(expected)
             } else {
-                LogService.info("Activating session host pid \(pid)", category: "AppActivator")
-                app.activate()
+                bringForward(app, reason: "session host pid \(pid)")
             }
             return
         }
@@ -186,7 +185,7 @@ enum AppActivator {
     @MainActor
     static func openApp(bundleId: String) {
         if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first {
-            app.activate()
+            bringForward(app, reason: "notification")
             return
         }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
@@ -196,9 +195,37 @@ enum AppActivator {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
+    @MainActor
     private static func activateBundle(_ bundleId: String) {
-        NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-            .first?
-            .activate()
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first else {
+            LogService.warn("No running app for \(bundleId)", category: "AppActivator")
+            return
+        }
+        bringForward(app, reason: "bundle \(bundleId)")
+    }
+
+    /// Unhides, activates with all windows (a bare `activate()` can leave a
+    /// hidden app hidden, or raise an app whose only window is elsewhere), and
+    /// records whether it took: the request's answer now, and 0.5s later
+    /// whether the app actually became frontmost — the system may decline an
+    /// activation requested from a background app, and "clicked but nothing
+    /// happened" reports were undiagnosable without it.
+    @MainActor
+    private static func bringForward(_ app: NSRunningApplication, reason: String) {
+        if app.isHidden {
+            app.unhide()
+        }
+        let accepted = app.activate(options: [.activateAllWindows])
+        let pid = app.processIdentifier
+        let name = app.bundleIdentifier ?? "pid \(pid)"
+        LogService.info("Activating \(name) (\(reason)): request accepted=\(accepted)", category: "AppActivator")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let front = NSWorkspace.shared.frontmostApplication
+            guard front?.processIdentifier != pid else { return }
+            LogService.warn(
+                "Activation of \(name) did not take — frontmost is \(front?.bundleIdentifier ?? "none")",
+                category: "AppActivator"
+            )
+        }
     }
 }

@@ -89,7 +89,7 @@ final class NotificationToastService {
                 }
             }
             // Content may have shrunk (notifications cleared elsewhere): update
-            // in place without restarting the timer; an evicted card stays gone.
+            // in place without restarting the timer, shown or waiting off-row.
             for app in previous.subtracting(arrivals) {
                 flash.updateNotificationToast(key: Self.key(app), item: item(for: app))
             }
