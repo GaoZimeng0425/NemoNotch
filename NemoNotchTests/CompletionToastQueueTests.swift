@@ -248,4 +248,18 @@ struct CompletionToastQueueTests {
         #expect(dropped)
         #expect(q.waiting.isEmpty)
     }
+
+    @Test("removing a shown card through replace brings a waiting card back with a fresh timer")
+    func replaceNilRevealsWaiting() {
+        var q = queue()
+        q.add([item("A")], now: t0)
+        q.add([notice("slack", count: 1), item("B")], now: t0.addingTimeInterval(1))
+        q.add([item("C")], now: t0.addingTimeInterval(2))
+        // A waits; slack is shown.
+        let removed = q.replace(key: "notify:slack", with: nil, now: t0.addingTimeInterval(300))
+        #expect(removed)
+        #expect(q.toasts.map(\.item.name) == ["A", "B", "C"])
+        #expect(q.toasts[0].deadline == t0.addingTimeInterval(330))
+        #expect(q.waiting.isEmpty)
+    }
 }

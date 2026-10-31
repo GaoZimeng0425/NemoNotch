@@ -8,7 +8,7 @@ import Foundation
 /// change (2s stat), `NotificationInbox` decides what is new, and each app's
 /// pending set becomes one `.notification` card in `CompletionFlashService`'s
 /// row. A card the user closes, clicks or lets expire marks its notifications
-/// handled; a card evicted by newer cards does not.
+/// handled; a card waiting off-row (or dropped from a full pile) does not.
 @MainActor
 @Observable
 final class NotificationToastService {

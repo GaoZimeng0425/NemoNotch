@@ -40,8 +40,9 @@ struct NotificationCard: Equatable {
 ///   floods the row with backlog.
 /// - A record is pending while it is still in Notification Center, arrived
 ///   after the baseline for a watched app, and was not handled (card
-///   clicked / closed / expired). A card evicted from the row is not
-///   handled: its records ride along with the app's next card.
+///   clicked / closed / expired). A card waiting off-row is not handled;
+///   if a full waiting pile drops it, its records ride along with the app's
+///   next card.
 /// - App keys are lowercased: the database's `app` field and the app's own
 ///   bundle id can differ in case (`com.tencent.xinWeChat`).
 struct NotificationInbox {
