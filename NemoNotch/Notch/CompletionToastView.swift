@@ -36,6 +36,8 @@ struct CompletionToastView: View {
 
             if let notice = item.notice {
                 noticeText(notice)
+            } else if let external = item.external {
+                externalText(external)
             } else if let calendar = item.calendar {
                 calendarText(calendar)
             } else {
@@ -142,6 +144,34 @@ struct CompletionToastView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// External-app card: the caller's app name, then its own title and body
+    /// verbatim — the request body is the whole card face, no translation.
+    /// Mirrors `noticeText`'s three-line structure.
+    private func externalText(_ external: ExternalCardContent) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            titleRow {
+                Text(verbatim: item.name)
+                    .font(.system(size: NotchConstants.completionToastFontSize, weight: .semibold))
+                    .foregroundStyle(NotchTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Text(verbatim: external.title)
+                .font(.system(size: NotchConstants.completionToastFontSize - 2, weight: .medium))
+                .foregroundStyle(NotchTheme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let body = external.body {
+                Text(verbatim: body)
+                    .font(.system(size: NotchConstants.completionToastFontSize - 3))
+                    .foregroundStyle(NotchTheme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     /// Notification card: app name (+ red count when several), then the
     /// two `NotificationCard` lines.
     private func noticeText(_ notice: NotificationCard) -> some View {
@@ -236,6 +266,10 @@ struct CompletionToastView: View {
                     .font(.system(size: s * 0.9, weight: .semibold))
                     .foregroundStyle(NotchTheme.accent)
             }
+        case let .external(iconSymbol):
+            Image(systemName: iconSymbol ?? "app.dashed")
+                .font(.system(size: s * 0.9, weight: .semibold))
+                .foregroundStyle(NotchTheme.accent)
         }
     }
 }

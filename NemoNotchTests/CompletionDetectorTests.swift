@@ -173,4 +173,24 @@ struct CompletionDetectorTests {
         #expect(merged[0].subtitle == "kept")
         #expect(merged[0].tool == "Edit")
     }
+
+    @Test("external payload is replaced whole-card on merge: a missing body clears the old one")
+    func mergeReplacesExternalPayloadWholeCard() {
+        var existing = item("Demo")
+        existing.key = "ext:Demo::dl-1"
+        existing.external = ExternalCardContent(app: "Demo", title: "下载完成", body: "A", jumpBundleId: nil)
+        var incoming = item("Demo")
+        incoming.key = "ext:Demo::dl-1"
+        incoming.external = ExternalCardContent(app: "Demo", title: "下载完成", body: nil, jumpBundleId: nil)
+        let merged = CompletionFlashNames.merge(existing: [existing], new: [incoming])
+        #expect(merged.count == 1)
+        #expect(merged[0].external?.body == nil)
+    }
+
+    @Test("external item uses its provided card key as toastKey")
+    func externalItemToastKeyUsesProvidedKey() {
+        var item = item("Demo", .external(iconSymbol: nil))
+        item.key = "ext:App::k1"
+        #expect(item.toastKey == "ext:App::k1")
+    }
 }

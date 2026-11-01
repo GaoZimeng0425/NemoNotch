@@ -7,6 +7,9 @@ enum CompletionSource: Equatable, Hashable {
     case agent // OpenClaw / Hermes multi-agent monitors
     case calendar // Calendar event due
     case notification(bundleID: String) // Notification Center message (Mail / Slack / WeChat …)
+    /// External app push (`POST /v1/toast`): the caller's SF Symbol name when
+    /// it sent a valid `sf:<name>` icon, else nil for the generic mark.
+    case external(iconSymbol: String?)
 }
 
 /// The session's host app as `AppActivator.activate` takes it: tab link →
@@ -46,6 +49,10 @@ struct CompletionItem: Equatable {
     var notice: NotificationCard?
     /// Time/place and link lines for a calendar-due card (`.calendar` source only).
     var calendar: CalendarCard?
+    /// Whole card face for an external-app push (`.external` source only).
+    /// Unlike the AI rich fields, merge replaces it whole — the request body
+    /// *is* the card, a missing field means the field is gone.
+    var external: ExternalCardContent?
 
     /// Convenience for callers that only have name + source (multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -61,6 +68,7 @@ struct CompletionItem: Equatable {
         jump = nil
         notice = nil
         calendar = nil
+        external = nil
     }
 
     init(
@@ -86,6 +94,7 @@ struct CompletionItem: Equatable {
         self.jump = jump
         notice = nil
         calendar = nil
+        external = nil
     }
 }
 
