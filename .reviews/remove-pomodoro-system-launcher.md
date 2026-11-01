@@ -2,8 +2,8 @@
 
 Reviewer: independent review subagent (Claude, fresh context; did not author this branch)
 Date: 2026-11-01
-Reviewed-Head: 09c5d2b
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 87fd2af
+Verdict: APPROVED
 Scope:  57 files changed, 302 insertions(+), 6498 deletions(-)
 
 ```
@@ -105,10 +105,24 @@ scripts/uitest-screenshots.sh
 - [x] **错误路径**:失败会响(非零退出/日志),没有吞错、没有假绿
 - [x] **坑总目录对照**:改到的区域在 AGENTS.md 有已知坑吗?对照过了吗?
 - [x] **教训候选**:有「这段以后会再咬人」的新坑/新判据吗?没有写"无";有就记到 Findings 尾部「教训候选」小节(位置 file:line + 一句话判据)——收尾 reflect 会分流进 guardrail-backlog(能门禁化的)或 AGENTS.md 坑总目录
-- [ ] **文档同步**(未通过:见 P2 两条):行为变了的话 AGENTS.md / README 跟上了吗?
+- [x] **文档同步**(复审通过):行为变了的话 AGENTS.md / README 跟上了吗?
 - [x] **工作流机制清场**:本分支触及 hooks/scripts/CI——旧口径(措辞/路径/次序)全仓 grep 过了吗(AGENTS.md、docs/、注释)?证据贴 Findings。
 ## 评审方法提示(给评审会话)
 
 在 worktree 里:`git diff 5ca1817034733ae877836224844c93a3cd2cd2d9...HEAD` 看全量改动;重要文件直接读上下文,
 别只看 diff 片段。发现问题先列 Findings(标 CHANGES_NEEDED),修完复审再改
 APPROVED。APPROVED 意味着:"我愿意为这个合并背书"——不是"看起来没毛病"。
+
+## 复审(re-review,Reviewed-Head 87fd2af)
+
+独立复审 09c5d2b..87fd2af 的修复提交,逐项核对:
+
+- P2 AGENTS.md 授权按钮断言:已改为"挪到提醒页等待提醒栏,开关开且未授权显示 PermissionCard";与 AlertsSettingsPage.swift:73 实码一致 [2 级]。
+- P2 README/README_CN 热键:改为 ⌥⌘1(总览)/⌥⌘2(AI),与 Hotkeys.swift:6-7 默认值一致;rg 无 ⌥⌘1-5 残留 [2 级]。
+- P3 AGENTS.md showCompletionToast:已替换为 showNotificationToast 口径;仓内仅剩带日期的历史 spec 提及,属历史记录可接受 [2 级]。
+- P3 uitest-screenshots.sh 缩进:已对齐为 2 空格 [2 级,cat -A]。
+- P3 SettingsSearchIndex .alerts:已补 permission.notification.title/detail,与页面实用键一致 [2 级]。
+- P3 docs/atoll-feature-gap.md:现在时断言改为带"已删"标注 [2 级]。
+- 跑过:sh scripts/doc-audit.sh 退出码 0;sh scripts/test.sh --only SettingsSearchTests 退出码 0,build/test.log 全部 passed [4 级]。
+
+结论:上轮全部 findings 已处理,无新增问题。
