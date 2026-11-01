@@ -53,7 +53,7 @@
 | 功能 | Atoll 实现 | 说明 |
 |------|-----------|------|
 | 系统 OSD 替换 | `SystemOSDManager` + `SystemHUDManager` | **压掉**系统原生音量/亮度 OSD，用自绘 HUD 替代（NemoNotch 是叠加，不抑制系统 OSD） |
-| GPU / 网络 / 温度监控 | `StatsManager`（58K，SMC + IOReport） | CPU 温度、频率、per-core、GPU、网速——NemoNotch SystemTab 只有 CPU/内存/磁盘 |
+| GPU / 网络 / 温度监控 | `StatsManager`（58K，SMC + IOReport） | CPU 温度、频率、per-core、GPU、网速——NemoNotch 的 SystemTab(2026-11-01 已删)当时只有 CPU/内存/磁盘 |
 | 蓝牙设备电量 | `BluetoothAudioManager`（98K） | AirPods 等电量展示 + 连接动画 |
 | 外接显示器亮度 | `LunarManager` + `BetterDisplayManager` | 与 Lunar/BetterDisplay 联动调外屏 |
 | 键盘背光 | `KeyboardBrightnessSensor` + `SystemKeyboardBacklightController` | 背光 HUD 与控制 |
@@ -72,7 +72,7 @@
 
 ## 反向对照（NemoNotch 有、Atoll 没有）
 
-AI CLI 会话监控（Claude/Gemini/opencode/zcode 的 hook 管线 + 会话卡片）、多智能体监控（OpenClaw/Hermes）、完成闪光 + 全屏 toast、番茄钟 + TODO、App 启动器、Dock 通知徽标、Gemini 配额、徽章折叠扇形布局。核心差异：Atoll 走"系统全能面板"路线，NemoNotch 走"AI 工作流指挥台"路线。
+AI CLI 会话监控（Claude/Gemini/opencode/zcode 的 hook 管线 + 会话卡片）、多智能体监控（OpenClaw/Hermes）、完成闪光 + 全屏 toast、番茄钟 + TODO、App 启动器、Dock 通知徽标(这三项 2026-10/11 已删)、Gemini 配额、徽章折叠扇形布局。核心差异：Atoll 走"系统全能面板"路线，NemoNotch 走"AI 工作流指挥台"路线。
 
 ## 如果要借鉴，个人建议优先级
 

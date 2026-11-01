@@ -60,7 +60,7 @@ test -d "$APP" || { echo "构建产物未找到: $APP"; exit 1; }
 
 for tab in "${TABS[@]}"; do
   echo "==> 截图 $tab"
-    rm -f "$RECT_FILE"
+  rm -f "$RECT_FILE"
   "$APP/Contents/MacOS/NemoNotch" --uitest --tab="$tab" &
   PID=$!
   wait_for 1.6   # 等开屏 + 内容渲染

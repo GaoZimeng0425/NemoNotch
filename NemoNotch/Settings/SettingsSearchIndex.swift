@@ -22,6 +22,7 @@ enum SettingsSearchIndex {
                 "settings.nav.alerts", "settings.completion_flash.header", "settings.completion_flash.enabled",
                 "settings.event_alerts.header", "settings.bluetooth_alerts.enabled",
                 "settings.calendar_alerts.enabled", "settings.charging_alerts.enabled",
+                "permission.notification.title", "permission.notification.detail",
             ],
             literals: []
         ),
