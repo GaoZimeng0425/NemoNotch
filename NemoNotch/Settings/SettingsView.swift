@@ -93,8 +93,9 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     }
 }
 
-/// 设置窗外壳(Atoll 同构):标准 `NavigationSplitView` 双栏 + 侧栏顶搜索条
-/// + 整窗玻璃背景。不手装 NSToolbar;侧栏开关是详情栏的一个 SwiftUI
+/// 设置窗外壳:标准 `NavigationSplitView` 双栏 + 系统原生侧栏搜索框
+/// (`.searchable(placement: .sidebar)`,同 macOS 系统设置;手搓搜索条的
+/// 上下间距各算各的,曾出现「上空下挤」)+ 整窗玻璃背景。不手装 NSToolbar;侧栏开关是详情栏的一个 SwiftUI
 /// `ToolbarItem`(为什么不用自带的,见 `sidebarToggle`)。各页内容在
 /// `Pages/` 下,共享视觉组件在 `SettingsComponents.swift`,搜索索引/过滤在
 /// `SettingsSearchIndex.swift`。
@@ -140,25 +141,24 @@ struct SettingsView: View {
     // MARK: - 侧栏
 
     private var sidebarColumn: some View {
-        VStack(spacing: 0) {
-            SettingsSidebarSearchBar(
+        pageList
+            .searchable(
                 text: Binding(
                     get: { SettingsSearchModel.shared.query },
                     set: { SettingsSearchModel.shared.query = $0 }
                 ),
-                onSubmit: {
-                    // 回车 → 跳首个命中页(过滤器保留,可继续点其他命中行)。
-                    if let first = matchedPages?.first {
-                        selectedPageRaw = first.rawValue
-                    }
-                }
+                placement: .sidebar,
+                prompt: Text("settings.search.placeholder")
             )
-            Divider()
-            pageList
-        }
-        // 自带开关要在侧栏列上摘(挂在 split view 上不生效),换成 `sidebarToggle`。
-        .toolbar(removing: .sidebarToggle)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 210, max: 240)
+            .onSubmit(of: .search) {
+                // 回车 → 跳首个命中页(过滤器保留,可继续点其他命中行)。
+                if let first = matchedPages?.first {
+                    selectedPageRaw = first.rawValue
+                }
+            }
+            // 自带开关要在侧栏列上摘(挂在 split view 上不生效),换成 `sidebarToggle`。
+            .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 210, max: 240)
     }
 
     /// 侧栏开关,放在详情栏那段工具栏的最前(收起时贴着红绿灯,展开时贴着侧栏)。
