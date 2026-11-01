@@ -36,3 +36,9 @@
   靠人工发现。做一版 scripts/test-gates.sh 统一喂样本。
 
 - **test.sh 共享文件篡改哨兵**(来源:hook-port-guard 评审教训候选,2026-10-28)。单测宿主与用户真实 app 共享 `~/.NemoNotch/hooks/*`、`~/.claude/settings.json`、`~/.gemini/settings.json`、`~/.zcode/cli/config.json`、opencode 插件、UserDefaults `hookServerPort`;一次测试把它们改坏就会让所有 CLI 事件静默丢失。拟:`test.sh` 前后对这些文件取 mtime/哈希快照,变化即响亮告警并列出文件——把「这个进程不写 X」从口头声明变成每次测试都验证的事实。
+
+- **设置搜索索引对账**(来源:external-toast-api 评审 P2,2026-11-01;同型于 87fd2af)。新增
+  Settings 页 section 时搜索索引是独立文件,漏登记零报警——用户搜不到开关 = 功能隐形,已二次
+  发生。拟:check-arch.sh A 档规则「`Settings/Pages/` 引用的 `settings.*` key 必须出现在
+  `SettingsSearchIndex` 对应页 keys」(页源码 grep 提取 ↔ 索引文件对账,纯文本可判定);上线前
+  按 A 档规矩校准到零命中 + `--selftest` 样本(命中样本可直接取本次 P2 的三 key 形状)。
