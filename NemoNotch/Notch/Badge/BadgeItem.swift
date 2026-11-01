@@ -13,7 +13,6 @@ enum BadgeItem: Identifiable, Equatable {
     case ai(source: AISource, status: ClaudeStatus, tool: String?, waitingApproval: Bool, sessionID: String)
     case agents(agentID: String, state: AgentMonitorState, emoji: String)
     case calendar
-    case pomodoro(phase: PomodoroPhase)
 
     var id: String {
         switch self {
@@ -22,7 +21,6 @@ enum BadgeItem: Identifiable, Equatable {
             "ai:\(sessionID):\(source.rawValue):\(status):\(tool ?? "nil"):\(waitingApproval)"
         case let .agents(agentID, state, emoji): "agents:\(agentID):\(state.rawValue):\(emoji)"
         case .calendar: "calendar"
-        case let .pomodoro(phase): "pomodoro:\(phase.rawValue)"
         }
     }
 
@@ -32,7 +30,6 @@ enum BadgeItem: Identifiable, Equatable {
         case .ai: .claude
         case .agents: .claude
         case .calendar: .overview
-        case .pomodoro: .pomodoro
         }
     }
 
@@ -41,8 +38,6 @@ enum BadgeItem: Identifiable, Equatable {
         switch self {
         case let .ai(_, _, _, waitingApproval, _) where waitingApproval:
             return 0
-        case .pomodoro:
-            return 2
         case .agents:
             return 3
         case .ai:
@@ -89,8 +84,8 @@ enum BadgeItem: Identifiable, Equatable {
     }
 
     /// Decides the expanded-notch glow from the currently active badge set.
-    /// Approval wins over running work; media / calendar / notification /
-    /// pomodoro never glow. Pure function — input is the already
+    /// Approval wins over running work; media / calendar / notification
+    /// never glow. Pure function — input is the already
     /// provider-filtered `activeBadgeItems`.
     static func glow(for items: [BadgeItem]) -> NotchGlow {
         var hasRunning = false

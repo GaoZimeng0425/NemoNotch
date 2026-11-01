@@ -25,7 +25,7 @@ enum SettingsNavGroup: String, CaseIterable, Identifiable {
 /// persist via `@AppStorage` so reopening the window returns to the last
 /// visited page.
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general, alerts, aiAgents, appList, notifications, hotkeys, pomodoro, keepAwake, about
+    case general, alerts, aiAgents, notifications, hotkeys, keepAwake, about
 
     var id: String {
         rawValue
@@ -37,8 +37,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var navGroup: SettingsNavGroup? {
         switch self {
         case .general, .alerts: .general
-        case .aiAgents, .hotkeys, .pomodoro: .aiWorkspace
-        case .appList, .notifications, .keepAwake: .system
+        case .aiAgents, .hotkeys: .aiWorkspace
+        case .notifications, .keepAwake: .system
         case .about: nil
         }
     }
@@ -48,10 +48,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .general: "settings.nav.general"
         case .alerts: "settings.nav.alerts"
         case .aiAgents: "settings.nav.ai"
-        case .appList: "settings.nav.apps"
         case .notifications: "settings.nav.notifications"
         case .hotkeys: "settings.nav.hotkeys"
-        case .pomodoro: "settings.nav.pomodoro"
         case .keepAwake: "settings.nav.awake"
         case .about: "settings.nav.about"
         }
@@ -62,10 +60,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .alerts: "bell.badge"
         case .aiAgents: "sparkles"
-        case .appList: "square.grid.2x2"
         case .notifications: "bell"
         case .hotkeys: "keyboard"
-        case .pomodoro: "timer"
         case .keepAwake: "moon.zzz"
         case .about: "info.circle"
         }
@@ -77,10 +73,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .general: Color(red: 0.62, green: 0.62, blue: 0.66)
         case .alerts: Color(red: 0.98, green: 0.62, blue: 0.09)
         case .aiAgents: Color(red: 0.60, green: 0.45, blue: 0.95)
-        case .appList: Color(red: 0.25, green: 0.75, blue: 0.45)
         case .notifications: Color(red: 0.94, green: 0.30, blue: 0.30)
         case .hotkeys: Color(red: 0.45, green: 0.45, blue: 0.50)
-        case .pomodoro: Color(red: 0.95, green: 0.42, blue: 0.25)
         case .keepAwake: Color(red: 0.30, green: 0.40, blue: 0.85)
         case .about: Color(red: 0.20, green: 0.55, blue: 0.95)
         }
@@ -91,10 +85,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .general: Color(red: 0.42, green: 0.42, blue: 0.47)
         case .alerts: Color(red: 0.92, green: 0.42, blue: 0.10)
         case .aiAgents: Color(red: 0.35, green: 0.30, blue: 0.90)
-        case .appList: Color(red: 0.10, green: 0.58, blue: 0.32)
         case .notifications: Color(red: 0.80, green: 0.15, blue: 0.20)
         case .hotkeys: Color(red: 0.25, green: 0.25, blue: 0.30)
-        case .pomodoro: Color(red: 0.85, green: 0.20, blue: 0.15)
         case .keepAwake: Color(red: 0.15, green: 0.22, blue: 0.60)
         case .about: Color(red: 0.05, green: 0.35, blue: 0.80)
         }
@@ -265,10 +257,8 @@ struct SettingsView: View {
         case .general: GeneralSettingsPage()
         case .alerts: AlertsSettingsPage()
         case .aiAgents: AIAgentsSettingsPage()
-        case .appList: AppListSettingsPage()
         case .notifications: NotificationListSettingsPage()
         case .hotkeys: HotkeysSettingsView()
-        case .pomodoro: PomodoroSettingsView()
         case .keepAwake: KeepAwakeSettingsView()
         case .about: AboutSettingsPage()
         }

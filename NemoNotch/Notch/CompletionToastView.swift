@@ -222,10 +222,6 @@ struct CompletionToastView: View {
             Image(systemName: "cpu")
                 .font(.system(size: s * 0.9, weight: .semibold))
                 .foregroundStyle(NotchTheme.accent)
-        case .pomodoro:
-            Image(systemName: "timer")
-                .font(.system(size: s * 0.9, weight: .semibold))
-                .foregroundStyle(NotchTheme.accent)
         case .calendar:
             Image(systemName: "calendar")
                 .font(.system(size: s * 0.9, weight: .semibold))

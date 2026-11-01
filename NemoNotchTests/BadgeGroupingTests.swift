@@ -70,7 +70,7 @@ struct BadgeGroupingTests {
     @Test("Overflow beyond cap collapses remainder to +K")
     func overflow() {
         let items: [BadgeItem] = [
-            ai(id: "s1"), .media, .calendar, .pomodoro(phase: .work), agent("🤖", id: "a1"),
+            ai(id: "s1"), .media, .calendar, ai(.working, .gemini, id: "s2"), agent("🤖", id: "a1"),
         ]
         // 5 distinct groups, cap 4 → show first 3, overflow 2
         let c = BadgeGrouping.cluster(items, cap: 4)
@@ -87,7 +87,7 @@ struct BadgeGroupingTests {
 
     @Test("Exactly cap groups → all visible, no overflow")
     func atCapBoundary() {
-        let items: [BadgeItem] = [ai(id: "s1"), .media, .calendar, .pomodoro(phase: .work)]
+        let items: [BadgeItem] = [ai(id: "s1"), .media, .calendar, ai(.working, .gemini, id: "s2")]
         let c = BadgeGrouping.cluster(items, cap: 4)
         #expect(c.groups.count == 4)
         #expect(c.overflow == 0)

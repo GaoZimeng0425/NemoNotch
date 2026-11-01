@@ -111,7 +111,6 @@ struct SettingsSceneRoot: View {
                 SettingsView()
                     .environment(deps.settings)
                     .environment(deps.aiMonitor)
-                    .environment(deps.launcher)
                     .environment(deps.weather)
                     .environment(deps.hermes)
                     .environment(deps.openClaw)
@@ -239,11 +238,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     media: deps.media,
                     calendar: deps.calendar,
                     weather: deps.weather,
-                    system: deps.system,
                     aiStore: deps.aiMonitor.store,
-                    registry: deps.registry,
-                    pomodoro: deps.pomodoro,
-                    tasks: deps.tasks
+                    registry: deps.registry
                 )
             }
             let target = NSScreen.screens.first(where: { $0.isBuiltInDisplay && $0.hasNotch })
@@ -352,18 +348,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         LogService.info("applicationWillTerminate received", category: "AppDelegate")
-        if let pomodoro = deps?.pomodoro {
-            switch pomodoro.state {
-            case .running, .paused:
-                pomodoro.abandon()
-                LogService.info(
-                    "applicationWillTerminate: abandoned active pomodoro",
-                    category: "AppDelegate"
-                )
-            default:
-                break
-            }
-        }
     }
 
     @MainActor
@@ -406,10 +390,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
             }
-        }
-
-        KeyboardShortcuts.onKeyDown(for: .openQuickStart) { [weak self] in
-            self?.deps?.quickStart.toggle()
         }
     }
 }

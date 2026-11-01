@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 自驱动截取 NemoNotch 全部 6 个 Tab 的面板截图到 docs/images/。
+# 自驱动截取 NemoNotch 全部 Tab 的面板截图到 docs/images/。
 # 用法: ./scripts/uitest-screenshots.sh
 set -euo pipefail
 
@@ -8,7 +8,7 @@ OUT_DIR="$ROOT/docs/images"
 RECT_FILE="/tmp/nemonotch-uitest.rect"
 DERIVED="$ROOT/build/uitest"
 APP="$DERIVED/Build/Products/Debug/NemoNotch.app"
-TABS=(overview claude agents launcher pomodoro system)
+TABS=(overview claude)
 
 mkdir -p "$OUT_DIR"
 
@@ -60,8 +60,7 @@ test -d "$APP" || { echo "构建产物未找到: $APP"; exit 1; }
 
 for tab in "${TABS[@]}"; do
   echo "==> 截图 $tab"
-  # 每次启动前清掉临时种子文件,否则 TaskStore 会在持久文件上反复追加,列表越积越多。
-  rm -f "$RECT_FILE" /tmp/nemonotch-uitest-tasks.json /tmp/nemonotch-uitest-history.json
+    rm -f "$RECT_FILE"
   "$APP/Contents/MacOS/NemoNotch" --uitest --tab="$tab" &
   PID=$!
   wait_for 1.6   # 等开屏 + 内容渲染

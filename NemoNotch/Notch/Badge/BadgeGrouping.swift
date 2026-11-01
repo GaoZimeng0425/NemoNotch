@@ -39,7 +39,6 @@ enum BadgeGrouping {
         case let .ai(source, _, _, _, _): "ai:\(source.rawValue)"
         case let .agents(_, _, emoji): "agents:\(emoji)"
         case .media: "media"
-        case .pomodoro: "pomodoro"
         case .calendar: "calendar"
         }
     }

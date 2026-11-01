@@ -5,7 +5,6 @@ import Foundation
 enum CompletionSource: Equatable, Hashable {
     case ai(AISource) // Claude Code / Gemini / opencode
     case agent // OpenClaw / Hermes multi-agent monitors
-    case pomodoro // Pomodoro phase end
     case calendar // Calendar event due
     case notification(bundleID: String) // Notification Center message (Mail / Slack / WeChat …)
 }
@@ -29,7 +28,7 @@ struct CompletionJump: Equatable {
 /// carried through from the AI session that completed.
 struct CompletionItem: Equatable {
     /// The unit that finished — the candidate key ("ai:<sessionID>" /
-    /// "agent:<agentID>"). nil for sources with no session (Pomodoro, calendar).
+    /// "agent:<agentID>"). nil for sources with no session (calendar).
     var key: String?
     let name: String
     let source: CompletionSource
@@ -48,7 +47,7 @@ struct CompletionItem: Equatable {
     /// Time/place and link lines for a calendar-due card (`.calendar` source only).
     var calendar: CalendarCard?
 
-    /// Convenience for callers that only have name + source (Pomodoro, multi-item merges).
+    /// Convenience for callers that only have name + source (multi-item merges).
     init(name: String, source: CompletionSource) {
         key = nil
         self.name = name
@@ -190,7 +189,7 @@ struct CompletionDetector {
 
 extension CompletionItem {
     /// What makes two completions "the same card": the session/agent when
-    /// known, else the name (session-less sources such as Pomodoro).
+    /// known, else the name (session-less sources such as calendar).
     var toastKey: String {
         key ?? "name:\(name)"
     }

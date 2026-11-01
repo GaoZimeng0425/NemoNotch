@@ -16,8 +16,8 @@ import SwiftUI
 /// right `.leading`), so content hugs the notch edges with empty space on
 /// the outside. Each flex column also carries edge padding so content never
 /// touches the shell's outer edge. Tabs split between the two columns via
-/// `Tab.chinPlacement`: regular content tabs on the left, pomodoro joins the
-/// settings/quit cluster on the right.
+/// `Tab.chinPlacement`: content tabs on the left (all current tabs), with an
+/// optional right-side tab slot in front of the settings/quit cluster.
 struct NotchChinBar: View {
     let tabs: [Tab]
     let selected: Tab
@@ -155,7 +155,7 @@ struct NotchChinBar: View {
         let capsuleWidth: CGFloat = 30
 
         HStack(spacing: 2) {
-            // Right-side tabs (e.g. pomodoro) first, closest to the notch.
+            // Right-side tabs (none today) first, closest to the notch.
             ForEach(rightTabs) { tab in
                 tabCapsule(tab: tab, width: capsuleWidth, height: capsuleHeight)
             }

@@ -12,7 +12,6 @@ struct NotchView: View {
     @Environment(AgentMonitorRegistry.self) var agentRegistry
     @Environment(CalendarService.self) var calendarService
     @Environment(HUDService.self) var hudService
-    @Environment(PomodoroTimerService.self) var pomodoroService
     @Environment(BluetoothService.self) var bluetoothService
     @Environment(\.openWindow) private var openWindow
 
@@ -257,7 +256,6 @@ struct NotchView: View {
             calendarService: calendarService,
             aiService: aiService,
             agentRegistry: agentRegistry,
-            pomodoroService: pomodoroService,
             appSettings: appSettings
         )
         vm.initialize()
@@ -372,14 +370,6 @@ struct NotchView: View {
             OverviewTab(morphNamespace: notchMorph)
         case .claude:
             AIChatTab()
-        case .launcher:
-            LauncherTab {
-                coordinator.notchClose()
-            }
-        case .pomodoro:
-            PomodoroTab()
-        case .system:
-            SystemTab()
         }
     }
 
@@ -411,7 +401,6 @@ struct NotchView: View {
             notchCoreWidth: notchCore,
             onBadgeTap: handleBadgeTap,
             mediaService: mediaService,
-            pomodoroService: pomodoroService,
             morphNamespace: notchMorph
         )
         .frame(height: hardwareNotchSize.height)

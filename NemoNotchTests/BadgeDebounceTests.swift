@@ -46,12 +46,6 @@ struct BadgeDebounceTests {
             calendarService: CalendarService(),
             aiService: AICLIMonitorService(),
             agentRegistry: AgentMonitorRegistry(),
-            pomodoroService: PomodoroTimerService(
-                taskStore: TaskStore(),
-                historyStore: PomodoroHistoryStore(),
-                appSettings: AppSettings(),
-                permissionMonitor: nil
-            ),
             appSettings: AppSettings(),
             schedule: clock.schedule
         )
