@@ -13,7 +13,7 @@ enum SettingsSearchIndex {
                 "settings.nav.general", "settings.visible_tabs", "settings.default_tab",
                 "settings.default_tab_picker", "settings.weather_city", "settings.weather_city_footer",
                 "settings.language",
-                "models.tab.overview", "models.tab.ai", "models.tab.launcher", "models.tab.system",
+                "models.tab.overview", "models.tab.ai",
             ],
             literals: []
         ),
@@ -22,6 +22,7 @@ enum SettingsSearchIndex {
                 "settings.nav.alerts", "settings.completion_flash.header", "settings.completion_flash.enabled",
                 "settings.event_alerts.header", "settings.bluetooth_alerts.enabled",
                 "settings.calendar_alerts.enabled", "settings.charging_alerts.enabled",
+                "permission.notification.title", "permission.notification.detail",
             ],
             literals: []
         ),
@@ -35,15 +36,6 @@ enum SettingsSearchIndex {
             ],
             literals: ["Claude Code", "Gemini CLI", "opencode", "zcode", "Hermes Agent", "OpenClaw"]
         ),
-        .appList: (
-            keys: [
-                // 带 %lld/%@ 的 key 必须按目录里的完整格式串列出 —— 漏掉占位符
-                // 会查不到词条,回退值(=key 本身)反而把原始 key 漏进搜索语料。
-                "settings.nav.apps", "settings.apps_count %lld", "settings.add_app",
-                "settings.app_picker_title", "settings.apps_selected_count %lld", "launcher.search_apps",
-            ],
-            literals: []
-        ),
         .notifications: (
             keys: [
                 "settings.nav.notifications", "settings.notificationToast.enabled", "settings.monitored_apps",
@@ -56,17 +48,7 @@ enum SettingsSearchIndex {
             keys: [
                 "settings.nav.hotkeys", "settings.hotkeys.notch", "settings.hotkeys.tabs",
                 "settings.hotkeys.toggle_notch",
-                "models.tab.overview", "models.tab.ai", "models.tab.launcher", "models.tab.system",
-            ],
-            literals: []
-        ),
-        .pomodoro: (
-            keys: [
-                "settings.nav.pomodoro", "settings.pomodoro.title", "settings.pomodoro.workDuration",
-                "settings.pomodoro.shortBreakDuration", "settings.pomodoro.longBreakDuration",
-                "settings.pomodoro.longBreakInterval", "settings.pomodoro.soundEnabled",
-                "settings.pomodoro.notificationEnabled", "settings.pomodoro.hotkeyHeader",
-                "settings.pomodoro.permissionHeader", "permission.notification.title",
+                "models.tab.overview", "models.tab.ai",
             ],
             literals: []
         ),

@@ -3,9 +3,6 @@ import SwiftUI
 enum Tab: String, CaseIterable, Identifiable {
     case overview
     case claude
-    case launcher
-    case pomodoro
-    case system
 
     var id: String {
         rawValue
@@ -15,9 +12,6 @@ enum Tab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "rectangle.3.group"
         case .claude: "sparkles"
-        case .launcher: "square.grid.2x2"
-        case .pomodoro: "timer"
-        case .system: "gearshape.2"
         }
     }
 
@@ -25,20 +19,14 @@ enum Tab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "models.tab.overview"
         case .claude: "models.tab.ai"
-        case .launcher: "models.tab.launcher"
-        case .pomodoro: "models.tab.pomodoro"
-        case .system: "models.tab.system"
         }
     }
 
-    /// Which side of the chin bar this tab renders on. Most tabs sit on the
-    /// left; pomodoro and system join settings/quit on the right so they read
-    /// as a personal-tool cluster rather than content tabs.
+    /// Which side of the chin bar this tab renders on. Every remaining tab is
+    /// a content tab and sits on the left; the right cluster holds only
+    /// settings/quit. Kept as a seam for future personal-tool tabs.
     var chinPlacement: ChinPlacement {
-        switch self {
-        case .pomodoro, .system: .right
-        default: .left
-        }
+        .left
     }
 }
 

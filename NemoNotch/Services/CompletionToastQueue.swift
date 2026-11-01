@@ -20,8 +20,8 @@ struct CompletionToast: Identifiable, Equatable {
 /// - One card per session/agent (`CompletionItem.toastKey`): the same session
 ///   finishing again refreshes its card in place (newer non-nil fields win,
 ///   timer restarts); another session in the same project — another app or
-///   the same app — gets its own card. Session-less sources (Pomodoro,
-///   calendar) fall back to the name.
+///   the same app — gets its own card. Session-less sources (calendar)
+///   fall back to the name.
 /// - A stack, not a conveyor: at most `capacity` cards show. A new arrival
 ///   beyond it parks the card that last arrived longest ago (earliest
 ///   deadline) in `waiting` instead of dropping it; whenever a shown card is

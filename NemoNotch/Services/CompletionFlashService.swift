@@ -156,21 +156,6 @@ final class CompletionFlashService {
         handle(items: items)
     }
 
-    // MARK: - External toast (no flash)
-
-    /// Show completion toasts without firing the full-screen edge glow — used
-    /// by the Pomodoro end alert, whose visual channel is the notch ring pulse
-    /// rather than the glow. Deliberately leaves the flash cooldown untouched
-    /// so it can never swallow a subsequent AI/agent flash.
-    func showCompletionToast(names: [String]) {
-        guard settings.completionFlashEnabled else {
-            LogService.debug("Completion toast ignored — completion flash disabled", category: "CompletionFlash")
-            return
-        }
-        addToasts(names.map { CompletionItem(name: $0, source: .pomodoro) })
-        LogService.debug("Completion toast shown (no flash): \(names)", category: "CompletionFlash")
-    }
-
     // MARK: - Notification Center cards
 
     /// A notification card with new arrivals: shown (or refreshed with a full

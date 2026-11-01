@@ -7,7 +7,6 @@ final class BadgeViewModel {
     private let calendarService: CalendarService
     private let aiService: AICLIMonitorService
     private let agentRegistry: AgentMonitorRegistry
-    private let pomodoroService: PomodoroTimerService
     private let appSettings: AppSettings
 
     var shownHasActiveBadge: Bool = false
@@ -24,7 +23,6 @@ final class BadgeViewModel {
         calendarService: CalendarService,
         aiService: AICLIMonitorService,
         agentRegistry: AgentMonitorRegistry,
-        pomodoroService: PomodoroTimerService,
         appSettings: AppSettings,
         schedule: @escaping DelayScheduler = mainDelayScheduler
     ) {
@@ -32,7 +30,6 @@ final class BadgeViewModel {
         self.calendarService = calendarService
         self.aiService = aiService
         self.agentRegistry = agentRegistry
-        self.pomodoroService = pomodoroService
         self.appSettings = appSettings
         self.schedule = schedule
     }
@@ -50,10 +47,6 @@ final class BadgeViewModel {
             case .opencode: appSettings.opencodeEnabled
             case .zcode: appSettings.zcodeEnabled
             }
-        }
-
-        if pomodoroService.state.isActive {
-            items.append(.pomodoro(phase: pomodoroService.currentPhase))
         }
 
         for agent in agentRegistry.activeAgents {

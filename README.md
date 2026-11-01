@@ -18,30 +18,18 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 </p>
 
 <p align="center">
-  <img src="docs/images/tab-pomodoro.png" alt="Pomodoro" width="380">
-  <img src="docs/images/tab-system.png" alt="System" width="380">
-</p>
-
-<p align="center">
-  <img src="docs/images/tab-launcher.png" alt="Launcher" width="380">
-</p>
-
-<p align="center">
   <a href="README_CN.md">中文文档</a>
 </p>
 
 ## Features
 
-### 6 Functional Tabs
+### Functional Tabs
 
 | Tab | Description |
 |-----|-------------|
 | **Overview** | Three glanceable panels in one tab — **Media**: real-time playback controls (play/pause/next/previous/seek), album artwork, progress bar — works with any player that reports Now Playing (Apple Music, Spotify, browsers, Podcasts, NetEase Music, …) via a Perl bridge to the system media controls; **Calendar**: 15-day date picker, daily event list, color-coded calendars, clickable meeting URLs; **Weather**: current temperature / feels-like, high/low, humidity & wind, scrollable 7-day forecast, day/night condition icons (Open-Meteo, falls back to wttr.in) |
 | **AI Chat** | Unified Claude Code, Gemini CLI, opencode & zcode monitoring — session list, subagent tracking, model display; conversation details, permission approval & context usage bar for Claude Code & Gemini CLI |
 | **Agents** | Multi-agent status monitoring for OpenClaw (WebSocket) and Hermes-agent (HTTP API), real-time agent state tracking |
-| **Launcher** | App icon grid, search filter, quick-launch custom app list |
-| **Pomodoro** | Classic 25/5/15 cycle with persistent TODO list, per-task completed-pomodoro counts, hotkey-summoned centered QuickStart panel, end-of-phase sound + system notification, collapsed-notch 🍅 + remaining-time pie |
-| **System** | Top 5 process resource ranking (CPU & memory), app icons, system summary footer (CPU / RAM / battery / network) |
 
 ### Highlights
 
@@ -52,11 +40,11 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Chat Bubble** — a small floating bubble (chat button in the capsule's expanded panel) that runs **your own `claude` CLI** one turn at a time: streaming replies rendered as markdown, a Stop button, and permission requests answerable right inside the bubble. The session is a first-class AI session — it shows in the notch and the capsule like any other, keeps full context via `--resume`, and survives relaunches. Claude Code backend; more backends as their CLIs grow streaming support.
 - **Waiting Reminder** — opt-in system notification when a session has been sitting on a permission prompt for too long (default 5 minutes, configurable 1–20), automatically retracted the moment the approval is answered. Sessions waiting for your *input* never remind — a parked prompt is a finished turn, not a plea. Settings → 提醒与动效.
 - **Lock Screen AI Panel** — while your Mac is locked, a compact dark card under the lock-screen clock lists the AI sessions still running (Claude Code / Gemini / opencode / zcode): project name, live status (running / compacting / awaiting approval), elapsed time and context %. Approval-needing sessions sort first and are tinted. Purely a glance display — it never takes clicks. Toggleable in Settings.
-- **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1-5`. All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
+- **Global Shortcuts** — Toggle panel: configure your own in Settings → Hotkeys (no default). Tab switches default to `⌥⌘1` (Overview) and `⌥⌘2` (AI). All bindings are user-customizable, powered by [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
 - **Smart Auto-Switch** — Automatically selects the active tab (AI working, music playing, etc.; while the AI status bar is on, a working AI session no longer pulls the notch to the AI tab)
 - **AI Status Bar** — One ring per running AI session, docked to the screen's left or right edge, or floating anywhere as a horizontal capsule: drag it off the edge to float it, drop it near an edge to dock it. Hover to see every session with its status and context share, usage quota (hover a provider for its windows' resets and pace) and a detail card (context window used, model, approve/deny, jump to the session's terminal). The moment a session starts waiting on a permission, the bar opens on its own with that session's card already up — Allow/Deny one click away, no delay — and folds itself away once every approval is answered (the first pointer entry hands the bar back to the cursor). A session parked at your prompt never forces the bar open; its card rises only on an already-open bar. A multi-choice ask (AskUserQuestion) is answered right on the card: one single-select question goes with a press on its option; multi-select and multi-question asks tick their picks and Send (a draft sends only when every question is answered). The answer rides the permission response as `updatedInput.answers` — Claude Code only. Optional usage alerts (Settings → 提醒与动效, off by default): when a provider's quota window passes your threshold (50–100%, default 80%) the bar opens with an alert card that stays until you press Got it — and the window's recovery is announced the same way.
 - **Activity Glow** — When AI/agents are busy (working, or waiting for approval), the expanded notch shows a soft blurred glow in the app's theme orange along its lower inner edge, fading out by the middle (content stays clean). While the AI status bar is on, the notch leaves AI sessions to the bar — no AI badges or AI glow on any screen (agents still show; the AI tab still lists every session)
-- **Completion Flash** — When an AI session or agent finishes a turn (working→idle), NemoNotch plays a one-shot full-screen accent-orange edge glow on all screens, plus a toast card hanging under the notch on every screen — one card per finished session/agent (AI sessions also show the working directory they ran in), side by side (up to 4 at a time; extra cards wait behind the row instead of being dropped, and closing a card brings the next waiting one back). Each card has a slowly rotating color ring so it stands out even on a black wallpaper, stays 5 minutes, hovering the row pauses the timers, every card shows how long ago it appeared ("5 seconds ago", "2 minutes ago"), AI cards are titled with the prompt you typed for that turn, and every card has a close button; clicking a card jumps to the app the session ran in (terminal tab, IDE, …) and closes it. Pomodoro phase-end alerts raise the same toast. Rapid completions are throttled: each still gets its card, but the flash does not replay. Toggleable in Settings.
+- **Completion Flash** — When an AI session or agent finishes a turn (working→idle), NemoNotch plays a one-shot full-screen accent-orange edge glow on all screens, plus a toast card hanging under the notch on every screen — one card per finished session/agent (AI sessions also show the working directory they ran in), side by side (up to 4 at a time; extra cards wait behind the row instead of being dropped, and closing a card brings the next waiting one back). Each card has a slowly rotating color ring so it stands out even on a black wallpaper, stays 5 minutes, hovering the row pauses the timers, every card shows how long ago it appeared ("5 seconds ago", "2 minutes ago"), AI cards are titled with the prompt you typed for that turn, and every card has a close button; clicking a card jumps to the app the session ran in (terminal tab, IDE, …) and closes it. Rapid completions are throttled: each still gets its card, but the flash does not replay. Toggleable in Settings.
 - **Notification Toasts** — New Notification Center messages from the apps you pick (default Mail, Slack, WeChat) show up as cards in the same toast row — one card per app: a single message shows sender and text, several show the count, the senders and the latest message. Clicking a card opens the app (launching it if needed) and closes the card; a closed, clicked or expired card's messages never come back, even while they still sit in Notification Center. Messages already there when NemoNotch starts are not replayed. NemoNotch reads Notification Center's database read-only (there is no public API for other apps' notifications), so it needs Full Disk Access; Notification Center itself is never modified. Off by default — turn it on under Settings → Notifications.
 - **Event Alerts** — Bluetooth audio devices (headphones/speakers) connecting or disconnecting expand the collapsed notch itself, Dynamic-Island-style: a headphones glyph + device name springs open from the notch and folds back a few seconds later. Connecting or disconnecting the power adapter does the same with a green bolt + exact charge percent. Calendar events reaching their start time (lead time configurable: at start / 5 / 10 / 15 minutes ahead) raise the full-screen flash + toast with a calendar icon; the card shows the time and place, and when the event carries a meeting or other link it shows it too — clicking the card opens that link. All-day events are excluded; all alerts are toggleable in Settings.
 
@@ -77,8 +65,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **AppKit** — Custom NSWindow, click-through, multi-screen positioning
 - **MediaPlayer / MediaRemote** — Media playback control
 - **EventKit** — Calendar event access
-- **IOKit** — System monitoring (CPU, memory, battery, disk)
-- **libproc** — Per-process resource tracking via kernel APIs
+- **IOKit** — Power sources (battery / charging detection) and sleep assertions
 - **CocoaLumberjack** — Logging (`~/.NemoNotch/logs/`, 7 files capped at 1MB each — under active use that is well under a week, often under two days)
 - **KeyboardShortcuts** — User-customizable global hotkeys (replaces Carbon `RegisterEventHotKey`)
 - **WebSocket / Unix Socket** — AI CLI Hooks & OpenClaw communication
@@ -92,7 +79,7 @@ NemoNotch/
 ├── Models/                      # Data models (Tab, AppSettings, AIProvider, PlaybackState, etc.)
 ├── Notch/                       # Notch UI core (window, animation, event handling, TabBar, HUD)
 ├── Tabs/                        # Tab content views (AIChatTab for unified AI sessions)
-├── Services/                    # Background services (media, calendar, AI CLI monitor, launcher, etc.)
+├── Services/                    # Background services (media, calendar, AI CLI monitor, etc.)
 ├── Settings/                    # Preferences UI
 └── Helpers/                     # Utilities (MarkdownRenderer, ClaudeCrabIcon, ToolStyles)
 ```

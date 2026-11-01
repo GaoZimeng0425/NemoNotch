@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 /// 通知中心 → toast:总开关、读库状态(完全磁盘访问权限卡)、转 toast 的应用列表。
 struct NotificationListSettingsPage: View {
     @Environment(AppSettings.self) var appSettings
-    @Environment(LauncherService.self) var launcherService
     @Environment(NotificationToastService.self) var notificationToast
 
     var body: some View {
@@ -28,7 +27,7 @@ struct NotificationListSettingsPage: View {
                 } else {
                     ForEach(appSettings.notificationToastApps, id: \.self) { bundleID in
                         HStack {
-                            if let icon = launcherService.icon(forBundleID: bundleID) {
+                            if let icon = AppIconCache.icon(bundleID: bundleID) {
                                 Image(nsImage: icon)
                                     .resizable()
                                     .frame(width: 24, height: 24)

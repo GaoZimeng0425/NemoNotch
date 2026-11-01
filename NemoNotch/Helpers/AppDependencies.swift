@@ -7,7 +7,7 @@ import SwiftUI
 /// table of contents instead of 25 optional fields + `if let` chains. The
 /// members are grouped by domain with the cross-group dependencies called
 /// out where they exist (e.g. `completionFlash` consumes the AI store and
-/// agent registry; the pomodoro stack feeds it completed sessions).
+/// agent registry).
 ///
 /// `build()` is a verbatim, order-preserving move of the construction block
 /// that used to live inline in `AppDelegate.applicationDidFinishLaunching` —
@@ -21,7 +21,6 @@ struct AppDependencies {
     let media: MediaService
     let calendar: CalendarService
     let aiMonitor: AICLIMonitorService
-    let launcher: LauncherService
 
     // MARK: Agents (registered into `registry`)
 
@@ -34,7 +33,6 @@ struct AppDependencies {
     let weather: WeatherService
     let usageQuota: UsageQuotaService
     let hud: HUDService
-    let system: SystemService
     let notificationPermission: NotificationPermissionMonitor
 
     // MARK: AI-derived events (cross-domain: consumes `aiMonitor.store` + `registry`)
@@ -56,13 +54,6 @@ struct AppDependencies {
 
     let keepAwake: KeepAwakeService
 
-    // MARK: Pomodoro (cross-domain: feeds `completionFlash`)
-
-    let tasks: TaskStore
-    let history: PomodoroHistoryStore
-    let pomodoro: PomodoroTimerService
-    let quickStart: QuickStartWindowController
-
     // MARK: Overlay windows
 
     let completionFlashWindow: CompletionFlashWindowController?
@@ -75,7 +66,6 @@ struct AppDependencies {
         let calendar = CalendarService()
         let aiMonitor = AICLIMonitorService()
         aiMonitor.startSessionDiscovery()
-        let launcher = LauncherService(settings: settings)
 
         // Only the user's real app listens: on ready the server installs
         // every CLI's hooks and rewrites the shared sender scripts — a test
@@ -149,25 +139,7 @@ struct AppDependencies {
             calendarDue.start()
         }
 
-        let system = SystemService()
-
-        let tasks = TaskStore(fileURL: UITestMode.isActive ? UITestSeeder.tasksURL : TaskStore.defaultURL)
-        let history = PomodoroHistoryStore(fileURL: UITestMode.isActive ? UITestSeeder.historyURL : PomodoroHistoryStore
-            .defaultURL)
         let notificationPermission = NotificationPermissionMonitor()
-        let pomodoro = PomodoroTimerService(
-            taskStore: tasks,
-            historyStore: history,
-            appSettings: settings,
-            permissionMonitor: notificationPermission,
-            completionFlash: completionFlash
-        )
-        let quickStart = QuickStartWindowController(
-            timerService: pomodoro,
-            taskStore: tasks,
-            appSettings: settings,
-            notificationMonitor: notificationPermission
-        )
         let chatBubble = ChatBubbleController(store: aiMonitor.store, aiMonitor: aiMonitor)
         let edgeBar = EdgeBarController(
             store: aiMonitor.store,
@@ -215,14 +187,12 @@ struct AppDependencies {
             media: media,
             calendar: calendar,
             aiMonitor: aiMonitor,
-            launcher: launcher,
             openClaw: openClaw,
             hermes: hermes,
             registry: registry,
             weather: weather,
             usageQuota: usageQuota,
             hud: hud,
-            system: system,
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
             notificationToast: notificationToast,
@@ -234,10 +204,6 @@ struct AppDependencies {
             bluetooth: bluetooth,
             calendarDue: calendarDue,
             keepAwake: keepAwake,
-            tasks: tasks,
-            history: history,
-            pomodoro: pomodoro,
-            quickStart: quickStart,
             completionFlashWindow: completionFlashWindow
         )
     }
@@ -260,17 +226,11 @@ struct AppDependencies {
                     .environment(openClaw)
                     .environment(registry)
                     .environment(hermes)
-                    .environment(launcher)
                     .environment(weather)
                     .environment(hud)
                     .environment(completionFlash)
                     .environment(bluetooth)
-                    .environment(system)
-                    .environment(tasks)
-                    .environment(history)
-                    .environment(pomodoro)
                     .environment(notificationPermission)
-                    .environment(\.quickStartController, quickStart)
             )
         }
     }

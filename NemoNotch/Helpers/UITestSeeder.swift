@@ -5,32 +5,23 @@ import Foundation
 /// 仅在 `UITestMode.isActive` 时由 AppDelegate 调用。
 @MainActor
 enum UITestSeeder {
-    /// 临时 tasks / history 文件,避免污染 ~/.NemoNotch/ 下的真实数据。
-    static let tasksURL = URL(fileURLWithPath: "/tmp/nemonotch-uitest-tasks.json")
-    static let historyURL = URL(fileURLWithPath: "/tmp/nemonotch-uitest-history.json")
-
     static func seed(
         media: MediaService,
         calendar: CalendarService,
         weather: WeatherService,
-        system: SystemService,
         aiStore: AISessionStore,
-        registry: AgentMonitorRegistry,
-        pomodoro: PomodoroTimerService,
-        tasks: TaskStore
+        registry: AgentMonitorRegistry
     ) {
         seedMedia(media)
         seedCalendar(calendar)
         seedWeather(weather)
-        seedSystem(system)
         seedAI(aiStore)
         seedAgents(registry)
-        seedPomodoro(pomodoro, tasks: tasks)
     }
 
     /// 完成闪光截图(`--flash`)专用:只填一个正在工作的 Claude 会话,
-    /// 不碰媒体 / 日历 / Agent / 番茄 —— 收起的刘海于是只显示「Claude Code」一行徽标,
-    /// 不被番茄、Agent 等更高优先级徽标盖掉。
+    /// 不碰媒体 / 日历 / Agent —— 收起的刘海于是只显示「Claude Code」一行徽标,
+    /// 不被 Agent 等更高优先级徽标盖掉。
     static func seedFlash(aiStore: AISessionStore) {
         seedAI(aiStore)
     }
@@ -134,63 +125,6 @@ enum UITestSeeder {
         weather.isLoaded = true
     }
 
-    // MARK: - System
-
-    private static func seedSystem(_ system: SystemService) {
-        func icon(_ bundleID: String) -> NSImage? {
-            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-            return NSWorkspace.shared.icon(forFile: url.path)
-        }
-        let procs: [ProcessEntry] = [
-            ProcessEntry(
-                id: 101,
-                displayName: "Xcode",
-                icon: icon("com.apple.dt.Xcode"),
-                cpuUsage: 184.2,
-                memoryUsed: 4_820_000_000
-            ),
-            ProcessEntry(
-                id: 102,
-                displayName: "Google Chrome",
-                icon: icon("com.google.Chrome"),
-                cpuUsage: 62.5,
-                memoryUsed: 2_140_000_000
-            ),
-            ProcessEntry(
-                id: 103,
-                displayName: "Figma",
-                icon: icon("com.figma.Desktop"),
-                cpuUsage: 38.1,
-                memoryUsed: 1_360_000_000
-            ),
-            ProcessEntry(
-                id: 104,
-                displayName: "Slack",
-                icon: icon("com.tinyspeck.slackmacgap"),
-                cpuUsage: 12.7,
-                memoryUsed: 880_000_000
-            ),
-            ProcessEntry(
-                id: 105,
-                displayName: "Terminal",
-                icon: icon("com.apple.Terminal"),
-                cpuUsage: 6.3,
-                memoryUsed: 210_000_000
-            ),
-        ]
-        system.topProcessesByCPU = procs
-        system.topProcessesByMemory = procs.sorted { $0.memoryUsed > $1.memoryUsed }
-        system.cpuUsage = 42
-        system.memoryTotal = 16_000_000_000
-        system.memoryUsed = 11_200_000_000
-        system.batteryLevel = 76
-        system.isCharging = true
-        system.diskTotal = 1_000_000_000_000
-        system.diskFree = 412_000_000_000
-        system.uploadSpeed = 11100
-        system.downloadSpeed = 38900
-    }
-
     // MARK: - AI Chat
 
     private static func seedAI(_ store: AISessionStore) {
@@ -203,8 +137,8 @@ enum UITestSeeder {
             s.cwd = "/Users/dev/Projects/NemoNotch"
             s.model = "claude-opus-4-8"
             s.phase = .processing
-            s.firstUserMessage = "Add a pomodoro timer to the notch panel"
-            s.lastUserMessage = "Add a pomodoro timer to the notch panel"
+            s.firstUserMessage = "Add a weather card to the notch panel"
+            s.lastUserMessage = "Add a weather card to the notch panel"
             s.inputTokens = 18400
             s.outputTokens = 6220
             s.cacheReadTokens = 142_000
@@ -215,21 +149,21 @@ enum UITestSeeder {
                 ChatMessage(
                     id: "m1",
                     role: .user,
-                    content: "Add a pomodoro timer to the notch panel"
+                    content: "Add a weather card to the notch panel"
                 ),
                 ChatMessage(
                     id: "m2",
                     role: .assistant,
-                    content: "I'll add a PomodoroTimerService with a 25/5/15 cycle and wire it into a new tab."
+                    content: "I'll add a WeatherService with a 5-day forecast and wire it into the overview tab."
                 ),
                 ChatMessage(
                     id: "m3",
                     role: .assistant,
                     content: "",
                     toolName: "Edit",
-                    toolInput: "NemoNotch/Services/PomodoroTimerService.swift"
+                    toolInput: "NemoNotch/Services/WeatherService.swift"
                 ),
-                ChatMessage(id: "m4", role: .toolResult, content: "Applied 1 edit to PomodoroTimerService.swift"),
+                ChatMessage(id: "m4", role: .toolResult, content: "Applied 1 edit to WeatherService.swift"),
                 ChatMessage(
                     id: "m5",
                     role: .assistant,
@@ -277,37 +211,6 @@ enum UITestSeeder {
         )
         registry.register(hermes)
         registry.register(openClaw)
-    }
-
-    // MARK: - Pomodoro
-
-    private static func seedPomodoro(_ pomodoro: PomodoroTimerService, tasks: TaskStore) {
-        let t1 = tasks.add(
-            title: "Redesign onboarding flow",
-            priority: .high,
-            notes: "",
-            tags: ["design"],
-            dueDate: nil
-        )
-        tasks.update(t1) { $0.completedPomodoros = 3 }
-        let t2 = tasks.add(
-            title: "Update README",
-            priority: .medium,
-            notes: "",
-            tags: ["docs"],
-            dueDate: nil
-        )
-        tasks.update(t2) { $0.completedPomodoros = 1 }
-        let t3 = tasks.add(
-            title: "Review PR #42",
-            priority: .low,
-            notes: "",
-            tags: [],
-            dueDate: nil
-        )
-        tasks.update(t3) { $0.completedPomodoros = 0 }
-        // 进行中的工作番茄,active pie 立即可见。
-        pomodoro.start(taskID: t1, duration: 25 * 60, autoFlow: false)
     }
 
     // MARK: - 截图矩形落盘(供脚本读取)

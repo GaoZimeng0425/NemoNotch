@@ -28,14 +28,6 @@ final class AppSettings {
         }
     }
 
-    var launcherApps: [AppItem] {
-        didSet {
-            if let data = try? JSONEncoder().encode(launcherApps) {
-                UserDefaults.standard.set(data, forKey: "launcherApps")
-            }
-        }
-    }
-
     var weatherCity: String {
         didSet { UserDefaults.standard.set(weatherCity, forKey: "weatherCity") }
     }
@@ -45,30 +37,6 @@ final class AppSettings {
             UserDefaults.standard.set(language.rawValue, forKey: "language")
             updateAppleLanguages()
         }
-    }
-
-    var pomodoroWorkDuration: TimeInterval {
-        didSet { UserDefaults.standard.set(pomodoroWorkDuration, forKey: "pomodoro.workDuration") }
-    }
-
-    var pomodoroShortBreakDuration: TimeInterval {
-        didSet { UserDefaults.standard.set(pomodoroShortBreakDuration, forKey: "pomodoro.shortBreakDuration") }
-    }
-
-    var pomodoroLongBreakDuration: TimeInterval {
-        didSet { UserDefaults.standard.set(pomodoroLongBreakDuration, forKey: "pomodoro.longBreakDuration") }
-    }
-
-    var pomodoroLongBreakInterval: Int {
-        didSet { UserDefaults.standard.set(pomodoroLongBreakInterval, forKey: "pomodoro.longBreakInterval") }
-    }
-
-    var pomodoroSoundEnabled: Bool {
-        didSet { UserDefaults.standard.set(pomodoroSoundEnabled, forKey: "pomodoro.soundEnabled") }
-    }
-
-    var pomodoroNotificationEnabled: Bool {
-        didSet { UserDefaults.standard.set(pomodoroNotificationEnabled, forKey: "pomodoro.notificationEnabled") }
     }
 
     // MARK: - OpenClaw
@@ -246,31 +214,11 @@ final class AppSettings {
 
         enabledTabs = tabs
 
-        if let data = UserDefaults.standard.data(forKey: "launcherApps"),
-           let apps = try? JSONDecoder().decode([AppItem].self, from: data) {
-            launcherApps = apps
-        } else {
-            launcherApps = Self.defaultApps
-        }
-
         weatherCity = UserDefaults.standard.string(forKey: "weatherCity") ?? ""
 
         let storedLang = UserDefaults.standard.string(forKey: "language").flatMap { AppLanguage(rawValue: $0) }
         language = storedLang ?? .system
 
-        let workDefault: TimeInterval = 25 * 60
-        let shortDefault: TimeInterval = 5 * 60
-        let longDefault: TimeInterval = 15 * 60
-        pomodoroWorkDuration = UserDefaults.standard
-            .object(forKey: "pomodoro.workDuration") as? TimeInterval ?? workDefault
-        pomodoroShortBreakDuration = UserDefaults.standard
-            .object(forKey: "pomodoro.shortBreakDuration") as? TimeInterval ?? shortDefault
-        pomodoroLongBreakDuration = UserDefaults.standard
-            .object(forKey: "pomodoro.longBreakDuration") as? TimeInterval ?? longDefault
-        pomodoroLongBreakInterval = UserDefaults.standard.object(forKey: "pomodoro.longBreakInterval") as? Int ?? 4
-        pomodoroSoundEnabled = UserDefaults.standard.object(forKey: "pomodoro.soundEnabled") as? Bool ?? true
-        pomodoroNotificationEnabled = UserDefaults.standard
-            .object(forKey: "pomodoro.notificationEnabled") as? Bool ?? true
         openClawEnabled = UserDefaults.standard
             .object(forKey: Self.openClawEnabledKey) as? Bool ?? true
         claudeEnabled = UserDefaults.standard
@@ -316,15 +264,4 @@ final class AppSettings {
         keepAwakeRestoreOnQuit = UserDefaults.standard
             .object(forKey: Self.keepAwakeRestoreOnQuitKey) as? Bool ?? true
     }
-
-    private static let defaultApps: [AppItem] = [
-        AppItem(id: "safari", name: "Safari", bundleIdentifier: "com.apple.Safari"),
-        AppItem(id: "xcode", name: "Xcode", bundleIdentifier: "com.apple.dt.Xcode"),
-        AppItem(id: "terminal", name: "终端", bundleIdentifier: "com.apple.Terminal"),
-        AppItem(id: "finder", name: "访达", bundleIdentifier: "com.apple.finder"),
-        AppItem(id: "vscode", name: "VS Code", bundleIdentifier: "com.microsoft.VSCode"),
-        AppItem(id: "music", name: "音乐", bundleIdentifier: "com.apple.Music"),
-        AppItem(id: "calendar", name: "日历", bundleIdentifier: "com.apple.iCal"),
-        AppItem(id: "settings", name: "系统设置", bundleIdentifier: "com.apple.SystemSettings"),
-    ]
 }

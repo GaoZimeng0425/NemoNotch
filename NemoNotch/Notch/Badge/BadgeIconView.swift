@@ -11,7 +11,6 @@ struct BadgeIconView: View {
     let item: BadgeItem
     let style: BadgeRenderStyle
     let mediaService: MediaService
-    let pomodoroService: PomodoroTimerService
     /// Cross-state morph namespace, consumed only by the media coin —
     /// see `NotchConstants.mediaVinylMorphID`. nil → no morph.
     var morphNamespace: Namespace.ID?
@@ -27,8 +26,6 @@ struct BadgeIconView: View {
             agentsBadge(state: state, emoji: emoji)
         case .calendar:
             calendarBadge
-        case let .pomodoro(phase):
-            pomodoroBadge(phase: phase)
         }
     }
 
@@ -165,41 +162,6 @@ struct BadgeIconView: View {
                 .frame(width: 14, height: 14)
         }
     }
-
-    // MARK: - Pomodoro
-
-    @ViewBuilder
-    private func pomodoroBadge(phase: PomodoroPhase) -> some View {
-        switch style {
-        case .compactLeft:
-            Text("🍅")
-                .font(.system(size: 14))
-                .opacity(emojiOpacity)
-                .modifier(PomodoroPulseModifier(token: pomodoroService.pulseToken))
-        case .compactRight:
-            PomodoroPieView(
-                remainingFraction: pomodoroService.remainingFraction,
-                phase: phase,
-                style: .badge
-            )
-            .opacity(piePausedOpacity)
-            .modifier(PomodoroPulseModifier(token: pomodoroService.pulseToken))
-        }
-    }
-
-    private var emojiOpacity: Double {
-        if case .paused = pomodoroService.state {
-            return 0.55
-        }
-        return 1.0
-    }
-
-    private var piePausedOpacity: Double {
-        if case .paused = pomodoroService.state {
-            return 0.7
-        }
-        return 1.0
-    }
 }
 
 // MARK: - CompactBadgesView
@@ -216,7 +178,6 @@ struct CompactBadgesView: View {
     let notchCoreWidth: CGFloat
     let onBadgeTap: (BadgeItem) -> Void
     let mediaService: MediaService
-    let pomodoroService: PomodoroTimerService
     /// Forwarded to the media coin for the vinyl morph —
     /// see `NotchConstants.mediaVinylMorphID`.
     var morphNamespace: Namespace.ID?
@@ -286,7 +247,6 @@ struct CompactBadgesView: View {
                     BadgeIconView(
                         item: group.representative, style: .compactLeft,
                         mediaService: mediaService,
-                        pomodoroService: pomodoroService,
                         morphNamespace: morphNamespace
                     )
                     .coinBackground()
@@ -322,8 +282,7 @@ struct CompactBadgesView: View {
                     } else {
                         BadgeIconView(
                             item: group.representative, style: .compactRight,
-                            mediaService: mediaService,
-                            pomodoroService: pomodoroService
+                            mediaService: mediaService
                         )
                         .coinBackground()
                     }
@@ -379,27 +338,5 @@ private struct BadgeCountChip: View {
             .padding(.vertical, fontSize < 9 ? 0.5 : 1)
             .background(NotchTheme.accent)
             .clipShape(Capsule())
-    }
-}
-
-// MARK: - PomodoroPulseModifier
-
-private struct PomodoroPulseModifier: ViewModifier {
-    let token: UUID
-    @State private var opacity: Double = 1.0
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(opacity)
-            .onChange(of: token) { _, _ in
-                withAnimation(.easeInOut(duration: 0.15).repeatCount(4, autoreverses: true)) {
-                    opacity = 0.3
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    withAnimation(.easeInOut(duration: 0.1)) {
-                        opacity = 1.0
-                    }
-                }
-            }
     }
 }
