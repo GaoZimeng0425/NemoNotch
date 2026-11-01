@@ -60,4 +60,39 @@ struct ZcodeProviderTests {
         #expect(store.get(sid)?.currentTool == "Bash")
         #expect(store.get(sid)?.status == .working)
     }
+
+    /// An open tool call (PreToolUse seen, its PostToolUse not yet back) must
+    /// NOT be demoted by the 5-min silence sweep: builds, test runs and
+    /// subagents run past it with zero hook events in between (subagents fire
+    /// no hooks at all — 2026-11-01 probe), and demoting there fires a false
+    /// "completed" toast mid-execution.
+    @Test func openToolCallIsNotDemotedBySilence() {
+        let store = AISessionStore()
+        let provider = ZcodeProvider(store: store)
+        let sid = "sess_open_tool"
+        provider.handleEvent(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
+        provider.handleEvent(event(#"{"hook_event_name":"PreToolUse","session_id":"\#(sid)","tool_name":"Bash"}"#))
+
+        // 400s after the last event — past the 300s silent-demote threshold.
+        provider.cleanupStaleSessions(now: Date().addingTimeInterval(400))
+
+        #expect(store.get(sid)?.status == .working)
+        #expect(store.get(sid)?.currentTool == "Bash")
+    }
+
+    /// The closed-tool counterpart still demotes on schedule — that sweep is
+    /// the only completion signal for zcode sessions whose Stop never arrives.
+    @Test func closedToolSessionStillDemotesAfterSilence() {
+        let store = AISessionStore()
+        let provider = ZcodeProvider(store: store)
+        let sid = "sess_closed_tool"
+        provider.handleEvent(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
+        provider.handleEvent(event(#"{"hook_event_name":"PreToolUse","session_id":"\#(sid)","tool_name":"Bash"}"#))
+        provider.handleEvent(event(#"{"hook_event_name":"PostToolUse","session_id":"\#(sid)","tool_name":"Bash"}"#))
+
+        provider.cleanupStaleSessions(now: Date().addingTimeInterval(400))
+
+        #expect(store.get(sid)?.status == .idle)
+        #expect(store.get(sid)?.currentTool == nil)
+    }
 }

@@ -187,8 +187,9 @@ final class ZcodeProvider: AIProvider {
         }
     }
 
-    private func cleanupStaleSessions() {
-        let now = Date()
+    /// Stale sweep. `now` is injectable so tests can age sessions without
+    /// sleeping; the cleanup timer runs it with the current time.
+    func cleanupStaleSessions(now: Date = Date()) {
         let demoteCutoff = now.addingTimeInterval(-Self.silentDemoteThreshold)
         let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
 
