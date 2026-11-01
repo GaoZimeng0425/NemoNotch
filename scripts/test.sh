@@ -108,4 +108,9 @@ if [ "${passed:-0}" -eq 0 ] && [ "${failed:-0}" -eq 0 ]; then
 fi
 echo "✅ 测试通过(退出码 0)"
 echo "   完整日志: $log"
+# 新鲜度锚点:记录「这份日志测的 head」。feat-done 测试门禁读它——等于当前
+# head 说明最近一次成功测试正描述要合并的提交,重跑是纯重复(一轮评审 +
+# feat-done 曾各重跑一遍同样套件,2026-11-01 优化)。只在缺失/不匹配时真跑;
+# 提交后未提交的改动不进合并、amend 后 head 会变,两头都不会被它误放行。
+git rev-parse --short HEAD > "$root/build/test-head.txt" 2>/dev/null || true
 exit 0

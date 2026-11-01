@@ -194,15 +194,24 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/test.sh" ]; then
   if [ -z "$swift_changes" ]; then
     echo "📄 本 feature 无 Swift/pbxproj 改动 — 跳过测试门禁" >&2
   else
-    if [ -n "$(git -C "$wt" status --porcelain)" ]; then
-      echo "⚠️  worktree 有未提交改动 — 门禁测的是「已提交+未提交」混合态,合并只带走已提交部分" >&2
-    fi
-    echo "🧪 测试门禁:在 worktree 跑单元测试…"
-    if ! sh "$wt/scripts/test.sh"; then
-      echo "" >&2
-      echo "❌ 测试未过 — 中止合并,worktree 与分支原样保留。" >&2
-      echo "   修复后重试 git feat-done $name;应急跳过:NEMONOTCH_SKIP_TESTS=1 git feat-done $name" >&2
-      exit 1
+    # 新鲜度短路(2026-11-01):test.sh 成功时把当时 head 写进 build/test-head.txt;
+    # 等于当前 head = 最近一次成功测试正对要合并的提交,重跑是纯重复。只测已提交
+    # 内容,worktree 的未提交改动不进合并(amend/rebase 后 head 变,自然落到真跑)。
+    current_head=$(git -C "$wt" rev-parse --short HEAD)
+    if [ -f "$wt/build/test-head.txt" ] \
+       && [ "$(cat "$wt/build/test-head.txt")" = "$current_head" ]; then
+      echo "🧪 测试门禁:test-head.txt == HEAD($current_head)— 最近一次成功测试正对当前提交,跳过重跑;日志: $wt/build/test.log"
+    else
+      if [ -n "$(git -C "$wt" status --porcelain)" ]; then
+        echo "⚠️  worktree 有未提交改动 — 门禁测的是「已提交+未提交」混合态,合并只带走已提交部分" >&2
+      fi
+      echo "🧪 测试门禁:在 worktree 跑单元测试…"
+      if ! sh "$wt/scripts/test.sh"; then
+        echo "" >&2
+        echo "❌ 测试未过 — 中止合并,worktree 与分支原样保留。" >&2
+        echo "   修复后重试 git feat-done $name;应急跳过:NEMONOTCH_SKIP_TESTS=1 git feat-done $name" >&2
+        exit 1
+      fi
     fi
   fi
 else

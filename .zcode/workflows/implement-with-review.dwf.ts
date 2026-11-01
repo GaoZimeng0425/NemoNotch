@@ -5,6 +5,9 @@ description: NemoNotch 开发执行环,双入口。①feature 入口(task/worktr
   假设并行探针(单变量,证据标梯级)+单席证据链挑战;复现确凿、证据链审计成立、修法机械、有确认探针且挑战者建议 proceed
   五者俱全才免闸直通,否则根因拍板闸停下问运行方(未复现的根因系推断,须用户确认);建环段自建 worktree+plan(首任务=失败测试)后合流
   feature 开发段,合流评审含 bug 专项镜头(失败测试必须由红转绿、修复与根因因果对应)。脑暴、合并与 push 留在主对话。
+  2026-11-01 时效优化:①评审前由中立验证工兵预跑一次全套门禁,工件共享给两席(默认读工件+必做抽查,不再每席全套重跑);
+  ②第 2 轮起双席均为增量复审(只核修复提交,不重做首轮全套);③P3 默认不修(≤3 行机械项可顺手),遗留 P3 进评审记录由 reflect 分流;
+  ④真机 e2e/部署统一在全部任务提交后做一次,不逐任务部署。
 whenToUse: feature 类任务(主对话已 brainstorming 脑暴、git feat 建 worktree、writing-plans
   写好 plan)以四参启动;bug 类任务(有可观察症状、根因未知)以 symptom 启动,先诊断后修。investigation
   只读调查不启动本工作流。
@@ -117,11 +120,22 @@ const IMPLEMENTER_PERSONA =
   "发现 plan 有错、有缺口或与仓库现实冲突时,升级说明并停下," +
   "不自行改设计、不扩范围、不顺手重构;" +
   "不建/不删 worktree 与分支,不运行 git feat-done,不 push;" +
+  "plan 里需要真机 e2e/部署验证的环节,统一推迟到全部任务实现并提交之后:" +
+  "跑一次 ./build.sh 再做端到端验证,不要每个任务各部署一次(构建是整条链最贵的步骤之一);" +
   "全部任务完成后的判据是仓库固定脚本:sh scripts/lint.sh --staged --fix 并重新暂存," +
   "plan 涉及 Swift 变更时跑影响面测试 sh scripts/affected-tests.sh——测试类由它确定性选出," +
   "你不挑类名(手挑 --only 出过假绿);它映射为空会自动回落全量," +
   "报告只引用脚本真实退出码,绝不凭记忆复述;" +
   "plan 要求同步 README/AGENTS 文档时按 plan 办,plan 没提就不动。";
+
+const VERIFY_PERSONA =
+  "你是验证工兵:中立复跑人,只跑命令、记录退出码、写一个工件,零判断零修改。" +
+  "在给定 worktree 里依次执行:sh scripts/lint.sh、sh scripts/affected-tests.sh、" +
+  "sh scripts/doc-audit.sh、sh scripts/check-arch.sh、python3 scripts/xcstrings.py check。" +
+  "把 git rev-parse --short HEAD 的输出与执行时间写在工件头,逐条记录命令、退出码、" +
+  "(测试的)通过/失败计数,写入 worktree 的 build/review-evidence.md" +
+  "(build/ 已被 gitignore,不进提交;文件已存在则整体重写)。" +
+  "不修复任何东西、失败不重试、不解释原因——原样记录就是全部职责。";
 
 const REVIEWER_PERSONA =
   "你是 NemoNotch 仓库的独立评审员,未参与开发(judge ≠ author)。按仓库 sh scripts/review.sh " +
@@ -328,6 +342,15 @@ const impl = await implementer.ask<Implementation>(
 );
 log(`实现完成:${impl.commits.length} 个提交`);
 
+// 中立预跑一次全套门禁,工件共享给两席评审:验证从「每席全套重跑」变
+// 「一次跑、多席读 + 必做抽查」,两席对任何一项的复跑权保留(2026-11-01 优化)。
+phase("预验证(中立工兵跑一次,评审席共享工件)");
+const evidencePath = `${worktree}/build/review-evidence.md`;
+await agent("验证工兵", { system: VERIFY_PERSONA }).ask<string>(
+  `worktree:${worktree}。跑完一句话返回工件路径与五条命令的退出码摘要。`
+);
+log(`预验证工件:${evidencePath}`);
+
 let final: Review | undefined;
 let previousFindings: Finding[] = [];
 for (let round = 1; round <= 3; round += 1) {
@@ -336,6 +359,8 @@ for (let round = 1; round <= 3; round += 1) {
   const [review, challenge] = await Promise.all([
     agent(`评审员-第${round}轮`, { system: REVIEWER_PERSONA }).ask<Review>(
       `评审 worktree ${worktree} 的分支 feature/${branch}(对照 develop:git diff develop...feature/${branch})。\n` +
+        `中立工兵已预跑全套门禁并落工件(先读):${evidencePath}。抽查纪律:至少复跑其中 2 项、` +
+        `其中 1 项须为变异验证,其余可引工件;工件头部 head 与当前 HEAD 不符(修复后未重跑)则工件作废,按原纪律全亲跑。\n` +
         `任务背景:${task}\n` +
         `plan 文档(先完整读取,核验忠实度与任务覆盖):\n${planPath}\n\n` +
         `实现者交接:${impl.summary}\n风险点:${JSON.stringify(impl.risks)}\n` +
@@ -344,15 +369,21 @@ for (let round = 1; round <= 3; round += 1) {
           ? "\nbug 修复专项:核验失败测试确实由红转绿、修复与根因因果对应、无越出根因的顺手改动。\n"
           : "") +
         (round > 1
-          ? `这是第 ${round} 轮:重点核验上一轮意见是否修到位,并回归检查。\n上轮意见:\n${JSON.stringify(previousFindings)}`
+          ? `这是第 ${round} 轮,增量复审、不做全套:以 .reviews 记录里上轮 Reviewed-Head 为基点 ` +
+            `git log <上轮Reviewed-Head>..HEAD 逐条核验修复提交——上轮意见是否被正确解决、修复无新引入问题;` +
+            `验证只跑修复触及文件的相关测试(sh scripts/affected-tests.sh)与至多一次变异抽查;` +
+            `首轮已过的门禁与端到端除非修复本身触及,不重跑。\n上轮意见:\n${JSON.stringify(previousFindings)}`
           : "")
     ),
     agent(`挑战者-第${round}轮`, { system: CHALLENGER_PERSONA }).ask<Review>(
       `攻击 worktree ${worktree} 的分支 feature/${branch}(对照 develop:git diff develop...feature/${branch})。\n` +
+        `全套门禁已由中立工兵预跑并落工件(可直接引用,无需重跑门禁):${evidencePath}\n` +
         `任务背景:${task}\nplan 文档:\n${planPath}\n\n` +
         `实现者自述(别信,抽查):${impl.summary}\n` +
         (round > 1
-          ? `第 ${round} 轮:上一轮的 MUST KILL 与影响面问题修了吗?回归扫一遍。\n上轮意见:\n${JSON.stringify(previousFindings)}`
+          ? `第 ${round} 轮,增量攻击:只针对 git log <上轮Reviewed-Head>..HEAD 的修复提交` +
+            `(上轮 Reviewed-Head 见 .reviews 记录)——修复本身对不对、有没有引入新洞;` +
+            `上轮的 MUST KILL 与影响面问题逐条验收;不做首轮的全套扫描。\n上轮意见:\n${JSON.stringify(previousFindings)}`
           : "")
     ),
   ]);
@@ -377,8 +408,10 @@ for (let round = 1; round <= 3; round += 1) {
 
   phase("按评审意见修复并自测");
   await implementer.ask(
-    `评审未通过,修复以下全部 P1/P2 意见后自测并提交(P3 自行判断,接受要在提交信息里说明理由;\n` +
-      `MUST KILL 标记的注释按建议改为结构表达):\n${JSON.stringify(merged.findings)}\n` +
+    `评审未通过,修复以下全部 P1/P2 意见后自测并提交。\n` +
+      `P3 纪律:默认不修——单文件 ≤3 行的纯机械修复(如删一行注释)可顺手做,` +
+      `其余 P3 原样保留、在提交信息里注明「遗留 P3 见评审记录」;不为 P3 扩大 diff。\n` +
+      `MUST KILL 标记的注释按建议改为结构表达(同受 ≤3 行约束)。\n${JSON.stringify(merged.findings)}\n` +
       "修复保持最小改动、不越出 plan 范围;完成后同样返回退出码证据。"
   );
 }
@@ -422,6 +455,9 @@ return {
         ? ",无未决 P1/P2。"
         : `,但仍有 ${blocking.length} 条 P1/P2 未决(评审轮数已用尽),合并前必须人工处理。`
       : ",评审未批准,不要合并。") +
+    (finalReview.findings.some((f) => f.severity === "P3")
+      ? `(遗留 P3 ${finalReview.findings.filter((f) => f.severity === "P3").length} 条见评审记录,收尾 reflect 时分流,不阻塞合并。)`
+      : "") +
     " 合并(feat-done 前核对 head 未 rebase)、评审记录与 plan 文档的提交、push 留给主对话执行。",
   findings: finalReview.findings.map((f) => ({
     where: f.where,
