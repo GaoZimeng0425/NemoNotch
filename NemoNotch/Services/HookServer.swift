@@ -39,8 +39,18 @@ final class HookServer {
         NSHomeDirectory() + "/.NemoNotch/hook-token"
     }
 
+    /// Port discovery for external apps (`POST /v1/toast` callers): one line
+    /// with the actual listening port (after any fallback from the default).
+    /// Missing file → callers fall back to the default port.
+    static var portFilePath: String {
+        NSHomeDirectory() + "/.NemoNotch/hook-port"
+    }
+
     var onEventReceived: ((HookEvent) -> Void)?
     var onReady: (() -> Void)?
+    /// `POST /v1/toast` handler: body in, acceptance out. Set by
+    /// `AppDependencies`; nil (defensive) answers 500 instead of crashing.
+    var onExternalToast: ((Data) -> ExternalToastAcceptance)?
 
     func start() {
         hasReadied = false
@@ -120,6 +130,7 @@ final class HookServer {
             // next port and would redirect every CLI to it, then exit.
             if UITestMode.ownsSharedHookConfig {
                 NotchConstants.setHookServerPort(port)
+                writePortFile()
                 try? HookInstaller.ensureScriptExists()
                 if HermesHookInstaller.isInstalled {
                     try? HermesHookInstaller.refreshScript()
@@ -317,6 +328,47 @@ final class HookServer {
             return
         }
 
+        if firstLine.hasPrefix("POST /v1/toast") {
+            // Same shared token as /hook: loopback TCP authenticates nobody by
+            // itself, and this route can pop arbitrary cards on screen.
+            guard isAuthorized(httpString) else {
+                LogService.warn("HookServer: rejected unauthenticated POST /v1/toast", category: "HookServer")
+                sendHTTP(connection, status: "401 Unauthorized", body: #"{"status":"unauthorized"}"#)
+                return
+            }
+            guard let bodyRange = httpString.range(of: "\r\n\r\n") else {
+                sendHTTP(connection, status: "400 Bad Request", body: "No body")
+                return
+            }
+            guard let bodyData = String(httpString[bodyRange.upperBound...]).data(using: .utf8) else {
+                sendHTTP(connection, status: "400 Bad Request", body: "Invalid body")
+                return
+            }
+            guard let onExternalToast else {
+                LogService.error("HookServer: /v1/toast reached with no handler wired", category: "HookServer")
+                sendHTTP(connection, status: "500 Internal Server Error", body: #"{"status":"error"}"#)
+                return
+            }
+            let acceptance = onExternalToast(bodyData)
+            switch acceptance {
+            case .ok:
+                sendHTTP(connection, status: Self.toastResponseStatus(acceptance), body: #"{"status":"ok"}"#)
+            case let .rejected(rejection):
+                // Foreign bodies are the single biggest source of bad input —
+                // reject loudly and log it, never swallow.
+                LogService.warn(
+                    "External toast rejected: \(rejection.localizedDescription)",
+                    category: "HookServer"
+                )
+                sendHTTP(
+                    connection,
+                    status: Self.toastResponseStatus(acceptance),
+                    body: Self.toastErrorBody(rejection.localizedDescription)
+                )
+            }
+            return
+        }
+
         sendHTTP(connection, status: "404 Not Found", body: "Not Found")
     }
 
@@ -415,6 +467,26 @@ final class HookServer {
         pendingOrder.removeAll { pendingPermissions[$0] == nil }
     }
 
+    // MARK: - External toast port file
+
+    /// Write `~/.NemoNotch/hook-port` (0600, same pattern as the token file)
+    /// so external apps can discover the actual port — including after a
+    /// fallback from the default. Same `ownsSharedHookConfig` gate as every
+    /// other shared-config write: test hosts / --uitest never touch it.
+    private func writePortFile() {
+        let path = Self.portFilePath
+        do {
+            try FileManager.default.createDirectory(
+                atPath: (path as NSString).deletingLastPathComponent,
+                withIntermediateDirectories: true
+            )
+            try Data("\(port)\n".utf8).write(to: URL(fileURLWithPath: path), options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+        } catch {
+            LogService.error("HookServer: failed to write port file: \(error)", category: "HookServer")
+        }
+    }
+
     // MARK: - Auth
 
     /// 首次访问时生成 32 字节随机令牌写入 0600 文件;发送方脚本运行时读取同一
@@ -459,6 +531,24 @@ final class HookServer {
         let line = after.components(separatedBy: .newlines).first ?? ""
         let value = line.trimmingCharacters(in: .whitespaces)
         return value.isEmpty ? nil : value
+    }
+
+    /// HTTP status line for a `/v1/toast` acceptance. Pure function for tests.
+    nonisolated static func toastResponseStatus(_ acceptance: ExternalToastAcceptance) -> String {
+        switch acceptance {
+        case .ok: "200 OK"
+        case .rejected: "400 Bad Request"
+        }
+    }
+
+    /// JSON body for a rejected toast push, reason string escaped by
+    /// JSONSerialization rather than interpolation. Pure function.
+    nonisolated static func toastErrorBody(_ reason: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: ["status": "error", "reason": reason]),
+              let text = String(data: data, encoding: .utf8) else {
+            return #"{"status":"error"}"#
+        }
+        return text
     }
 
     private func isAuthorized(_ httpString: String) -> Bool {

@@ -127,6 +127,7 @@ struct AppDependencies {
         // 外来应用 → toast(POST /v1/toast):门禁 + 校验 + 组装的唯一落点,
         // 对外来数据零翻译(请求体即完整卡面)。
         let externalCard = ExternalCardService(settings: settings, present: { completionFlash.showExternalToast($0) })
+        aiMonitor.hookServer.onExternalToast = { externalCard.handle(body: $0) }
 
         // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
         // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
