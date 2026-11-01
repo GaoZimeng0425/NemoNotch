@@ -204,6 +204,16 @@ final class ZcodeProvider: AIProvider {
             if case .ended = session.phase {
                 continue
             }
+            // An open tool call (PreToolUse seen, its PostToolUse not yet back)
+            // means the CLI is still executing: builds, test runs and
+            // subagents regularly run past 5 min with zero hook events in
+            // between (subagents fire no hooks at all — 2026-11-01 probe).
+            // Demoting here fires a false "completed" toast mid-work. Leave
+            // these to the stale reaper below: a dead CLI disappears silently
+            // at 30 min instead of being announced as completed.
+            if session.isPreToolUse {
+                continue
+            }
             store.mutate(session.id) { s in
                 s.phase = s.phase.transition(to: .idle)
                 s.currentTool = nil
