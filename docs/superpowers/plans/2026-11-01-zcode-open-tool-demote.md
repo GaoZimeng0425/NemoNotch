@@ -5,7 +5,7 @@
 - [x] 2. 修复:`cleanupStaleSessions` 跳过 `isPreToolUse == true` 的会话(含 `now` 注入缝)
 - [x] 3. 守卫有牙:`scripts/mutate.sh` 验证新测试
 - [x] 4. 影响面测试 + lint 全绿
-- [ ] 5. 独立评审 + feat-done 合并部署
+- [x] 5. 独立评审 + feat-done 合并部署
 
 ## 0. 根因确认(首部声明)
 
@@ -26,6 +26,7 @@
 - 长纯生成间隙(最后一个 PostToolUse 后模型长时间思考 >5min)理论可误报,日志无实证,不动。
 - opencode provider 有同款 5 分钟降级逻辑,无证据表型,不动。
 - `session_<hex>` 老格式 id 不匹配 `sess_` 前缀兜底(`AICLIMonitorService.routeEvent`):真实事件大多带 `cli_source` 标签,store 已在时 default 分支救回;单独议题,不混入本分支。
+- 评审 P3:`UserPromptSubmit` 不复位 `isPreToolUse`(事件链断裂残留 → 徽章最多多转至 30 分钟回收,自愈)。**刻意不采纳复位修法**:zcode 是 Claude 形状,若支持 turn 中排队消息,复位会在「排队 prompt 落在长工具执行中」时重新打开假「完成」toast 的门——宁留显示瑕疵,不冒误报回归。
 
 ## 1. 失败测试(首任务)
 

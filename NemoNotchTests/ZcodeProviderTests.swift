@@ -95,4 +95,22 @@ struct ZcodeProviderTests {
         #expect(store.get(sid)?.status == .idle)
         #expect(store.get(sid)?.currentTool == nil)
     }
+
+    /// Symmetric guard: a failed tool call also closes the tool, so silence
+    /// after it still demotes on schedule — protects the failure path that
+    /// keeps the open-tool guard honest.
+    @Test func failedToolThenSilenceStillDemotes() {
+        let store = AISessionStore()
+        let provider = ZcodeProvider(store: store)
+        let sid = "sess_failed_tool"
+        provider.handleEvent(event(#"{"hook_event_name":"UserPromptSubmit","session_id":"\#(sid)"}"#))
+        provider.handleEvent(event(#"{"hook_event_name":"PreToolUse","session_id":"\#(sid)","tool_name":"Bash"}"#))
+        provider
+            .handleEvent(event(#"{"hook_event_name":"PostToolUseFailure","session_id":"\#(sid)","tool_name":"Bash"}"#))
+
+        provider.cleanupStaleSessions(now: Date().addingTimeInterval(400))
+
+        #expect(store.get(sid)?.status == .idle)
+        #expect(store.get(sid)?.currentTool == nil)
+    }
 }
