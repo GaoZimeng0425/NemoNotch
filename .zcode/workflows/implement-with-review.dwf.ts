@@ -359,8 +359,8 @@ for (let round = 1; round <= 3; round += 1) {
   const [review, challenge] = await Promise.all([
     agent(`评审员-第${round}轮`, { system: REVIEWER_PERSONA }).ask<Review>(
       `评审 worktree ${worktree} 的分支 feature/${branch}(对照 develop:git diff develop...feature/${branch})。\n` +
-        `中立工兵已预跑全套门禁并落工件(先读):${evidencePath}。抽查纪律:至少复跑其中 2 项、` +
-        `其中 1 项须为变异验证,其余可引工件;工件头部 head 与当前 HEAD 不符(修复后未重跑)则工件作废,按原纪律全亲跑。\n` +
+        `中立工兵已预跑全套门禁并落工件(先读):${evidencePath}。抽查纪律:至少复跑其中 2 项,` +
+        `并另行做至少一次变异验证,其余可引工件;工件头部 head 与当前 HEAD 不符(修复后未重跑)则工件作废,按原纪律全亲跑。\n` +
         `任务背景:${task}\n` +
         `plan 文档(先完整读取,核验忠实度与任务覆盖):\n${planPath}\n\n` +
         `实现者交接:${impl.summary}\n风险点:${JSON.stringify(impl.risks)}\n` +
@@ -377,7 +377,8 @@ for (let round = 1; round <= 3; round += 1) {
     ),
     agent(`挑战者-第${round}轮`, { system: CHALLENGER_PERSONA }).ask<Review>(
       `攻击 worktree ${worktree} 的分支 feature/${branch}(对照 develop:git diff develop...feature/${branch})。\n` +
-        `全套门禁已由中立工兵预跑并落工件(可直接引用,无需重跑门禁):${evidencePath}\n` +
+        `全套门禁已由中立工兵预跑并落工件(可直接引用,无需重跑门禁):${evidencePath}` +
+        `(工件头部 head 与当前 HEAD 不符则作废,不得引用)\n` +
         `任务背景:${task}\nplan 文档:\n${planPath}\n\n` +
         `实现者自述(别信,抽查):${impl.summary}\n` +
         (round > 1
@@ -411,7 +412,7 @@ for (let round = 1; round <= 3; round += 1) {
     `评审未通过,修复以下全部 P1/P2 意见后自测并提交。\n` +
       `P3 纪律:默认不修——单文件 ≤3 行的纯机械修复(如删一行注释)可顺手做,` +
       `其余 P3 原样保留、在提交信息里注明「遗留 P3 见评审记录」;不为 P3 扩大 diff。\n` +
-      `MUST KILL 标记的注释按建议改为结构表达(同受 ≤3 行约束)。\n${JSON.stringify(merged.findings)}\n` +
+      `MUST KILL 标记的注释按建议改为结构表达:伴随 P1/P2 的按其严重级全修,纯 P3 的同受 ≤3 行约束。\n${JSON.stringify(merged.findings)}\n` +
       "修复保持最小改动、不越出 plan 范围;完成后同样返回退出码证据。"
   );
 }

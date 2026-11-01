@@ -194,9 +194,10 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/test.sh" ]; then
   if [ -z "$swift_changes" ]; then
     echo "📄 本 feature 无 Swift/pbxproj 改动 — 跳过测试门禁" >&2
   else
-    # 新鲜度短路(2026-11-01):test.sh 成功时把当时 head 写进 build/test-head.txt;
-    # 等于当前 head = 最近一次成功测试正对要合并的提交,重跑是纯重复。只测已提交
-    # 内容,worktree 的未提交改动不进合并(amend/rebase 后 head 变,自然落到真跑)。
+    # 新鲜度短路(2026-11-01):test.sh 在全量跑成功时把当时 head 写进
+    # build/test-head.txt(仅全量——affected-tests 的 --only 子集不写,否则全量
+    # 兜底被子集结果短路掉);等于当前 head = 该提交的全量套件已绿,重跑是纯重复。
+    # 未提交改动不进合并、amend/rebase 后 head 变,两头都自然落到真跑。
     current_head=$(git -C "$wt" rev-parse --short HEAD)
     if [ -f "$wt/build/test-head.txt" ] \
        && [ "$(cat "$wt/build/test-head.txt")" = "$current_head" ]; then

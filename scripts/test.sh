@@ -112,5 +112,10 @@ echo "   完整日志: $log"
 # head 说明最近一次成功测试正描述要合并的提交,重跑是纯重复(一轮评审 +
 # feat-done 曾各重跑一遍同样套件,2026-11-01 优化)。只在缺失/不匹配时真跑;
 # 提交后未提交的改动不进合并、amend 后 head 会变,两头都不会被它误放行。
-git rev-parse --short HEAD > "$root/build/test-head.txt" 2>/dev/null || true
+# 只在全量跑(--only 为空)时写:affected-tests.sh 以 --only 子集收尾,若子集
+# 也写锚点,feat-done 的全量兜底会被子集结果短路掉(CI 不跑单测,合并即部署,
+# 全量只在这一处守)。锚点的语义 = 「该 head 的全量套件绿」(评审 P1)。
+if [ -z "$only" ]; then
+  git rev-parse --short HEAD > "$root/build/test-head.txt" 2>/dev/null || true
+fi
 exit 0
