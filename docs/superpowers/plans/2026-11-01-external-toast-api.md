@@ -196,3 +196,25 @@
   git add NemoNotch/Settings/Pages/AlertsSettingsPage.swift NemoNotch/Resources/Localizable.xcstrings README.md README_CN.md AGENTS.md NemoNotchTests/AppSettingsExternalToastTests.swift
   git commit -m "feat(external-toast): settings toggle + localization + docs"
   ```
+
+---
+
+## 实现偏差记录(评审后补档;完整过程见 .superpowers/sdd/2026-11-01-external-toast-api/progress.md)
+
+实现期裁量(全部因 plan 字面签名无法编译或时序不可达):
+
+1. `ExternalToastRejection` 补 `Error` 协议——`Result<_, Failure>` 要求 `Failure: Error`,plan 的 "Equatable, Sendable" 按字面无法编译。
+2. `cardKey`/`makeItem` 默认参数写 `{ UUID().uuidString }`(plan 字面 `= UUID().uuidString` 是 String 不是闭包,编译不过)。
+3. 缺 `schema` 键 → `.badSchemaVersion`(raw DTO 用 `Int?` 解码;必填缺失也是 schema 槽位错,拒绝枚举只有这一个 case)。
+4. 空 `key` 字符串通过校验但按无 key 处理(cardKey"非空且非空串"接口文本推导;无 `keyInvalid` case)。已补单测钉住(`emptyKeyTreatedAsAbsent`)。
+5. 测试名去 `testXxx` 前缀照仓库 Swift Testing 惯例。
+6. `ExternalCardService` 不加 `@Observable`——服务无可观察状态(plan 签名只给 `@MainActor`)。
+7. Task 5 Step 1-2 的"红"不可达——`externalToastEnabled` 字段按 plan 已在 Task 3 落地,测试首跑即绿,保留为行为钉。
+8. 400 响应体 `reason` 经 `JSONSerialization` 编码(`toastErrorBody` 纯函数)而非手工拼接,防将来 reason 文案引入引号。
+
+评审修复(2026-11-01 第二轮,P2×2 + P3 接受项):
+
+- P2:设置搜索索引登记 `settings.external_toast.*` 三 key(此前搜「外部」找不到新开关)。
+- P2:`CompletionFlashNames.merge` 对 `.external` 来源的 `jump` 不做 nil-保旧——keyed 重推缺 `jumpBundleId` 必须清空点击目标(整卡替换契约);AI 会话的 nil-保旧语义不变(`mergeKeepsJump` 继续钉死)。测试 `mergeReplacesExternalPayloadWholeCard` 扩到断言 jump 清空(红→绿)。
+- P3(接受):`sf:` 符号名渲染前经 `NSImage(systemSymbolName:)` 探测,不存在回落 `app.dashed`;`jumpBundleId` 加 ≤255 上限(`.jumpBundleIdTooLong`,256 拒/255 过,红→绿;对外零调用方,收紧零成本);空 key 行为补单测;README×2 同步空串与上限;杀叙事注释五处 + detector 假约束句;补 `showExternalToast` 绕过 `completionFlashEnabled` 门禁且不触发辉光的钉子测试(钉既有行为,非红→绿);端口回落真机实测(占 45831 起动,证据见提交信息)。
+- P3(拒绝/记录):无。

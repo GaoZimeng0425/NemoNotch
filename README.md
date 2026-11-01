@@ -86,11 +86,11 @@ Request body:
 |---|---|---|---|
 | `schema` | Int | ✓ | Contract version, `1` for now; anything else → `400` |
 | `app` | String | ✓ | Display name, 1–48 chars |
-| `key` | String? | | Present = keyed card (same key refreshes the same card, timer restarts); absent = one-shot card, every push is its own. 1–128 chars. Neither `app` nor `key` may contain `::` |
+| `key` | String? | | Present = keyed card (same key refreshes the same card, timer restarts); absent = one-shot card, every push is its own. 1–128 chars; an empty string is treated as absent. Neither `app` nor `key` may contain `::` |
 | `title` | String | ✓ | 1–120 chars |
 | `body` | String? | | ≤ 280 chars |
-| `icon` | String? | | Only `sf:<SF Symbol name>` in v1; anything else falls back to the generic card icon, no error |
-| `jumpBundleId` | String? | | Clicking the card activates that app; absent = the click just closes the card |
+| `icon` | String? | | Only `sf:<SF Symbol name>` in v1; an unknown name falls back to the generic card icon, no error |
+| `jumpBundleId` | String? | | Clicking the card activates that app; absent = the click just closes the card. ≤ 255 chars |
 
 Contract rules: unknown fields are ignored (forward compatible); a keyed re-push is the **whole card face** — omitting `body` clears it, there is no per-field merge; per-card duration is deliberately not in v1 (cards live as long as the internal ones). Responses: `200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`.
 

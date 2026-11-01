@@ -12,9 +12,7 @@ enum ExternalToastAcceptance: Equatable, Sendable {
 ///
 /// Responsibilities, in order: feature gate → decode + validate (pure,
 /// `ExternalToastPayload.parse`) → assemble a `CompletionItem` → hand it to
-/// the toast pipeline through `present`. **No semantic translation of the
-/// external data lives here or anywhere downstream** — the request body is
-/// the whole card face, a missing field is an empty field (spec red line).
+/// the toast pipeline through `present`.
 @MainActor
 final class ExternalCardService {
     private let settings: AppSettings

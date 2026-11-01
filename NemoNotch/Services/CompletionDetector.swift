@@ -50,8 +50,6 @@ struct CompletionItem: Equatable {
     /// Time/place and link lines for a calendar-due card (`.calendar` source only).
     var calendar: CalendarCard?
     /// Whole card face for an external-app push (`.external` source only).
-    /// Unlike the AI rich fields, merge replaces it whole — the request body
-    /// *is* the card, a missing field means the field is gone.
     var external: ExternalCardContent?
 
     /// Convenience for callers that only have name + source (multi-item merges).
@@ -223,6 +221,8 @@ enum CompletionFlashNames {
     /// else name), preserving order. When a `new` item matches an existing
     /// key it replaces it — name included, since a session's folder or title
     /// can change between turns — but a nil rich field keeps the older value.
+    /// External items are the exception for `jump`: they replace it whole,
+    /// so a keyed re-push without `jumpBundleId` clears the jump target.
     static func merge(existing: [CompletionItem], new: [CompletionItem]) -> [CompletionItem] {
         var result = existing
         for item in new {
@@ -235,7 +235,11 @@ enum CompletionFlashNames {
                 merged.tokenDisplay = item.tokenDisplay ?? older.tokenDisplay
                 merged.duration = item.duration ?? older.duration
                 merged.path = item.path ?? older.path
-                merged.jump = item.jump ?? older.jump
+                if case .external = item.source {
+                    merged.jump = item.jump
+                } else {
+                    merged.jump = item.jump ?? older.jump
+                }
                 result[idx] = merged
             } else {
                 result.append(item)

@@ -22,7 +22,8 @@ struct ExternalToastPayload: Equatable, Sendable {
 }
 
 /// Validation failures for `/v1/toast` bodies. Order matters: malformed → schema →
-/// app presence → `::` separator → lengths → title → body. Icon degrades, never rejects.
+/// app presence → `::` separator → lengths → title → body → jumpBundleId.
+/// Icon degrades, never rejects.
 enum ExternalToastRejection: Error, Equatable, Sendable {
     case malformedJSON
     case badSchemaVersion
@@ -33,6 +34,7 @@ enum ExternalToastRejection: Error, Equatable, Sendable {
     case titleInvalid
     case titleTooLong
     case bodyTooLong
+    case jumpBundleIdTooLong
 
     /// Short English sentence for logs and the HTTP error body.
     var localizedDescription: String {
@@ -46,12 +48,12 @@ enum ExternalToastRejection: Error, Equatable, Sendable {
         case .titleInvalid: "Missing or empty title"
         case .titleTooLong: "title exceeds 120 characters"
         case .bodyTooLong: "body exceeds 280 characters"
+        case .jumpBundleIdTooLong: "jumpBundleId exceeds 255 characters"
         }
     }
 }
 
 /// The card-face content an external push contributes to `CompletionItem`.
-/// No semantic translation happens between payload and card: fields map 1:1.
 struct ExternalCardContent: Equatable, Sendable {
     let app: String
     let title: String
@@ -106,6 +108,10 @@ extension ExternalToastPayload {
 
         if let body = raw.body, body.count > 280 {
             return .failure(.bodyTooLong)
+        }
+
+        if let jumpBundleId = raw.jumpBundleId, jumpBundleId.count > 255 {
+            return .failure(.jumpBundleIdTooLong)
         }
 
         return .success(ExternalToastPayload(

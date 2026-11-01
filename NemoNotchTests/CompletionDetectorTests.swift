@@ -174,17 +174,20 @@ struct CompletionDetectorTests {
         #expect(merged[0].tool == "Edit")
     }
 
-    @Test("external payload is replaced whole-card on merge: a missing body clears the old one")
+    @Test("external payload is replaced whole-card on merge: a missing body or jump clears the old one")
     func mergeReplacesExternalPayloadWholeCard() {
-        var existing = item("Demo")
+        var existing = item("Demo", .external(iconSymbol: nil))
         existing.key = "ext:Demo::dl-1"
-        existing.external = ExternalCardContent(app: "Demo", title: "下载完成", body: "A", jumpBundleId: nil)
-        var incoming = item("Demo")
+        existing.external = ExternalCardContent(app: "Demo", title: "下载完成", body: "A", jumpBundleId: "com.old.app")
+        existing.jump = CompletionJump(hostPID: nil, hostBundleId: "com.old.app", tabLink: nil)
+        var incoming = item("Demo", .external(iconSymbol: nil))
         incoming.key = "ext:Demo::dl-1"
         incoming.external = ExternalCardContent(app: "Demo", title: "下载完成", body: nil, jumpBundleId: nil)
         let merged = CompletionFlashNames.merge(existing: [existing], new: [incoming])
         #expect(merged.count == 1)
         #expect(merged[0].external?.body == nil)
+        #expect(merged[0].external?.jumpBundleId == nil)
+        #expect(merged[0].jump == nil)
     }
 
     @Test("external item uses its provided card key as toastKey")

@@ -124,8 +124,6 @@ struct AppDependencies {
             notificationToast.start()
         }
 
-        // 外来应用 → toast(POST /v1/toast):门禁 + 校验 + 组装的唯一落点,
-        // 对外来数据零翻译(请求体即完整卡面)。
         let externalCard = ExternalCardService(settings: settings, present: { completionFlash.showExternalToast($0) })
         aiMonitor.hookServer.onExternalToast = { externalCard.handle(body: $0) }
 

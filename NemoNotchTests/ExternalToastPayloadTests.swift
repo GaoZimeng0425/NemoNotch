@@ -94,6 +94,9 @@ struct ExternalToastPayloadTests {
             .parse(payloadJSON(title: String(repeating: "t", count: 121))) == .failure(.titleTooLong))
         #expect(ExternalToastPayload
             .parse(payloadJSON(body: String(repeating: "b", count: 281))) == .failure(.bodyTooLong))
+        #expect(ExternalToastPayload.parse(json(
+            "{\"schema\":1,\"app\":\"Demo\",\"title\":\"Hi\",\"jumpBundleId\":\"\(String(repeating: "j", count: 256))\"}"
+        )) == .failure(.jumpBundleIdTooLong))
 
         let boundary = ExternalToastPayload.parse(payloadJSON(
             app: String(repeating: "a", count: 48),
@@ -105,6 +108,25 @@ struct ExternalToastPayloadTests {
             Issue.record("expected boundary payload to pass, got \(boundary)")
             return
         }
+
+        let jumpBoundary = ExternalToastPayload.parse(json(
+            "{\"schema\":1,\"app\":\"Demo\",\"title\":\"Hi\",\"jumpBundleId\":\"\(String(repeating: "j", count: 255))\"}"
+        ))
+        guard case .success = jumpBoundary else {
+            Issue.record("expected 255-char jumpBundleId to pass, got \(jumpBoundary)")
+            return
+        }
+    }
+
+    @Test("an empty-string key is treated as absent: keyless payload, unique card keys")
+    func emptyKeyTreatedAsAbsent() {
+        let result = ExternalToastPayload.parse(json(#"{"schema":1,"app":"Demo","key":"","title":"Hi"}"#))
+        guard case let .success(payload) = result else {
+            Issue.record("expected success, got \(result)")
+            return
+        }
+        #expect(payload.key == nil)
+        #expect(payload.cardKey(makeUniqueID: { "u1" }) == "ext:Demo::u1")
     }
 
     @Test("'::' in app or key is rejected (collision-proof card keys)")
@@ -156,7 +178,7 @@ struct ExternalToastPayloadTests {
     func rejectionDescriptions() {
         let all: [ExternalToastRejection] = [
             .malformedJSON, .badSchemaVersion, .appInvalid, .appTooLong, .keyTooLong,
-            .separatorInAppOrKey, .titleInvalid, .titleTooLong, .bodyTooLong,
+            .separatorInAppOrKey, .titleInvalid, .titleTooLong, .bodyTooLong, .jumpBundleIdTooLong,
         ]
         for rejection in all {
             #expect(!rejection.localizedDescription.isEmpty)

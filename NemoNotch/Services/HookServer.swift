@@ -354,8 +354,6 @@ final class HookServer {
             case .ok:
                 sendHTTP(connection, status: Self.toastResponseStatus(acceptance), body: #"{"status":"ok"}"#)
             case let .rejected(rejection):
-                // Foreign bodies are the single biggest source of bad input —
-                // reject loudly and log it, never swallow.
                 LogService.warn(
                     "External toast rejected: \(rejection.localizedDescription)",
                     category: "HookServer"

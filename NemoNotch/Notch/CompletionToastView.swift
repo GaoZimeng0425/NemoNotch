@@ -145,8 +145,7 @@ struct CompletionToastView: View {
     }
 
     /// External-app card: the caller's app name, then its own title and body
-    /// verbatim — the request body is the whole card face, no translation.
-    /// Mirrors `noticeText`'s three-line structure.
+    /// verbatim. Mirrors `noticeText`'s three-line structure.
     private func externalText(_ external: ExternalCardContent) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             titleRow {
@@ -267,9 +266,18 @@ struct CompletionToastView: View {
                     .foregroundStyle(NotchTheme.accent)
             }
         case let .external(iconSymbol):
-            Image(systemName: iconSymbol ?? "app.dashed")
-                .font(.system(size: s * 0.9, weight: .semibold))
-                .foregroundStyle(NotchTheme.accent)
+            // Probe existence: an `sf:` name that isn't a real SF Symbol
+            // renders blank, so it falls back to the generic card icon.
+            if let symbol = iconSymbol,
+               NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil {
+                Image(systemName: symbol)
+                    .font(.system(size: s * 0.9, weight: .semibold))
+                    .foregroundStyle(NotchTheme.accent)
+            } else {
+                Image(systemName: "app.dashed")
+                    .font(.system(size: s * 0.9, weight: .semibold))
+                    .foregroundStyle(NotchTheme.accent)
+            }
         }
     }
 }
