@@ -16,6 +16,17 @@ struct AlertsSettingsPage: View {
                 .toggleStyle(.switch)
             }
 
+            Section("settings.external_toast.header") {
+                Toggle("settings.external_toast.enabled", isOn: Binding(
+                    get: { appSettings.externalToastEnabled },
+                    set: { appSettings.externalToastEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                Text("settings.external_toast.hint")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("settings.event_alerts.header") {
                 Toggle("settings.bluetooth_alerts.enabled", isOn: Binding(
                     get: { appSettings.bluetoothToastEnabled },

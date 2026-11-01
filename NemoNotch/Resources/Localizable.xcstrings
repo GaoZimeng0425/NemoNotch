@@ -3760,6 +3760,57 @@
         }
       }
     },
+    "settings.external_toast.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow external apps to pop toasts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许外部应用弹出 Toast"
+          }
+        }
+      }
+    },
+    "settings.external_toast.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "External App Toasts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外部应用 Toast"
+          }
+        }
+      }
+    },
+    "settings.external_toast.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local apps push cards through the local API (POST /v1/toast)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本机应用经本地 API(POST /v1/toast)弹出 Toast 卡。"
+          }
+        }
+      }
+    },
     "settings.bluetooth_alerts.enabled" : {
       "localizations" : {
         "en" : {

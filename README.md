@@ -46,6 +46,7 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **Activity Glow** — When AI/agents are busy (working, or waiting for approval), the expanded notch shows a soft blurred glow in the app's theme orange along its lower inner edge, fading out by the middle (content stays clean). While the AI status bar is on, the notch leaves AI sessions to the bar — no AI badges or AI glow on any screen (agents still show; the AI tab still lists every session)
 - **Completion Flash** — When an AI session or agent finishes a turn (working→idle), NemoNotch plays a one-shot full-screen accent-orange edge glow on all screens, plus a toast card hanging under the notch on every screen — one card per finished session/agent (AI sessions also show the working directory they ran in), side by side (up to 4 at a time; extra cards wait behind the row instead of being dropped, and closing a card brings the next waiting one back). Each card has a slowly rotating color ring so it stands out even on a black wallpaper, stays 5 minutes, hovering the row pauses the timers, every card shows how long ago it appeared ("5 seconds ago", "2 minutes ago"), AI cards are titled with the prompt you typed for that turn, and every card has a close button; clicking a card jumps to the app the session ran in (terminal tab, IDE, …) and closes it. Rapid completions are throttled: each still gets its card, but the flash does not replay. Toggleable in Settings.
 - **Notification Toasts** — New Notification Center messages from the apps you pick (default Mail, Slack, WeChat) show up as cards in the same toast row — one card per app: a single message shows sender and text, several show the count, the senders and the latest message. Clicking a card opens the app (launching it if needed) and closes the card; a closed, clicked or expired card's messages never come back, even while they still sit in Notification Center. Messages already there when NemoNotch starts are not replayed. NemoNotch reads Notification Center's database read-only (there is no public API for other apps' notifications), so it needs Full Disk Access; Notification Center itself is never modified. Off by default — turn it on under Settings → Notifications.
+- **External Toast API** — Any app or script on this Mac (any language, GUI or CLI) can pop a card into the same toast row under the notch with a single HTTP POST (`POST /v1/toast`): your app name, title, body, an SF Symbol icon, and an optional click-to-jump bundle id. Pushes with the same `key` refresh the same card (timer restarts); pushes without a key each get their own card. NemoNotch does no translation of your data — the request body is the whole card face, a missing field clears it. Authenticated by the shared local token (see [External Toast API](#external-toast-api) below). On by default, toggleable in Settings → Alerts.
 - **Event Alerts** — Bluetooth audio devices (headphones/speakers) connecting or disconnecting expand the collapsed notch itself, Dynamic-Island-style: a headphones glyph + device name springs open from the notch and folds back a few seconds later. Connecting or disconnecting the power adapter does the same with a green bolt + exact charge percent. Calendar events reaching their start time (lead time configurable: at start / 5 / 10 / 15 minutes ahead) raise the full-screen flash + toast with a calendar icon; the card shows the time and place, and when the event carries a meeting or other link it shows it too — clicking the card opens that link. All-day events are excluded; all alerts are toggleable in Settings.
 
   <p align="center">
@@ -58,6 +59,48 @@ An interactive floating panel for the MacBook notch area, turning the notch into
 - **i18n** — Supports English and Simplified Chinese, switchable in Settings
 - **Explicit permission requests.** NemoNotch does not auto-request permissions on launch. Each feature surfaces a "Grant Access" button (Calendar in the Overview tab, Location in the Weather card) — click to invoke the system dialog. For permissions that have no system dialog (Accessibility and other list-style privacy panes), the button opens the right System Settings pane and parks a small floating guide beside it: drag the NemoNotch icon from the guide into the list, flip the switch, and the guide confirms and disappears on its own (the grant itself still happens in System Settings — nothing is bypassed). Media control needs no permission at all — it goes through the Perl bridge.
 - **ESC closes the notch.** Press ESC any time the notch is opened.
+
+## External Toast API
+
+Any app on this Mac — any language, GUI or script — can show a toast card under the notch over HTTP. This is the first step of NemoNotch's plugin story: the wire schema is a public, versioned contract.
+
+- **Endpoint**: `POST http://127.0.0.1:<port>/v1/toast`
+- **Auth**: `X-NemoNotch-Token` header carrying the contents of `~/.NemoNotch/hook-token` (0600, generated on first launch). Wrong or missing token → `401` and no card.
+- **Port discovery**: read `~/.NemoNotch/hook-port` — one line with the actual port (it self-heals across port fallbacks). File missing → default `45831`.
+
+Request body:
+
+```json
+{
+  "schema": 1,
+  "app": "MyDownloader",
+  "key": "download-42",
+  "title": "Download finished",
+  "body": "nemo-1.2.3.dmg · 84 MB",
+  "icon": "sf:arrow.down.circle",
+  "jumpBundleId": "com.me.mydownloader"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `schema` | Int | ✓ | Contract version, `1` for now; anything else → `400` |
+| `app` | String | ✓ | Display name, 1–48 chars |
+| `key` | String? | | Present = keyed card (same key refreshes the same card, timer restarts); absent = one-shot card, every push is its own. 1–128 chars. Neither `app` nor `key` may contain `::` |
+| `title` | String | ✓ | 1–120 chars |
+| `body` | String? | | ≤ 280 chars |
+| `icon` | String? | | Only `sf:<SF Symbol name>` in v1; anything else falls back to the generic card icon, no error |
+| `jumpBundleId` | String? | | Clicking the card activates that app; absent = the click just closes the card |
+
+Contract rules: unknown fields are ignored (forward compatible); a keyed re-push is the **whole card face** — omitting `body` clears it, there is no per-field merge; per-card duration is deliberately not in v1 (cards live as long as the internal ones). Responses: `200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`.
+
+```bash
+PORT=$(cat ~/.NemoNotch/hook-port)   # file missing → 45831
+TOKEN=$(cat ~/.NemoNotch/hook-token)
+curl -X POST "127.0.0.1:$PORT/v1/toast" \
+  -H "X-NemoNotch-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"schema":1,"app":"MyDownloader","key":"download-42","title":"Download finished","body":"84 MB","icon":"sf:arrow.down.circle"}'
+```
 
 ## Tech Stack
 
