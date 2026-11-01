@@ -4192,22 +4192,6 @@
         }
       }
     },
-    "settings.search.clear" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear search"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除搜索"
-          }
-        }
-      }
-    },
     "settings.waiting_reminder.header" : {
       "localizations" : {
         "en" : {
