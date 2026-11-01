@@ -175,6 +175,18 @@ final class CompletionFlashService {
         syncToasts()
     }
 
+    // MARK: - External app cards (POST /v1/toast)
+
+    /// An external-app push: shown (or refreshed with a full timer when the
+    /// card key repeats) without the edge glow and without touching the flash
+    /// throttle — the glow means "AI work finished", external sources don't
+    /// get to trigger it. Not gated on `completionFlashEnabled`:
+    /// `ExternalCardService` owns this feature's switch.
+    func showExternalToast(_ item: CompletionItem) {
+        addToasts([item])
+        LogService.debug("External toast shown: \(item.toastKey)", category: "CompletionFlash")
+    }
+
     // MARK: - Toast row interaction
 
     /// The close button on one card.

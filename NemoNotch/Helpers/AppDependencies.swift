@@ -39,6 +39,10 @@ struct AppDependencies {
 
     let completionFlash: CompletionFlashService
     let notificationToast: NotificationToastService
+    /// External-app toasts (`POST /v1/toast`): gate + validation + assembly,
+    /// then `completionFlash.showExternalToast`. The only landing point for
+    /// foreign card data — no translation happens here by design.
+    let externalCard: ExternalCardService
     let edgeBar: EdgeBarController
     let quotaAlerts: QuotaAlertMonitor
     let chatBubble: ChatBubbleController
@@ -120,6 +124,10 @@ struct AppDependencies {
             notificationToast.start()
         }
 
+        // 外来应用 → toast(POST /v1/toast):门禁 + 校验 + 组装的唯一落点,
+        // 对外来数据零翻译(请求体即完整卡面)。
+        let externalCard = ExternalCardService(settings: settings, present: { completionFlash.showExternalToast($0) })
+
         // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService
         // 自持瞬时状态,NotchView 渲染);日历到期走 CompletionFlashService 的
         // 全屏闪烁 + Toast。bind() 让「蓝牙动效」设置开关成为唯一启动源 ——
@@ -196,6 +204,7 @@ struct AppDependencies {
             notificationPermission: notificationPermission,
             completionFlash: completionFlash,
             notificationToast: notificationToast,
+            externalCard: externalCard,
             edgeBar: edgeBar,
             quotaAlerts: quotaAlerts,
             chatBubble: chatBubble,

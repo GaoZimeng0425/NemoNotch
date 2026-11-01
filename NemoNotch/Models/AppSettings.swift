@@ -106,6 +106,17 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(notificationToastApps, forKey: Self.notificationToastAppsKey) }
     }
 
+    // MARK: - External app toast API (POST /v1/toast)
+
+    static let externalToastEnabledKey = "externalToastEnabled"
+
+    /// Whether local apps may push toast cards via `POST /v1/toast`. Default
+    /// on: the 0600 shared token is the admission gate, no system permission
+    /// prompt is involved, and the toast queue's own cap bounds a flood.
+    var externalToastEnabled: Bool {
+        didSet { UserDefaults.standard.set(externalToastEnabled, forKey: Self.externalToastEnabledKey) }
+    }
+
     // MARK: - Event alerts (calendar due / bluetooth audio / charging)
 
     static let calendarDueFlashEnabledKey = "calendarDueFlashEnabled"
@@ -235,6 +246,8 @@ final class AppSettings {
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
         notificationToastEnabled = UserDefaults.standard
             .object(forKey: Self.notificationToastEnabledKey) as? Bool ?? false
+        externalToastEnabled = UserDefaults.standard
+            .object(forKey: Self.externalToastEnabledKey) as? Bool ?? true
         notificationToastApps = UserDefaults.standard
             .stringArray(forKey: Self.notificationToastAppsKey) ?? Self.defaultNotificationToastApps
         calendarDueFlashEnabled = UserDefaults.standard
