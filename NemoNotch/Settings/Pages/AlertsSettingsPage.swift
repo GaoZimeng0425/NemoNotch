@@ -66,10 +66,20 @@ struct AlertsSettingsPage: View {
                     Text("settings.waiting_reminder.10min").tag(10)
                     Text("settings.waiting_reminder.20min").tag(20)
                 }
-                if notificationMonitor.status != .authorized {
-                    Text("settings.waiting_reminder.no_permission")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                // The grant button lived on the removed Pomodoro page; the
+                // reminder is now its only user. Shown only once the user
+                // turns the reminder on — never asked for unprompted.
+                if appSettings.waitingReminderEnabled, notificationMonitor.status != .authorized {
+                    PermissionCard(
+                        icon: "bell.badge",
+                        titleKey: "permission.notification.title",
+                        detailKey: "permission.notification.detail",
+                        status: notificationMonitor.status == .denied ? .denied : .notDetermined,
+                        primary: .programmatic { Task { await notificationMonitor.request() } },
+                        openSettings: { notificationMonitor.openSystemSettings() },
+                        style: .adaptive
+                    )
+                    .padding(.vertical, 4)
                 }
             }
 

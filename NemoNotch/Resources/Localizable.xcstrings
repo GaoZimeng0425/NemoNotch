@@ -4336,22 +4336,6 @@
         }
       }
     },
-    "settings.waiting_reminder.no_permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notifications are not authorized — enable them in System Settings to receive reminders."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚未授权通知——请在系统设置中允许后才能收到提醒。"
-          }
-        }
-      }
-    },
     "waiting_reminder.title" : {
       "localizations" : {
         "en" : {
@@ -5164,6 +5148,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最新："
+          }
+        }
+      }
+    },
+    "permission.notification.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知"
+          }
+        }
+      }
+    },
+    "permission.notification.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send a system notification when a session has waited too long for approval"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话等待审批过久时发送系统通知"
           }
         }
       }
