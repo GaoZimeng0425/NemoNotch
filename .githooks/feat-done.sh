@@ -110,9 +110,11 @@ elif [ -n "$wt" ] && [ -f "$wt/scripts/check-arch.sh" ]; then
 fi
 
 # ── 评审门禁:judge ≠ author 的机械化(2026-10-20)──
-# 判断不能机械化,评审的「发生」可以:改动触及代码/scripts/hooks/CI 的 feature,
-# 合并前必须有 .reviews/<name>.md 且 Verdict: APPROVED——由**未参与开发**的
-# 会话/子代理填写(sh scripts/review.sh <name> 生成模板与审查清单)。
+# 判断不能机械化,评审的「发生」可以:改动触及代码/scripts/hooks/CI/.zcode 与 .claude
+# (技能、人格、工作流;2026-11-02:流程文本毒害面最大——一段流程文本让一行级修复跑了
+# 1.5h,所以与代码同等看待)的 feature,合并前必须有 .reviews/<name>.md 且
+# Verdict: APPROVED——由**未参与开发**的会话/子代理填写(sh scripts/review.sh <name>
+# 生成模板与审查清单)。
 # 纯文档/格式 feature 自动跳过(触发集与测试门禁同判据扩到工程脚本)。
 # 逃生口:NEMONOTCH_SKIP_REVIEW=1(应急,与 SKIP_TESTS 同款约定)。
 if [ "${NEMONOTCH_SKIP_REVIEW:-0}" = "1" ]; then
@@ -120,9 +122,9 @@ if [ "${NEMONOTCH_SKIP_REVIEW:-0}" = "1" ]; then
 elif [ -n "$wt" ]; then
   base=$(git -C "$main_wt" merge-base develop "$branch")
   # 不接管道,同上——裸命令让 set -e 兜 fail-closed
-  review_triggers=$(git -C "$wt" diff --name-only "$base...HEAD" -- '*.swift' '*.xcodeproj/project.pbxproj' 'scripts/*' '.githooks/*' '.github/*')
+  review_triggers=$(git -C "$wt" diff --name-only "$base...HEAD" -- '*.swift' '*.xcodeproj/project.pbxproj' 'scripts/*' '.githooks/*' '.github/*' '.zcode/*' '.claude/*')
   if [ -z "$review_triggers" ]; then
-    echo "📄 本 feature 无代码/脚本/hooks/CI 改动 — 跳过评审门禁" >&2
+    echo "📄 本 feature 无代码/脚本/hooks/CI/.zcode/.claude 改动 — 跳过评审门禁" >&2
   else
     # 查「已提交」的记录内容(HEAD 里的 .reviews/<name>.md),不是工作区文件:
     # 评审是证据链,未提交的 APPROVED 不算数;也避免未跟踪记录卡死 worktree 拆除
