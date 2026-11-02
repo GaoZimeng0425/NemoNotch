@@ -180,19 +180,38 @@ enum AppActivator {
         return ppid > 1 ? ppid : nil
     }
 
-    /// Brings the app forward, launching it when it is not running (a
-    /// notification can outlive its app).
+    /// Brings the app forward the way a Dock click does — through Launch
+    /// Services, which activates the running instance (or launches it when the
+    /// notification outlived its app) **and delivers the reopen event**. A bare
+    /// `NSRunningApplication.activate()` only switches the frontmost app: Mail
+    /// with its viewer window closed became frontmost with nothing on screen
+    /// (8/8 clicks logged `accepted=true` and no `did not take`, yet no window),
+    /// read by the user as "the click did nothing". Reopen is what makes such
+    /// an app rebuild its main window.
     @MainActor
     static func openApp(bundleId: String) {
-        if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first {
-            bringForward(app, reason: "notification")
-            return
-        }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first
+        guard let url = running?.bundleURL
+            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
+        else {
             LogService.warn("No app installed for \(bundleId)", category: "AppActivator")
             return
         }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        if let running, running.isHidden {
+            running.unhide()
+        }
+        LogService.info(
+            "Opening \(bundleId) (notification) via Launch Services; running=\(running != nil)",
+            category: "AppActivator"
+        )
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { app, error in
+            if let error {
+                LogService.warn("Opening \(bundleId) failed: \(error.localizedDescription)", category: "AppActivator")
+                return
+            }
+            guard let pid = app?.processIdentifier else { return }
+            verifyFrontmost(pid: pid, name: bundleId)
+        }
     }
 
     @MainActor
@@ -207,9 +226,7 @@ enum AppActivator {
     /// Unhides, activates with all windows (a bare `activate()` can leave a
     /// hidden app hidden, or raise an app whose only window is elsewhere), and
     /// records whether it took: the request's answer now, and 0.5s later
-    /// whether the app actually became frontmost — the system may decline an
-    /// activation requested from a background app, and "clicked but nothing
-    /// happened" reports were undiagnosable without it.
+    /// whether the app actually became frontmost.
     @MainActor
     private static func bringForward(_ app: NSRunningApplication, reason: String) {
         if app.isHidden {
@@ -219,6 +236,13 @@ enum AppActivator {
         let pid = app.processIdentifier
         let name = app.bundleIdentifier ?? "pid \(pid)"
         LogService.info("Activating \(name) (\(reason)): request accepted=\(accepted)", category: "AppActivator")
+        verifyFrontmost(pid: pid, name: name)
+    }
+
+    /// 0.5s later, whether the app actually became frontmost — the system may
+    /// decline an activation requested from a background app, and "clicked
+    /// but nothing happened" reports were undiagnosable without it.
+    private static func verifyFrontmost(pid: pid_t, name: String) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let front = NSWorkspace.shared.frontmostApplication
             guard front?.processIdentifier != pid else { return }
