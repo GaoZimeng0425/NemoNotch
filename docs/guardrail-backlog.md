@@ -31,9 +31,29 @@
   `firstIndex(of: "\r")` / `firstIndex(of: "\n")`(聚簇陷阱的机器可判定形状;Data 上的 UInt8
   查找不在拦截面),出生按 A/B 档四规矩自测;③**两段式客户端验收探针**(URLSession / 原始 socket
   头‖体分段)进 external-toast 指南或 CI——curl 永远单段发送,曾让整份 curl-only 验收清单假绿。
+- [ ] **`AppActivator.onScreenWindowCount` 抽纯函数 + 判别性测试**(来源:harden-review-freshness
+  评审 P3-1,2026-11-02)。过滤逻辑(pid / layer==0 / ≥200×150 / NSNumber cast)是纯逻辑,抽成接受
+  `[[String: Any]]` 的 `normalWindowCount(_:)` 即可用合成窗口字典测(Mail 33px 辅助窗 + 800×600 真窗 +
+  layer-3 + 他 pid → 期望 1),过 `mutate.sh` 验牙。log-only 路径,非阻塞。
+- [ ] **review.sh「Verdict 行存在但非标准值」要提示而不重生成**(来源:同上评审 P3-2)。只认
+  APPROVED/CHANGES_NEEDED/无法验证 之后,拼写偏离(如小写 approved)的记录重跑会被洗回空白模板;
+  修法:`^Verdict:` 存在且非 `(填` 却不匹配白名单时退出并提示。窄风险(feat-done 只认 `^Verdict: APPROVED`)。
+- [ ] **post-merge 钩子对纯文档合并跳过 `build.sh`**(来源:本条目自身的登记过程,2026-11-02)。docs-only
+  feature 合入 develop 也触发全量归档 + 替换 /Applications + 重启 app(~3 min,用户眼前 app 闪一次),
+  二进制零变化。判据与 feat-done 测试门禁同款:merge 区间无 `*.swift`/pbxproj/Resources 改动即跳过并
+  打印一行说明。`NEMONOTCH_HOOK_DEBUG=1` 是干跑逃生口,不是机制。
 
 ## 已硬化(留档)
 
+- [x] **freshness 自愈与比对吃同一份源**(2026-11-02,feature/harden-review-freshness):自愈在 worktree
+  cwd 调 `install.sh`(`--show-toplevel` = worktree)装的是 worktree 旧源,比对却拿主检出新源——develop
+  被别的会话推进且动过 `.githooks/` 时「✅ 已重装请重跑」无限循环(fix-toast-open-reopen 实踩,前后探针
+  rc=1/1 → rc=1/0)。现 `(cd "$nf_root" && sh .githooks/install.sh)`。判据:**检测与自愈动作必须吃
+  同一份真相源**;自愈脚本不许依赖 cwd 的相对 git 解析。
+- [x] **review.sh 只认已填 Verdict 值**(2026-11-02,同 feature):裸 `^Verdict:` 被模板占位行
+  `Verdict: (填 …)` 命中,空白模板重跑误报「已填不覆盖」(评审员实遇)。现正向白名单
+  `^Verdict: *(APPROVED|CHANGES_NEEDED|无法验证)`。判据:**保护性判定锚定到值而非前缀**——
+  `^Keyword:` 型 grep 对模板占位行天然误报;feat-done.sh:141 的 `(填` 反向守卫是同一课的另一种写法。
 - [x] **影响面测试选择**(2026-10-23,feature/harden-gates):`--only` 类名从 agent 挑选
   → `scripts/affected-tests.sh` 确定性映射(改动文件→顶层符号→测试引用;空映射回落
   全量)。关闭历史假绿类(--only 选错类)。
