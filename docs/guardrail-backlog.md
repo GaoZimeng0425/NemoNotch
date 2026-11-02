@@ -22,6 +22,15 @@
 - [ ] **advisory 债表模式**——未来新增门禁若遇存量债(如新 lint 规则上线时上百违例),
   别做"全有或全无":登记表只减不增 + 某项跑绿时哨兵提示删条目(参考 octok-platform
   local-ci 的 TYPECHECK/JEST_LEGACY_ADVISORY + advisoryPassed 设计,2026-10-24 调研)。
+- [ ] **HookServer 手写 HTTP 分帧的守恒不变量**(来源:fix-hookserver-http-framing,2026-11-02。
+  `hasCompleteHTTPRequest` 里 `after.firstIndex(of: "\r")` 恒 nil——Swift 把 `\r\n` 聚成一个
+  Character——Content-Length 分支死代码、头块到齐即判完整:两段式客户端 POST /v1/toast 首发 400、
+  >64KB hook 事件截断 65312/65313B,日志指纹最早 2026-10-30、累计 202 条无人察觉;已改纯字节级并有
+  `HookServerFramingTests` 七用例)。三个候选:①**NWProtocolHTTP / `NWProtocolFramer` 替换手写
+  分帧**的重构(用户拍板本分支不做,留作候选);②**check-arch B 档**:新增行拦 String 上的
+  `firstIndex(of: "\r")` / `firstIndex(of: "\n")`(聚簇陷阱的机器可判定形状;Data 上的 UInt8
+  查找不在拦截面),出生按 A/B 档四规矩自测;③**两段式客户端验收探针**(URLSession / 原始 socket
+  头‖体分段)进 external-toast 指南或 CI——curl 永远单段发送,曾让整份 curl-only 验收清单假绿。
 
 ## 已硬化(留档)
 
