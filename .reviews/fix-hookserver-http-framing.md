@@ -2,7 +2,7 @@
 
 Reviewer: 独立评审子代理(judge ≠ author,未参与开发;ZCode 派发,只读 worktree + 仅本记录可写)
 Date: 2026-11-02
-Reviewed-Head: dc7a4b6
+Reviewed-Head: 46e9d56
 Verdict: APPROVED
 Scope:  4 files changed, 532 insertions(+), 21 deletions(-)
 
@@ -46,3 +46,10 @@ docs/superpowers/plans/2026-11-02-fix-hookserver-http-framing.md
 ## 评审方法记录
 
 `git diff develop..HEAD` 全量阅读 + HookServer.swift 关键区(receive/processRequest/常量)全文上下文;全部门禁与测试在 worktree 亲跑并引用退出码(见证据纪律项);未跑 build.sh(会部署,评审禁项)。APPROVED 意为愿意为此合并背书:P2 为流程项、feat-done 前补勾即可,不构成代码改动要求。
+
+## 增量补审(2026-11-02,46e9d56)
+
+- 范围核对:`git show 46e9d56 --stat` 仅 plan 文档 1 文件、9 行,全部为 `[ ]`→`[x]`(零文字改动);`git diff dc7a4b6..46e9d56 -- . ':!.reviews' ':!docs/superpowers/plans'` 为空——**零代码漂移**,dc7a4b6 上的全部验证(变异 5 红 3 绿、lint/doc-audit/check-arch 三绿)继续有效。
+- **P2 已处理**:9 框全勾,plan-audit 判据满足(任务 7 依赖部署后验证、任务 8 的 feat-done 为闸前最后一步,勾选顺序是门禁语义下唯一可行序)。
+- **任务 7 探针升级为本评审梯级 5 亲跑**(对运行中部署实例,lsof 确认 NemoNotch 监听 127.0.0.1:45831):`python3 -I /tmp/nemonotch-framing-probe.py` → single-segment **200 OK** / two-segment(头‖体)**200 OK** / partial-5B → recv timed out(服务端持续等待,不再即刻 400)——两段式症状在活体上消失,与作者自述一致。
+- 观察披露:部署(日志 12:09:46 listener ready)后 /hook 零新增 `Failed to decode HookEvent`(65312/65313B 指纹停增);12:10:44 仍有一条 `/v1/toast Malformed JSON body`(.warn)——非本 bug 形状(两段式已实证 200),属外来坏输入或无 Content-Length 的 chunked 客户端(plan 范围纪律已披露的接受面),不阻塞、留观。
