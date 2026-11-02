@@ -26,11 +26,12 @@ struct ExternalCardServiceTests {
         title: String = "下载完成",
         body: String? = "84 MB",
         iconSymbol: String? = "arrow.down.circle",
-        jumpBundleId: String? = nil
+        jumpBundleId: String? = nil,
+        jumpURL: String? = nil
     ) -> ExternalToastPayload {
         ExternalToastPayload(
             schema: 1, app: app, key: key, title: title,
-            body: body, iconSymbol: iconSymbol, jumpBundleId: jumpBundleId
+            body: body, iconSymbol: iconSymbol, jumpBundleId: jumpBundleId, jumpURL: jumpURL
         )
     }
 
