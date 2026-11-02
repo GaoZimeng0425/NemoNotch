@@ -256,21 +256,91 @@ final class HookServer {
             }
     }
 
+    /// Is the buffered request complete? Judged purely in BYTES — no String
+    /// or Character semantics anywhere on this path.
+    ///
+    /// Header block = everything before the first `\r\n\r\n` byte sequence;
+    /// no separator yet → incomplete. With a `Content-Length` header (name
+    /// matched case-insensitively, byte by byte, on any line of the block —
+    /// curl 8.7.1 sends it LAST) the request is complete once at least that
+    /// many body bytes follow the separator. No parseable Content-Length →
+    /// complete as soon as the header block has landed (`GET /health` shape;
+    /// same fallback as before).
+    ///
+    /// Why bytes: Swift clusters "\r\n" into ONE Character, so the previous
+    /// `after.firstIndex(of: "\r")` was always nil, the Content-Length branch
+    /// was dead code and the fallback `return true` declared every request
+    /// complete the moment its header block arrived. Two-segment clients
+    /// (URLSession writes the headers, then the body) got 400 "Malformed JSON
+    /// body" on `POST /v1/toast`; `POST /hook` events over 64KB were cut at
+    /// the first 65536-byte read — the 65312/65313B "Failed to decode
+    /// HookEvent" fingerprint is 65536 minus the header block. See
+    /// docs/superpowers/plans/2026-11-02-fix-hookserver-http-framing.md.
     nonisolated static func hasCompleteHTTPRequest(_ data: Data) -> Bool {
-        guard let str = String(data: data, encoding: .utf8),
-              let separator = str.range(of: "\r\n\r\n") else { return false }
-        let headers = str[..<separator.lowerBound]
-        let body = str[separator.upperBound...]
-        if let clRange = headers.range(of: "Content-Length:", options: .caseInsensitive) {
-            let after = headers[clRange.upperBound...]
-            if let lineEnd = after.firstIndex(of: "\r") {
-                let value = after[..<lineEnd].trimmingCharacters(in: .whitespaces)
-                if let cl = Int(value) {
-                    return body.utf8.count >= cl
+        guard let separator = data.range(of: Data("\r\n\r\n".utf8)) else { return false }
+        // Data slices keep the parent's indices (startIndex ≠ 0): measure
+        // with distance(from:to:), never `count` arithmetic.
+        let bodyBytes = data.distance(from: separator.upperBound, to: data.endIndex)
+        guard let contentLength = contentLengthHeader(in: data[data.startIndex ..< separator.lowerBound]) else {
+            return true
+        }
+        return bodyBytes >= contentLength
+    }
+
+    /// `Content-Length` value in a header block, or nil when absent or not
+    /// parseable (both mean "no Content-Length"). Lines are split on the
+    /// `\r\n` byte pair; the field name is the bytes before the first `:`,
+    /// lowercased by mapping only `A`–`Z` (+0x20). Not `| 0x20`: that turns
+    /// 0x0D ("\r") into 0x2D ("-") and other non-letters into garbage.
+    private nonisolated static func contentLengthHeader(in headerBlock: Data) -> Int? {
+        let crlf = Data("\r\n".utf8)
+        let wanted = Array("content-length".utf8)
+        var lineStart = headerBlock.startIndex
+        while lineStart < headerBlock.endIndex {
+            let lineEnd = headerBlock.range(of: crlf, in: lineStart ..< headerBlock.endIndex)?.lowerBound
+                ?? headerBlock.endIndex
+            let line = headerBlock[lineStart ..< lineEnd]
+            if let colon = line.firstIndex(of: UInt8(ascii: ":")) {
+                let name = line[line.startIndex ..< colon].map { byte in
+                    byte >= UInt8(ascii: "A") && byte <= UInt8(ascii: "Z") ? byte + 0x20 : byte
+                }
+                if name == wanted {
+                    return parseDecimal(line[line.index(after: colon) ..< line.endIndex])
                 }
             }
+            // The last line of the block has no trailing CRLF (the block ends
+            // right before `\r\n\r\n`); every other line is followed by one.
+            lineStart = lineEnd == headerBlock.endIndex ? lineEnd : headerBlock.index(lineEnd, offsetBy: 2)
         }
-        return true
+        return nil
+    }
+
+    /// ASCII decimal with optional surrounding SP / HTAB. At least one digit
+    /// and nothing but digits between the padding; anything else (empty,
+    /// sign, overflow, non-ASCII) → nil.
+    private nonisolated static func parseDecimal(_ bytes: Data) -> Int? {
+        var start = bytes.startIndex
+        var end = bytes.endIndex
+        while start < end, isLinearWhitespace(bytes[start]) {
+            start = bytes.index(after: start)
+        }
+        while end > start, isLinearWhitespace(bytes[bytes.index(before: end)]) {
+            end = bytes.index(before: end)
+        }
+        guard start < end else { return nil }
+        var value = 0
+        for byte in bytes[start ..< end] {
+            guard byte >= UInt8(ascii: "0"), byte <= UInt8(ascii: "9") else { return nil }
+            let (shifted, overflowedShift) = value.multipliedReportingOverflow(by: 10)
+            let (sum, overflowedAdd) = shifted.addingReportingOverflow(Int(byte - UInt8(ascii: "0")))
+            guard !overflowedShift, !overflowedAdd else { return nil }
+            value = sum
+        }
+        return value
+    }
+
+    private nonisolated static func isLinearWhitespace(_ byte: UInt8) -> Bool {
+        byte == 0x20 || byte == 0x09
     }
 
     private func processRequest(_ data: Data, connection: NWConnection) {
@@ -292,6 +362,9 @@ final class HookServer {
                 sendHTTP(connection, status: "401 Unauthorized", body: #"{"status":"unauthorized"}"#)
                 return
             }
+            // Body = everything after the FIRST "\r\n\r\n". This String boundary
+            // and the byte boundary in `hasCompleteHTTPRequest` are the same
+            // separator — change one, change the other.
             guard let bodyRange = httpString.range(of: "\r\n\r\n") else {
                 sendHTTP(connection, status: "400 Bad Request", body: "No body")
                 return
@@ -336,6 +409,8 @@ final class HookServer {
                 sendHTTP(connection, status: "401 Unauthorized", body: #"{"status":"unauthorized"}"#)
                 return
             }
+            // Same "\r\n\r\n" boundary as `hasCompleteHTTPRequest` (and the
+            // /hook branch above) — change one, change the other.
             guard let bodyRange = httpString.range(of: "\r\n\r\n") else {
                 sendHTTP(connection, status: "400 Bad Request", body: "No body")
                 return
