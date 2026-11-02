@@ -36,7 +36,7 @@
 **Interfaces:**
 - Produces: `ExternalToastPayload.jumpURL: String?`(已 trim,非空才有值);`ExternalToastRejection.jumpURLInvalid / .jumpURLTooLong`。
 
-- [ ] **Step 1: 写失败测试**(新增,其余既有用例的 `expected` 构造补 `jumpURL: nil`)
+- [x] **Step 1: 写失败测试**(新增,其余既有用例的 `expected` 构造补 `jumpURL: nil`)
 
 ```swift
 @Test("jumpURL: https and custom scheme accepted, trimmed")
@@ -68,26 +68,26 @@ func jumpURLEmptyIsNil() {
 }
 ```
 
-- [ ] **Step 2: 跑测试看红**
+- [x] **Step 2: 跑测试看红**
 
 Run: `sh scripts/test.sh --only ExternalToastPayloadTests`
 Expected: 编译失败(`jumpURL` 不存在)或用例失败——红。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `parse` 在 jumpBundleId 校验后:`let trimmedJump = raw.jumpURL?.trimmingCharacters(in: .whitespacesAndNewlines)`;若非空:`count > 2048 → .jumpURLTooLong`;`URL(string:)` 为 nil 或 `scheme` 为空或 `scheme.lowercased() == "file"` → `.jumpURLInvalid`;成功时 `jumpURL: (trimmedJump?.isEmpty == false) ? trimmedJump : nil`。
 
-- [ ] **Step 4: 跑测试看绿**
+- [x] **Step 4: 跑测试看绿**
 
 Run: `sh scripts/test.sh --only ExternalToastPayloadTests`
 Expected: 全部通过。
 
-- [ ] **Step 5: 变异验证(守卫有牙)**
+- [x] **Step 5: 变异验证(守卫有牙)**
 
 Run: `sh scripts/mutate.sh NemoNotch/Models/ExternalToastPayload.swift 'scheme.lowercased() == "file"' 'false' --only ExternalToastPayloadTests`
 Expected: 变异被抓住(`file:///` 用例变红),mutate exit 0。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add NemoNotch/Models/ExternalToastPayload.swift NemoNotchTests/ExternalToastPayloadTests.swift
@@ -106,7 +106,7 @@ git commit -m "feat(toast): /v1/toast 新增可选 jumpURL(绝对 URL、scheme�
 - Consumes: Task 1 的 `payload.jumpURL`。
 - Produces: `item.jump?.tabLink == payload.jumpURL`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 @Test("jumpURL maps to tabLink; alone it still yields a jump; with jumpBundleId both ride along")
@@ -121,10 +121,10 @@ func jumpURLMapsToTabLink() {
 }
 ```
 
-- [ ] **Step 2: 跑测试看红** — Run: `sh scripts/test.sh --only ExternalCardServiceTests`;Expected: `tabLink` 断言失败(当前恒 nil)。
-- [ ] **Step 3: 实现** — `tabLink: payload.jumpURL`。
-- [ ] **Step 4: 跑测试看绿** — Run 同上;Expected: 全部通过。
-- [ ] **Step 5: Commit**
+- [x] **Step 2: 跑测试看红** — Run: `sh scripts/test.sh --only ExternalCardServiceTests`;Expected: `tabLink` 断言失败(当前恒 nil)。
+- [x] **Step 3: 实现** — `tabLink: payload.jumpURL`。
+- [x] **Step 4: 跑测试看绿** — Run 同上;Expected: 全部通过。
+- [x] **Step 5: Commit**
 
 ```bash
 git add NemoNotch/Services/ExternalCardService.swift NemoNotchTests/ExternalCardServiceTests.swift
@@ -138,13 +138,13 @@ git commit -m "feat(toast): jumpURL 映射到 CompletionJump.tabLink——点击
 **Files:**
 - Modify: `README.md`、`README_CN.md`(字段表加 `jumpURL` 行、示例 JSON 加字段)、`AGENTS.md`(外部 Toast 段加半句:`jumpURL` 点击开 URL、scheme≠file、URL 优先回落 bundle)
 
-- [ ] **Step 1: 改三文件**;**Step 2: 核对** — Run: `rg -n "jumpURL" README.md README_CN.md AGENTS.md | wc -l; rg -c 2048 README.md README_CN.md NemoNotch/Models/ExternalToastPayload.swift; sh scripts/doc-audit.sh | tail -1`;Expected: 命中 ≥6、三处都含 2048、doc-audit 通过。
-- [ ] **Step 3: Commit** — `git add README.md README_CN.md AGENTS.md && git commit -m "docs(toast): jumpURL 字段表/示例/手册同步"`
+- [x] **Step 1: 改三文件**;**Step 2: 核对** — Run: `rg -n "jumpURL" README.md README_CN.md AGENTS.md | wc -l; rg -c 2048 README.md README_CN.md NemoNotch/Models/ExternalToastPayload.swift; sh scripts/doc-audit.sh | tail -1`;Expected: 命中 ≥6、三处都含 2048、doc-audit 通过。
+- [x] **Step 3: Commit** — `git add README.md README_CN.md AGENTS.md && git commit -m "docs(toast): jumpURL 字段表/示例/手册同步"`
 
 ---
 
 ### Task 4: 门禁、评审、合并
 
-- [ ] **Step 1: 全量测试 + lint + doc-audit + check-arch** — Run: `sh scripts/test.sh && sh scripts/lint.sh && sh scripts/doc-audit.sh && sh scripts/check-arch.sh; echo exit=$?`;Expected: `exit=0`(全量绿写锚点)。
+- [x] **Step 1: 全量测试 + lint + doc-audit + check-arch** — Run: `sh scripts/test.sh && sh scripts/lint.sh && sh scripts/doc-audit.sh && sh scripts/check-arch.sh; echo exit=$?`;Expected: `exit=0`(全量绿写锚点)。
 - [ ] **Step 2: 评审** — `sh scripts/review.sh external-toast-jump-url && sh scripts/review.sh external-toast-jump-url --prompt` → 填事实派只读评审子代理 → 记录原样落盘单独提交;P1/P2 回流用 `--prev`。
 - [ ] **Step 3: 勾满 plan,主检出 `git feat-done external-toast-jump-url`**;合并后用 curl 发一张带 `jumpURL` 的卡点击验证(梯级 5)。
