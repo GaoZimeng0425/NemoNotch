@@ -256,7 +256,7 @@ final class HookServer {
             }
     }
 
-    private nonisolated static func hasCompleteHTTPRequest(_ data: Data) -> Bool {
+    nonisolated static func hasCompleteHTTPRequest(_ data: Data) -> Bool {
         guard let str = String(data: data, encoding: .utf8),
               let separator = str.range(of: "\r\n\r\n") else { return false }
         let headers = str[..<separator.lowerBound]
