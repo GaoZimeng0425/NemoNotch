@@ -41,40 +41,40 @@
 **Interfaces:**
 - Produces: pathspec 字面 `'.zcode/*' '.claude/*'`;手册口径「代码/scripts/hooks/CI/.zcode与.claude(技能、人格、工作流)」。
 
-- [ ] **Step 1: 守卫先见红——旧触发集放过 `.zcode/` 改动**
+- [x] **Step 1: 守卫先见红——旧触发集放过 `.zcode/` 改动**
 
 Run: `c=$(git log --diff-filter=A --format=%h -- .zcode/workflows/implement-with-review.dwf.ts | tail -1); git diff --name-only "$c^...$c" -- '*.swift' '*.xcodeproj/project.pbxproj' 'scripts/*' '.githooks/*' '.github/*'`
 Expected: 无输出(旧门禁会跳过评审)。
 
-- [ ] **Step 2: 同样见红——旧触发集放过 `.claude/` 改动**
+- [x] **Step 2: 同样见红——旧触发集放过 `.claude/` 改动**
 
 Run: `c2=$(git log --format=%h -- .claude/settings.json | tail -1); git diff --name-only "$c2^...$c2" -- '*.swift' '*.xcodeproj/project.pbxproj' 'scripts/*' '.githooks/*' '.github/*'`
 Expected: 无输出。
 
-- [ ] **Step 3: 改 pathspec、注释与提示**
+- [x] **Step 3: 改 pathspec、注释与提示**
 
 `.githooks/feat-done.sh:123` pathspec 末尾追加 `'.zcode/*' '.claude/*'`;`:116` 注释「改动触及代码/scripts/hooks/CI 的 feature」加「/.zcode 与 .claude(技能、人格、工作流;2026-11-02:流程文本毒害面最大)」;`:125` echo 改「本 feature 无代码/脚本/hooks/CI/.zcode/.claude 改动 — 跳过评审门禁」。
 
-- [ ] **Step 4: 见绿——两个历史范围用新 pathspec 均命中**
+- [x] **Step 4: 见绿——两个历史范围用新 pathspec 均命中**
 
 Run: Step 1、Step 2 的命令,pathspec 末尾各加 `'.zcode/*' '.claude/*'`
 Expected: 分别输出 `.zcode/workflows/implement-with-review.dwf.ts` 与 `.claude/settings.json`。
 
-- [ ] **Step 5: 负例——纯文档提交不被误拦**
+- [x] **Step 5: 负例——纯文档提交不被误拦**
 
 Run: `git diff --name-only 1d410ab^...1d410ab -- '*.swift' '*.xcodeproj/project.pbxproj' 'scripts/*' '.githooks/*' '.github/*' '.zcode/*' '.claude/*'`(1d410ab 只动 docs/)
 Expected: 无输出。
 
-- [ ] **Step 6: AGENTS.md 评审门禁口径同步**
+- [x] **Step 6: AGENTS.md 评审门禁口径同步**
 
 Run: `rg -n "代码/scripts/hooks/CI" AGENTS.md`;每处改为「代码/scripts/hooks/CI/.zcode与.claude(技能、人格、工作流)」。
 
-- [ ] **Step 7: doc-audit 绿**
+- [x] **Step 7: doc-audit 绿**
 
 Run: `sh scripts/doc-audit.sh; echo exit=$?`
 Expected: `exit=0`。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add .githooks/feat-done.sh AGENTS.md
@@ -91,21 +91,21 @@ git commit -m "gate(review): 评审触发集纳入 .zcode/ 与 .claude/(技能�
 **Interfaces:**
 - Produces: `sh scripts/review.sh <name> --prompt` → stdout 打印派发 prompt,退出 0,**不写任何文件**;`--prev <short-sha>` 切增量复审段。占位符字面 `<<填:症状/需求事实,不含实现思路>>`。Task 6 与 AGENTS.md(Task 3)引用此命令。
 
-- [ ] **Step 1: 实现 `--prompt` 分支**
+- [x] **Step 1: 实现 `--prompt` 分支**
 
 在参数解析处识别 `--prompt`(及可选 `--prev <sha>`),走独立函数输出 heredoc,然后 `exit 0`。prompt 必须含:角色(未参与开发,judge≠author)、worktree 绝对路径(由脚本所在仓库根推得)、diff 范围(默认 `develop..HEAD`;`--prev` 时为 `<prev>..HEAD` 且加「零代码漂移检查 `git diff <prev>..HEAD -- . ':!.reviews'`、维持或改判、bump Reviewed-Head」段)、事实占位符、「先跑 `sh scripts/review.sh <name>` 拿清单逐项过;亲跑 lint/doc-audit/check-arch/affected-tests 引用真实退出码」、bug 专项三镜头(失败测试红→绿可重放 / 修复与根因因果对应 / 旧口径全仓 grep 清场)、输出格式=完整 `.reviews/<name>.md` 记录全文(行名 `Reviewer:` / `Verdict: APPROVED|CHANGES_NEEDED|无法验证` / `Reviewed-Head: <git rev-parse --short HEAD>` / Findings P1–P3 带 file:line)、**铁律段**(零 git 状态变更:不 pull/push/merge/rebase/checkout/commit;不改任何文件;不跑 build.sh;记录全文返回由调用方落盘)。
 
-- [ ] **Step 2: 既有行为不变**
+- [x] **Step 2: 既有行为不变**
 
 Run: `sh scripts/review.sh probe-x >/dev/null; test -f .reviews/probe-x.md && echo "template still generated ✓"; rm .reviews/probe-x.md`
 Expected: `template still generated ✓`。
 
-- [ ] **Step 3: `--prompt` 字段对齐、铁律、不写文件、增量段**
+- [x] **Step 3: `--prompt` 字段对齐、铁律、不写文件、增量段**
 
 Run: `out=$(sh scripts/review.sh probe-x --prompt); echo "$out" | rg -c "Verdict: APPROVED|Reviewed-Head:|Reviewer:"; echo "$out" | rg -c "pull|push|build\.sh"; echo "$out" | rg -c "红→绿|因果|grep"; test ! -e .reviews/probe-x.md && echo "no file written ✓"; sh scripts/review.sh probe-x --prompt --prev abc1234 | rg -c "abc1234\.\.HEAD"`
 Expected: 第一计数 ≥3,第二 ≥3,第三 ≥3,`no file written ✓`,末计数 ≥1。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add scripts/review.sh
@@ -122,26 +122,26 @@ git commit -m "review.sh: --prompt [--prev] 输出工具中立的评审派发 pr
 **Interfaces:**
 - Consumes: Task 2 命令 `sh scripts/review.sh <name> --prompt [--prev <head>]`;Task 4 的 `.claude/skills` 链接(可在手册「两工具同一流程」句提及)。
 
-- [ ] **Step 1: 列旧口径残留(历史 plans 与本 spec 排除)**
+- [x] **Step 1: 列旧口径残留(历史 plans 与本 spec 排除)**
 
 Run: `rg -n "implement-with-review|实现子代理|免闸|subagent-driven|四参|symptom 入口" AGENTS.md docs/ README.md README_CN.md --glob '!docs/superpowers/plans/**' --glob '!docs/superpowers/specs/2026-11-02-main-dev-loop-design.md'`
 Expected: 命中清单(至少 AGENTS.md:236)。
 
-- [ ] **Step 2: 改写三入口条目为流程不变量**
+- [x] **Step 2: 改写三入口条目为流程不变量**
 
 替换为一条(可带短子列表),必须含:①执行者=主对话,唯一必需子代理=评审员;两工具(ZCode / Claude Code)同一流程,按各自子代理工具派发;②新需求 `brainstorming → spec → writing-plans → 用户批准 plan(=停顿)→ executing-plans 主对话实现(本仓恒选;subagent-driven-development 不用)→ 门禁 → 评审 → feat-done`;③bug `复现(证据标梯级)→ 根因不明 systematic-debugging(≥2 独立假设且证据不在手才派并行探针,只读回结论)→ 写代码前停顿:根因 file:line+梯级 / 修法 / 影响面 / 刻意不做,等用户一句;未复现首句「根因系推断」→ 失败测试先红 → 修复 → mutate.sh → 门禁 → 评审 → feat-done`;自检四条(复现确凿/证据链成立/修法机械/有确认探针)不满足回去挖、不到提议;免闸五条件作废;④investigation 只读不建 worktree;⑤门禁脚本清单(test.sh 全量写锚点 / lint / doc-audit / check-arch / plan-audit)全绿才派评审;⑥评审派发 = `sh scripts/review.sh <name>` 生成模板 + `--prompt` 输出粘给子代理工具 + 记录原样落盘单独提交(禁编辑);回流 P1/P2 主对话修 → `--prev` 增量复审 ≤3 轮,P3 默认不修;方案被迫变更回停顿;⑦挑战者第二席默认不开,高爆炸半径面(HookServer 协议/钩子脚本/签名部署/持久化格式)在停顿那一拍提议;⑧收尾 feat-done、push 等开口、汇报先背景+「点哪里能看到」+ 一行度量。长度 ≤ 原条目 1.5 倍。
 
-- [ ] **Step 3: 清其余命中 + 反目标弱检**
+- [x] **Step 3: 清其余命中 + 反目标弱检**
 
 Step 1 其他命中逐处改写/删除(历史复盘改过去时)。Run: `rg -n "等用户一句|停顿" AGENTS.md | head -3`
 Expected: 停顿句存在。
 
-- [ ] **Step 4: 零残留 + doc-audit 绿**
+- [x] **Step 4: 零残留 + doc-audit 绿**
 
 Run: `rg -n "implement-with-review|实现子代理只照|免闸直通|四参" AGENTS.md docs/ README.md README_CN.md --glob '!docs/superpowers/plans/**' --glob '!docs/superpowers/specs/2026-11-02-main-dev-loop-design.md'; echo "rg exit=$?"; sh scripts/doc-audit.sh; echo "audit exit=$?"`
 Expected: `rg exit=1` 且 `audit exit=0`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add AGENTS.md docs/ README.md README_CN.md
@@ -159,21 +159,21 @@ git commit -m "docs(agents): 任务入口分流改为主对话执行的工具中
 **Interfaces:**
 - Produces: Claude Code 在本仓可见 `.zcode/skills/` 全部技能;`reviewer` 子代理类型(只读)。
 
-- [ ] **Step 1: 探针留档——ZCode 不扫 `.claude/skills`**
+- [x] **Step 1: 探针留档——ZCode 不扫 `.claude/skills`**
 
 Run: `cd /Applications/ZCode.app/Contents/Resources && timeout 90 rg -l --no-messages "claude/skills" glm app.asar.unpacked; echo "rg_exit=$?"`
 Expected: `rg_exit=1`(零引用;已于 2026-11-02 实测一次)。若为 0 → 停下,按 spec 退回方案 B(不建链接,改记「Claude Code 装 superpowers 插件」前置)。
 
-- [ ] **Step 2: 建相对链接并验证**
+- [x] **Step 2: 建相对链接并验证**
 
 Run: `ln -s ../.zcode/skills .claude/skills && readlink .claude/skills && test -f .claude/skills/brainstorming/SKILL.md && echo "resolves ✓"`
 Expected: `../.zcode/skills` 与 `resolves ✓`。
 
-- [ ] **Step 3: 写 `.claude/agents/reviewer.md`**
+- [x] **Step 3: 写 `.claude/agents/reviewer.md`**
 
 frontmatter:`name: reviewer`、`description`(独立评审员——judge≠author,只读,Verdict 三态,Findings 带 P 级)、`tools: Read, Grep, Glob, Bash`。正文与全局 `~/.zcode/agents/reviewer.md` 同义:先跑 `sh scripts/review.sh <name>` 拿清单逐项过;验证亲跑引用真实退出码;`Verdict: APPROVED | CHANGES_NEEDED | 无法验证`;评审对象绑定 `git rev-parse --short HEAD`;**记录全文返回由调用方落盘——不改任何文件、不提交、零 git 状态变更**;中文。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .claude/skills .claude/agents/reviewer.md
@@ -189,16 +189,16 @@ git commit -m "claude: .claude/skills → ../.zcode/skills 相对链接(两工�
 - Modify: `.gitignore:41-43`(删 `!/.zcode/workflows/`、`/.zcode/workflows/*`、`!/.zcode/workflows/*.dwf.ts`)
 - 文件系统删除:`.zcode/workflow-drafts/implement-with-review.dwf.ts`
 
-- [ ] **Step 1: 删文件与例外行**
+- [x] **Step 1: 删文件与例外行**
 
 Run: `git rm -q .zcode/workflows/implement-with-review.dwf.ts && rm -f .zcode/workflow-drafts/implement-with-review.dwf.ts`;编辑 `.gitignore` 删三行(保留 `/.zcode/*` 与 `!/.zcode/skills/`)。
 
-- [ ] **Step 2: 验证 ignore 边界**
+- [x] **Step 2: 验证 ignore 边界**
 
 Run: `git check-ignore -q .zcode/workflows/x.dwf.ts && echo "workflows ignored ✓"; git check-ignore -q .zcode/skills/brainstorming/SKILL.md && echo "❌ skills ignored" || echo "skills tracked ✓"; git ls-files .zcode/ | cut -d/ -f1-2 | sort -u`
 Expected: `workflows ignored ✓`、`skills tracked ✓`,ls-files 只有 `.zcode/skills`。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add -A .gitignore .zcode/workflows
