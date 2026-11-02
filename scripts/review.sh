@@ -9,21 +9,87 @@
 # 提交,成为永久证据链(.superpowers/sdd/ 的延续)。
 #
 # Usage:
-#   sh scripts/review.sh <name>          # 生成/刷新 .reviews/<name>.md 模板
+#   sh scripts/review.sh <name>                      # 生成/刷新 .reviews/<name>.md 模板
+#   sh scripts/review.sh <name> --prompt             # 打印评审派发 prompt(不写任何文件)
+#   sh scripts/review.sh <name> --prompt --prev <h>  # 增量复审 prompt:只核 <h>..HEAD
 #   评审者填完 Findings 与 Verdict 后:  git add .reviews/<name>.md
+#
+# --prompt(2026-11-02,工具中立):评审派发的 prompt 由本脚本定形,ZCode / Claude Code
+# 各自把它粘给自己的子代理工具——铁律(零 git 状态变更、不改文件)和 bug 专项镜头写死
+# 在模板里,不再每次手搓(手搓漏一条铁律 = 子代理裸 git pull 重写 develop 的实案)。
 set -u
 
-name="$1"
+name="${1:-}"
 if [ -z "$name" ]; then
-  echo "usage: sh scripts/review.sh <feature-name>" >&2
+  echo "usage: sh scripts/review.sh <feature-name> [--prompt [--prev <head>]]" >&2
   exit 2
 fi
+shift
+prompt_mode=0
+prev=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prompt) prompt_mode=1 ;;
+    --prev)
+      shift
+      prev="${1:-}"
+      if [ -z "$prev" ]; then
+        echo "✋ --prev 需要上轮 Reviewed-Head 短哈希" >&2
+        exit 2
+      fi
+      ;;
+    *) echo "✋ 未知参数: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+# 评审派发 prompt(工具中立)。变量在调用时求值:wt / base / name / prev。
+emit_prompt() {
+  if [ -n "$prev" ]; then
+    range="$prev..HEAD"
+    mode_block="## 增量复审模式
+上轮评审 Reviewed-Head 为 \`$prev\`。只核修复提交:\`git diff $prev..HEAD\`。先做零代码漂移检查
+\`git diff $prev..HEAD -- . ':!.reviews'\`(空 = 只动了评审记录,维持上轮 Verdict 即可)。
+Findings 只针对 $prev 之后的改动;更新记录的 Reviewed-Head 为当前 head,维持或改判 Verdict。"
+  else
+    range="$base...HEAD"
+    mode_block="## 首轮评审
+全量改动:\`git diff $range\`;重要文件直接读上下文,别只看 diff 片段。"
+  fi
+  cat <<EOF
+你是独立评审员(judge ≠ author):你没有参与 feature/$name 的开发,也看不到作者的对话。
+
+Worktree(只读;在此执行命令):$wt
+分支:feature/$name    评审范围:$range
+
+## 事实(由派发方填写;只给症状/需求事实,不给实现思路)
+<<填:症状/需求事实,不含实现思路>>
+
+$mode_block
+
+## 步骤
+1. 先跑 \`sh scripts/review.sh $name\` 拿审查清单(.reviews/$name.md 模板),逐项过;仓库规矩读 worktree 里的 AGENTS.md。
+2. 验证必须亲跑并引用真实退出码:\`sh scripts/lint.sh\`、\`sh scripts/doc-audit.sh\`、\`sh scripts/check-arch.sh\`;有 Swift 改动再跑 \`sh scripts/affected-tests.sh\`(有新守卫/新测试则用 \`sh scripts/mutate.sh\` 验证有牙)。不信作者自述。
+3. bug 专项镜头(修 bug 的分支必查):①失败测试红→绿可重放(测试提交早于修复提交,被测函数在测试提交时仍是旧实现);②修复与根因因果对应,不是绕开症状;③推翻的旧口径全仓 grep 清场(AGENTS.md、docs/、注释)。
+4. 把 .reviews/$name.md **填完整后全文返回**(不要只返回摘要),字段行保持行首裸格式:
+   - \`Reviewer:\` 你的标识
+   - \`Reviewed-Head:\` \`git rev-parse --short HEAD\` 的输出
+   - \`Verdict: APPROVED\`(或 \`Verdict: CHANGES_NEEDED\` / \`Verdict: 无法验证\`)——APPROVED 意味着「我愿意为这个合并背书」
+   - Findings 按 P1/P2/P3,每条带 file:line 与一句话修法;尾部「教训候选」小节(没有写"无")
+
+## 铁律
+- **零 git 状态变更**:不 pull、不 push、不 merge、不 rebase、不 checkout、不 commit、不 stash(本仓 branch.develop.rebase=true,裸 git pull 会重写 develop——2026-11-02 实案)。
+- **不改任何文件**(包括 .reviews/):记录全文返回,由派发方原样落盘并提交。
+- **不跑 build.sh**(它会部署并重启 app)。
+- 无法验证就明说,不猜。中文回复,技术名保留。
+EOF
+}
 
 main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 branch="feature/$name"
 
 if ! git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
-  echo "✋ 找不到分支 $branch。" >&2
+  echo "✋ 找不到分支 ${branch}。" >&2
   exit 1
 fi
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/$branch" '
@@ -34,6 +100,13 @@ if [ -z "$wt" ]; then
 fi
 
 base=$(git -C "$main_wt" merge-base develop "$branch")
+
+# --prompt 只打印、不碰 .reviews/(模板生成与「已填 Verdict 不覆盖」逻辑全在其后,原样不动)
+if [ "$prompt_mode" = 1 ]; then
+  emit_prompt
+  exit 0
+fi
+
 note="$wt/.reviews/$name.md"
 mkdir -p "$wt/.reviews"
 
