@@ -21,6 +21,7 @@
 4. 按复杂度配力:根因已验证的小修复 = 失败测试→修复→评审→feat-done,不写长 plan、不派探针。
 5. feat-done 六道机械门禁(merge-tree / doc-audit / plan-audit / check-arch / 评审记录 / 全量测试)原样保留,仍是唯一硬强制层(提示词不假装强制)。
 6. 成本目标:同类小修复端到端 ≤ 30 分钟、token ≤ 2M(对照 2026-11-02 基线 1h16m+ 未完成 / 10.86M)。
+7. **工具中立**(用户裁定 2026-11-02):ZCode 与 Claude Code 在本仓走**同一份**流程——流程定义只住在两工具都自动加载的地方(AGENTS.md ↔ CLAUDE.md 链接、scripts/、.githooks/),不住在任一工具的私有技能目录;文档与脚本里不出现任一工具的工具名(写「子代理工具」不写 Agent/Task/SendMessage)。
 
 **非目标**
 - 除「评审触发集纳入 `.zcode/`」一处外(用户拍板 A,见「已定设计」),不改 feat-done / git 钩子 / scripts/*.sh 的任何语义。
@@ -36,7 +37,7 @@
 
 ## 方案对比
 
-- **A(选定):主对话技能 + AGENTS.md 路由改写 + 退役动态工作流。** 新技能当执行清单串既有 superpowers 技能,评审派发模板化。Anthropic 文档明说主对话上下文的工作流用 Skill 承载。代价:技能=提示词无硬强制——但硬强制本来就该在 feat-done 脚本(best-practices 的分工)。
+- **A(选定,2026-11-02 二次修订为工具中立形态):流程不变量进 AGENTS.md + 评审派发 prompt 由 `scripts/review.sh --prompt` 生成 + 退役动态工作流。** 两工具自动加载同一份手册、粘贴同一段 prompt 到各自的子代理工具。初版曾打算写 `.zcode/skills/main-dev-loop/` 技能,被用户指出那是 ZCode 私有落点(Claude Code 看不见)而改为此形态;Anthropic 文档说主对话工作流用 Skill 承载,本仓的等价物就是始终加载的 AGENTS.md。代价:手册=提示词无硬强制——硬强制本来就该在 feat-done 脚本(best-practices 的分工)。
 - **B:动态工作流砍成「一个常驻 lead + 评审」两席。** token 从 9 席降到 2 席,但 lead 仍是子代理,跟用户说话只能走工作流提问机制,「写代码前听方案」退化为通知卡——只解决贵,不解决「不跟我讨论」。否。
 - **C:只改 AGENTS.md 不写技能。** 步骤散在长手册里、无可调用入口、评审 prompt 每次手搓——今天裸 pull 事故就是「手搓 prompt 漏一条铁律」的后果。否。
 
@@ -72,30 +73,34 @@
 
 1. 前置:门禁脚本全绿才派(test/lint/doc-audit/check-arch/plan-audit——即旧「验证工兵」的活,由主对话后台 Bash 跑,输出本就被脚本压缩)。
 2. `sh scripts/review.sh <name>` 生成 `.reviews/<name>.md` 模板。
-3. Agent(`subagent_type: reviewer`,全局人格=只读 Read+Bash)按技能内置模板派发:worktree 路径、`git diff develop..HEAD`、症状/需求**事实**(不带实现思路——沿用铁律)、要求亲跑脚本并引用真实退出码、bug 专项镜头(失败测试红→绿可重放、修复与根因因果对应、旧口径全仓 grep 清场)。模板铁律:**零 git 状态变更(不 pull/push/merge/rebase/checkout/commit)、不改任何文件**——评审员把填好的记录**全文返回**,主对话**原样**落盘并单独提交(仅该文件,禁止编辑评审文本;Reviewed-Head 记派发时 head,`.reviews` 提交不计入 code_head,新鲜度门禁天然成立)。
-4. 回流:P1/P2 由主对话修复(每轮重新跑门禁)→ SendMessage **续同一评审员**增量复审(只核修复提交,bump Reviewed-Head;机制 2026-11-02 实测可用;**兜底**:续话失败则新派评审员,携上轮记录全文 + 仅修复提交的 diff);≤3 轮;P3 默认不修(≤3 行机械项可顺手),遗留进评审记录。
+3. 用各自工具的**子代理工具**派一个未参与开发的子代理(ZCode 用全局 `reviewer` 人格、Claude Code 用本仓 `.claude/agents/reviewer.md`;两者同义:只读、返回记录全文、不改文件不提交),prompt 一律是 `sh scripts/review.sh <name> --prompt` 的输出(name/worktree/diff 范围已填,症状/需求**事实**留占位由主对话填——不带实现思路,沿用铁律):要求亲跑脚本并引用真实退出码、bug 专项镜头(失败测试红→绿可重放、修复与根因因果对应、旧口径全仓 grep 清场)。prompt 内置铁律:**零 git 状态变更(不 pull/push/merge/rebase/checkout/commit)、不改任何文件、不跑 build.sh**。评审员把填好的记录**全文返回**,主对话**原样**落盘 `.reviews/<name>.md` 并单独提交(仅该文件,禁止编辑评审文本;Reviewed-Head 记派发时 head,`.reviews` 提交不计入 code_head,新鲜度门禁天然成立)。
+4. 回流:P1/P2 由主对话修复(每轮重新跑门禁)→ **通用路径**:新派评审员,prompt 用 `review.sh <name> --prompt --prev <上轮 Reviewed-Head>`(增量模式:只核 `<prev>..HEAD` 修复提交、零代码漂移检查、bump Reviewed-Head);某工具若能续同一子代理(ZCode 2026-11-02 实测可用)只是加速选项,流程不依赖它;≤3 轮;P3 默认不修(≤3 行机械项可顺手),遗留进评审记录。
 
-### 容器与文件清单
+### 容器与文件清单(工具中立形态)
 
-- 新增 `.zcode/skills/main-dev-loop/SKILL.md` + `.zcode/skills/main-dev-loop/reviewer-prompt.md`(模板)。
-- **feat-done 评审触发集纳入 `.zcode/`**(用户拍板 A,2026-11-02):`.githooks/feat-done.sh` 触发路径加 `.zcode/`,AGENTS.md「评审门禁」句同步为「代码/scripts/hooks/CI/.zcode/(工作流与技能)改动须有评审记录」——技能/流程文本毒害所有后续工作,值得门禁;这是本次唯一的脚本改动。
-- AGENTS.md:「任务入口分流」段改写(执行者=主对话;删「实现子代理只照方案实现」口径;引用新技能;明确本仓 writing-plans 恒选 executing-plans;`subagent-driven-development` 本仓不用)。改写遵守手册精简原则:只写坑与不变量,不写功能说明书。
-- 退役:`git rm .zcode/workflows/implement-with-review.dwf.ts`(`.gitignore` 有该路径的跟踪例外,需同步调整;`.zcode/workflow-drafts/` 本就 gitignored,文件系统删除即可)。
+- **流程不变量住 AGENTS.md**「任务入口分流」段(两工具自动加载;CLAUDE.md 是其符号链接,doc-audit 断言):执行者=主对话;删「实现子代理只照方案实现」口径;停顿无条件;评审派发=review.sh --prompt;本仓 writing-plans 恒选 executing-plans,`subagent-driven-development` 不用;免闸五条件作废(前四条=自检清单)。不新建任何工具私有技能文件。改写遵守手册精简原则:只写坑与不变量。
+- **`scripts/review.sh` 新增 `--prompt [--prev <head>]` 输出模式**(不改既有模板生成与门禁判定):打印评审派发 prompt 到 stdout,name/worktree/diff 范围填好、事实段留占位;含铁律段、bug 专项镜头、输出格式(字段行名与 feat-done 的 grep `^Verdict: APPROVED` / `^Reviewed-Head:` 严格一致);`--prev` 切增量复审模式。模板住在门禁脚本旁边,两工具粘贴同一段。
+- **`.claude/skills → .zcode/skills` 相对符号链接**(用户拍板 A,2026-11-02):让 Claude Code 在本仓看到 brainstorming / writing-plans / executing-plans / systematic-debugging 等既有技能(本机 Claude Code 未装 superpowers,`~/.claude/plugins/{cache,repos}` 为空;本仓 `.claude/` 原只有 swiftformat 钩子)。**前置探针已做**(梯级 4,静态):`rg -l "claude/skills" /Applications/ZCode.app/Contents/Resources/{glm,app.asar.unpacked}` 退出 1(零引用),对照串 `agents/skills` 有命中——ZCode 不扫 `.claude/skills`,无双重加载歧义(10-29 那次歧义是全局双根同名链接,形态不同)。若未来 ZCode 加扫该目录出现重名,退回方案 B(Claude Code 装 superpowers 插件、删链接)。
+- **`.claude/agents/reviewer.md`**:Claude Code 侧只读评审人格,与全局 `~/.zcode/agents/reviewer.md` 同义(只读工具、返回记录全文、不改文件不提交、零 git 状态变更)。ZCode 沿用全局人格,不在 `.zcode/agents/` 放同名文件(双根同名=歧义)。
+- **feat-done 评审触发集纳入 `.zcode/*` 与 `.claude/*`**(用户拍板 A):`.githooks/feat-done.sh:123` pathspec 追加两项,AGENTS.md「评审门禁」句同步为「代码/scripts/hooks/CI/.zcode与.claude(技能、人格、工作流)改动须有评审记录」——流程文本毒害所有后续工作,值得门禁;这是本次唯一的门禁语义改动。
+- 退役:`git rm .zcode/workflows/implement-with-review.dwf.ts`(ZCode 独有机制,Claude Code 本就跑不了;`.gitignore:41-43` 三行跟踪例外同步删除;`.zcode/workflow-drafts/` 本就 gitignored,文件系统删除即可)。
 - 推翻旧口径 ⇒ 全仓 grep 残留(AGENTS.md、docs/ 里的「implement-with-review」散文引用;历史 plan/archive 刻意不改;会话记忆另行更新)。
-- **此 feature 本身走新流程**:实现=主对话,评审=一个子代理(它删的是 .ts 工作流 + 加技能 md + 改 AGENTS.md——评审按「代码/scripts/hooks/CI 改动」计,有 .reviews 记录;这本身就是新流程的第一次实测)。
+- **此 feature 本身走新流程**:实现=主对话,评审=一个子代理,prompt 用 `review.sh --prompt` 的输出——新流程的第一次实测;触发集因本分支动了 `.githooks/`、`.claude/`、`.zcode/` 必然激活。
 
 ### 度量与验收
 
 - 下一次真实 bug 与真实需求各跑一次新流程,记录 token / 时长 / 停顿次数 / 评审轮数,对照 2026-11-02 基线(1h16m 未完成 / 10.86M token / 9 席)。
+- **两工具各验一次**:ZCode 侧由本 feature 自身的评审派发实测;Claude Code 侧由用户在本仓打开 `claude`,确认 brainstorming 等技能可见、`sh scripts/review.sh <name> --prompt` 输出可直接粘给其子代理工具。
 - 过程可观察:主对话每阶段一行进度,不刷屏。
 - 停顿体验:用户在写代码前看到过根因+修法(本次脑暴对话即为实例)。
 
 ## 留给 builder 的
 
-- SKILL.md 正文措辞(分节、触发词 description、何时自动加载);reviewer-prompt.md 具体字句。
-- AGENTS.md 改写文本(doc-audit 硬字符串约束不破坏:手册引用的脚本路径必须存在等)。
+- AGENTS.md 三入口段的具体文字(doc-audit 硬字符串约束不破坏;与原条目同量级)。
+- `review.sh --prompt` 的实现方式(heredoc 模板;`--prev` 增量段的措辞);占位符字面(建议 `<<填:症状/需求事实,不含实现思路>>`)。
+- `.claude/agents/reviewer.md` 的 frontmatter(Claude Code 的只读工具名集合)。
 - `.gitignore` 例外行的精确修改;退役文件的 git 操作顺序。
-- 停顿话术模板(技能里给一个填充式示例)。
+- 停顿话术模板(手册里给一个填充式示例,一两行)。
 
 ## 附:基线数据(2026-11-02)
 
