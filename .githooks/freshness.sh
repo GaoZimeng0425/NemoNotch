@@ -46,11 +46,15 @@ nemonotch_check_fresh() {
 
   echo "" >&2
   echo "✋ .githooks 源与已安装副本不一致:$nf_stale" >&2
-  echo "   正在重新安装(sh .githooks/install.sh)…" >&2
-  if sh "$nf_src/install.sh" >/dev/null 2>&1; then
+  echo "   正在重新安装(cd 主检出 && sh .githooks/install.sh)…" >&2
+  # 自愈必须以**主检出**为 cwd:install.sh 用 `git rev-parse --show-toplevel` 定根,在
+  # worktree 里调就把 worktree(可能基于更旧的 develop)那份装进去,而上面比对的是主检出
+  # 那份——develop 被别的会话推进且动过 .githooks/ 时,「✅ 已重装,请重跑」会无限循环,
+  # 自愈变假自愈(2026-11-02 实踩:082fda1 worktree vs f6ba079 主检出)。
+  if (cd "$nf_root" && sh .githooks/install.sh) >/dev/null 2>&1; then
     echo "   ✅ 已重装。本次命令用的是旧副本,已中止 — 请重新执行刚才的命令。" >&2
   else
-    echo "   ❌ 自动重装失败 — 手动执行: sh \"$nf_src/install.sh\"" >&2
+    echo "   ❌ 自动重装失败 — 手动执行: cd \"$nf_root\" && sh .githooks/install.sh" >&2
   fi
   echo "" >&2
   return 1
