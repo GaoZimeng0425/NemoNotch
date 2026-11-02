@@ -146,5 +146,5 @@ git commit -m "feat(toast): jumpURL 映射到 CompletionJump.tabLink——点击
 ### Task 4: 门禁、评审、合并
 
 - [x] **Step 1: 全量测试 + lint + doc-audit + check-arch** — Run: `sh scripts/test.sh && sh scripts/lint.sh && sh scripts/doc-audit.sh && sh scripts/check-arch.sh; echo exit=$?`;Expected: `exit=0`(全量绿写锚点)。
-- [ ] **Step 2: 评审** — `sh scripts/review.sh external-toast-jump-url && sh scripts/review.sh external-toast-jump-url --prompt` → 填事实派只读评审子代理 → 记录原样落盘单独提交;P1/P2 回流用 `--prev`。
-- [ ] **Step 3: 勾满 plan,主检出 `git feat-done external-toast-jump-url`**;合并后用 curl 发一张带 `jumpURL` 的卡点击验证(梯级 5)。
+- [x] **Step 2: 评审** — `sh scripts/review.sh external-toast-jump-url && sh scripts/review.sh external-toast-jump-url --prompt` → 填事实派只读评审子代理 → 记录原样落盘单独提交;P1/P2 回流用 `--prev`。
+- [x] **Step 3: 勾满 plan,主检出 `git feat-done external-toast-jump-url`**;合并后用 curl 发一张带 `jumpURL` 的卡点击验证(梯级 5)。
