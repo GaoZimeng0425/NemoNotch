@@ -144,7 +144,7 @@ elif [ -n "$wt" ]; then
         # (行为同为 fail-closed,只是提示从「Verdict 不是 APPROVED」变回正确的代办指引)。
         echo "❌ 工作区评审记录的 Verdict 不是 APPROVED(如 CHANGES_NEEDED)— 按 Findings 修复后让评审员更新记录为 APPROVED 并提交,再重跑本命令。" >&2
       elif [ -f "$wt/.reviews/$name.md" ]; then
-        echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
+        echo "❌ 评审门禁未过 — 本 feature 有代码/脚本/hooks/CI/.zcode/.claude 改动,但没有**已提交**且 Verdict: APPROVED 的评审记录。" >&2
         echo "   ✅ 模板已生成在 $wt/.reviews/$name.md(机械步骤已代办)— 派**未参与开发**的会话/子代理评审" >&2
         echo "      diff、填 Findings 与 Verdict → git add .reviews/$name.md && git commit → 重跑本命令。" >&2
       else

@@ -97,13 +97,13 @@ git commit -m "gate(review): 评审触发集纳入 .zcode/ 与 .claude/(技能�
 
 - [x] **Step 2: 既有行为不变**
 
-Run: `sh scripts/review.sh probe-x >/dev/null; test -f .reviews/probe-x.md && echo "template still generated ✓"; rm .reviews/probe-x.md`
-Expected: `template still generated ✓`。
+Run: `sh scripts/review.sh main-dev-loop-skill; echo exit=$?`(真实分支名——评审 P3 指出 probe-x 无分支不可重放;首次生成空模板、已有已填记录时提示不覆盖,两者皆为既有行为,勿 rm 真实记录)
+Expected: `exit=0`。
 
 - [x] **Step 3: `--prompt` 字段对齐、铁律、不写文件、增量段**
 
-Run: `out=$(sh scripts/review.sh probe-x --prompt); echo "$out" | rg -c "Verdict: APPROVED|Reviewed-Head:|Reviewer:"; echo "$out" | rg -c "pull|push|build\.sh"; echo "$out" | rg -c "红→绿|因果|grep"; test ! -e .reviews/probe-x.md && echo "no file written ✓"; sh scripts/review.sh probe-x --prompt --prev abc1234 | rg -c "abc1234\.\.HEAD"`
-Expected: 第一计数 ≥3,第二 ≥3,第三 ≥3,`no file written ✓`,末计数 ≥1。
+Run: `out=$(sh scripts/review.sh main-dev-loop-skill --prompt); echo "$out" | rg -o "Verdict: APPROVED|Reviewed-Head:|Reviewer:" | wc -l; echo "$out" | rg -o "pull|push|build\.sh" | wc -l; echo "$out" | rg -o "红→绿|因果|grep" | wc -l; git status --short .reviews | grep -q . || echo "no file written ✓"; sh scripts/review.sh main-dev-loop-skill --prompt --prev abc1234 | rg -c "abc1234\.\.HEAD"`
+Expected: 第一计数 ≥3,第二 ≥3,第三 ≥3(按匹配数计,铁律/镜头各写在一行内),`no file written ✓`,末计数 ≥1。
 
 - [x] **Step 4: Commit**
 

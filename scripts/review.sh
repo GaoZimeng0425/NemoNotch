@@ -89,7 +89,7 @@ main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
 branch="feature/$name"
 
 if ! git -C "$main_wt" show-ref --verify --quiet "refs/heads/$branch"; then
-  echo "✋ 找不到分支 $branch。" >&2
+  echo "✋ 找不到分支 ${branch}。" >&2
   exit 1
 fi
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/$branch" '
