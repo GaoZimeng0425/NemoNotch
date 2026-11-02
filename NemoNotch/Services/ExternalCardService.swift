@@ -58,7 +58,9 @@ final class ExternalCardService {
             body: payload.body,
             jumpBundleId: payload.jumpBundleId
         )
-        item.jump = CompletionJump.make(hostPID: nil, hostBundleId: payload.jumpBundleId, tabLink: nil)
+        // jumpURL rides as tabLink: AppActivator opens it first and only falls back to
+        // activating jumpBundleId when the URL cannot be opened (same rule as AI/calendar cards).
+        item.jump = CompletionJump.make(hostPID: nil, hostBundleId: payload.jumpBundleId, tabLink: payload.jumpURL)
         return item
     }
 }

@@ -102,4 +102,20 @@ struct ExternalCardServiceTests {
         let bare = ExternalCardService.makeItem(payload: payload(jumpBundleId: nil))
         #expect(bare.jump == nil)
     }
+
+    @Test("jumpURL maps to tabLink; alone it still yields a jump; with jumpBundleId both ride along")
+    func makeItemMapsJumpURL() {
+        let alone = ExternalCardService.makeItem(payload: payload(jumpURL: "pulse://alerts/1"))
+        #expect(alone.jump?.tabLink == "pulse://alerts/1")
+        #expect(alone.jump?.hostBundleId == nil)
+
+        let both = ExternalCardService.makeItem(payload: payload(
+            jumpBundleId: "com.me.pulse",
+            jumpURL: "pulse://alerts/1"
+        ))
+        #expect(both.jump?.tabLink == "pulse://alerts/1")
+        #expect(both.jump?.hostBundleId == "com.me.pulse")
+
+        #expect(ExternalCardService.makeItem(payload: payload()).jump == nil)
+    }
 }
