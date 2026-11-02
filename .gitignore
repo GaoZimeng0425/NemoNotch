@@ -38,8 +38,5 @@ build.log
 /.scratch/
 /.zcode/*
 !/.zcode/skills/
-!/.zcode/workflows/
-/.zcode/workflows/*
-!/.zcode/workflows/*.dwf.ts
 
 __pycache__/
