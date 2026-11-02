@@ -224,11 +224,18 @@ final class HookServer {
     /// and run WITHOUT hopping to the main actor: if every chunk waited for a
     /// MainActor turn, a busy main thread (long layout pass, dialog stall)
     /// would stop the server reading, the sender's socket buffer would fill,
-    /// and a `--max-time`-capped curl (hook-sender.sh posts events with
-    /// `--max-time 2`) would abort mid-body — the truncated event then failed
-    /// to decode and was silently dropped (observed: a 65KB PostToolUse with
-    /// a base64 tool_response died exactly this way). Only the FINAL
-    /// processing needs the main actor.
+    /// and a `--max-time`-capped curl (hook-sender.sh posts with
+    /// `--max-time 2`) could abort mid-body. Only the FINAL processing needs
+    /// the main actor.
+    ///
+    /// The 65KB PostToolUse that "died mid-body" (base64 tool_response,
+    /// decode failure, silently dropped) was NOT a `--max-time` abort: the old
+    /// `hasCompleteHTTPRequest` was always-true once the header block had
+    /// arrived (Swift clusters "\r\n" — see that function), so the first
+    /// 65536-byte read was declared complete and processed as the whole
+    /// request; the 65312/65313B fingerprint is 65536 minus the header block.
+    /// A real `--max-time` abort under that gate would likewise have handed
+    /// over a half body — a companion symptom, not the cause.
     private nonisolated func receive(connection: NWConnection, accumulated: Data) {
         connection
             .receive(minimumIncompleteLength: 1, maximumLength: 65536) {
@@ -387,10 +394,14 @@ final class HookServer {
                 sendJSON(connection, payload: .ack)
             } catch {
                 // Log the decode ERROR itself (a typeMismatch names the JSON
-                // path) plus the body size — a size below the request's
-                // Content-Length means the sender aborted mid-body (e.g. the
-                // hook script's --max-time), which is the signature of the
-                // silently-dropped 65KB PostToolUse incident.
+                // path) plus the body size. A body shorter than the request's
+                // Content-Length most often meant the framing gate let the
+                // request through before the body had fully arrived — the
+                // always-true `hasCompleteHTTPRequest` bug behind the
+                // 65312/65313B (= 65536 − header block) fingerprint of the
+                // silently-dropped 65KB PostToolUse incident. A sender abort
+                // mid-body (hook-sender.sh's --max-time) leaves the same
+                // short-body shape.
                 let snippet = String(bodyString.prefix(500))
                 LogService.error(
                     "Failed to decode HookEvent: \(error) — body \(bodyData.count)B, head: \(snippet)",
