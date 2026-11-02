@@ -2,9 +2,9 @@
 
 Reviewer: 独立评审子代理(GLM;judge ≠ author,未参与开发、未见作者对话)
 Date: 2026-11-02
-Reviewed-Head: aa9ecc6
+Reviewed-Head: 2ae14fe
 Verdict: APPROVED
-Scope:  9 files changed, 282 insertions(+), 12 deletions(-)
+Scope:  9 files changed, 282 insertions(+), 12 deletions(-)(首轮 @ aa9ecc6;增量复审 @ 2ae14fe)
 
 ```
 AGENTS.md
@@ -20,8 +20,20 @@ docs/superpowers/specs/2026-11-02-external-toast-jump-url-design.md
 
 ## Findings
 
-- [P3] NemoNotch/Services/CompletionDetector.swift:225 — 存量注释「a keyed re-push without `jumpBundleId` clears the jump target」现在实际清空的还含 `jumpURL`(tabLink),后续顺手补半句;该文件不在本分支 diff 内,不拦。
-- [P3] README.md:95 / README_CN.md:93 — 字段表写 "passed through verbatim",实际落库的是 trim 后的串(首尾空白被剥);且实测纯空白串 `"   "` 也视为未提供(比文档的 "empty string" 更宽松,方向无害)。可在文档补一句 "whitespace-only = absent"。不拦。
+### 增量复审(aa9ecc6..2ae14fe)
+
+第二轮独立评审(新会话,未见作者对话):零代码漂移检查 `git diff aa9ecc6..HEAD -- . ':!.reviews'` 显示改动恰好为声称的四处——CompletionDetector.swift 一行注释、README×2 字段表措辞、plan Task 4 Steps 2–3 勾选,无夹带;Swift 改动仅一行注释。两条 P3 修复核对:
+
+- **P3① 已修,正确**:CompletionDetector.swift:225 注释补为 "without `jumpBundleId` / `jumpURL` clears the jump target",与 merge 的外部 jump 整体替换分支(`if case .external = item.source { merged.jump = item.jump }`,:238-239)行为一致。
+- **P3② 已修,正确**:README.md / README_CN.md 均补「trimmed, and an empty or whitespace-only string is treated as absent; otherwise passed through verbatim」/「首尾空白会被剥掉,空串或纯空白视为未提供;其余原样透传」,与 ExternalToastPayload.swift parse 逐点一致——`trimmingCharacters(in: .whitespacesAndNewlines)`(:126)、trim 后空串归 nil(:153),且长度/URL 校验同样作用于 trim 后的串(:127-142),文档无超前或落后于实现。
+- **门禁亲跑(退出码为证)**:`sh scripts/lint.sh` exit 0(仅存量 warning,零 error);`sh scripts/doc-audit.sh` exit 0;`sh scripts/check-arch.sh` exit 0;`sh scripts/affected-tests.sh` exit 0(改动 5 个 Swift 文件 → 8 测试类,85 用例通过 0 失败,含 ExternalToastPayloadTests / ExternalCardServiceTests / CompletionDetectorTests)。
+- **plan 核对**:`grep -c '^- \[ ]' docs/superpowers/plans/2026-11-02-external-toast-jump-url.md` = 0;Step 2(评审记录单独提交)已由 91d9145 兑现。**Step 3 预勾的明说**:feat-done 的 plan 门禁要求无裸框,「勾满 plan」自指只能预勾;梯级 5(合并部署后 curl 发卡点击验证)沿用首轮记录的既定安排留给部署后执行——若部署后验证失败应走修复路径,本预勾不构成「真机验证已发生」的证据。
+- 无新 finding。本轮评审零 git 状态变更、未改任何文件、未跑 build.sh。
+
+首轮(保留):
+
+- [P3] NemoNotch/Services/CompletionDetector.swift:225 — 存量注释「a keyed re-push without `jumpBundleId` clears the jump target」现在实际清空的还含 `jumpURL`(tabLink),后续顺手补半句;该文件不在本分支 diff 内,不拦。(已于 2ae14fe 修复,见增量复审小节)
+- [P3] README.md:95 / README_CN.md:93 — 字段表写 "passed through verbatim",实际落库的是 trim 后的串(首尾空白被剥);且实测纯空白串 `"   "` 也视为未提供(比文档的 "empty string" 更宽松,方向无害)。可在文档补一句 "whitespace-only = absent"。不拦。(已于 2ae14fe 修复,见增量复审小节)
 
 无 P1/P2。
 
@@ -50,4 +62,4 @@ docs/superpowers/specs/2026-11-02-external-toast-jump-url-design.md
 
 ---
 
-**评审方法与证据附录**(供 feat-done 门禁核对):全量 diff `git diff f6ba079...HEAD`;`git rev-parse --short HEAD` = `aa9ecc6`;门禁与测试退出码如上;三个变异分别对 ExternalToastPayload.swift(×2)与 ExternalCardService.swift(×1)执行,均被抓住且文件恢复(worktree 仅余 untracked 的本记录模板)。plan 剩余裸框为 Task 4 Step 2(本评审落盘)/ Step 3(feat-done),流程自洽。
+**评审方法与证据附录**(供 feat-done 门禁核对):全量 diff `git diff f6ba079...HEAD`;首轮 `git rev-parse --short HEAD` = `aa9ecc6`,增量复审 = `2ae14fe`(aa9ecc6..HEAD 两个提交:91d9145 评审记录落盘、f66a2bd/2ae14fe P3 修复与 plan 勾选);门禁与测试退出码如上;三个变异分别对 ExternalToastPayload.swift(×2)与 ExternalCardService.swift(×1)执行,均被抓住且文件恢复(worktree 仅余 untracked 的本记录模板)。plan 剩余裸框为 Task 4 Step 2(本评审落盘)/ Step 3(feat-done),流程自洽。增量复审补充:本轮 `git status --porcelain` 除 untracked build/ 外零输出(评审过程零 git 状态变更、未改文件、未跑 build.sh);`grep -c '^- \[ ]'` plan = 0。
