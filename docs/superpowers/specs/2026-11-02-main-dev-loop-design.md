@@ -23,7 +23,7 @@
 6. 成本目标:同类小修复端到端 ≤ 30 分钟、token ≤ 2M(对照 2026-11-02 基线 1h16m+ 未完成 / 10.86M)。
 
 **非目标**
-- 不改 feat-done / git 钩子 / scripts/*.sh 的任何语义。
+- 除「评审触发集纳入 `.zcode/`」一处外(用户拍板 A,见「已定设计」),不改 feat-done / git 钩子 / scripts/*.sh 的任何语义。
 - 不改 brainstorming / writing-plans / executing-plans / systematic-debugging 技能正文,只路由到它们;「生成技能文本不覆盖本仓门禁」条款继续生效。
 - 不处理全局保存工作流 `dev-loop`(其他仓库用)与全局 agents 人格 `implementer`(其他仓库用;本仓开发循环不再调用它,人格文件不动)。
 - 不重写历史 plan 文档/archive 里的 subagent-driven 字样(历史记录不改写)。
@@ -59,7 +59,7 @@
 ### 三入口保留,只换执行者
 
 - **新需求(feature)**:brainstorming(主对话)→ spec → writing-plans → **用户批准 plan(=技术方案停顿)** → executing-plans(主对话逐任务,一任务一验证一提交)→ 门禁脚本全绿 → 评审 → feat-done。writing-plans 模板里「subagent-driven-development (recommended) or executing-plans」的选择题,本仓**恒选 executing-plans**(手册赢条款,不改技能正文)。
-- **bug**:主对话复现(先重放;证据逐条标梯级)→ 根因未知走 systematic-debugging(≤3 假设并行探针规则见上)→ **根因 + 修法停顿**(见下;未复现的根因必须明说「系推断,未经用户确认不进修复」——免闸直通五条件保留但裁决者从「挑战者子代理」改为「主对话向用户一句话确认」)→ 失败测试(引用真实失败输出)→ 修复 → `scripts/mutate.sh` 变异验证 → 门禁脚本 → 评审 → feat-done。
+- **bug**:主对话复现(先重放;证据逐条标梯级)→ 根因未知走 systematic-debugging(≤3 假设并行探针规则见上)→ **根因 + 修法停顿**(见下)→ 失败测试(引用真实失败输出)→ 修复 → `scripts/mutate.sh` 变异验证 → 门禁脚本 → 评审 → feat-done。**旧「免闸直通五条件」作废**(builder check 裁决的矛盾,已按用户停顿裁定解决):停顿无条件阻塞,没有闸可免;前四条(复现确凿/证据链成立/修法机械/有确认探针)降级为主对话的**自检清单**——不满足就回 systematic-debugging 继续挖,不到提议那一步;第五条「挑战者 proceed」作废。未复现的根因必须明说「系推断,未经用户确认不进修复」。
 - **investigation**:只读,引用证据直接作答,不建 worktree(不变)。
 
 ### 技术方案停顿(唯一新增停顿)
@@ -73,11 +73,12 @@
 1. 前置:门禁脚本全绿才派(test/lint/doc-audit/check-arch/plan-audit——即旧「验证工兵」的活,由主对话后台 Bash 跑,输出本就被脚本压缩)。
 2. `sh scripts/review.sh <name>` 生成 `.reviews/<name>.md` 模板。
 3. Agent(`subagent_type: reviewer`,全局人格=只读 Read+Bash)按技能内置模板派发:worktree 路径、`git diff develop..HEAD`、症状/需求**事实**(不带实现思路——沿用铁律)、要求亲跑脚本并引用真实退出码、bug 专项镜头(失败测试红→绿可重放、修复与根因因果对应、旧口径全仓 grep 清场)。模板铁律:**零 git 状态变更(不 pull/push/merge/rebase/checkout/commit)、不改任何文件**——评审员把填好的记录**全文返回**,主对话**原样**落盘并单独提交(仅该文件,禁止编辑评审文本;Reviewed-Head 记派发时 head,`.reviews` 提交不计入 code_head,新鲜度门禁天然成立)。
-4. 回流:P1/P2 由主对话修复(每轮重新跑门禁)→ SendMessage 续同一评审员**增量复审**(只核修复提交,bump Reviewed-Head);≤3 轮;P3 默认不修(≤3 行机械项可顺手),遗留进评审记录。
+4. 回流:P1/P2 由主对话修复(每轮重新跑门禁)→ SendMessage **续同一评审员**增量复审(只核修复提交,bump Reviewed-Head;机制 2026-11-02 实测可用;**兜底**:续话失败则新派评审员,携上轮记录全文 + 仅修复提交的 diff);≤3 轮;P3 默认不修(≤3 行机械项可顺手),遗留进评审记录。
 
 ### 容器与文件清单
 
 - 新增 `.zcode/skills/main-dev-loop/SKILL.md` + `.zcode/skills/main-dev-loop/reviewer-prompt.md`(模板)。
+- **feat-done 评审触发集纳入 `.zcode/`**(用户拍板 A,2026-11-02):`.githooks/feat-done.sh` 触发路径加 `.zcode/`,AGENTS.md「评审门禁」句同步为「代码/scripts/hooks/CI/.zcode/(工作流与技能)改动须有评审记录」——技能/流程文本毒害所有后续工作,值得门禁;这是本次唯一的脚本改动。
 - AGENTS.md:「任务入口分流」段改写(执行者=主对话;删「实现子代理只照方案实现」口径;引用新技能;明确本仓 writing-plans 恒选 executing-plans;`subagent-driven-development` 本仓不用)。改写遵守手册精简原则:只写坑与不变量,不写功能说明书。
 - 退役:`git rm .zcode/workflows/implement-with-review.dwf.ts`(`.gitignore` 有该路径的跟踪例外,需同步调整;`.zcode/workflow-drafts/` 本就 gitignored,文件系统删除即可)。
 - 推翻旧口径 ⇒ 全仓 grep 残留(AGENTS.md、docs/ 里的「implement-with-review」散文引用;历史 plan/archive 刻意不改;会话记忆另行更新)。
