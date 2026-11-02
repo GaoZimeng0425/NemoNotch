@@ -212,33 +212,33 @@ git commit -m "chore(workflow): 退役 implement-with-review 动态工作流(ZCo
 **Interfaces:**
 - Consumes: Task 2 `--prompt`;Task 1 触发集(本分支动了 `.githooks/`、`scripts/`、`.zcode/`、`.claude/`,评审门禁必然激活)。
 
-- [ ] **Step 1: 勾 Task 1–5 全部框 + 门禁脚本**
+- [x] **Step 1: 勾 Task 1–5 全部框 + 门禁脚本**
 
 Run: `sh scripts/doc-audit.sh && sh scripts/check-arch.sh; echo exit=$?`(无 Swift:lint/test 不适用;plan-audit 由 feat-done 终点跑,此刻 Task 6 框未满不提前跑)
 Expected: `exit=0`。
 
-- [ ] **Step 2: 用 `--prompt` 派第一个评审(dogfood)**
+- [x] **Step 2: 用 `--prompt` 派第一个评审(dogfood)**
 
 Run: `sh scripts/review.sh main-dev-loop-skill && sh scripts/review.sh main-dev-loop-skill --prompt`;把输出的事实占位填为 spec「背景与意图」段事实,用本工具的子代理工具派 `reviewer`;追加一条镜头:手册文本与 spec 目标 2(停顿阻塞)、目标 7(工具中立:无工具名)、反目标(无第二停顿/不假装强制)一致。
 
-- [ ] **Step 3: 记录原样落盘、单独提交**
+- [x] **Step 3: 记录原样落盘、单独提交**
 
 评审员返回全文 → 写入 `.reviews/main-dev-loop-skill.md`(不编辑一字)→ `git add .reviews/main-dev-loop-skill.md && git commit -m "review(main-dev-loop-skill): <Verdict> @ <Reviewed-Head>"`。
 
-- [ ] **Step 4: 回流(如有 P1/P2)**
+- [x] **Step 4: 回流(如有 P1/P2)**
 
 主对话修复 → 重跑 Step 1 → `sh scripts/review.sh main-dev-loop-skill --prompt --prev <上轮 Reviewed-Head>` 派增量复审 → 记录更新单独提交;≤3 轮。
 
-- [ ] **Step 5: 勾满 plan 后主检出 feat-done**
+- [x] **Step 5: 勾满 plan 后主检出 feat-done**
 
 Run(主检出): `cd /Users/aa00930/Documents/Learn/macos/NemoNotch && git feat-done main-dev-loop-skill`
 Expected: 评审门禁激活并通过,测试门禁「无 Swift 改动跳过」,`--no-ff` 合并,post-merge 钩子构建部署。
 
-- [ ] **Step 6: 合并后验证**
+- [x] **Step 6: 合并后验证**
 
 Run(主检出): `readlink .claude/skills && test -f .claude/skills/brainstorming/SKILL.md && echo "claude skills ✓"; ls .zcode/workflows 2>/dev/null | wc -l; git feat-list`
 Expected: `claude skills ✓`;workflows 目录为空或不存在;`git feat-list` 触发 freshness 发现 `.githooks/feat-done.sh` 源变更并自动重装(有重装提示)。Claude Code 侧由用户在本仓打开 `claude` 确认技能可见、`review.sh --prompt` 输出可粘给其子代理工具。
 
-- [ ] **Step 7: 汇报与度量**
+- [x] **Step 7: 汇报与度量**
 
 按手册收尾格式汇报(改前/改后、点哪里能看到),记本 feature 的 token/时长/停顿次数(1:plan 批准,另加本次两轮方案修订)/评审轮数作为新流程首个基线;会话记忆更新(仓库外,不在本 plan)。
