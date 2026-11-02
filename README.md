@@ -78,7 +78,8 @@ Request body:
   "title": "Download finished",
   "body": "nemo-1.2.3.dmg · 84 MB",
   "icon": "sf:arrow.down.circle",
-  "jumpBundleId": "com.me.mydownloader"
+  "jumpBundleId": "com.me.mydownloader",
+  "jumpURL": "mydownloader://downloads/42"
 }
 ```
 
@@ -91,6 +92,7 @@ Request body:
 | `body` | String? | | ≤ 280 chars |
 | `icon` | String? | | Only `sf:<SF Symbol name>` in v1; an unknown name falls back to the generic card icon, no error |
 | `jumpBundleId` | String? | | Clicking the card activates that app; absent = the click just closes the card. ≤ 255 chars |
+| `jumpURL` | String? | | Clicking the card opens this URL (deep link or web page) — it wins over `jumpBundleId`, which stays the fallback when the URL cannot be opened. Absolute URL with a scheme, never `file:`; ≤ 2048 chars; trimmed, and an empty or whitespace-only string is treated as absent; otherwise passed through verbatim (percent-encode it yourself) |
 
 Contract rules: unknown fields are ignored (forward compatible); a keyed re-push is the **whole card face** — omitting `body` clears it, there is no per-field merge; per-card duration is deliberately not in v1 (cards live as long as the internal ones). Responses: `200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`.
 

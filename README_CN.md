@@ -76,7 +76,8 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
   "title": "下载完成",
   "body": "nemo-1.2.3.dmg · 84 MB",
   "icon": "sf:arrow.down.circle",
-  "jumpBundleId": "com.me.mydownloader"
+  "jumpBundleId": "com.me.mydownloader",
+  "jumpURL": "mydownloader://downloads/42"
 }
 ```
 
@@ -89,6 +90,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 | `body` | String? | | ≤ 280 字符 |
 | `icon` | String? | | v1 仅 `sf:<SF Symbol 名>`；不存在的符号名回落通用卡片图标，不报错 |
 | `jumpBundleId` | String? | | 点击卡片激活该应用；缺失 = 点击只关卡。≤ 255 字符 |
+| `jumpURL` | String? | | 点击卡片打开该 URL（深链或网页）——优先于 `jumpBundleId`，URL 打不开时才回落到激活应用。必须是带 scheme 的绝对 URL，禁 `file:`；≤ 2048 字符；首尾空白会被剥掉，空串或纯空白视为未提供；其余原样透传（请自行百分号编码） |
 
 契约规则：未知字段忽略（前向兼容）；keyed 重推是**完整卡面**——缺 `body` 即清空正文，无逐字段合并；每卡自定义时长刻意不在 v1（与内部卡同样 5 分钟）。响应：`200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`。
 

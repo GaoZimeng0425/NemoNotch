@@ -26,11 +26,12 @@ struct ExternalCardServiceTests {
         title: String = "下载完成",
         body: String? = "84 MB",
         iconSymbol: String? = "arrow.down.circle",
-        jumpBundleId: String? = nil
+        jumpBundleId: String? = nil,
+        jumpURL: String? = nil
     ) -> ExternalToastPayload {
         ExternalToastPayload(
             schema: 1, app: app, key: key, title: title,
-            body: body, iconSymbol: iconSymbol, jumpBundleId: jumpBundleId
+            body: body, iconSymbol: iconSymbol, jumpBundleId: jumpBundleId, jumpURL: jumpURL
         )
     }
 
@@ -100,5 +101,21 @@ struct ExternalCardServiceTests {
 
         let bare = ExternalCardService.makeItem(payload: payload(jumpBundleId: nil))
         #expect(bare.jump == nil)
+    }
+
+    @Test("jumpURL maps to tabLink; alone it still yields a jump; with jumpBundleId both ride along")
+    func makeItemMapsJumpURL() {
+        let alone = ExternalCardService.makeItem(payload: payload(jumpURL: "pulse://alerts/1"))
+        #expect(alone.jump?.tabLink == "pulse://alerts/1")
+        #expect(alone.jump?.hostBundleId == nil)
+
+        let both = ExternalCardService.makeItem(payload: payload(
+            jumpBundleId: "com.me.pulse",
+            jumpURL: "pulse://alerts/1"
+        ))
+        #expect(both.jump?.tabLink == "pulse://alerts/1")
+        #expect(both.jump?.hostBundleId == "com.me.pulse")
+
+        #expect(ExternalCardService.makeItem(payload: payload()).jump == nil)
     }
 }

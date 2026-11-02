@@ -19,10 +19,14 @@ struct ExternalToastPayload: Equatable, Sendable {
     /// Parsed from `icon`: the SF Symbol name when `icon` is a valid `"sf:<name>"`, else nil.
     let iconSymbol: String?
     let jumpBundleId: String?
+    /// Optional click target: an absolute URL (deep link or web page) opened on click;
+    /// wins over `jumpBundleId`, which stays the fallback when the URL cannot be opened.
+    /// Already trimmed; empty/whitespace input is normalised to nil.
+    let jumpURL: String?
 }
 
 /// Validation failures for `/v1/toast` bodies. Order matters: malformed → schema →
-/// app presence → `::` separator → lengths → title → body → jumpBundleId.
+/// app presence → `::` separator → lengths → title → body → jumpBundleId → jumpURL.
 /// Icon degrades, never rejects.
 enum ExternalToastRejection: Error, Equatable, Sendable {
     case malformedJSON
@@ -35,6 +39,8 @@ enum ExternalToastRejection: Error, Equatable, Sendable {
     case titleTooLong
     case bodyTooLong
     case jumpBundleIdTooLong
+    case jumpURLInvalid
+    case jumpURLTooLong
 
     /// Short English sentence for logs and the HTTP error body.
     var localizedDescription: String {
@@ -49,6 +55,8 @@ enum ExternalToastRejection: Error, Equatable, Sendable {
         case .titleTooLong: "title exceeds 120 characters"
         case .bodyTooLong: "body exceeds 280 characters"
         case .jumpBundleIdTooLong: "jumpBundleId exceeds 255 characters"
+        case .jumpURLInvalid: "jumpURL must be an absolute URL with a scheme other than file"
+        case .jumpURLTooLong: "jumpURL exceeds 2048 characters"
         }
     }
 }
@@ -69,6 +77,7 @@ private struct RawExternalToast: Decodable {
     let body: String?
     let icon: String?
     let jumpBundleId: String?
+    let jumpURL: String?
 }
 
 extension ExternalToastPayload {
@@ -114,6 +123,22 @@ extension ExternalToastPayload {
             return .failure(.jumpBundleIdTooLong)
         }
 
+        // jumpURL: trimmed; empty = absent. Must be an absolute URL (scheme present) and
+        // never `file:` — a notification card must not open local files or scripts.
+        // Passed through verbatim otherwise (no semantic translation); callers percent-encode.
+        let trimmedJumpURL = raw.jumpURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let jumpURL = trimmedJumpURL, !jumpURL.isEmpty {
+            if jumpURL.count > 2048 {
+                return .failure(.jumpURLTooLong)
+            }
+            guard let url = URL(string: jumpURL),
+                  let scheme = url.scheme, !scheme.isEmpty,
+                  scheme.lowercased() != "file"
+            else {
+                return .failure(.jumpURLInvalid)
+            }
+        }
+
         return .success(ExternalToastPayload(
             schema: 1,
             app: app,
@@ -121,7 +146,8 @@ extension ExternalToastPayload {
             title: title,
             body: raw.body,
             iconSymbol: Self.symbolName(fromIcon: raw.icon),
-            jumpBundleId: raw.jumpBundleId
+            jumpBundleId: raw.jumpBundleId,
+            jumpURL: (trimmedJumpURL?.isEmpty == false) ? trimmedJumpURL : nil
         ))
     }
 

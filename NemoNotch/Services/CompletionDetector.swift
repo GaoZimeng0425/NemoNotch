@@ -222,7 +222,7 @@ enum CompletionFlashNames {
     /// key it replaces it — name included, since a session's folder or title
     /// can change between turns — but a nil rich field keeps the older value.
     /// External items are the exception for `jump`: they replace it whole,
-    /// so a keyed re-push without `jumpBundleId` clears the jump target.
+    /// so a keyed re-push without `jumpBundleId` / `jumpURL` clears the jump target.
     static func merge(existing: [CompletionItem], new: [CompletionItem]) -> [CompletionItem] {
         var result = existing
         for item in new {

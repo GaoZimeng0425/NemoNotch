@@ -22,7 +22,8 @@ struct ExternalToastPayloadTests {
             title: "下载完成",
             body: "nemo-1.2.3.dmg · 84 MB",
             iconSymbol: "arrow.down.circle",
-            jumpBundleId: "com.me.mydownloader"
+            jumpBundleId: "com.me.mydownloader",
+            jumpURL: nil
         )
         #expect(result == .success(expected))
     }
@@ -32,7 +33,7 @@ struct ExternalToastPayloadTests {
         let result = ExternalToastPayload.parse(json(#"{"schema":1,"app":"Demo","title":"Hi"}"#))
         let expected = ExternalToastPayload(
             schema: 1, app: "Demo", key: nil, title: "Hi",
-            body: nil, iconSymbol: nil, jumpBundleId: nil
+            body: nil, iconSymbol: nil, jumpBundleId: nil, jumpURL: nil
         )
         #expect(result == .success(expected))
     }
@@ -156,13 +157,13 @@ struct ExternalToastPayloadTests {
     func cardKeyIdentity() {
         let keyed = ExternalToastPayload(
             schema: 1, app: "MyApp", key: "dl-1", title: "t",
-            body: nil, iconSymbol: nil, jumpBundleId: nil
+            body: nil, iconSymbol: nil, jumpBundleId: nil, jumpURL: nil
         )
         #expect(keyed.cardKey() == "ext:MyApp::dl-1")
 
         let keyless = ExternalToastPayload(
             schema: 1, app: "MyApp", key: nil, title: "t",
-            body: nil, iconSymbol: nil, jumpBundleId: nil
+            body: nil, iconSymbol: nil, jumpBundleId: nil, jumpURL: nil
         )
         var calls = 0
         let makeUniqueID = { () -> String in
@@ -174,11 +175,48 @@ struct ExternalToastPayloadTests {
         #expect(keyless.cardKey(makeUniqueID: makeUniqueID) != keyless.cardKey(makeUniqueID: makeUniqueID))
     }
 
+    @Test("jumpURL: https and custom scheme accepted, trimmed")
+    func jumpURLAccepted() {
+        let r1 = ExternalToastPayload
+            .parse(json(#"{"schema":1,"app":"Pulse","title":"告警","jumpURL":"pulse://alerts/123"}"#))
+        #expect((try? r1.get())?.jumpURL == "pulse://alerts/123")
+        let r2 = ExternalToastPayload
+            .parse(json(#"{"schema":1,"app":"Pulse","title":"告警","jumpURL":"  https://example.com/x?y=1  "}"#))
+        #expect((try? r2.get())?.jumpURL == "https://example.com/x?y=1")
+    }
+
+    @Test("jumpURL: file scheme (any case), scheme-less and space-containing values are rejected")
+    func jumpURLRejected() {
+        for bad in ["file:///etc/hosts", "FILE:///x", "alerts/123", "pulse://a b"] {
+            let r = ExternalToastPayload
+                .parse(json("{\"schema\":1,\"app\":\"Pulse\",\"title\":\"告警\",\"jumpURL\":\"\(bad)\"}"))
+            #expect(r == .failure(.jumpURLInvalid), "\(bad)")
+        }
+    }
+
+    @Test("jumpURL over 2048 chars is rejected as jumpURLTooLong")
+    func jumpURLTooLong() {
+        let long = "https://e.com/" + String(repeating: "a", count: 2048)
+        let r = ExternalToastPayload
+            .parse(json("{\"schema\":1,\"app\":\"Pulse\",\"title\":\"告警\",\"jumpURL\":\"\(long)\"}"))
+        #expect(r == .failure(.jumpURLTooLong))
+    }
+
+    @Test("empty or whitespace jumpURL means absent")
+    func jumpURLEmptyIsNil() {
+        for empty in ["", "   "] {
+            let r = ExternalToastPayload
+                .parse(json("{\"schema\":1,\"app\":\"Pulse\",\"title\":\"告警\",\"jumpURL\":\"\(empty)\"}"))
+            #expect((try? r.get())?.jumpURL == nil, "[\(empty)]")
+        }
+    }
+
     @Test("every rejection has a non-empty localized description")
     func rejectionDescriptions() {
         let all: [ExternalToastRejection] = [
             .malformedJSON, .badSchemaVersion, .appInvalid, .appTooLong, .keyTooLong,
             .separatorInAppOrKey, .titleInvalid, .titleTooLong, .bodyTooLong, .jumpBundleIdTooLong,
+            .jumpURLInvalid, .jumpURLTooLong,
         ]
         for rejection in all {
             #expect(!rejection.localizedDescription.isEmpty)
