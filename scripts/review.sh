@@ -110,10 +110,12 @@ fi
 note="$wt/.reviews/$name.md"
 mkdir -p "$wt/.reviews"
 
-# 已填 Verdict 的记录(不论 APPROVED 还是 CHANGES_NEEDED)都是证据,不覆盖——自动
+# 已填 Verdict 的记录(APPROVED / CHANGES_NEEDED / 无法验证)都是证据,不覆盖——自动
 # 重生成只许作用于空白模板(feat-done 门禁会代跑本脚本;曾把填好的 CHANGES_NEEDED
 # 洗回空白模板,评审实测)。要重评先人工清掉 Verdict 行。
-if [ -f "$note" ] && grep -q '^Verdict:' "$note"; then
+# 只认**已填值**:模板自带的占位行 `Verdict: (填 …)` 也以 `Verdict:` 开头,裸 `^Verdict:`
+# 会把刚生成的空白模板误判成「已填」,重跑时报「不覆盖」而其实什么都没填(评审员 2026-11-02 实遇)。
+if [ -f "$note" ] && grep -Eq '^Verdict: *(APPROVED|CHANGES_NEEDED|无法验证)' "$note"; then
   echo "✅ .reviews/$name.md 已有已填 Verdict 的记录 — 不覆盖。要重评先人工清掉 Verdict 行。"
   exit 0
 fi

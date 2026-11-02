@@ -239,17 +239,48 @@ enum AppActivator {
         verifyFrontmost(pid: pid, name: name)
     }
 
-    /// 0.5s later, whether the app actually became frontmost — the system may
-    /// decline an activation requested from a background app, and "clicked
-    /// but nothing happened" reports were undiagnosable without it.
+    /// 0.5s later, whether the app actually became frontmost **and has a
+    /// normal window on screen** — the system may decline an activation
+    /// requested from a background app, and an app whose windows are all
+    /// closed activates with nothing to show (Mail 2026-11-02: 8 activations
+    /// logged as accepted, zero viewer windows). Either way reads as "clicked
+    /// but nothing happened"; the two warn lines below tell them apart.
     private static func verifyFrontmost(pid: pid_t, name: String) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let front = NSWorkspace.shared.frontmostApplication
-            guard front?.processIdentifier != pid else { return }
-            LogService.warn(
-                "Activation of \(name) did not take — frontmost is \(front?.bundleIdentifier ?? "none")",
-                category: "AppActivator"
-            )
+            let windows = onScreenWindowCount(pid: pid)
+            if front?.processIdentifier != pid {
+                LogService.warn(
+                    "Activation of \(name) did not take — frontmost is \(front?.bundleIdentifier ?? "none"); visibleWindows=\(windows)",
+                    category: "AppActivator"
+                )
+            } else if windows == 0 {
+                LogService.warn(
+                    "Activation of \(name) took but no window on screen (visibleWindows=0) — app may need a reopen",
+                    category: "AppActivator"
+                )
+            } else {
+                LogService.info("Activation of \(name) took; visibleWindows=\(windows)", category: "AppActivator")
+            }
         }
+    }
+
+    /// Normal-band (layer 0) on-screen windows of `pid`, sized like real
+    /// windows — a window-server query, no TCC needed for owner pid / layer /
+    /// bounds (only window titles would need Screen Recording; never read).
+    /// The size floor filters the 1pt/33px helper windows some apps keep in
+    /// the normal band (Mail reports several; none is user-visible).
+    private static func onScreenWindowCount(pid: pid_t) -> Int {
+        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID)
+            as? [[String: Any]] ?? []
+        return windows.filter {
+            guard ($0[kCGWindowOwnerPID as String] as? Int32) == pid,
+                  ($0[kCGWindowLayer as String] as? Int) == 0,
+                  let bounds = $0[kCGWindowBounds as String] as? [String: Any],
+                  let width = bounds["Width"] as? Double,
+                  let height = bounds["Height"] as? Double
+            else { return false }
+            return width >= 200 && height >= 150
+        }.count
     }
 }
