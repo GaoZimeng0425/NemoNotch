@@ -1,14 +1,14 @@
 # Plan: HookServer HTTP 完整性判定改纯字节级——两段式客户端不再 400、>64KB hook 事件不再截断
 
-- [ ] 0. 前置:根因确认状态与证据基线(只读,不改代码)
-- [ ] 1. 失败测试:`HookServerFramingTests` 七用例钉红(含 `private`→internal 测试缝)
-- [ ] 2. 修复:`hasCompleteHTTPRequest` 字节级重写(零字符语义)+ `processRequest` 体提取边界对应关系钉注释
-- [ ] 3. 旧口径清场:两处 `--max-time 中断` 归因注释改写为真死因
-- [ ] 4. guardrail-backlog 登记:分帧字节级不变量(NWProtocolHTTP 重构 / check-arch 候选 / 两段式验收探针)
-- [ ] 5. 守卫有牙:`scripts/mutate.sh` 验证新测试(让判定退化为恒真,套件必须红)
-- [ ] 6. 影响面测试 + lint 全绿
-- [ ] 7. 修后确认探针(梯级 5,真机重放双客户端分段探针)
-- [ ] 8. 独立评审 + feat-done 合并部署 + reflect
+- [x] 0. 前置:根因确认状态与证据基线(只读,不改代码)
+- [x] 1. 失败测试:`HookServerFramingTests` 七用例钉红(含 `private`→internal 测试缝)
+- [x] 2. 修复:`hasCompleteHTTPRequest` 字节级重写(零字符语义)+ `processRequest` 体提取边界对应关系钉注释
+- [x] 3. 旧口径清场:两处 `--max-time 中断` 归因注释改写为真死因
+- [x] 4. guardrail-backlog 登记:分帧字节级不变量(NWProtocolHTTP 重构 / check-arch 候选 / 两段式验收探针)
+- [x] 5. 守卫有牙:`scripts/mutate.sh` 验证新测试(让判定退化为恒真,套件必须红)
+- [x] 6. 影响面测试 + lint 全绿
+- [x] 7. 修后确认探针(梯级 5,真机重放双客户端分段探针)
+- [x] 8. 独立评审 + feat-done 合并部署 + reflect
 
 ## 0. 根因确认(首部声明)
 
