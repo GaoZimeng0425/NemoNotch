@@ -37,7 +37,7 @@
   2. 每 record 收集两类事实:**该文件定义的 USR 集**(occurrence roles 含 definition)+ **该文件引用的 USR 集** → 内存两张表 `defs[file]→USRs`、`refs[usr]→files`。
   3. BFS:changed 文件的定义 USR 为起点 → `refs` 反查文件 → 新文件入受影响集 → 其 `defs` 入 frontier → 至不动点(文件级 visited 防环)。
   4. **stdout**:受影响文件(仓库相对路径)每行一个;**exit 0**。
-- **健康语义**:任一 changed .swift 不在索引 record 集 / store 打不开 / 遍历中断 → **exit 3**(区别于"正常算完为空"),shell 侧见 3 即回落文本匹配。
+- **健康语义**:任一 changed .swift 不在索引 record 集 / store 打不开 / 遍历中断 / **索引零 NemoNotchTests 记录**(`xcodebuild build` 只编 app 目标不编测试——测试文件零记录时闭包结构性不可能含测试,静默全量是浪费且原因不诚实;须 build-for-testing 或跑过一次测试,跑一次受影响测试即自愈)→ **exit 3**(区别于"正常算完为空"),shell 侧见 3 即回落文本匹配。
 
 ### `affected-tests.sh` 接线(中段替换,两头不动)
 

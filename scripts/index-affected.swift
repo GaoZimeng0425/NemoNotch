@@ -444,6 +444,11 @@ case "closure":
     }
     let seeds = Array(args[4...])
     let index = scanIndex(repoRoot: repoRoot)
+    // 前置健康:索引零测试记录(xcodebuild build 不编测试目标;须 build-for-testing
+    // 或跑过一次测试)→ 闭包结构性不可能含测试,交给文本回落而不是静默全量。
+    if !index.filesWithRecord.contains(where: { $0.hasPrefix("NemoNotchTests/") }) {
+        unhealthy("索引无 NemoNotchTests 记录(测试目标未构建过——跑一次测试或 build-for-testing)")
+    }
     guard let affected = closure(seeds: seeds, index: index) else { exit(3) }
     for line in affected.sorted() {
         print(line)
