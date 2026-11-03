@@ -1,12 +1,19 @@
 #!/bin/sh
 # affected-tests.sh — 确定性影响面测试选择(「能硬化的都硬化」)。
-# 背景:--only 的类名曾由 agent 挑选,出过选错类的假绿;ripwire --affected 对
-# Swift Testing 的宏风格测试解析不了(实测 tests=0),故自建映射,零判断:
-#   改动的生产 .swift → 顶层符号(class/struct/enum/protocol/extension/func/typealias)
-#   → NemoNotchTests/ 中引用了任一符号的测试文件(文件名即类名)
-#   + 改动的测试文件自身
-#   → test.sh --only <逗号列表>
-# 映射为空 → 回落全量(宁多跑,不漏跑)。同名符号误吸只会多跑,方向安全。
+# 两级选择器(2026-11-03):
+#   一级(优先)编译器索引闭包:scripts/index-affected.swift(libIndexStore,
+#     读本 worktree DerivedData 的 Index.noindex/DataStore)对改动文件求传递
+#     引用闭包(a 引 b、b 引 c → c b a 全选),闭包 ∩ NemoNotchTests/*Tests.swift
+#     → 类名(文件名即类名的约定不变,只对 *Tests.swift 认)。
+#   二级(回落)文本符号匹配(原实现整段保留):无索引/新文件未构建/dylib 缺失/
+#     CLI 异常时兜底;fresh worktree 未构建过天然走二级。
+# 共同出口:类列表 → test.sh --only;映射为空 → 全量(宁多跑不漏跑;健康闭包
+#   为空也全量——v1 不信空)。旧索引/同名误吸只会多选,方向安全。
+# 新鲜度:索引 = 最近一次构建的快照;「改完未构建就跑」窗口内按旧图选(旧名
+#   引用者仍被选出,偏安全),随后的 xcodebuild 会顺带刷新索引。
+# 原二级的背景:--only 类名曾由 agent 挑选出过选错类假绿;ripwire --affected 对
+# Swift Testing 宏测试解析不了(tests=0 实测),故自建确定性映射,零判断:
+#   改动的生产 .swift → 顶层符号 → 引用任一符号的测试文件 + 改动的测试文件自身
 #
 # Usage:
 #   sh scripts/affected-tests.sh                    # 在 feature worktree 里,base=develop
@@ -41,6 +48,61 @@ fi
 if [ -z "$changed_prod" ] && [ -z "$changed_tests" ]; then
   echo "affected: 无 Swift 改动 — 无需跑测试"
   exit 0
+fi
+
+# ── 一级:编译器索引闭包(libIndexStore)─────────────────────────────
+# 定位:info.plist 的 WorkspacePath 与 $root/NemoNotch.xcodeproj 绝对路径全等
+# (本机常驻多个 NemoNotch-<hash> DerivedData,已合并 worktree 的化石目录不许误匹配)。
+# 失败语义:任何不健康(无索引/swift 缺失/CLI 非零)→ 走二级文本回落;
+# 健康且闭包∩测试为空 → 全量(v1 不信空)。原因经 stderr 回传(函数在子壳里跑)。
+locate_datastore() {
+  proj="$root/NemoNotch.xcodeproj"
+  for d in "$HOME/Library/Developer/Xcode/DerivedData"/NemoNotch-*/; do
+    [ -f "$d/info.plist" ] || continue
+    if [ "$(plutil -extract WorkspacePath raw "$d/info.plist" 2>/dev/null)" = "$proj" ] \
+       && [ -d "$d/Index.noindex/DataStore" ]; then
+      echo "$d/Index.noindex/DataStore"
+      return 0
+    fi
+  done
+  return 1
+}
+
+index_closure_classes() {  # stdout: 逗号类名(可为空);exit 0 = 索引健康
+  ds=$(locate_datastore) || { echo "无本 worktree 的 DerivedData 索引(未构建过?)" >&2; return 1; }
+  command -v swift >/dev/null 2>&1 || { echo "swift 不在 PATH" >&2; return 1; }
+  # shellcheck disable=SC2086
+  closure_out=$(swift "$root/scripts/index-affected.swift" closure "$ds" "$root" $changed_prod 2>/dev/null) \
+    || { echo "CLI exit 非零(索引不健康/新文件未构建/dylib 缺失)" >&2; return 1; }
+  cls=""
+  for f in $closure_out; do
+    case "$f" in
+      NemoNotchTests/*Tests.swift) cls="$cls $(basename "$f" .swift)" ;;
+    esac
+  done
+  echo "闭包 $(printf '%s\n' "$closure_out" | grep -c .) 文件,命中测试 $(echo $cls | wc -w | tr -d ' ') 类" >&2
+  echo $cls | tr ' ' '\n' | sed '/^$/d' | paste -sd, -
+}
+
+if [ -n "$changed_prod" ]; then
+  reason_file=$(mktemp /tmp/affected-reason.XXXXXX)
+  if classes=$(index_closure_classes 2>"$reason_file"); then
+    note=$(cat "$reason_file")
+    rm -f "$reason_file"
+    # shellcheck disable=SC2086
+    for t in $changed_tests; do
+      [ -f "$t" ] && classes="$classes,$(basename "$t" .swift)"
+    done
+    classes=$(echo "$classes" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd, -)
+    echo "affected: 改动 $(echo $changed_prod $changed_tests | wc -w | tr -d ' ') 个 Swift 文件;选择器=索引闭包($note)"
+    if [ -z "$classes" ]; then
+      echo "affected: 闭包与测试交集为空 → 回落全量(v1 不信空,宁多跑不漏跑)"
+      exec sh scripts/test.sh
+    fi
+    echo "affected: 选出测试类: $classes"
+    exec sh scripts/test.sh --only "$classes"
+  fi
+  echo "affected: 选择器=文本回落($(cat "$reason_file"; rm -f "$reason_file"))"
 fi
 
 # 符号抽取分两级:类型符号(class/struct/enum/protocol/extension/actor/typealias)
