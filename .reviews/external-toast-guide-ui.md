@@ -2,8 +2,9 @@
 
 Reviewer: ZCode 独立评审子代理(未参与开发;judge ≠ author)
 Date: 2026-11-03
-Reviewed-Head: b6d075b
+Reviewed-Head: 358976b
 Verdict: APPROVED
+(358976b 纯 plan 勾选,代码与 b6d075b 逐字节一致)
 Scope:  10 files changed, 379 insertions(+), 2 deletions(-)
 
 ```
@@ -118,3 +119,7 @@ implementer 声明的 affected-tests 8/0 未由本评审复跑(四道门禁 + �
 ## 判决
 
 **APPROVED**。P2 修复正确且完整(同提交、双语两工件逐字一致、措辞与实现/README 对齐、验收项与锚点断言到位);四道门禁 + 目标测试亲跑全绿;常量-文档一致性保持。唯一残留是修复自身引入的一行注释示例失准(P3,默认不修),不构成背书障碍。
+
+### Reviewed-Head 刷新记录(358976b,2026-11-03)
+
+b6d075b 之上两个纯文档提交:facfc1d(本评审记录入库)、358976b(plan 9 个 checkbox 勾选,`git show 358976b --stat` 仅 plan 文件 9 行)。代码零变更实证:`git diff b6d075b..358976b -- NemoNotch/ NemoNotchTests/ scripts/ .githooks/` 输出 0 行。判决维持 APPROVED,Reviewed-Head 更新为 358976b。
