@@ -83,7 +83,12 @@ enum SessionPhase: Equatable {
              (.waitingForApproval, .ended):
             return true
         case (.compacting, .processing),
-             (.compacting, .ended):
+             (.compacting, .ended),
+             // compacting 也能直接落回每个静止态:PreCompact 后直接 Stop /
+             // 审批 / 静默降级都不许被拒——否则徽章空转 30min 且完成卡永不弹。
+             (.compacting, .waitingForInput),
+             (.compacting, .waitingForApproval),
+             (.compacting, .idle):
             return true
         case (.ended, _):
             return false
@@ -285,5 +290,36 @@ enum AskAnswer {
             answers[question.text] = labels.joined(separator: ", ")
         }
         return answers
+    }
+}
+
+/// One decision, four providers: may the 5-minute silent sweep demote this
+/// session to idle? The exemptions are the false-positive guards —
+/// - an open tool call means the CLI is still executing (builds, test runs,
+///   subagents regularly run past 5 min with zero hook events; demoting
+///   there announced false completions — 2026-11-01 zcode probe), and the
+///   session is left to the 30-min reaper instead;
+/// - a waiting approval is moved by its own bridge timeout (Claude 120s /
+///   opencode 600s), so the sweep has nothing to clean there;
+/// - a record-backed session (Claude) is corrected by its record's status.
+/// Spec: 2026-11-03-reminder-kind-tone-design.md 捎带修复 3/4 + 审计口径 1.
+enum StaleDemotion {
+    static func shouldDemote(
+        phase: SessionPhase,
+        isPreToolUse: Bool,
+        recordStatusKnown: Bool = false
+    ) -> Bool {
+        if isPreToolUse {
+            return false
+        }
+        if recordStatusKnown {
+            return false
+        }
+        switch phase {
+        case .idle, .ended, .waitingForApproval:
+            return false
+        case .processing, .compacting, .waitingForInput:
+            return true
+        }
     }
 }

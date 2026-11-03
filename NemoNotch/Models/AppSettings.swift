@@ -106,6 +106,24 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(notificationToastApps, forKey: Self.notificationToastAppsKey) }
     }
 
+    // MARK: - Reminder tones(需要你决定 / 出事了)
+
+    static let attentionToastEnabledKey = "attentionToastEnabled"
+    static let failureToastEnabledKey = "failureToastEnabled"
+
+    /// Amber/blue cards — AskUserQuestion, plan review, tool approvals.
+    /// Default on: this is what the old misfiring completion flash was
+    /// (accidentally) already telling the user, minus the lie.
+    var attentionToastEnabled: Bool {
+        didSet { UserDefaults.standard.set(attentionToastEnabled, forKey: Self.attentionToastEnabledKey) }
+    }
+
+    /// Red cards — agent error / API error / session lost. Default on:
+    /// "come rescue" is the one signal that must not be silent.
+    var failureToastEnabled: Bool {
+        didSet { UserDefaults.standard.set(failureToastEnabled, forKey: Self.failureToastEnabledKey) }
+    }
+
     // MARK: - External app toast API (POST /v1/toast)
 
     static let externalToastEnabledKey = "externalToastEnabled"
@@ -246,6 +264,10 @@ final class AppSettings {
             .object(forKey: Self.completionFlashEnabledKey) as? Bool ?? true
         notificationToastEnabled = UserDefaults.standard
             .object(forKey: Self.notificationToastEnabledKey) as? Bool ?? false
+        attentionToastEnabled = UserDefaults.standard
+            .object(forKey: Self.attentionToastEnabledKey) as? Bool ?? true
+        failureToastEnabled = UserDefaults.standard
+            .object(forKey: Self.failureToastEnabledKey) as? Bool ?? true
         externalToastEnabled = UserDefaults.standard
             .object(forKey: Self.externalToastEnabledKey) as? Bool ?? true
         notificationToastApps = UserDefaults.standard

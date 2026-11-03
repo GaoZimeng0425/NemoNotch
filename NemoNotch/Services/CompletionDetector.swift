@@ -51,6 +51,13 @@ struct CompletionItem: Equatable {
     var calendar: CalendarCard?
     /// Whole card face for an external-app push (`.external` source only).
     var external: ExternalCardContent?
+    /// What happened in the lifecycle — drives the card's wording, ring and
+    /// glow color. nil keeps the legacy multi-color ring for sources with no
+    /// lifecycle (calendar / notification / external).
+    var kind: ReminderKind?
+    /// Attention cards never expire on their own: they leave with the wait
+    /// they announced (answered / bridge timeout / answered in terminal).
+    var sticky: Bool
 
     /// Convenience for callers that only have name + source (multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -67,6 +74,8 @@ struct CompletionItem: Equatable {
         notice = nil
         calendar = nil
         external = nil
+        kind = nil
+        sticky = false
     }
 
     init(
@@ -93,6 +102,8 @@ struct CompletionItem: Equatable {
         notice = nil
         calendar = nil
         external = nil
+        kind = nil
+        sticky = false
     }
 }
 
@@ -117,6 +128,15 @@ struct CompletionCandidate: Equatable {
     /// Where a click on the card jumps (AI sessions only), snapshotted at
     /// completion so it still works after the session itself is reaped.
     var jump: CompletionJump?
+    /// The attention kind while parked on the user (a waiting-for-approval
+    /// snapshot); nil otherwise. Feeds `AttentionDetector`.
+    var attentionKind: ReminderKind?
+    /// What a completion of this unit reports — turnDone by default; the
+    /// snapshot labels a Stop-less demote/reap `sessionLost`.
+    var completesAs: ReminderKind
+    /// True while a multi-agent's state is `.error`: a completion that
+    /// follows an error reports `agentError`, not a green turnDone.
+    var wasError: Bool
 
     /// Convenience for callers that only have the identity fields.
     init(key: String, name: String, isActive: Bool, source: CompletionSource) {
@@ -131,6 +151,9 @@ struct CompletionCandidate: Equatable {
         duration = nil
         path = nil
         jump = nil
+        attentionKind = nil
+        completesAs = .turnDone
+        wasError = false
     }
 
     init(
@@ -157,40 +180,108 @@ struct CompletionCandidate: Equatable {
         self.duration = duration
         self.path = path
         self.jump = jump
+        attentionKind = nil
+        completesAs = .turnDone
+        wasError = false
     }
 }
 
-/// Detects active→idle transitions by diffing successive snapshots.
-/// Pure value type — no actor isolation, no UI. The first `step` only
-/// records a baseline, so units already active at startup never false-fire.
+/// Detects active→idle transitions by diffing successive snapshots, and the
+/// vanishings of units that were still working (no Stop ever came →
+/// `sessionLost`). Pure value type — no actor isolation, no UI. The first
+/// `step` only records a baseline, so units already active at startup never
+/// false-fire.
 struct CompletionDetector {
-    private var prior: [String: Bool] = [:]
+    /// What the detector remembers about one unit between snapshots.
+    private struct PriorState {
+        var active: Bool
+        var error: Bool
+        /// Identity for a disappearance card: the unit is gone, so the card
+        /// can only speak in the skeleton it last showed.
+        var skeleton: CompletionItem
+    }
 
-    /// Returns the units that went active→idle since the last call.
-    /// A unit that disappears (e.g. session removed) is dropped, not reported.
+    private var prior: [String: PriorState] = [:]
+
+    /// Returns the units that went active→idle since the last call, and the
+    /// units that vanished while still active (`sessionLost`). A unit that
+    /// was already idle and then disappears is dropped, not reported.
     mutating func step(_ candidates: [CompletionCandidate]) -> [CompletionItem] {
         var completed: [CompletionItem] = []
-        var next: [String: Bool] = [:]
+        var next: [String: PriorState] = [:]
         for candidate in candidates {
-            next[candidate.key] = candidate.isActive
-            if prior[candidate.key] == true, !candidate.isActive {
-                var item = CompletionItem(
-                    name: candidate.name,
-                    source: candidate.source,
-                    subtitle: candidate.subtitle,
-                    tool: candidate.tool,
-                    model: candidate.model,
-                    tokenDisplay: candidate.tokenDisplay,
-                    duration: candidate.duration,
-                    path: candidate.path,
-                    jump: candidate.jump
-                )
-                item.key = candidate.key
-                completed.append(item)
+            next[candidate.key] = PriorState(
+                active: candidate.isActive,
+                error: candidate.wasError,
+                skeleton: Self.skeleton(of: candidate)
+            )
+            guard let before = prior[candidate.key], before.active, !candidate.isActive else {
+                continue
             }
+            var item = Self.skeleton(of: candidate)
+            // An agent that sat in `.error` before going quiet reports a
+            // failure, not a green "done".
+            item.kind = before.error ? .agentError : candidate.completesAs
+            completed.append(item)
+        }
+        // Vanished while still working: report `sessionLost` in the last
+        // skeleton. Sorted by key so the batch order is deterministic.
+        for key in prior.keys.filter({ next[$0] == nil }).sorted()
+            where prior[key]!.active {
+            var lost = prior[key]!.skeleton
+            lost.key = key
+            lost.kind = .sessionLost
+            completed.append(lost)
         }
         prior = next
         return completed
+    }
+
+    /// The identity fields a card can show without the unit being around
+    /// anymore: everything else left with the unit.
+    private static func skeleton(of candidate: CompletionCandidate) -> CompletionItem {
+        var item = CompletionItem(
+            name: candidate.name,
+            source: candidate.source,
+            subtitle: candidate.subtitle,
+            tool: candidate.tool,
+            model: candidate.model,
+            tokenDisplay: candidate.tokenDisplay,
+            duration: candidate.duration,
+            path: candidate.path,
+            jump: candidate.jump
+        )
+        item.key = candidate.key
+        return item
+    }
+}
+
+/// Detects entries into and exits from "parked on the user"
+/// (waiting-for-approval). An arrival fires once per wait — an approval
+/// context changing must not replay the arrival gesture, the same
+/// coarseness `RingKind` uses for the edge bar ring — and the wait ends by
+/// the phase leaving OR the unit vanishing, both reported as a retraction.
+/// Pure value type; the service turns arrivals/retractions into cards.
+struct AttentionDetector {
+    typealias Entry = (key: String, attention: ReminderKind?)
+
+    private var waiting: [String: ReminderKind] = [:]
+
+    mutating func step(_ entries: [Entry]) -> (arrived: [(key: String, kind: ReminderKind)], retracted: [String]) {
+        var next: [String: ReminderKind] = [:]
+        var arrived: [(key: String, kind: ReminderKind)] = []
+        for entry in entries {
+            guard let kind = entry.attention else { continue }
+            if waiting[entry.key] == nil {
+                arrived.append((entry.key, kind))
+            }
+            next[entry.key] = kind
+        }
+        // A wait ends by attention clearing OR the unit vanishing — both
+        // leave the key absent from `next`. Sorted for determinism.
+        let retracted = waiting.keys.filter { next[$0] == nil }.sorted()
+        waiting = next
+        return (arrived, retracted)
     }
 }
 
@@ -199,6 +290,17 @@ extension CompletionItem {
     /// known, else the name (session-less sources such as calendar).
     var toastKey: String {
         key ?? "name:\(name)"
+    }
+
+    /// The session id inside an `ai:` / `ask:` / `fail:` key — the three card
+    /// identities one session can hold. nil for agent / calendar / external
+    /// keys: a failure card must only ever displace its OWN session's cards.
+    var sessionKey: String? {
+        guard let key else { return nil }
+        for prefix in ["ai:", "ask:", "fail:"] where key.hasPrefix(prefix) {
+            return String(key.dropFirst(prefix.count))
+        }
+        return nil
     }
 }
 
@@ -246,5 +348,55 @@ enum CompletionFlashNames {
             }
         }
         return result
+    }
+}
+
+/// Pure snapshot builder: store sessions and registry agents into detector
+/// candidates. Extracted from `CompletionFlashService.currentCandidates` so
+/// the misfire regression — "parked on the user is NOT a completion", twice
+/// a live incident (2026-11-02: green flash on every PermissionRequest) —
+/// has a testable seam.
+enum ReminderSnapshot {
+    static func aiCandidate(_ session: AISessionState, now: Date = Date()) -> CompletionCandidate {
+        var candidate = CompletionCandidate(
+            key: "ai:\(session.id)",
+            name: session.projectFolder ?? session.displayTitle,
+            // Active == the CLI is mid-conversation (processing / compacting
+            // / waiting for an approval) — `SessionPhase.isActive`. A session
+            // parked at its prompt is NOT active: the turn is over.
+            isActive: session.phase.isActive,
+            source: .ai(session.source),
+            subtitle: session.lastUserMessage ?? session.displayTitle,
+            tool: session.currentTool,
+            model: session.displayModel,
+            tokenDisplay: session.tokenDisplay,
+            duration: now.timeIntervalSince(session.sessionStart),
+            path: session.cwd,
+            jump: CompletionJump.make(
+                hostPID: session.launchingAppPID,
+                hostBundleId: session.launchingAppBundleId,
+                tabLink: session.tabLinkURL
+            )
+        )
+        candidate.attentionKind = session.attentionKind
+        // A Stop reports turnDone (apiError when the transcript's last
+        // assistant entry is a terminal API error); anything else that
+        // deactivates a session — demote, reap, record-gone — never saw a
+        // Stop, so it reports sessionLost.
+        candidate.completesAs = session.phase == .waitingForInput
+            ? (session.hitApiError ? .apiError : .turnDone)
+            : .sessionLost
+        return candidate
+    }
+
+    static func agentCandidate(id: String, name: String, state: AgentMonitorState) -> CompletionCandidate {
+        var candidate = CompletionCandidate(
+            key: "agent:\(id)",
+            name: name,
+            isActive: state != .idle,
+            source: .agent
+        )
+        candidate.wasError = state == .error
+        return candidate
     }
 }

@@ -20,6 +20,9 @@ enum SettingsSearchIndex {
         .alerts: (
             keys: [
                 "settings.nav.alerts", "settings.completion_flash.header", "settings.completion_flash.enabled",
+                "settings.completion_flash.hint",
+                "settings.attention_toast.header", "settings.attention_toast.enabled", "settings.attention_toast.hint",
+                "settings.failure_toast.header", "settings.failure_toast.enabled",
                 "settings.external_toast.header", "settings.external_toast.enabled", "settings.external_toast.hint",
                 "settings.external_toast.guide.header", "settings.external_toast.guide.copy",
                 "settings.external_toast.guide.copied",

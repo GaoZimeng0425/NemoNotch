@@ -177,15 +177,12 @@ final class OpencodeProvider: AIProvider {
         let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
 
         for session in store.sessions(for: .opencode) where session.lastEventTime < demoteCutoff {
-            // Demote ANY active phase, not just .waitingForInput — an aborted or
-            // Stop-missed session stuck in .processing would otherwise spin for
-            // up to 30 min (removeStaleThreshold).
-            if case .idle = session.phase {
-                continue
-            }
-            if case .ended = session.phase {
-                continue
-            }
+            // Exemptions (open tool calls, waiting approvals) live in
+            // `StaleDemotion` — the shared false-positive guard.
+            guard StaleDemotion.shouldDemote(
+                phase: session.phase,
+                isPreToolUse: session.isPreToolUse
+            ) else { continue }
             store.mutate(session.id) { s in
                 s.phase = s.phase.transition(to: .idle)
                 s.currentTool = nil

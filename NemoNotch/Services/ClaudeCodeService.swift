@@ -217,6 +217,9 @@ final class ClaudeProvider: AIProvider {
                 if let model = result.lastModel {
                     session.model = model
                 }
+                if let apiError = result.lastAssistantApiError {
+                    session.hitApiError = apiError
+                }
                 if let branch = result.lastGitBranch {
                     session.gitBranch = branch
                 }
@@ -506,6 +509,9 @@ final class ClaudeProvider: AIProvider {
                 if let model = result.lastModel {
                     session.model = model
                 }
+                if let apiError = result.lastAssistantApiError {
+                    session.hitApiError = apiError
+                }
                 if let branch = result.lastGitBranch {
                     session.gitBranch = branch
                 }
@@ -559,16 +565,12 @@ final class ClaudeProvider: AIProvider {
         // A record-backed session lives as long as its process; its record's
         // status (`applyRecords`) is what corrects a stale phase.
         for session in store.sessions(for: .claude)
-            where session.lastEventTime < demoteCutoff && !session.recordStatusKnown {
-            // Demote ANY active phase, not just .waitingForInput — an aborted or
-            // Stop-missed session stuck in .processing would otherwise spin for
-            // up to 30 min (removeStaleThreshold).
-            if case .idle = session.phase {
-                continue
-            }
-            if case .ended = session.phase {
-                continue
-            }
+            where session.lastEventTime < demoteCutoff {
+            guard StaleDemotion.shouldDemote(
+                phase: session.phase,
+                isPreToolUse: session.isPreToolUse,
+                recordStatusKnown: session.recordStatusKnown
+            ) else { continue }
             store.mutate(session.id) { s in
                 s.phase = s.phase.transition(to: .idle)
                 s.currentTool = nil

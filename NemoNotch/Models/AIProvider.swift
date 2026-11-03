@@ -50,6 +50,11 @@ struct AISessionState: Identifiable {
     var lastMessage: String?
     var lastEventName: String?
     var isPreToolUse = false
+    /// The turn's latest main-line assistant entry was a terminal API error
+    /// (rate limit / stream death): a Stop while this is true reports
+    /// `apiError` instead of a green turnDone. A retry that succeeds clears
+    /// it; `beginTurn()` resets it.
+    var hitApiError = false
     var sessionStart: Date
     var lastEventTime: Date
     var firstUserMessage: String?
@@ -274,11 +279,20 @@ enum ClaudeStatus: Equatable {
 }
 
 extension AISessionState {
+    /// The reminder kind while the session is parked on the user; nil
+    /// otherwise. The approval context's tool name picks the flavor
+    /// (question / plan review / permission click).
+    var attentionKind: ReminderKind? {
+        guard case let .waitingForApproval(ctx) = phase else { return nil }
+        return ReminderKind.attentionKind(forToolName: ctx.toolName)
+    }
+
     /// A new prompt starts a turn: its tools are counted afresh.
     mutating func beginTurn() {
         turnToolCount = 0
         lastToolName = nil
         lastToolSubject = nil
+        hitApiError = false
     }
 
     /// A `PreToolUse`: the turn's newest tool, and one more counted.

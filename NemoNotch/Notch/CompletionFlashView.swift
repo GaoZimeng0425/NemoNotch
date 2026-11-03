@@ -31,26 +31,33 @@ struct CompletionFlashView: View {
     }
 
     private var glow: some View {
-        ZStack {
+        // The tone's main/hot pair replaces the fixed accent pair: the same
+        // neon stack (bloom → halo → hot rim → white core), now speaking
+        // "why you're needed" (green back / amber decide / blue allow / red
+        // rescue). Same window, property change only — no rebuild, so the
+        // 具文窗口 trap (invisible windows losing their surface) can't bite.
+        let main = service.glowTone.main
+        let hot = service.glowTone.hot
+        return ZStack {
             // Wide ambient bloom — the glow spilling softly inward from the edge.
             edge(
                 width: NotchConstants.completionGlowWidth,
                 blur: NotchConstants.completionGlowBlur,
-                color: NotchTheme.accent,
+                color: main,
                 opacity: 0.5
             )
             // Mid halo — tighter and brighter, saturates the rim.
             edge(
                 width: NotchConstants.completionGlowWidth * 0.5,
                 blur: NotchConstants.completionGlowBlur * 0.6,
-                color: NotchTheme.accent,
+                color: main,
                 opacity: 0.85
             )
-            // Inner rim — hotter orange hugging the very edge.
+            // Inner rim — the tone's hot color hugging the very edge.
             edge(
                 width: NotchConstants.completionGlowEdgeWidth * 2,
                 blur: NotchConstants.completionGlowEdgeWidth,
-                color: NotchTheme.accentHot,
+                color: hot,
                 opacity: 0.95
             )
             // Hot core — thin near-white line, lightly blurred so it glows

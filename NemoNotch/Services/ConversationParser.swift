@@ -16,6 +16,12 @@ enum ConversationParser: ConversationParserProtocol {
         var newOffset: UInt64
         var interrupted: Bool
         var cleared: Bool
+        /// Whether the increment's LATEST main-line assistant entry is a
+        /// terminal API error — nil when the increment had no main-line
+        /// assistant entries (session keeps its previous state). "Latest
+        /// wins" so a retry that succeeds clears the error: the flag means
+        /// "the turn ended on an error", not "an error happened once".
+        var lastAssistantApiError: Bool?
 
         var conversation: ParsedConversation {
             ParsedConversation(
@@ -70,7 +76,8 @@ enum ConversationParser: ConversationParserProtocol {
             lastModel: nil,
             newOffset: fromOffset,
             interrupted: false,
-            cleared: false
+            cleared: false,
+            lastAssistantApiError: nil
         )
 
         guard let fileHandle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: filePath)) else {
@@ -131,6 +138,11 @@ enum ConversationParser: ConversationParserProtocol {
 
         if json["type"] as? String == "assistant",
            let message = json["message"] as? [String: Any] {
+            // The latest main-line assistant entry owns the api-error state
+            // (sidechain/subagent errors must not mark the parent turn).
+            if json["isSidechain"] as? Bool != true {
+                result.lastAssistantApiError = ApiErrorMarker.isApiError(json)
+            }
             // A sub-agent's call (older builds wrote them into the main log as
             // `isSidechain`) and Claude Code's own `<synthetic>` notes count
             // toward the totals but are not the session's model calls: they
