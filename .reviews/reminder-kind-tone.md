@@ -61,3 +61,42 @@ docs/superpowers/specs/2026-11-03-reminder-kind-tone-design.md
 
 - **测试文件写完忘了 add,plan 勾框照勾**:plan-audit 只核勾框不核工件入库。可门禁化——feat-done 探针加一条:worktree 存在 untracked 的 `*.swift` 时响亮警告(位置:本分支实案 NemoNotchTests/AppSettingsReminderToneTests.swift)。
 - **队列「移除+递补」原语要一次成型**:demote 先移除行上卡、refill 递补、再扫等待堆的两段式,让恰好递补进行的卡躲过匹配(见 P3)。判据:任何「按谓词移除 + refill」的组合,移除判定必须覆盖 refill 可能引入的卡(CompletionToastQueue.demote)。
+
+## 增量复审(第 2 轮)
+
+Reviewer: ZCode 独立评审会话(增量复审,未参与开发)
+Date: 2026-11-03
+Reviewed-Head: 67e355e
+Verdict: APPROVED
+Scope: fb3d90f...67e355e — 4 commits(564f747 / 1052c09 / 85409d1 / 67e355e),8 files changed, +148/−22
+
+### 上轮 Findings 处置核对
+
+- **P1(漏交测试)→ 已解决**:564f747 补交 `NemoNotchTests/AppSettingsReminderToneTests.swift` 入库(git show 亲验,new file 45 行,4 用例:两开关各默认开 + 关掉持久化,UserDefaults 键有保存/恢复与 `removeObject` 清场,`@Suite(.serialized)` 防串扰)。affected-tests 选择列表含该类,269 用例全绿。
+- **P2(日历辉光漂移)→ 已解决(修法 b 拍板)**:1052c09 在 AGENTS.md 四色条目补「日历/蓝牙批次辉光随 green(到点=该行动了,最接近『回来看』档;旧 accent 橙弃用,拍板 2026-11-03 评审口径 6)」+ spec 审计口径第 6 条;代码 handle 的 `$0.kind?.tone ?? .green` 与文档口径一致(亲读 CompletionFlashService.swift:352-357)。代码、spec、手册三者同一提交,符合 doc-audit 强迫同行原则。
+- **P2(T10 未完)→ 已解决**:67e355e 勾 Step 2/3。门禁本轮亲跑(见下);真机四色截图存在 `/private/tmp/nn-{green,amber,blue,red}.png`(2026-11-03 17:17),抽查判读 2/4 张:nn-green.png 场景 = 多张绿环「完成了」卡 + 顶部琥珀橙辉光同屏(两 CLI 会话一完成一提问,恰为 85409d1「attention 到达也闪辉光」的真机实证);nn-amber.png 因 CDN 判读通道 400 未读成,blue/red 未抽查——四色判读以作者声明为主、抽查 2/4 相符(梯级:抽查=5、未抽 2 张=1)。
+- **P3(注释旧口径)→ 已解决**:1052c09 头注释改为「active→inactive edges (each completion carries its ReminderKind — done, or lost) and for arrivals into "parked on the user"」,与现行为一致。
+- **P3(搜索索引)→ 已解决(断言豁免合理)**:1052c09 补 6 条 key(completion_flash.hint / attention_toast.header·enabled·hint / failure_toast.header·enabled),逐一在 Localizable.xcstrings 命中(grep 计数各 1);上轮建议的「SettingsSearchTests 补断言」未做——亲读该测试为纯匹配语义固定语料(不锁任何页的 key 清单,无断言位可锁),stringsByPage 语言解析已有判别断言,不补合理。
+- **P3(demote 两段式)→ 修复落地、守卫无牙(降级本轮新 P3,见下)**:1052c09 改为先 `toasts`+`waiting` 总移除、后 `refill`(带注释引用 review round-1 P3);行为正确性亲验——`refill` 用 `waiting.popLast()` 递补,旧顺序确实会让恰被递补的匹配卡躲过 demote,新顺序消除该窗口。
+
+### 85409d1(attention 辉光)重点核对
+
+spec 63/65/85 行确证「三处视觉同一语义」「amber 环卡 + amber 辉光」是既有要求——第 1 轮评审与实现确都漏了,85409d1 方向正确。`flashIfNeeded` 重构对 handle 原语义三项均保留(亲读 :341-365):(1) **节流**——`guard !inCooldown` 只出卡 + debug log,与旧 mid-window 分支等价;(2) **开关门禁**——`toneAllowed` 过滤仍在发射处,attention 路径 `where settings.attentionToastEnabled` 与出卡同闸,开关关时既不闪也不出卡;(3) **同批仲裁**——`pick(enabled.map…)` 仍在已过滤批次上。移除 `?? .green` 无行为差异:`guard !enabled.isEmpty` 早退在前,`pick`(`tones.max`)对非空数组必非 nil,空批次不可达闪辉光分支。新仲裁面(同拍 attention 先于完成处理、attention 闪后 2s 内的完成只出卡)与注释「being blocked on the user outranks being done」及 spec 口径 5 节流语义一致。ask 卡 `tokenDisplay: nil`(去 token 噪音)为 UI 微调,e2e 已验。`holdForUITest` 不经 handle/flashIfNeeded,截图模式不受影响。
+
+### 本轮亲跑门禁(退出码)
+
+- `sh scripts/lint.sh` → **exit 0**(仅存量 warning,均不在本分支 diff 文件内)
+- `sh scripts/doc-audit.sh` → **exit 0**
+- `sh scripts/check-arch.sh` → **exit 0**
+- `sh scripts/affected-tests.sh` → **exit 0**(269 过 0 败,含 AppSettingsReminderToneTests)
+- 变异验证(下条)→ **exit 1**(变异存活),文件经 trap 恢复,`git status` 干净
+
+### 本轮新发现
+
+- **[P3]** `NemoNotch/Services/CompletionToastQueue.swift` demote 一次成型修复**无守卫用例**:变异回旧顺序(两集合移除夹 refill),`sh scripts/mutate.sh … --only CompletionToastQueueTests` → exit 1(变异存活,28 用例全绿)。现有 demoteSameSessionOnly(toasts 全非匹配)与 demoteWaitingPile(toasts 无匹配卡 → refill 不触发)都不构造「toasts 与 waiting 同时有同会话卡」的时序差场景。修复本身正确但无牙——下次被"优化"回两段式不会红。修法:补一用例(toasts=[ai:s1,x,y] 满 capacity、waiting=[ask:s1],断言 demote 后行上无 s1 卡且 removed 含两张)。按 P3 默认不修,主对话拍板(≤10 行可顺手)。
+- **[披露]** 作者声明全量 test.sh 665/665,但 worktree 与主检出均无 `build/test-head.txt` 锚点工件可证(梯级 1 自述);本轮代跑 affected 269 全绿(梯级 4)。feat-done 测试门禁会强制全量重跑,不阻塞本 verdict。
+- **[提示]** plan 仅剩 Step 4(评审+合并)未勾——时序正确(APPROVED 后才能勾),feat-done 前须补勾,否则 plan-audit 拦裸框。
+
+### 教训候选(增补)
+
+- **"修复+守卫"成对交付的缺口在增量回修里更高发**:评审回修的 P3(非用户报 bug)最容易只改代码不补用例——demote 时序差修复即实案(变异存活 exit 1)。判据:凡注释里写着「review round-N P3」的防御性修复,必须有对应用例或明说为何不测。
