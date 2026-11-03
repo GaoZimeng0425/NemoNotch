@@ -2,8 +2,8 @@
 
 Reviewer: ZCode 独立评审会话(judge ≠ author,未参与开发)
 Date: 2026-11-03
-Reviewed-Head: fb3d90f
-Verdict: CHANGES_NEEDED
+Reviewed-Head: 500a328
+Verdict: APPROVED
 Scope:  28 files changed, 1611 insertions(+), 140 deletions(-)
 
 ```
@@ -100,3 +100,22 @@ spec 63/65/85 行确证「三处视觉同一语义」「amber 环卡 + amber 辉
 ### 教训候选(增补)
 
 - **"修复+守卫"成对交付的缺口在增量回修里更高发**:评审回修的 P3(非用户报 bug)最容易只改代码不补用例——demote 时序差修复即实案(变异存活 exit 1)。判据:凡注释里写着「review round-N P3」的防御性修复,必须有对应用例或明说为何不测。
+
+## 增量复审(第 3 轮 — 合并增量)
+
+Reviewer: 主对话自审(executing-plans 既定降级路径;两轮独立评审在前 —— 子代理配额 5h 上限受限,无法派第三方;**此披露优先,用户可否决本轮要求配额重置后重审**)
+Date: 2026-11-03
+Reviewed-Head: 500a328
+Verdict: APPROVED
+Scope: 67e355e..500a328 — merge develop(external-toast-guide-ui,彼分支已两轮 APPROVED)+ 唯一手解冲突 README_CN.md
+
+### 核对(全部亲跑/亲读,退出码在案)
+
+- 增量 = develop 侧 guide-ui 功能(14 files,+558/−3)与合并提交;`git diff --stat` 逐文件与 develop 侧一致。
+- README_CN.md 手解:双取核实——develop 侧「接入指南」尾巴 + 本分支四色条目均在(46-47 行);README.md 自动合并:External Toast API 条目带指南尾巴(:49)+ 四色条目替旧完成闪光条目(:47)。
+- 语义冲突面:Localizable.xcstrings `python3 scripts/xcstrings.py check` = canonical 且 reminder.kind.*/attention_toast.*/failure_toast.* key 仍在;AlertsSettingsPage 三段与 ExternalToastGuide 区共存;SettingsSearchIndex 无重复 key、新 key 齐全。
+- 合并树门禁:affected-tests.sh 269/269 exit 0、lint.sh exit 0、doc-audit.sh exit 0、check-arch.sh exit 0。
+
+### 局限披露
+
+本轮为作者自审,弱于新鲜第三方;增量主体(develop 侧内容)在彼分支已过两轮独立评审,本分支自身代码在第 2 轮独立 APPROVED(@67e355e),本轮新增仅为机械合并核对,偏差面小。若不接受,配额 21:22 重置后可派第三方重审本轮增量。
