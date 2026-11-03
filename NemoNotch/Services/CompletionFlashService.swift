@@ -37,6 +37,13 @@ final class CompletionFlashService {
     private let settings: AppSettings
 
     private var detector = CompletionDetector()
+    private var attentionDetector = AttentionDetector()
+    /// The previous snapshot of `hitApiError` flags — a false→true flip after
+    /// the turn's Stop is the "late apiError" (transcript parsed post-Stop).
+    private var priorApiError: [String: Bool] = [:]
+    /// The tone the current glow runs in (spec: colors encode why the user
+    /// is needed). Same-batch arbitration picks the highest-priority tone.
+    private(set) var glowTone: ReminderTone = .green
     private var inCooldown = false
     private var cooldownTask: Task<Void, Never>?
     private var flashResetTask: Task<Void, Never>?
@@ -51,8 +58,15 @@ final class CompletionFlashService {
         self.registry = registry
         self.settings = settings
         LogService.info("CompletionFlashService init", category: "CompletionFlash")
-        // Prime the detector so units already active at launch don't flash.
-        _ = detector.step(currentCandidates())
+        // Prime the detectors so units already active — or already parked on
+        // the user, or already error-flagged by record discovery — don't fire
+        // at launch: baseline, not news.
+        let baseline = currentCandidates()
+        _ = detector.step(baseline)
+        _ = attentionDetector.step(baseline.map { ($0.key, $0.attentionKind) })
+        priorApiError = Dictionary(
+            uniqueKeysWithValues: store.sortedSessions.map { ($0.id, $0.hitApiError) }
+        )
         observe()
     }
 
@@ -68,36 +82,12 @@ final class CompletionFlashService {
     // MARK: - Snapshot
 
     private func currentCandidates() -> [CompletionCandidate] {
-        var result: [CompletionCandidate] = []
-        for session in store.sortedSessions {
-            result.append(CompletionCandidate(
-                key: "ai:\(session.id)",
-                name: session.projectFolder ?? session.displayTitle,
-                // Active == .working only; a session merely .waiting is not "working".
-                isActive: session.status == .working,
-                source: .ai(session.source),
-                // What the user asked this turn; the session title when no prompt is known.
-                subtitle: session.lastUserMessage ?? session.displayTitle,
-                tool: session.currentTool,
-                model: session.displayModel,
-                tokenDisplay: session.tokenDisplay,
-                duration: Date().timeIntervalSince(session.sessionStart),
-                path: session.cwd,
-                jump: CompletionJump.make(
-                    hostPID: session.launchingAppPID,
-                    hostBundleId: session.launchingAppBundleId,
-                    tabLink: session.tabLinkURL
-                )
-            ))
-        }
+        var result = store.sortedSessions.map { ReminderSnapshot.aiCandidate($0) }
         for monitor in registry.installedMonitors {
             for agent in monitor.agents.values {
-                result.append(CompletionCandidate(
-                    key: "agent:\(agent.id)",
-                    name: agent.name,
-                    isActive: agent.state != .idle,
-                    source: .agent
-                ))
+                result.append(
+                    ReminderSnapshot.agentCandidate(id: agent.id, name: agent.name, state: agent.state)
+                )
             }
         }
         return result
@@ -109,7 +99,8 @@ final class CompletionFlashService {
         let armProbe = PerfProbe.begin()
         withObservationTracking {
             // Touch the tracked state so onChange fires on any mutation.
-            _ = store.sortedSessions.map { ($0.id, $0.status) }
+            _ = store.sortedSessions.map { ($0.id, $0.status, $0.phase) }
+            _ = store.sortedSessions.map { ($0.id, $0.hitApiError) }
             for monitor in registry.installedMonitors {
                 _ = monitor.agents.mapValues { $0.state }
             }
@@ -129,14 +120,113 @@ final class CompletionFlashService {
     }
 
     private func evaluate() {
-        let completed = detector.step(currentCandidates())
-        guard !completed.isEmpty else { return }
-        guard settings.completionFlashEnabled else {
-            LogService.debug("Completion ignored — flash disabled", category: "CompletionFlash")
-            return
+        let candidates = currentCandidates()
+        let completed = detector.step(candidates)
+        let attention = attentionDetector.step(
+            candidates.map { ($0.key, $0.attentionKind) }
+        )
+
+        // 1) The CLI parked on the user: sticky cards that leave with their
+        //    wait (answered / bridge timeout / answered in terminal).
+        for (key, kind) in attention.arrived where settings.attentionToastEnabled {
+            if let item = askItem(candidateKey: key, kind: kind) {
+                LogService.debug(
+                    "Attention arrived: \(kind) for \(String(key.dropFirst(3)).prefix(8))",
+                    category: "CompletionFlash"
+                )
+                addToasts([item])
+            }
         }
-        LogService.debug("Completion detected: \(completed.map(\.name))", category: "CompletionFlash")
-        handle(items: completed)
+        for key in attention.retracted {
+            let toastKey = "ask:" + String(key.dropFirst("ai:".count))
+            if toastQueue.replace(key: toastKey, with: nil, now: Date()) {
+                LogService.debug("Attention card retracted: \(toastKey)", category: "CompletionFlash")
+                syncToasts()
+            }
+        }
+
+        // 2) Completions and failures, each in its tone.
+        if !completed.isEmpty {
+            LogService.debug(
+                "Completion detected: \(completed.map(\.name)) [\(completed.map { $0.kind.map { "\($0)" } ?? "-" }.joined(separator: ","))]",
+                category: "CompletionFlash"
+            )
+            handle(completed)
+        }
+
+        // 3) A late apiError mark — the transcript's evidence parsed after
+        //    the Stop already showed the green card. Swap it for the red one.
+        let apiFlags = Dictionary(
+            uniqueKeysWithValues: store.sortedSessions.map { ($0.id, $0.hitApiError) }
+        )
+        for (id, flagged) in apiFlags where flagged && priorApiError[id] != true {
+            emitLateFailure(sessionID: id)
+        }
+        priorApiError = apiFlags
+    }
+
+    /// The sticky card for an arrival into "parked on the user": its face is
+    /// the question being asked (AskUserQuestion summary) or the tool line
+    /// awaiting the click.
+    private func askItem(candidateKey: String, kind: ReminderKind) -> CompletionItem? {
+        let sessionID = String(candidateKey.dropFirst("ai:".count))
+        guard let session = store.get(sessionID) else { return nil }
+        var face: String?
+        if case let .waitingForApproval(ctx) = session.phase {
+            face = ctx.interactivePrompt?.summary
+                ?? (ctx.displayInput.isEmpty ? nil : ctx.displayInput)
+        }
+        var item = CompletionItem(
+            name: session.projectFolder ?? session.displayTitle,
+            source: .ai(session.source),
+            subtitle: face ?? session.lastUserMessage ?? session.displayTitle,
+            tool: session.currentTool,
+            model: session.displayModel,
+            tokenDisplay: session.tokenDisplay,
+            duration: nil,
+            path: session.cwd,
+            jump: CompletionJump.make(
+                hostPID: session.launchingAppPID,
+                hostBundleId: session.launchingAppBundleId,
+                tabLink: session.tabLinkURL
+            )
+        )
+        item.key = "ask:\(sessionID)"
+        item.kind = kind
+        item.sticky = true
+        return item
+    }
+
+    /// The transcript's API-error mark arrived after the turn's Stop: the
+    /// green card was the best knowledge at the time — now it is a lie.
+    /// Show the red card and displace the same session's green one
+    /// (spec 审计口径 3).
+    private func emitLateFailure(sessionID: String) {
+        guard settings.failureToastEnabled, let session = store.get(sessionID) else { return }
+        var item = CompletionItem(
+            name: session.projectFolder ?? session.displayTitle,
+            source: .ai(session.source),
+            subtitle: session.lastUserMessage ?? session.displayTitle,
+            tool: nil,
+            model: session.displayModel,
+            tokenDisplay: session.tokenDisplay,
+            duration: nil,
+            path: session.cwd,
+            jump: CompletionJump.make(
+                hostPID: session.launchingAppPID,
+                hostBundleId: session.launchingAppBundleId,
+                tabLink: session.tabLinkURL
+            )
+        )
+        item.key = "fail:\(sessionID)"
+        item.kind = .apiError
+        LogService.info(
+            "Late apiError card for session \(sessionID.prefix(8))",
+            category: "CompletionFlash"
+        )
+        addToasts([item])
+        toastQueue.demote(sessionKey: sessionID, keeping: "fail:\(sessionID)", now: Date())
+        syncToasts()
     }
 
     // MARK: - External flash
@@ -153,7 +243,7 @@ final class CompletionFlashService {
         }
         guard !items.isEmpty else { return }
         LogService.debug("External flash triggered: \(items.map(\.name))", category: "CompletionFlash")
-        handle(items: items)
+        handle(items)
     }
 
     // MARK: - Notification Center cards
@@ -234,14 +324,41 @@ final class CompletionFlashService {
 
     // MARK: - Throttle / merge
 
-    private func handle(items: [CompletionItem]) {
+    private func handle(_ items: [CompletionItem]) {
+        // Switches gate the EMISSION, never the snapshot: filtering here
+        // (not in currentCandidates) means flipping a switch on later cannot
+        // replay edges the detector already consumed.
+        let enabled = items.filter { toneAllowed($0.kind?.tone ?? .green) }
+        guard !enabled.isEmpty else {
+            LogService.debug(
+                "All \(items.count) item(s) gated off by their tone switch",
+                category: "CompletionFlash"
+            )
+            return
+        }
         if inCooldown {
-            LogService.debug("Flash throttled, toast only: \(items.map(\.name))", category: "CompletionFlash")
+            // Mid-window arrivals get their card but never replay or recolor
+            // the running glow (spec 审计口径 5) — the card carries the news.
+            LogService.debug("Flash throttled, toast only: \(enabled.map(\.name))", category: "CompletionFlash")
         } else {
+            // Same-batch arbitration: rescue-red outranks decide-amber
+            // outranks approve-blue outranks green.
+            glowTone = ReminderTone.pick(enabled.map { $0.kind?.tone ?? .green }) ?? .green
             triggerFlash()
             startCooldown()
         }
-        addToasts(items)
+        addToasts(enabled)
+    }
+
+    /// Tone→switch: green keeps the legacy completion switch (now green
+    /// only); amber/blue answer to the attention switch, red to the failure
+    /// switch — independent, no master gate (spec 审计口径 2).
+    private func toneAllowed(_ tone: ReminderTone) -> Bool {
+        switch tone {
+        case .green: settings.completionFlashEnabled
+        case .amber, .blue: settings.attentionToastEnabled
+        case .red: settings.failureToastEnabled
+        }
     }
 
     private func triggerFlash() {

@@ -350,3 +350,53 @@ enum CompletionFlashNames {
         return result
     }
 }
+
+/// Pure snapshot builder: store sessions and registry agents into detector
+/// candidates. Extracted from `CompletionFlashService.currentCandidates` so
+/// the misfire regression — "parked on the user is NOT a completion", twice
+/// a live incident (2026-11-02: green flash on every PermissionRequest) —
+/// has a testable seam.
+enum ReminderSnapshot {
+    static func aiCandidate(_ session: AISessionState, now: Date = Date()) -> CompletionCandidate {
+        var candidate = CompletionCandidate(
+            key: "ai:\(session.id)",
+            name: session.projectFolder ?? session.displayTitle,
+            // Active == the CLI is mid-conversation (processing / compacting
+            // / waiting for an approval) — `SessionPhase.isActive`. A session
+            // parked at its prompt is NOT active: the turn is over.
+            isActive: session.phase.isActive,
+            source: .ai(session.source),
+            subtitle: session.lastUserMessage ?? session.displayTitle,
+            tool: session.currentTool,
+            model: session.displayModel,
+            tokenDisplay: session.tokenDisplay,
+            duration: now.timeIntervalSince(session.sessionStart),
+            path: session.cwd,
+            jump: CompletionJump.make(
+                hostPID: session.launchingAppPID,
+                hostBundleId: session.launchingAppBundleId,
+                tabLink: session.tabLinkURL
+            )
+        )
+        candidate.attentionKind = session.attentionKind
+        // A Stop reports turnDone (apiError when the transcript's last
+        // assistant entry is a terminal API error); anything else that
+        // deactivates a session — demote, reap, record-gone — never saw a
+        // Stop, so it reports sessionLost.
+        candidate.completesAs = session.phase == .waitingForInput
+            ? (session.hitApiError ? .apiError : .turnDone)
+            : .sessionLost
+        return candidate
+    }
+
+    static func agentCandidate(id: String, name: String, state: AgentMonitorState) -> CompletionCandidate {
+        var candidate = CompletionCandidate(
+            key: "agent:\(id)",
+            name: name,
+            isActive: state != .idle,
+            source: .agent
+        )
+        candidate.wasError = state == .error
+        return candidate
+    }
+}

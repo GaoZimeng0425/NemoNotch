@@ -279,6 +279,14 @@ enum ClaudeStatus: Equatable {
 }
 
 extension AISessionState {
+    /// The reminder kind while the session is parked on the user; nil
+    /// otherwise. The approval context's tool name picks the flavor
+    /// (question / plan review / permission click).
+    var attentionKind: ReminderKind? {
+        guard case let .waitingForApproval(ctx) = phase else { return nil }
+        return ReminderKind.attentionKind(forToolName: ctx.toolName)
+    }
+
     /// A new prompt starts a turn: its tools are counted afresh.
     mutating func beginTurn() {
         turnToolCount = 0
