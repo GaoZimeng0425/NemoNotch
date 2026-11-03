@@ -43,22 +43,22 @@
   - `struct ExternalToastGuideSection: View`(无参;内部 `@State private var copied = false`)
   - xcstrings keys:`settings.external_toast.guide.header` = 「接入指南」/"Agent onboarding guide";`.copy` = 「复制指南」/"Copy guide";`.copied` = 「已复制」/"Copied"
 
-- [ ] **Step 1: 写失败测试** `ExternalToastGuideTests`(Swift Testing):断言 `ExternalToastGuide.text` 非空、含 `"POST http://127.0.0.1:<port>/v1/toast"` 或 `"/v1/toast"`、含 `"hook-port"`、`"hook-token"`、`"X-NemoNotch-Token"`、字段表关键词 `"jumpBundleId"`、验收清单标题 `"验收清单"`
-- [ ] **Step 2: 跑红** `sh scripts/test.sh --only ExternalToastGuideTests`(编译失败即红)
-- [ ] **Step 3: 实现**:
+- [x] **Step 1: 写失败测试** `ExternalToastGuideTests`(Swift Testing):断言 `ExternalToastGuide.text` 非空、含 `"POST http://127.0.0.1:<port>/v1/toast"` 或 `"/v1/toast"`、含 `"hook-port"`、`"hook-token"`、`"X-NemoNotch-Token"`、字段表关键词 `"jumpBundleId"`、验收清单标题 `"验收清单"`
+- [x] **Step 2: 跑红** `sh scripts/test.sh --only ExternalToastGuideTests`(编译失败即红)
+- [x] **Step 3: 实现**:
   - `ExternalToastGuideSection.swift`:常量(从 `docs/external-toast-agent-guide.md` 全文拷入)+ 视图——`DisclosureGroup("settings.external_toast.guide.header")` 内 `ScrollView { Text(verbatim:).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }.frame(maxHeight: 320)`;DisclosureGroup 上方或 label 尾部放 `Button`(复制动作 = `NSPasteboard.general.clearContents()` + `setString(ExternalToastGuide.text, forType: .string)`(先例 `KeepAwakeSettingsView.swift:62`),点击后 `copied = true` + `Task { sleep 2s; copied = false }`,按钮文案按 `copied` 切 `.copy`/`.copied`;**按钮在折叠态也可见可点**(放 DisclosureGroup 的 label 行内或其上方,不放进 content)
   - `AlertsSettingsPage.swift`:external_toast Section 的 hint Text 之后追加 `ExternalToastGuideSection()`
   - `SettingsSearchIndex.swift`:`.alerts` keys 数组追加 `"settings.external_toast.guide.header"`、`".copy"`、`".copied"`
   - xcstrings:3 key 双语(`python3 scripts/xcstrings.py format` 归一)
-- [ ] **Step 4: 跑绿** `sh scripts/test.sh --only ExternalToastGuideTests` + `sh scripts/lint.sh --staged --fix`(重新暂存)
-- [ ] **Step 5: e2e(部署后)**:`./build.sh` → 设置 → 提醒与动效 → 外部应用 Toast 区块:折叠态点「复制指南」→ 终端 `pbpaste | head -3` 见标题、`pbpaste | grep -c "v1/toast"` ≥ 1;展开见 monospace 正文。记录输出
-- [ ] **Step 6: Commit** `feat(guide-ui): agent onboarding guide section with copy (Task 1)`(含 docs/external-toast-agent-guide.md 入库)
+- [x] **Step 4: 跑绿** `sh scripts/test.sh --only ExternalToastGuideTests` + `sh scripts/lint.sh --staged --fix`(重新暂存)
+- [x] **Step 5: e2e(部署后)**:`./build.sh` → 设置 → 提醒与动效 → 外部应用 Toast 区块:折叠态点「复制指南」→ 终端 `pbpaste | head -3` 见标题、`pbpaste | grep -c "v1/toast"` ≥ 1;展开见 monospace 正文。记录输出
+- [x] **Step 6: Commit** `feat(guide-ui): agent onboarding guide section with copy (Task 1)`(含 docs/external-toast-agent-guide.md 入库)
 
 ### Task 2: README 提及 + 全量验证
 
 **Files:**
 - Modify: `README.md` / `README_CN.md`(External Toast API 节尾各一句:「设置 → 提醒与动效 内有一键复制的 agent 接入指南」/ 英文对译)
 
-- [ ] **Step 1: README×2 各加一句**(指向设置内指南;不改契约描述)
-- [ ] **Step 2: 全量验证** `sh scripts/affected-tests.sh && sh scripts/lint.sh && sh scripts/doc-audit.sh && sh scripts/check-arch.sh`(引退出码)
-- [ ] **Step 3: Commit** `docs(guide-ui): point README to in-app agent guide (Task 2)`
+- [x] **Step 1: README×2 各加一句**(指向设置内指南;不改契约描述)
+- [x] **Step 2: 全量验证** `sh scripts/affected-tests.sh && sh scripts/lint.sh && sh scripts/doc-audit.sh && sh scripts/check-arch.sh`(引退出码)
+- [x] **Step 3: Commit** `docs(guide-ui): point README to in-app agent guide (Task 2)`
