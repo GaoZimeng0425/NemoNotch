@@ -40,6 +40,7 @@ enum ExternalToastGuide {
     | `body` | String? | | ≤280 字符 |
     | `icon` | String? | | 仅 `sf:<SF Symbol 名>`;未知符号名回落通用卡片图标,不报错 |
     | `jumpBundleId` | String? | | 点击卡片激活该 bundle id 的应用;缺省 = 点击只关卡;≤255 字符 |
+    | `jumpURL` | String? | | 点击卡片打开该 URL(深链或网页),**优先于 `jumpBundleId`**(URL 打不开才回落激活应用);须为带 scheme 的绝对 URL 且 scheme ≠ `file:`,≤2048 字符;空串/纯空白视为未提供;URL 原样透传,需 percent-encode 请自行编码 |
 
     **两种用法**:
 
@@ -66,6 +67,7 @@ enum ExternalToastGuide {
     3. 同一 `key` 推两次(第二次改 `title`)→ 只有一张卡且内容已更新、计时重置;
     4. 发 `{"schema":1}`(缺 `title`)→ 期望 `400`,reason 提及 title;
     5. 停掉 NemoNotch 再发 → 脚本不抛错、不阻塞、不重试风暴。
+    6. 带 `jumpURL` 的合法推送(如 `"https://example.com/done"`)→ 期望 `200`;点卡片打开该 URL(深链优先,打不开回落 `jumpBundleId`)。
 
     ## 6. 最小示例(shell)
 
