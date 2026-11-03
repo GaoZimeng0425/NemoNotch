@@ -217,6 +217,9 @@ final class ClaudeProvider: AIProvider {
                 if let model = result.lastModel {
                     session.model = model
                 }
+                if let apiError = result.lastAssistantApiError {
+                    session.hitApiError = apiError
+                }
                 if let branch = result.lastGitBranch {
                     session.gitBranch = branch
                 }
@@ -505,6 +508,9 @@ final class ClaudeProvider: AIProvider {
                 }
                 if let model = result.lastModel {
                     session.model = model
+                }
+                if let apiError = result.lastAssistantApiError {
+                    session.hitApiError = apiError
                 }
                 if let branch = result.lastGitBranch {
                     session.gitBranch = branch
