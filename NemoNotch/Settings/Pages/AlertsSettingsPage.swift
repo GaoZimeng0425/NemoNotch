@@ -25,6 +25,7 @@ struct AlertsSettingsPage: View {
                 Text("settings.external_toast.hint")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                ExternalToastGuideSection()
             }
 
             Section("settings.event_alerts.header") {
