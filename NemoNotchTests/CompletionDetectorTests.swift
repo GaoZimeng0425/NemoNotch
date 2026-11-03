@@ -27,13 +27,14 @@ struct CompletionDetectorTests {
         #expect(result.map(\.name) == ["Proj"])
     }
 
-    @Test("completed item carries its source")
+    @Test("completed item carries its source and kind")
     func completedCarriesSource() {
         var d = CompletionDetector()
         _ = d.step([CompletionCandidate(key: "ai:1", name: "Proj", isActive: true, source: .ai(.gemini))])
         let result = d.step([CompletionCandidate(key: "ai:1", name: "Proj", isActive: false, source: .ai(.gemini))])
         var expected = item("Proj", .ai(.gemini))
         expected.key = "ai:1"
+        expected.kind = .turnDone
         #expect(result == [expected])
     }
 
@@ -69,12 +70,60 @@ struct CompletionDetectorTests {
         #expect(Set(result.map(\.name)) == ["A", "B"])
     }
 
-    @Test("a removed session is not a completion")
-    func removedSessionNoCompletion() {
+    @Test("a session vanishing mid-work reports sessionLost; one already idle stays silent")
+    func disappearanceDependsOnPriorActivity() {
         var d = CompletionDetector()
-        _ = d.step([c("ai:1", "A", true)])
-        let result = d.step([]) // session disappeared
-        #expect(result.isEmpty)
+        var busy = c("ai:1", "A", true)
+        busy.jump = CompletionJump(hostPID: 42, hostBundleId: nil, tabLink: nil)
+        _ = d.step([busy])
+        // No Stop ever came and the unit is gone: the work was not finished.
+        let lost = d.step([])
+        #expect(lost.count == 1)
+        #expect(lost[0].kind == .sessionLost)
+        #expect(lost[0].name == "A")
+        #expect(lost[0].key == "ai:1")
+        #expect(lost[0].jump?.hostPID == 42)
+        // An already-idle unit vanishing is not news.
+        _ = d.step([c("ai:2", "B", false)])
+        #expect(d.step([]).isEmpty)
+    }
+
+    // MARK: - Reminder kinds
+
+    @Test("completion kind defaults to turnDone and follows completesAs")
+    func completionKindFollowsCandidate() {
+        var d = CompletionDetector()
+        _ = d.step([c("ai:1", "Proj", true)])
+        #expect(d.step([c("ai:1", "Proj", false)]).map(\.kind) == [.turnDone])
+
+        var idle = c("ai:2", "Other", false)
+        idle.completesAs = .sessionLost
+        _ = d.step([c("ai:2", "Other", true)])
+        #expect(d.step([idle]).map(\.kind) == [.sessionLost])
+    }
+
+    @Test("an agent that sat in error reports agentError, not a green done")
+    func agentErrorEdge() {
+        var d = CompletionDetector()
+        var err = c("agent:x", "Hermes", true)
+        err.wasError = true
+        _ = d.step([err])
+        #expect(d.step([c("agent:x", "Hermes", false)]).map(\.kind) == [.agentError])
+    }
+
+    @Test("sessionKey parses only the three session-scoped key prefixes")
+    func sessionKeyParsing() {
+        var i = item("A")
+        i.key = "ai:s1"
+        #expect(i.sessionKey == "s1")
+        i.key = "ask:s1"
+        #expect(i.sessionKey == "s1")
+        i.key = "fail:s1"
+        #expect(i.sessionKey == "s1")
+        i.key = "agent:x"
+        #expect(i.sessionKey == nil)
+        i.key = nil
+        #expect(i.sessionKey == nil)
     }
 
     @Test("merge dedups by name preserving order")
@@ -195,5 +244,41 @@ struct CompletionDetectorTests {
         var item = item("Demo", .external(iconSymbol: nil))
         item.key = "ext:App::k1"
         #expect(item.toastKey == "ext:App::k1")
+    }
+}
+
+@Suite("AttentionDetector")
+struct AttentionDetectorTests {
+    @Test("arrival fires once per wait; a context change does not replay it")
+    func arrivalIdempotent() {
+        var d = AttentionDetector()
+        let first = d.step([(key: "ai:1", attention: ReminderKind?.some(.needsApproval))])
+        #expect(first.arrived.count == 1)
+        #expect(first.arrived[0].key == "ai:1")
+        #expect(first.arrived[0].kind == .needsApproval)
+        // Same wait, different tool shape — the arrival gesture must not replay.
+        let again = d.step([(key: "ai:1", attention: .needsDecision)])
+        #expect(again.arrived.isEmpty)
+        #expect(again.retracted.isEmpty)
+    }
+
+    @Test("leaving the wait retracts; vanishing retracts too")
+    func retraction() {
+        var d = AttentionDetector()
+        _ = d.step([(key: "ai:1", attention: .needsApproval)])
+        let left = d.step([(key: "ai:1", attention: nil)])
+        #expect(left.retracted == ["ai:1"])
+
+        _ = d.step([(key: "ai:2", attention: .needsDecision)])
+        let gone = d.step([])
+        #expect(gone.retracted == ["ai:2"])
+    }
+
+    @Test("a session never in the wait never retracts")
+    func noFalseRetraction() {
+        var d = AttentionDetector()
+        let idle = d.step([(key: "ai:1", attention: nil)])
+        #expect(idle.arrived.isEmpty)
+        #expect(idle.retracted.isEmpty)
     }
 }
