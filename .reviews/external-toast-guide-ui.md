@@ -2,8 +2,8 @@
 
 Reviewer: ZCode 独立评审子代理(未参与开发;judge ≠ author)
 Date: 2026-11-03
-Reviewed-Head: 7dc0978
-Verdict: CHANGES_NEEDED
+Reviewed-Head: b6d075b
+Verdict: APPROVED
 Scope:  10 files changed, 379 insertions(+), 2 deletions(-)
 
 ```
@@ -81,3 +81,40 @@ docs/superpowers/specs/2026-11-03-agent-guide-settings-design.md
 ## Verdict 依据
 
 CHANGES_NEEDED:唯一实质问题是 P2(jumpURL 缺项)。它不是运行时缺陷——代码、测试、四道门禁全绿,守卫有牙,本地化与最小改动纪律全部遵守——但本 feature 的交付物就是这份「复制出去即脱离仓库」的契约工件,它在出生时已落后于自己 base 里的公开契约,并违反其自带同源声明的最外级。修法机械(两处同一提交各加一行,可选一条验收项),修复后走增量复审(`--prompt --prev 7dc0978`)应可直接改判。两个 P3 建议顺手(注释一句、Task 世代),不单独阻塞。
+
+---
+
+# 增量复审 Round 2 — 7dc0978..b6d075b(2026-11-03)
+
+Reviewed-Head: b6d075b | Verdict: **APPROVED**
+
+零漂移:`git log 7dc0978..b6d075b` 唯一提交 b6d075b,改动 = 修复三文件(doc/常量/测试)+ 本评审记录随分支入库(.reviews 83 行,流程预期)。worktree 其余干净。
+
+## 逐条核对 Round 1 Findings
+
+- **P2(jumpURL 缺项)——已修 ✅**。`docs/external-toast-agent-guide.md` 与 `ExternalToastGuideSection.swift` 同提交各加 jumpURL 字段表行(措辞与 `README.md:95` 及实现逐项对齐,本评审核对 `ExternalToastPayload.swift:126-140`:URL 优先/回落 bundleId ✓、带 scheme 绝对 URL 且 ≠file ✓、≤2048 ✓、trim 后空=未提供 ✓、原样透传/percent-encode 自理 ✓)+ 验收清单第 6 条(与 `ExternalCardService.swift:61-63` 的 tabLink/回落实现一致)。锚点测试加 `#expect(text.contains("jumpURL"))`。**常量与文档仍 74→76 行逐字一致**(diff IDENTICAL,含 swiftformat 缩进修复后的最终态)。实现者称先红后绿;红态无法用 mutate.sh 单跑复现(见下),绿态本评审亲证 2/2。
+- **P3-1(注释过强)——已修,但示例失准,记新 P3(不阻塞)**。注释主体改准(「锚点子串全数删尽才红——单处损坏在多处出现的锚上测不到」),但推荐示例「选唯一出现的锚,**如 jumpURL**」在修复后不再成立:jumpURL 现出现 2 次(字段表行 + 验收第 6 条),jumpBundleId 3 次(表行 + 验收第 6 条 + jumpURL 行自身引用)——**全部锚点均已非唯一**。本评审实证:`mutate.sh 'jumpURL'→'jumpURX'`(只换第一处)存活(exit 1)——照注释选锚做变异验证会得出「守卫没牙」的**假阴性**。修法(≤3 行,顺手项):示例改为「整段删除型变异(如把常量改空/改名)」或加计数断言(`text.components(separatedBy:"jumpURL").count-1 == 2`)。守卫对声明目的(清空/字段名整体消失)仍有牙——语义与 Round 1 已实证的 contains 机制相同。
+- **P3-2(连点复位截短)——deferred ✅**。>3 行观感项,ledger 有记录(Final fix pass 行),符合 P3 纪律。
+
+## 本轮亲跑证据(worktree 内,真实退出码)
+
+| 命令 | 结果 |
+|---|---|
+| `git log 7dc0978..b6d075b` / `git status` | 唯一提交 b6d075b;worktree 干净(变异后亦然) |
+| `sh scripts/test.sh --only ExternalToastGuideTests` | exit 0,2/2 passed(TEST SUCCEEDED,build/test.log) |
+| `python3 scripts/xcstrings.py check` | exit 0,canonical |
+| `sh scripts/lint.sh` | exit 0 |
+| `sh scripts/doc-audit.sh` | exit 0 |
+| `sh scripts/check-arch.sh` | exit 0 |
+| 常量 vs 文档逐字 diff | IDENTICAL(76 行) |
+| `sh scripts/mutate.sh … 'jumpURL' 'jumpURX' --only ExternalToastGuideTests` | exit 1 存活——实证新注释示例失准(第一处换掉后第二处仍满足 contains) |
+
+implementer 声明的 affected-tests 8/0 未由本评审复跑(四道门禁 + 目标测试已亲证;改动面仅 3 文件且 2 个纯文本行)。
+
+## Round 2 Findings
+
+- **[P3] 测试注释的变异选锚示例失准**:「唯一出现的锚,如 jumpURL」——jumpURL 现出现 2 次,全部锚点均非唯一;照做会得假阴性「守卫没牙」(exit 1 实证)。`NemoNotchTests/ExternalToastGuideTests.swift:5-6`。≤3 行机械项,可顺手修,不阻塞合并。
+
+## 判决
+
+**APPROVED**。P2 修复正确且完整(同提交、双语两工件逐字一致、措辞与实现/README 对齐、验收项与锚点断言到位);四道门禁 + 目标测试亲跑全绿;常量-文档一致性保持。唯一残留是修复自身引入的一行注释示例失准(P3,默认不修),不构成背书障碍。
