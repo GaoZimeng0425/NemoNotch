@@ -277,7 +277,7 @@ fi
 # 先 fetch 再比对,让「远端不可达 / 分叉 / 推送本身失败」三种结局各有各的话。
 # 逃生口:NEMONOTCH_SKIP_PUSH=1(离线或刻意暂缓,与 SKIP_TESTS 同款约定)。
 if [ "${NEMONOTCH_SKIP_PUSH:-0}" = "1" ]; then
-  echo "⏭  NEMONOTCH_SKIP_PUSH=1 — 跳过推送。记得: git -C \"$main_wt\" push origin develop"
+  echo "⏭  NEMONOTCH_SKIP_PUSH=1 — 跳过推送。记得: git -C \"$main_wt\" push origin develop" >&2
 elif ! git -C "$main_wt" fetch -q origin develop 2>/dev/null; then
   echo "⚠️  未推送:无法 fetch origin(离线或远端不可达)。合并已在本地 develop,稍后手动:" >&2
   echo "    git -C \"$main_wt\" push origin develop" >&2

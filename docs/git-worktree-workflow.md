@@ -60,8 +60,13 @@ git feat-done <name>   # gates in the worktree (merge-tree conflict precheck
                        #   auto-stash primary checkout → merge
                        #   feature/<name> -> develop (--no-ff, triggers
                        #   post-merge build) → restore stash → remove worktree,
-                       #   delete the branch. Missing review record → the gate
-                       #   auto-generates the template via review.sh first.
+                       #   delete the branch → push origin develop (fetch-first;
+                       #   diverged → loud refusal, **never** auto-pull —
+                       #   branch.develop.rebase=true would linearize local
+                       #   --no-ff merges; offline/push-failure → loud, merge
+                       #   kept; NEMONOTCH_SKIP_PUSH=1 escape). Missing review
+                       #   record → the gate auto-generates the template via
+                       #   review.sh first.
 git feat-list          # list all worktrees
 ```
 
