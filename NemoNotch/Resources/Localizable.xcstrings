@@ -5378,6 +5378,54 @@
           }
         }
       }
+    },
+    "settings.completion_flash.hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Green = a turn finished. Questions, approvals and failures each have their own switch below."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绿色 = 一轮完成;提问 / 审批 / 出错各有独立开关(互不越权)。"
+          }
+        }
+      }
+    },
+    "settings.attention_toast.header" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs You"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要你决定"
+          }
+        }
+      }
+    },
+    "settings.failure_toast.header" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failures"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出事了"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

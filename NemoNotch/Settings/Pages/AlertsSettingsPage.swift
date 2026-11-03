@@ -14,6 +14,28 @@ struct AlertsSettingsPage: View {
                     set: { appSettings.completionFlashEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
+                Text("settings.completion_flash.hint")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("settings.attention_toast.header") {
+                Toggle("settings.attention_toast.enabled", isOn: Binding(
+                    get: { appSettings.attentionToastEnabled },
+                    set: { appSettings.attentionToastEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                Text("settings.attention_toast.hint")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("settings.failure_toast.header") {
+                Toggle("settings.failure_toast.enabled", isOn: Binding(
+                    get: { appSettings.failureToastEnabled },
+                    set: { appSettings.failureToastEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
             }
 
             Section("settings.external_toast.header") {
