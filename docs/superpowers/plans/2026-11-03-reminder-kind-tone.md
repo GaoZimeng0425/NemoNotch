@@ -180,4 +180,4 @@
 - [x] **Step 1: 文档三处同提交改**(doc-audit 会核对手册引用的脚本路径)。
 - [x] **Step 2: 门禁全套** — `sh scripts/lint.sh` / `sh scripts/doc-audit.sh` / `sh scripts/check-arch.sh` / `sh scripts/plan-audit.sh`(本文件勾框全勾)/ `sh scripts/test.sh` 全量,全绿并引用退出码汇报。
 - [x] **Step 3: 真机验证四条**(spec 验证节):①AskUserQuestion→amber 卡+辉光、答完即撤;②Bash 审批→blue;③正常完成→green;④kill 跑着的 CLI→red「会话中断」。截图留证。
-- [ ] **Step 4: 评审 + 合并** — `sh scripts/review.sh reminder-kind-tone` 生成模板,派独立评审子代理(prompt 用 `--prompt` 输出,不带实现思路);APPROVED 后主检出 `git feat-done reminder-kind-tone`(合并即部署+自动 push)。
+- [x] **Step 4: 评审 + 合并** — `sh scripts/review.sh reminder-kind-tone` 生成模板,派独立评审子代理(prompt 用 `--prompt` 输出,不带实现思路);APPROVED 后主检出 `git feat-done reminder-kind-tone`(合并即部署+自动 push)。
