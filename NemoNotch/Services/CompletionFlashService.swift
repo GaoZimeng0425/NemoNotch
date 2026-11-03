@@ -129,7 +129,9 @@ final class CompletionFlashService {
         )
 
         // 1) The CLI parked on the user: sticky cards that leave with their
-        //    wait (answered / bridge timeout / answered in terminal).
+        //    wait (answered / bridge timeout / answered in terminal). The
+        //    arrival also flashes the glow in its tone — being blocked on
+        //    the user outranks being done (spec 语义表).
         for (key, kind) in attention.arrived where settings.attentionToastEnabled {
             if let item = askItem(candidateKey: key, kind: kind) {
                 LogService.debug(
@@ -137,6 +139,7 @@ final class CompletionFlashService {
                     category: "CompletionFlash"
                 )
                 addToasts([item])
+                flashIfNeeded(kind.tone)
             }
         }
         for key in attention.retracted {
@@ -184,7 +187,7 @@ final class CompletionFlashService {
             subtitle: face ?? session.lastUserMessage ?? session.displayTitle,
             tool: session.currentTool,
             model: session.displayModel,
-            tokenDisplay: session.tokenDisplay,
+            tokenDisplay: nil,
             duration: nil,
             path: session.cwd,
             jump: CompletionJump.make(
@@ -340,18 +343,24 @@ final class CompletionFlashService {
             )
             return
         }
-        if inCooldown {
-            // Mid-window arrivals get their card but never replay or recolor
-            // the running glow (spec 审计口径 5) — the card carries the news.
-            LogService.debug("Flash throttled, toast only: \(enabled.map(\.name))", category: "CompletionFlash")
-        } else {
-            // Same-batch arbitration: rescue-red outranks decide-amber
-            // outranks approve-blue outranks green.
-            glowTone = ReminderTone.pick(enabled.map { $0.kind?.tone ?? .green }) ?? .green
-            triggerFlash()
-            startCooldown()
+        // Same-batch arbitration: rescue-red outranks decide-amber
+        // outranks approve-blue outranks green. Inside the cooldown window
+        // this is a no-op — the cards still go out below (spec 审计口径 5).
+        if let winner = ReminderTone.pick(enabled.map { $0.kind?.tone ?? .green }) {
+            flashIfNeeded(winner)
         }
         addToasts(enabled)
+    }
+
+    /// Flash the glow in `tone` unless the cooldown window is running.
+    private func flashIfNeeded(_ tone: ReminderTone) {
+        guard !inCooldown else {
+            LogService.debug("Flash throttled, toast only: \(tone)", category: "CompletionFlash")
+            return
+        }
+        glowTone = tone
+        triggerFlash()
+        startCooldown()
     }
 
     /// Tone→switch: green keeps the legacy completion switch (now green
