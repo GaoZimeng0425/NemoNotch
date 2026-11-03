@@ -5,7 +5,8 @@
 # 流程:merge-tree 冲突预检(秒级,先行)→ doc-audit → plan 全勾 → 架构围栏
 # (check-arch)→ 评审门禁 → 测试门禁(worktree 内跑单测,不过就中止)→ 自动
 # stash/恢复主检出的未提交改动(以前手动做了七轮的舞步)→ checkout develop
-# → merge(触发 post-merge 自动构建)→ stash pop → 拆 worktree。
+# → merge(触发 post-merge 自动构建)→ stash pop → 拆 worktree → push origin develop
+# (合并即同步;分叉只响亮不自动 pull;NEMONOTCH_SKIP_PUSH=1 逃生)。
 set -e
 
 name="$1"
@@ -269,4 +270,26 @@ if [ -n "$wt" ]; then
   esac
 fi
 
-echo "   记得推送:  git -C \"$main_wt\" push origin develop"
+# ── 推送:合并进 develop 即同步 origin(用户拍板 2026-11-03:「只要合并的都自动同步,别每次问」)──
+# 失败只响亮不回滚——合并已是本地事实;退出码非零让调用方看见。分叉时**绝不自动 pull**:
+# 本仓 branch.develop.rebase=true,裸 pull 会把本地 --no-ff 合并线性化重写并推上去
+# (2026-11-02 实案,见 AGENTS.md「Git 流程」),只给出人工对齐命令。
+# 先 fetch 再比对,让「远端不可达 / 分叉 / 推送本身失败」三种结局各有各的话。
+# 逃生口:NEMONOTCH_SKIP_PUSH=1(离线或刻意暂缓,与 SKIP_TESTS 同款约定)。
+if [ "${NEMONOTCH_SKIP_PUSH:-0}" = "1" ]; then
+  echo "⏭  NEMONOTCH_SKIP_PUSH=1 — 跳过推送。记得: git -C \"$main_wt\" push origin develop" >&2
+elif ! git -C "$main_wt" fetch -q origin develop 2>/dev/null; then
+  echo "⚠️  未推送:无法 fetch origin(离线或远端不可达)。合并已在本地 develop,稍后手动:" >&2
+  echo "    git -C \"$main_wt\" push origin develop" >&2
+  exit 1
+elif [ "$(git -C "$main_wt" rev-list --count develop..origin/develop)" != "0" ]; then
+  echo "⚠️  未推送:origin/develop 有本地没有的提交(分叉)。**不自动 pull**——branch.develop.rebase=true 的裸 pull 会重写本地合并。" >&2
+  echo "    人工对齐(自同步合并,pre-merge-commit 放行 origin/develop):" >&2
+  echo "    git -C \"$main_wt\" merge origin/develop && git -C \"$main_wt\" push origin develop" >&2
+  exit 1
+elif git -C "$main_wt" push -q origin develop; then
+  echo "⬆️  已推送 develop → origin/develop ($(git -C "$main_wt" rev-parse --short develop))"
+else
+  echo "⚠️  推送失败(见上)。合并已在本地 develop,手动: git -C \"$main_wt\" push origin develop" >&2
+  exit 1
+fi
