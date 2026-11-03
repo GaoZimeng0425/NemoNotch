@@ -308,10 +308,12 @@ final class CompletionFlashService {
     /// given names, with no auto-reset/cooldown. Only used under `--uitest --flash`.
     func holdForUITest(names: [String]) {
         flashLevel = 1
-        // Show a Claude-sourced item so the screenshot demonstrates the source logo.
-        toastQueue.add(names.map { name in
+        // Cycle the four tones so one screenshot shows every ring color.
+        let tones: [ReminderKind?] = [.turnDone, .needsDecision, .needsApproval, .sessionLost]
+        toastQueue.add(names.enumerated().map { index, name in
             var item = CompletionItem(name: name, source: .ai(.claude))
             item.path = NSHomeDirectory() + "/Documents/Learn/macos/" + name
+            item.kind = tones[index % tones.count]
             return item
         }, now: Date())
         // Screenshot mode never decays: a paused queue expires nothing.

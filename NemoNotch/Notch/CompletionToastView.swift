@@ -50,7 +50,9 @@ struct CompletionToastView: View {
         .frame(width: CompletionToastLayout.cardWidth, height: CompletionToastLayout.cardHeight)
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-        .overlay(CompletionToastRing(cornerRadius: Self.cornerRadius))
+        // The ring speaks the tone (spec: color = why you're needed); cards
+        // with no lifecycle keep the rainbow.
+        .overlay(CompletionToastRing(cornerRadius: Self.cornerRadius, colors: item.kind?.tone.ring))
         .overlay(alignment: .topTrailing) {
             Image(systemName: "xmark")
                 .font(.system(size: 9, weight: .bold))
@@ -212,10 +214,15 @@ struct CompletionToastView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "tool · model · tokens · duration" for the single-item detail line,
-    /// skipping nil fields. Returns nil when there is no detail at all.
+    /// "kind · tool · model · tokens · duration" for the single-item detail
+    /// line, skipping nil fields. The kind's verb leads (等你选 ·
+    /// AskUserQuestion · …) so the card says what happened even where the
+    /// ring color is missed. Returns nil when there is no detail at all.
     private func detailLine(for item: CompletionItem) -> String? {
         var parts: [String] = []
+        if let kind = item.kind {
+            parts.append(kind.verb)
+        }
         if let tool = item.tool, !tool.isEmpty {
             parts.append(tool)
         }
@@ -308,9 +315,12 @@ enum AppIconCache {
 /// with the panel whenever the row is empty or off-screen.
 private struct CompletionToastRing: NSViewRepresentable {
     let cornerRadius: CGFloat
+    /// The tone's ring stops; nil keeps the legacy rainbow for cards with no
+    /// lifecycle (calendar / notification / external).
+    let colors: [NSColor]?
 
     func makeNSView(context: Context) -> CompletionToastRingView {
-        CompletionToastRingView(cornerRadius: cornerRadius)
+        CompletionToastRingView(cornerRadius: cornerRadius, colors: colors)
     }
 
     func updateNSView(_ view: CompletionToastRingView, context: Context) {}
@@ -321,7 +331,9 @@ final class CompletionToastRingView: NSView {
     /// Seconds per full turn.
     static let period: CFTimeInterval = 4
     private static let key = "turn"
-    private static let colors: [NSColor] = [
+    /// The legacy multi-color stops — still the ring for sources with no
+    /// lifecycle (calendar / notification / external cards).
+    static let rainbow: [NSColor] = [
         NSColor(NotchTheme.accent),
         NSColor(red: 1.0, green: 0.36, blue: 0.62, alpha: 1),
         NSColor(red: 0.62, green: 0.42, blue: 1.0, alpha: 1),
@@ -331,17 +343,21 @@ final class CompletionToastRingView: NSView {
     ]
 
     private let cornerRadius: CGFloat
+    private let colors: [NSColor]
     private let gradient = CAGradientLayer()
     private let strokeMask = CAShapeLayer()
 
-    init(cornerRadius: CGFloat) {
+    init(cornerRadius: CGFloat, colors: [NSColor]? = nil) {
         self.cornerRadius = cornerRadius
+        self.colors = colors ?? Self.rainbow
         super.init(frame: .zero)
         wantsLayer = true
         gradient.type = .conic
         gradient.startPoint = CGPoint(x: 0.5, y: 0.5)
         gradient.endPoint = CGPoint(x: 0.5, y: 0)
-        gradient.colors = Self.colors.map(\.cgColor)
+        // `self.colors` — the parameter is optional and Optional.map would
+        // keypath the array itself, not its elements.
+        gradient.colors = self.colors.map(\.cgColor)
         strokeMask.fillColor = nil
         strokeMask.strokeColor = NSColor.black.cgColor
         strokeMask.lineWidth = Self.lineWidth

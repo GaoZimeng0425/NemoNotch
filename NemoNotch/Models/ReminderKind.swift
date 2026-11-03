@@ -32,6 +32,20 @@ enum ReminderKind: Equatable {
         }
     }
 
+    /// The card's leading verb — the wording half of the reminder (color is
+    /// the other). Localized with the system locale.
+    var verb: String {
+        switch self {
+        case .turnDone: String(localized: "reminder.kind.turnDone")
+        case .needsDecision: String(localized: "reminder.kind.needsDecision")
+        case .needsPlanApproval: String(localized: "reminder.kind.needsPlanApproval")
+        case .needsApproval: String(localized: "reminder.kind.needsApproval")
+        case .agentError: String(localized: "reminder.kind.agentError")
+        case .apiError: String(localized: "reminder.kind.apiError")
+        case .sessionLost: String(localized: "reminder.kind.sessionLost")
+        }
+    }
+
     /// The attention kind for a tool that is awaiting approval:
     /// question-shaped tools want a decision, plan approval wants a review,
     /// everything else — including an unknown or missing tool name — wants a
