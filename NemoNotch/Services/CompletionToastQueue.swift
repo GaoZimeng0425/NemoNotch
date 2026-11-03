@@ -137,13 +137,16 @@ struct CompletionToastQueue {
         let matches: (CompletionItem) -> Bool = {
             $0.sessionKey == sessionKey && $0.toastKey != toastKey
         }
+        // Remove from BOTH sets before refilling: a refill in between could
+        // promote a matching card from the waiting pile back onto the row,
+        // and it would dodge this demote (review round-1 P3).
         var removed = toasts.filter { matches($0.item) }
         toasts.removeAll { matches($0.item) }
+        removed += waiting.filter { matches($0.item) }
+        waiting.removeAll { matches($0.item) }
         if !removed.isEmpty {
             refill(now: now)
         }
-        removed += waiting.filter { matches($0.item) }
-        waiting.removeAll { matches($0.item) }
         return removed
     }
 

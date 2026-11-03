@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Watches the AI session store and agent registry for work-completion edges
-/// (working→idle / active→idle) and drives the full-screen edge glow + the
-/// toast row under the notch. Throttles the glow only: the first completion
-/// flashes, completions arriving during the cooldown don't replay it. Every
-/// completion gets its own toast card (`CompletionToastQueue`).
+/// Watches the AI session store and agent registry for active→inactive
+/// edges (each completion carries its `ReminderKind` — done, or lost) and
+/// for arrivals into "parked on the user" (attention cards), and drives the
+/// tone-colored full-screen edge glow + the toast row under the notch.
+/// Throttles the glow only: the first batch flashes, arrivals during the
+/// cooldown don't replay it. Every completion gets its own toast card
+/// (`CompletionToastQueue`).
 @MainActor
 @Observable
 final class CompletionFlashService {
