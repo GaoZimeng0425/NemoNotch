@@ -424,15 +424,23 @@ final class GeminiProvider: AIProvider {
         let removeCutoff = now.addingTimeInterval(-Self.removeStaleThreshold)
 
         for session in store.sessions(for: .gemini) where session.lastEventTime < demoteCutoff {
-            if case .waitingForInput = session.phase {
-                store.mutate(session.id) { s in
-                    s.phase = s.phase.transition(to: .idle)
-                }
-                LogService.info(
-                    "Demoted silent session \(session.id.prefix(8)) to idle (\(Int(now.timeIntervalSince(session.lastEventTime)))s silent)",
-                    category: "GeminiProvider"
-                )
+            // Unified with the other providers: any demotable phase goes idle
+            // after 5 silent minutes (previously only waitingForInput did —
+            // a Gemini session killed mid-processing used to spin until the
+            // 30-min reaper). Exemptions live in `StaleDemotion`.
+            guard StaleDemotion.shouldDemote(
+                phase: session.phase,
+                isPreToolUse: session.isPreToolUse
+            ) else { continue }
+            store.mutate(session.id) { s in
+                s.phase = s.phase.transition(to: .idle)
+                s.currentTool = nil
+                s.isPreToolUse = false
             }
+            LogService.info(
+                "Demoted silent session \(session.id.prefix(8)) to idle (\(Int(now.timeIntervalSince(session.lastEventTime)))s silent)",
+                category: "GeminiProvider"
+            )
         }
 
         for session in store.sessions(for: .gemini) where session.lastEventTime < removeCutoff {

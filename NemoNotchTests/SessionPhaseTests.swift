@@ -22,4 +22,20 @@ struct SessionPhaseTests {
         #expect(SessionPhase.compacting.transition(to: .waitingForInput) == .waitingForInput)
         #expect(SessionPhase.compacting.transition(to: .idle) == .idle)
     }
+
+    @Test("stale demotion spares open tools, waiting approvals and records")
+    func staleDemotionExemptions() {
+        // 开着的工具:CLI 还在跑,降级=假完成/假中断(2026-11-01 zcode 实案)
+        #expect(!StaleDemotion.shouldDemote(phase: .processing, isPreToolUse: true))
+        // record 在管的会话由 record 纠正 phase(Claude 专属)
+        #expect(!StaleDemotion.shouldDemote(phase: .processing, isPreToolUse: false, recordStatusKnown: true))
+        // 等审批:审批桥自带超时(Claude 120s / opencode 600s)会挪 phase
+        #expect(!StaleDemotion.shouldDemote(phase: .waitingForApproval(ctx), isPreToolUse: false))
+        #expect(!StaleDemotion.shouldDemote(phase: .idle, isPreToolUse: false))
+        #expect(!StaleDemotion.shouldDemote(phase: .ended, isPreToolUse: false))
+        // 其余静默 5 分钟的活跃/停泊态都降
+        #expect(StaleDemotion.shouldDemote(phase: .processing, isPreToolUse: false))
+        #expect(StaleDemotion.shouldDemote(phase: .waitingForInput, isPreToolUse: false))
+        #expect(StaleDemotion.shouldDemote(phase: .compacting, isPreToolUse: false))
+    }
 }
