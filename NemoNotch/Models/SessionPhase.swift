@@ -83,7 +83,12 @@ enum SessionPhase: Equatable {
              (.waitingForApproval, .ended):
             return true
         case (.compacting, .processing),
-             (.compacting, .ended):
+             (.compacting, .ended),
+             // compacting 也能直接落回每个静止态:PreCompact 后直接 Stop /
+             // 审批 / 静默降级都不许被拒——否则徽章空转 30min 且完成卡永不弹。
+             (.compacting, .waitingForInput),
+             (.compacting, .waitingForApproval),
+             (.compacting, .idle):
             return true
         case (.ended, _):
             return false
