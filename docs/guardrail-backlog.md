@@ -71,3 +71,11 @@
   发生。拟:check-arch.sh A 档规则「`Settings/Pages/` 引用的 `settings.*` key 必须出现在
   `SettingsSearchIndex` 对应页 keys」(页源码 grep 提取 ↔ 索引文件对账,纯文本可判定);上线前
   按 A 档规矩校准到零命中 + `--selftest` 样本(命中样本可直接取本次 P2 的三 key 形状)。
+
+- **分发型文档的契约对表**(来源:external-toast-guide-ui 评审 P2,2026-11-03)。设置内指南常量
+  复制出去即脱离仓库,但它出生时就落后于 base 的公开契约(jumpURL 11-02 已入库、指南 11-01
+  定稿未同步)——同源链「常量↔指南文档」逐字一致有单测守,「指南文档↔README 契约表」无任何
+  对账,断在最长的那级。拟:check-arch B 档或独立纯文本对表——提取 README External Toast API
+  字段表与指南文档字段表的字段名集合(`jumpBundleId` 等),集合不等即红(新增字段忘了同步指南
+  的场景全覆盖);措辞级差异不比,只比字段名集合。教训①(contains 锚点变异须选唯一出现锚,
+  mutate 假阴性实案)一并记:AGENTS mutate 节加一句的候选。

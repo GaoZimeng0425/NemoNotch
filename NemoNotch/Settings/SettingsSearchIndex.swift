@@ -24,6 +24,8 @@ enum SettingsSearchIndex {
                 "settings.attention_toast.header", "settings.attention_toast.enabled", "settings.attention_toast.hint",
                 "settings.failure_toast.header", "settings.failure_toast.enabled",
                 "settings.external_toast.header", "settings.external_toast.enabled", "settings.external_toast.hint",
+                "settings.external_toast.guide.header", "settings.external_toast.guide.copy",
+                "settings.external_toast.guide.copied",
                 "settings.event_alerts.header", "settings.bluetooth_alerts.enabled",
                 "settings.calendar_alerts.enabled", "settings.charging_alerts.enabled",
                 "permission.notification.title", "permission.notification.detail",
