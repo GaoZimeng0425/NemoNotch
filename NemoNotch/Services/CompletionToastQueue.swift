@@ -38,9 +38,9 @@ struct CompletionToastQueue {
     private(set) var isPaused = false
 
     /// The earliest deadline that should fire, or nil when nothing can expire
-    /// (empty or paused).
+    /// (empty, paused, or only sticky cards — those leave with their wait).
     var nextDeadline: Date? {
-        isPaused ? nil : toasts.map(\.deadline).min()
+        isPaused ? nil : toasts.filter { !$0.item.sticky }.map(\.deadline).min()
     }
 
     mutating func add(_ items: [CompletionItem], now: Date, makeID: () -> UUID = UUID.init) {
@@ -115,14 +115,36 @@ struct CompletionToastQueue {
     }
 
     /// Removes cards whose deadline has passed, then brings waiting cards
-    /// back into the freed slots. Paused: removes nothing.
+    /// back into the freed slots. Paused: removes nothing. Sticky cards
+    /// (attention cards) never expire here — they leave via `replace(key:
+    /// with: nil)` when their wait ends, or `demote`.
     @discardableResult
     mutating func expire(now: Date) -> [CompletionToast] {
         guard !isPaused else { return [] }
-        let expired = toasts.filter { $0.deadline <= now }
-        toasts.removeAll { $0.deadline <= now }
+        let expired = toasts.filter { $0.deadline <= now && !$0.item.sticky }
+        toasts.removeAll { $0.deadline <= now && !$0.item.sticky }
         refill(now: now)
         return expired
+    }
+
+    /// A late-arriving failure card displaces the green card of the SAME
+    /// session (spec 审计口径 3): removes every card whose `sessionKey`
+    /// matches and whose toastKey isn't `keeping`, from the row and the
+    /// waiting pile alike, and returns what it removed. Other sessions'
+    /// and session-less cards (calendar) never match.
+    @discardableResult
+    mutating func demote(sessionKey: String, keeping toastKey: String, now: Date) -> [CompletionToast] {
+        let matches: (CompletionItem) -> Bool = {
+            $0.sessionKey == sessionKey && $0.toastKey != toastKey
+        }
+        var removed = toasts.filter { matches($0.item) }
+        toasts.removeAll { matches($0.item) }
+        if !removed.isEmpty {
+            refill(now: now)
+        }
+        removed += waiting.filter { matches($0.item) }
+        waiting.removeAll { matches($0.item) }
+        return removed
     }
 
     /// Most recently parked first; a returning card sits at the head of the

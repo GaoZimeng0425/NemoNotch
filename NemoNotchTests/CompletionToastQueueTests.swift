@@ -37,6 +37,68 @@ struct CompletionToastQueueTests {
         #expect(q.toasts[0].deadline == t0.addingTimeInterval(50))
     }
 
+    // MARK: - Sticky(attention 卡挂到撤回,不计时)
+
+    @Test("sticky card never expires while its neighbor does")
+    func stickyNeverExpires() {
+        var q = queue()
+        var ask = item("A")
+        ask.key = "ask:s1"
+        ask.sticky = true
+        var done = item("B")
+        done.key = "ai:s2"
+        q.add([ask, done], now: t0)
+        // 只有非 sticky 的 B 有到期点
+        #expect(q.nextDeadline == t0.addingTimeInterval(30))
+        let expired = q.expire(now: t0.addingTimeInterval(31))
+        #expect(expired.map(\.item.name) == ["B"])
+        #expect(q.toasts.map(\.item.name) == ["A"])
+        #expect(q.nextDeadline == nil)
+    }
+
+    @Test("a re-pushed sticky key stays sticky")
+    func stickySurvivesRepush() {
+        var q = queue()
+        var ask = item("A")
+        ask.key = "ask:s1"
+        ask.sticky = true
+        q.add([ask], now: t0)
+        q.add([ask], now: t0.addingTimeInterval(5))
+        #expect(q.toasts.count == 1)
+        #expect(q.toasts[0].item.sticky)
+    }
+
+    // MARK: - 跨键顶换(apiError 迟到红卡)
+
+    private func keyed(_ name: String, _ key: String) -> CompletionItem {
+        var i = item(name)
+        i.key = key
+        return i
+    }
+
+    @Test("demote removes only the same session's other cards")
+    func demoteSameSessionOnly() {
+        var q = queue()
+        q.add([keyed("green", "ai:s1"), keyed("other", "ai:s2"), item("cal")], now: t0)
+        let removed = q.demote(sessionKey: "s1", keeping: "fail:s1", now: t0.addingTimeInterval(1))
+        #expect(removed.map(\.item.key) == ["ai:s1"])
+        #expect(q.toasts.map(\.item.name).sorted() == ["cal", "other"])
+        #expect(q.demote(sessionKey: "nope", keeping: "k", now: t0).isEmpty)
+    }
+
+    @Test("demote reaches into the waiting pile")
+    func demoteWaitingPile() {
+        var q = queue()
+        q.add([keyed("green", "ai:s1")], now: t0)
+        q.add([keyed("x", "ai:x"), keyed("y", "ai:y"), keyed("z", "ai:z")], now: t0.addingTimeInterval(1))
+        // capacity 3:最早到的 ai:s1 被挤进等待堆
+        #expect(q.toasts.count == 3)
+        #expect(q.waiting.map(\.item.key) == ["ai:s1"])
+        let removed = q.demote(sessionKey: "s1", keeping: "fail:s1", now: t0.addingTimeInterval(2))
+        #expect(removed.map(\.item.key) == ["ai:s1"])
+        #expect(q.waiting.isEmpty)
+    }
+
     @Test("two sessions in the same project get two cards, not one merged card")
     func sameNameDifferentSessions() {
         var q = queue()
