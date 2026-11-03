@@ -57,7 +57,7 @@ NemoNotch/
 
 - 单测在 `NemoNotchTests/`,用 **Swift Testing**(`import Testing`、`@Test`、`#expect`),新代码不要用 XCTest。
 - 只测纯逻辑(parser、编码、状态机);ScriptingBridge/AX/NSWindow 集成测试跳过(要真权限,CI 不稳)。
-- **跑测试用 `sh scripts/test.sh`**(不是裸 xcodebuild——它带本机 ad-hoc 签名参数;`--only <Class>` 支持逗号列表;全量输出写 `build/test.log`)。**影响面测试选择已硬化**:feature worktree 里用 `sh scripts/affected-tests.sh`——改动文件→顶层符号→测试引用的确定性映射选类,映射为空回落全量(宁多跑不漏跑);**禁手挑 --only 类名**(--only 选错类的假绿出过实案;ripwire --affected 对 Swift Testing 宏测试解析不了,tests=0 实测,故自建映射)。**报告测试结果必须引脚本的退出码和日志,绝不凭记忆复述"过了"**。
+- **跑测试用 `sh scripts/test.sh`**(不是裸 xcodebuild——它带本机 ad-hoc 签名参数;`--only <Class>` 支持逗号列表;全量输出写 `build/test.log`)。**影响面测试选择已硬化(两级,2026-11-03)**:feature worktree 里用 `sh scripts/affected-tests.sh`——一级:编译器索引闭包(`scripts/index-affected.swift`,dlopen 工具链 libIndexStore 读本 worktree DerivedData 的索引;改动文件→**传递**引用闭包,a 引 b、b 引 c→c b a 全选→∩ `NemoNotchTests/*Tests.swift` 为类;索引须含测试记录——只 `xcodebuild build` 过的 worktree 没编测试目标→exit 3 走二级,跑一次测试自愈);二级(回落):改动文件→顶层符号→测试引用的文本映射,原实现保留。共同出口:映射为空回落全量(宁多跑不漏跑;健康闭包为空也全量,v1 不信空);**禁手挑 --only 类名**(--only 选错类的假绿出过实案;ripwire --affected 对 Swift Testing 宏测试解析不了,tests=0 实测,故自建映射)。**报告测试结果必须引脚本的退出码和日志,绝不凭记忆复述"过了"**。
 - `feat-done` 合并前在 worktree 跑单测——合并即部署 /Applications,测试必须先于部署。
 - **冷启动宿主崩溃有界重试**:仅当「非零退出 + 0 个用例执行 + 日志含崩溃特征(`Early unexpected exit`/`Test runner exited` 等)」同时成立才重试一次(首次日志存 `build/test.log.crash1`)——真失败/编译错误绝不重试,不给真失败擦粉。`NEMONOTCH_TEST_NO_RETRY=1` 关;特征词待抓到真实崩溃日志后校准。
 - **判别剃刀(假测试判据)**:每个测试必须以具体输入调被测单元、断言字面输出或可观察副作用。问:*被测代码到处返回默认值,这测试还能过吗?*能过就没有鉴别力。不可接受:只断言"调用发生了"、自指期望(`#expect(f(a)) == f(a)` 形)、钉手写常量。**断言面选在边界**:单元的契约是"发出去的东西"(hook 回包、store 落库、渲染结果)时,断言发出的内容而非发起方的返回值——返回值对「发错了但仍成功返回」天然无感。例外:跨表关系断言。范例:`CompletionDetector`、`BadgeGrouping` 等纯 fold 测试。
