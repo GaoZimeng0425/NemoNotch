@@ -1,4 +1,34 @@
+@preconcurrency import CryptoKit
 @preconcurrency import Foundation
+
+/// 资产指纹策略:已解压的 dylib 是否需要随 bundle 内资产更新而重解压。
+/// 旧安装第一次带上本逻辑时 `recordedFingerprint` 为 nil → 强制重解压一次,
+/// 把打了 `@autoreleasepool` 补丁的 dylib 铺下去(否则老用户升级 app 后
+/// `~/Library/Application Support/NemoNotch/` 里的旧 dylib 永远不会被替换)。
+enum DylibExtractionPolicy {
+    static func needsExtraction(
+        destExists: Bool,
+        recordedFingerprint: String?,
+        assetFingerprint: String
+    ) -> Bool {
+        guard destExists else { return true }
+        return recordedFingerprint != assetFingerprint
+    }
+}
+
+/// 泄漏看门狗策略:perl 守护 footprint 达阈值即回收。主修复是 dylib 的
+/// `@autoreleasepool` 补丁(scripts/build-mediaremote-mini.sh);这里是兜底——
+/// artwork 场景(放歌时 MB 级/发)无法在探针里可靠驱动,守卫不依赖归因。
+enum DaemonMemoryPolicy {
+    static let recycleThresholdBytes = 256 * 1024 * 1024
+
+    static func shouldRecycle(
+        footprintBytes: Int,
+        thresholdBytes: Int = recycleThresholdBytes
+    ) -> Bool {
+        footprintBytes >= thresholdBytes
+    }
+}
 
 final class NowPlayingCLI: @unchecked Sendable {
     private static let infoKeyMapping: [String: String] = [
@@ -163,6 +193,40 @@ final class NowPlayingCLI: @unchecked Sendable {
         _ = startDaemon()
     }
 
+    // MARK: - 泄漏看门狗
+
+    /// `RUSAGE_INFO_V3` flavor;`RUSAGE_INFO_*` 是 C 宏 Swift 不可见,按
+    /// sys/resource.h 硬编码。刻意不用 `rusage_info_current`(指向 SDK 最新
+    /// 版结构,与内核写回长度不一致会 SIGABRT,PerfProbe 实案见 AGENTS.md);
+    /// 显式 v3 结构 + v3 flavor 与外部监控工具同款,实测安全。
+    private static let rusageInfoV3Flavor: Int32 = 3
+
+    private static func daemonFootprintBytes(pid: pid_t) -> Int? {
+        var info = rusage_info_v3()
+        // SDK 的 Swift 桥接把出参声明成 UnsafeMutablePointer<rusage_info_t?>
+        // (指向"可选裸指针");把 v3 结构体存储重绑成该类型后传首地址——内核
+        // 按 flavor=3 写回整个 v3 结构,缓冲区尺寸即 sizeof(rusage_info_v3)。
+        let result = withUnsafeMutableBytes(of: &info) { raw -> Int32 in
+            let typed = raw.bindMemory(to: rusage_info_t?.self)
+            return proc_pid_rusage(pid, rusageInfoV3Flavor, typed.baseAddress!)
+        }
+        guard result == 0 else { return nil }
+        return Int(info.ri_phys_footprint)
+    }
+
+    /// 每收到一轮完整响应查一次(≈2s 一发,一个 syscall,可忽略);超阈值
+    /// 走现成 restartDaemon。在 `queue` 上调用,与超时重启同款上下文。
+    private func recycleDaemonIfBloated() {
+        guard let process = daemonProcess, process.isRunning,
+              let footprint = Self.daemonFootprintBytes(pid: process.processIdentifier),
+              DaemonMemoryPolicy.shouldRecycle(footprintBytes: footprint) else { return }
+        LogService.info(
+            "daemon footprint \(footprint / 1_048_576)MB over threshold, recycling (leak guard)",
+            category: "NowPlayingCLI"
+        )
+        restartDaemon()
+    }
+
     // MARK: - Daemon Fetch
 
     private func fetchViaDaemon(completion: @Sendable @escaping ([String: Any]?) -> Void) {
@@ -208,6 +272,8 @@ final class NowPlayingCLI: @unchecked Sendable {
         } else {
             finishPending(nil)
         }
+
+        recycleDaemonIfBloated()
     }
 
     private func handleDaemonTimeout() {
@@ -350,8 +416,16 @@ final class NowPlayingCLI: @unchecked Sendable {
 
     private static func extractDylib(gzPath: String) -> String? {
         let dest = (supportDir as NSString).appendingPathComponent("MediaRemoteMini.dylib")
+        let fingerprintPath = dest + ".sha256"
+        let assetFingerprint = sha256HexOfFile(atPath: gzPath)
 
-        if FileManager.default.fileExists(atPath: dest) {
+        // 资产指纹变了(或旧安装第一次带上本逻辑)→ 删旧重解压;
+        // 指纹一致 → 直接复用已解压产物,不重复 gunzip。
+        if !DylibExtractionPolicy.needsExtraction(
+            destExists: FileManager.default.fileExists(atPath: dest),
+            recordedFingerprint: try? String(contentsOfFile: fingerprintPath, encoding: .utf8),
+            assetFingerprint: assetFingerprint
+        ) {
             return dest
         }
 
@@ -427,11 +501,18 @@ final class NowPlayingCLI: @unchecked Sendable {
                 try FileManager.default.removeItem(atPath: dest)
             }
             try FileManager.default.moveItem(atPath: tempDest, toPath: dest)
+            // 成功后记资产指纹;写失败不致命(下次启动多解压一次而已)。
+            try? assetFingerprint.write(toFile: fingerprintPath, atomically: true, encoding: .utf8)
             return dest
         } catch {
             try? FileManager.default.removeItem(atPath: tempDest)
             return nil
         }
+    }
+
+    private static func sha256HexOfFile(atPath path: String) -> String {
+        guard let data = FileManager.default.contents(atPath: path) else { return "" }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Fallback search
