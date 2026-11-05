@@ -131,6 +131,8 @@ PAT_OPACITY_HIDE='\.opacity\(.*[?][[:space:]]*0([^[:alnum:].]|$)|\.opacity\(.*[?
 # 当前 SDK 的 rusage_info_current 结构版本与内核写回不一致,proc_pid_rusage
 # 调用直接 SIGABRT(实测)。→ AGENTS.md「工具与探针」。
 # 校准(2026-10-27):0 命中(仅 PerfProbe 注释提及,注释行已滤)。
+# 已知合法位点(2026-11-05):NowPlayingCLI.swift 看门狗以显式 RUSAGE_INFO_V3
+# + 匹配结构体 + 行尾 fence: allow 豁免(独立探针 rc=0 验证)。
 PAT_RUSAGE='proc_pid_rusage\('
 
 # ui-store-dict — UI 只读 sortedSessions,不直读 store 原始会话字典。
