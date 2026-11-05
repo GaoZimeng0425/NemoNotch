@@ -208,7 +208,10 @@ final class NowPlayingCLI: @unchecked Sendable {
         // 按 flavor=3 写回整个 v3 结构,缓冲区尺寸即 sizeof(rusage_info_v3)。
         let result = withUnsafeMutableBytes(of: &info) { raw -> Int32 in
             let typed = raw.bindMemory(to: rusage_info_t?.self)
-            return proc_pid_rusage(pid, rusageInfoV3Flavor, typed.baseAddress!)
+            // PerfProbe 实案雷的是 rusage_info_current(SDK 最新版枚举,结构
+            // 长度与内核写回不一致 SIGABRT);本行显式 RUSAGE_INFO_V3 + v3
+            // 结构体,2026-11-05 独立探针本机实跑 rc=0,评审记录留证据。
+            return proc_pid_rusage(pid, rusageInfoV3Flavor, typed.baseAddress!) // fence: allow
         }
         guard result == 0 else { return nil }
         return Int(info.ri_phys_footprint)
