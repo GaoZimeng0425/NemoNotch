@@ -233,7 +233,7 @@ NemoNotch 是一个 macOS 刘海(notch)工具:在 MacBook 刘海区提供交互�
 
 ### 4.1 性能探针默认关闭、热路径常驻、Release 可见
 
-- **通用原则**:性能探针禁用态只读一次静态 Bool,即可安全常驻在最热的路径里;开关走环境变量/UserDefaults,报告打 info 级让 Release 构建也能看到——现场排障 tail 日志即可定位谁在烧 CPU。附:读进程资源用 getrusage 而非 proc_pid_rusage(当前 SDK 的 rusage_info_current 结构版本与内核不匹配会 SIGABRT)。
+- **通用原则**:性能探针禁用态只读一次静态 Bool,即可安全常驻在最热的路径里;开关走环境变量/UserDefaults,报告打 info 级让 Release 构建也能看到——现场排障 tail 日志即可定位谁在烧 CPU。附:读进程资源用 getrusage 而非 proc_pid_rusage(当前 SDK 的 rusage_info_current 结构版本与内核不匹配会 SIGABRT;显式固定 flavor 如 V3 + 匹配结构体可用,见 AGENTS.md 媒体节看门狗)。
 - **本项目战例**:PerfProbe 被 17 个调用点文件引用(另加定义文件共 18 个,`grep -rl PerfProbe NemoNotch --include='*.swift'`,2026-10-20 实测;挖掘材料记为 15,系当时快照),连 rebuildSorted 这种高频内部函数也有 begin/end 计时;MainThreadProbe 把每个 runloop turn 喂给它——「主线程 ~180 次/秒 × 1.8ms」的模式才变得可见,单回合阈值探针对此盲(多短回合 ≠ 一个长卡顿),beforeWaiting 栈采样也叫不出业务函数(工作早已返回)。
 - **证据**:`NemoNotch/Helpers/PerfProbe.swift:1-40`;`NemoNotch/Services/AISessionStore.swift:113-118`;AGENTS.md「Performance Probe」节;文件计数命令见附录。
 

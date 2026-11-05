@@ -11,7 +11,9 @@
 # 编译参数对齐 nowplaying-cli Makefile(2026-04 版本):
 #   clang -dynamiclib -fobjc-arc -fvisibility=default -O3
 #   -framework Foundation -framework AppKit -framework UniformTypeIdentifiers
-#   + ad-hoc codesign + gzip -9n(无时间戳,可重放)
+#   + ad-hoc codesign + gzip -9n(gzip 层无时间戳;Mach-O 层受随机
+#     LC_UUID 与 install_name 嵌 mktemp 路径影响,不逐字节可重放——
+#     资产审计用符号面+ObjC面+关键函数反汇编对拍,见评审记录)
 #
 # 产物替换 NemoNotch/Resources/MediaRemoteMini.bin.gz 后,用
 # scripts/mediaremote-leak-check.sh 验证(阈值 2000B/发)。
