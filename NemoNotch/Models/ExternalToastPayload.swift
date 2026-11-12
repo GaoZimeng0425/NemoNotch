@@ -23,10 +23,45 @@ struct ExternalToastPayload: Equatable, Sendable {
     /// wins over `jumpBundleId`, which stays the fallback when the URL cannot be opened.
     /// Already trimmed; empty/whitespace input is normalised to nil.
     let jumpURL: String?
+    /// Ring color class (Herdr mod and friends). nil = rainbow ring, as before.
+    var tone: ExternalToastTone?
+    /// Herdr agent address (`t7`, `vps/t7`); a click focuses that agent in Herdr.
+    var herdrTerminal: String?
+    /// `.close` removes the keyed card; its `title` is "" and never shown.
+    var action: ExternalToastAction = .show
+    /// When the card leaves on its own; nil = the queue's default timer.
+    var expiry: ExternalToastExpiry?
+}
+
+/// Optional ring color class — the four reminder tones, never a free color.
+enum ExternalToastTone: String, Sendable {
+    case done, decide, approve, error
+
+    /// Representative kind carrying the tone onto the card (ring only — external
+    /// cards never render `kind.verb`).
+    var reminderKind: ReminderKind {
+        switch self {
+        case .done: .turnDone
+        case .decide: .needsDecision
+        case .approve: .needsApproval
+        case .error: .agentError
+        }
+    }
+}
+
+enum ExternalToastAction: String, Sendable {
+    case show, close
+}
+
+/// `expiresAt`: an absolute deadline (Unix seconds) or `"infinity"` (never expires).
+enum ExternalToastExpiry: Equatable, Sendable {
+    case at(Date)
+    case infinity
 }
 
 /// Validation failures for `/v1/toast` bodies. Order matters: malformed → schema →
-/// app presence → `::` separator → lengths → title → body → jumpBundleId → jumpURL.
+/// app presence → `::` separator → lengths → jumpBundleId → jumpURL → action →
+/// (show only) title → body → tone → herdrTerminal → expiresAt.
 /// Icon degrades, never rejects.
 enum ExternalToastRejection: Error, Equatable, Sendable {
     case malformedJSON
@@ -41,6 +76,13 @@ enum ExternalToastRejection: Error, Equatable, Sendable {
     case jumpBundleIdTooLong
     case jumpURLInvalid
     case jumpURLTooLong
+    case actionInvalid
+    case closeRequiresKey
+    case toneInvalid
+    case herdrTerminalInvalid
+    case expiresAtInvalid
+    case expiresAtInPast
+    case infinityRequiresKey
 
     /// Short English sentence for logs and the HTTP error body.
     var localizedDescription: String {
@@ -57,6 +99,13 @@ enum ExternalToastRejection: Error, Equatable, Sendable {
         case .jumpBundleIdTooLong: "jumpBundleId exceeds 255 characters"
         case .jumpURLInvalid: "jumpURL must be an absolute URL with a scheme other than file"
         case .jumpURLTooLong: "jumpURL exceeds 2048 characters"
+        case .actionInvalid: "action must be \"show\" or \"close\""
+        case .closeRequiresKey: "action close requires a key"
+        case .toneInvalid: "tone must be one of done, decide, approve, error"
+        case .herdrTerminalInvalid: "herdrTerminal must look like t7 or machine/t7"
+        case .expiresAtInvalid: "expiresAt must be Unix seconds or \"infinity\""
+        case .expiresAtInPast: "expiresAt is in the past"
+        case .infinityRequiresKey: "expiresAt infinity requires a key"
         }
     }
 }
@@ -78,6 +127,32 @@ private struct RawExternalToast: Decodable {
     let icon: String?
     let jumpBundleId: String?
     let jumpURL: String?
+    let tone: String?
+    let herdrTerminal: String?
+    let action: String?
+    let expiresAt: RawExpiry?
+}
+
+/// `expiresAt` is a number or a string; anything else must reach validation as
+/// `.invalid` instead of failing the whole body as malformed JSON.
+private enum RawExpiry: Decodable {
+    case seconds(Double)
+    case text(String)
+    case invalid
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let bool = try? container.decode(Bool.self) {
+            _ = bool
+            self = .invalid
+        } else if let seconds = try? container.decode(Double.self) {
+            self = .seconds(seconds)
+        } else if let text = try? container.decode(String.self) {
+            self = .text(text)
+        } else {
+            self = .invalid
+        }
+    }
 }
 
 extension ExternalToastPayload {
@@ -85,7 +160,7 @@ extension ExternalToastPayload {
 
     /// Decode + validate a `/v1/toast` body. Unknown JSON fields are ignored by the
     /// decoder (forward compatibility). Pure function, no MainActor.
-    static func parse(_ data: Data) -> Result<ExternalToastPayload, ExternalToastRejection> {
+    static func parse(_ data: Data, now: Date = Date()) -> Result<ExternalToastPayload, ExternalToastRejection> {
         let raw: RawExternalToast
         do {
             raw = try JSONDecoder().decode(RawExternalToast.self, from: data)
@@ -110,15 +185,6 @@ extension ExternalToastPayload {
             return .failure(.keyTooLong)
         }
 
-        guard let title = raw.title, !title.isEmpty else { return .failure(.titleInvalid) }
-        if title.count > 120 {
-            return .failure(.titleTooLong)
-        }
-
-        if let body = raw.body, body.count > 280 {
-            return .failure(.bodyTooLong)
-        }
-
         if let jumpBundleId = raw.jumpBundleId, jumpBundleId.count > 255 {
             return .failure(.jumpBundleIdTooLong)
         }
@@ -139,16 +205,88 @@ extension ExternalToastPayload {
             }
         }
 
-        return .success(ExternalToastPayload(
+        let key = (raw.key?.isEmpty == false) ? raw.key : nil
+        let jumpURL = (trimmedJumpURL?.isEmpty == false) ? trimmedJumpURL : nil
+
+        // action: close only needs app + key (title is never shown); show keeps
+        // every original requirement.
+        var action = ExternalToastAction.show
+        if let rawAction = raw.action {
+            guard let parsed = ExternalToastAction(rawValue: rawAction) else { return .failure(.actionInvalid) }
+            action = parsed
+        }
+        if action == .close {
+            guard key != nil else { return .failure(.closeRequiresKey) }
+            var closing = ExternalToastPayload(
+                schema: 1, app: app, key: key, title: "", body: nil, iconSymbol: nil,
+                jumpBundleId: nil, jumpURL: nil
+            )
+            closing.action = .close
+            return .success(closing)
+        }
+
+        guard let title = raw.title, !title.isEmpty else { return .failure(.titleInvalid) }
+        if title.count > 120 {
+            return .failure(.titleTooLong)
+        }
+
+        if let body = raw.body, body.count > 280 {
+            return .failure(.bodyTooLong)
+        }
+
+        var payload = ExternalToastPayload(
             schema: 1,
             app: app,
-            key: (raw.key?.isEmpty == false) ? raw.key : nil,
+            key: key,
             title: title,
             body: raw.body,
             iconSymbol: Self.symbolName(fromIcon: raw.icon),
             jumpBundleId: raw.jumpBundleId,
-            jumpURL: (trimmedJumpURL?.isEmpty == false) ? trimmedJumpURL : nil
-        ))
+            jumpURL: jumpURL
+        )
+        do {
+            payload.tone = try Self.tone(raw.tone)
+            payload.herdrTerminal = try Self.herdrTerminal(raw.herdrTerminal)
+            payload.expiry = try Self.expiry(raw.expiresAt, hasKey: key != nil, now: now)
+        } catch {
+            return .failure(error)
+        }
+        return .success(payload)
+    }
+
+    private static func tone(_ raw: String?) throws(ExternalToastRejection) -> ExternalToastTone? {
+        guard let raw else { return nil }
+        guard let tone = ExternalToastTone(rawValue: raw) else { throw .toneInvalid }
+        return tone
+    }
+
+    /// `t7` or `machine/t7`; never starts with `-` (it ends up as a CLI argument).
+    private static func herdrTerminal(_ raw: String?) throws(ExternalToastRejection) -> String? {
+        guard let raw else { return nil }
+        let pattern = #"^([A-Za-z0-9._-]{1,64}/)?[A-Za-z0-9]{1,32}$"#
+        guard raw.first != "-", raw.range(of: pattern, options: .regularExpression) != nil else {
+            throw .herdrTerminalInvalid
+        }
+        return raw
+    }
+
+    private static func expiry(
+        _ raw: RawExpiry?, hasKey: Bool, now: Date
+    ) throws(ExternalToastRejection) -> ExternalToastExpiry? {
+        switch raw {
+        case nil:
+            return nil
+        case let .seconds(seconds):
+            let deadline = Date(timeIntervalSince1970: seconds)
+            guard deadline > now else { throw .expiresAtInPast }
+            return .at(deadline)
+        case .text("infinity"):
+            // Without a key nothing could ever close the card.
+            guard hasKey else { throw .infinityRequiresKey }
+            return .infinity
+        case .text, .invalid:
+            throw .expiresAtInvalid
+        }
     }
 
     /// Only `"sf:<name>"` (non-empty name) is a valid icon; anything else degrades to nil.
