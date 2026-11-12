@@ -77,7 +77,9 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
   "body": "nemo-1.2.3.dmg · 84 MB",
   "icon": "sf:arrow.down.circle",
   "jumpBundleId": "com.me.mydownloader",
-  "jumpURL": "mydownloader://downloads/42"
+  "jumpURL": "mydownloader://downloads/42",
+  "tone": "done",
+  "expiresAt": 1794470400
 }
 ```
 
@@ -86,13 +88,17 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 | `schema` | Int | ✓ | 契约版本，目前恒为 `1`；其他值 → `400` |
 | `app` | String | ✓ | 应用显示名，1–48 字符 |
 | `key` | String? | | 有 = keyed 持续卡（同 key 刷新同一张，重置计时）；无 = 一次性卡，每次推送各自成卡。1–128 字符；空串视为未提供。`app` 与 `key` 都禁含 `::` |
-| `title` | String | ✓ | 1–120 字符 |
+| `title` | String | ✓ | 1–120 字符（`action: "close"` 时不需要） |
 | `body` | String? | | ≤ 280 字符 |
 | `icon` | String? | | v1 仅 `sf:<SF Symbol 名>`；不存在的符号名回落通用卡片图标，不报错 |
 | `jumpBundleId` | String? | | 点击卡片激活该应用；缺失 = 点击只关卡。≤ 255 字符 |
 | `jumpURL` | String? | | 点击卡片打开该 URL（深链或网页）——优先于 `jumpBundleId`，URL 打不开时才回落到激活应用。必须是带 scheme 的绝对 URL，禁 `file:`；≤ 2048 字符；首尾空白会被剥掉，空串或纯空白视为未提供；其余原样透传（请自行百分号编码） |
+| `tone` | String? | | 卡片边框颜色类别：`done`（绿，完成回来看）/ `decide`（琥珀，来做决定）/ `approve`（蓝，来点允许）/ `error`（红，来救火）；缺失 = 彩虹边框；其他值 → `400`。只改颜色，不改卡面文字 |
+| `herdrTerminal` | String? | | [Herdr](#herdr-mod) 的 agent 地址（`t7`、`vps/t7`）：点卡片让 Herdr 聚焦到该 agent。优先于 `jumpURL`（并存时忽略 URL）；失败回落打开 Herdr。格式 `[机器名/]地址`，地址 1–32 位字母数字，不得以 `-` 开头，否则 → `400` |
+| `action` | String? | | `show`（缺省）或 `close`。`close` 撤掉同 `app` + `key` 的卡（在屏上或排队中的都撤），**必须带 `key`**，不需要 `title`；卡不存在也返回 `200` |
+| `expiresAt` | Number 或 String | | 卡片到期时刻：Unix 时间戳（秒，可带小数），到点消失，悬停不顺延；或 `"infinity"` = 永不自动消失，只能被 `close` / 点击 / × 撤下（**必须带 `key`**）。缺失 = 约 5 分钟。时间戳已过去 → `400` |
 
-契约规则：未知字段忽略（前向兼容）；keyed 重推是**完整卡面**——缺 `body` 即清空正文，无逐字段合并；每卡自定义时长刻意不在 v1（与内部卡同样 5 分钟）。响应：`200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`。
+契约规则：未知字段忽略（前向兼容）；keyed 重推是**完整卡面**——缺 `body` 即清空正文，无逐字段合并；卡片存活时长缺省与内部卡相同（约 5 分钟），需要别的时长用 `expiresAt`。响应：`200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`。
 
 ```bash
 PORT=$(cat ~/.NemoNotch/hook-port)   # 文件缺失 → 45831
@@ -101,6 +107,18 @@ curl -X POST "127.0.0.1:$PORT/v1/toast" \
   -H "X-NemoNotch-Token: $TOKEN" -H "Content-Type: application/json" \
   -d '{"schema":1,"app":"MyDownloader","key":"download-42","title":"下载完成","body":"84 MB","icon":"sf:arrow.down.circle"}'
 ```
+
+### Herdr mod
+
+在 Herdr 里跑 agent 时：agent 在你没看着的时候跑完，弹一张绿卡（约 5 分钟后消失）；卡住等你，弹一张蓝卡（一直挂到你处理）。点卡片，Herdr 聚焦到那个 agent；你在 Herdr 里看过或答完，卡片自动撤掉。Herdr 里唯一的变化是侧栏 Spaces 那一行多一个 `● NemoNotch`（圆点亮 = 连得上 NemoNotch）。
+
+```bash
+# 先打开 Herdr
+sh scripts/install-herdr-mod.sh              # 安装 / 更新（可重复运行）
+sh scripts/install-herdr-mod.sh --uninstall
+```
+
+mod 源码在 `integrations/herdr-mod/`，只用上面的外部 Toast API（`tone`、`herdrTerminal`、`action`、`expiresAt`）。如果在 Herdr 里同时装着 NemoNotch 自己的 Claude Code hook，每轮会收到两张卡——不想要的那份 hook 自行卸载。
 
 ## 技术栈
 
