@@ -352,11 +352,15 @@ final class CompletionToastWindowController {
         case let .dismiss(id):
             service.dismissToast(id: id)
         case let .jump(id, target):
-            AppActivator.activate(
-                pid: target.hostPID,
-                expectedBundleId: target.hostBundleId,
-                tabLink: target.tabLink
-            )
+            if let terminal = target.herdrTerminal {
+                HerdrJumper.focus(terminal: terminal)
+            } else {
+                AppActivator.activate(
+                    pid: target.hostPID,
+                    expectedBundleId: target.hostBundleId,
+                    tabLink: target.tabLink
+                )
+            }
             service.dismissToast(id: id)
         case let .open(id, bundleID):
             AppActivator.openApp(bundleId: bundleID)
