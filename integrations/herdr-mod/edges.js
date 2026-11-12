@@ -6,6 +6,9 @@
 // weren't looking) and blocked (waiting on you).
 const ATTENTION = new Set(["done", "blocked"]);
 const WORD = { done: "跑完了", blocked: "等你回应" };
+// Mirrors NemoNotch's herdrTerminal validation (ExternalToastPayload.swift):
+// an address it would reject must not cost the whole card a 400.
+const JUMPABLE = /^([A-Za-z0-9._-]{1,64}\/)?[A-Za-z0-9]{1,32}$/;
 
 /** address -> status */
 export function snapshot(agents) {
@@ -59,13 +62,28 @@ export function card(agent) {
     title: clip(`${agent.space_name} / ${agent.tab_name}`, 120),
     body: clip(parts.join(" · "), 280),
     tone: blocked ? "approve" : "done",
-    herdrTerminal: agent.address,
     jumpBundleId: "dev.herdr.app",
   };
+  if (JUMPABLE.test(agent.address) && !agent.address.startsWith("-")) body.herdrTerminal = agent.address;
   if (blocked) body.expiresAt = "infinity";
   return body;
 }
 
 export function closeBody(address) {
   return { schema: 1, app: "Herdr", key: address, action: "close" };
+}
+
+/**
+ * A single-lane runner: each task starts after the previous one settled, so
+ * a card's show and close reach NemoNotch in edge order (independent requests
+ * can arrive close-before-show and leave a never-expiring card behind).
+ * A failed task never blocks the lane.
+ */
+export function serial() {
+  let tail = Promise.resolve();
+  return (task) => {
+    const run = tail.then(task);
+    tail = run.catch(() => {});
+    return run;
+  };
 }

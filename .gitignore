@@ -40,3 +40,7 @@ build.log
 !/.zcode/skills/
 
 __pycache__/
+
+# Herdr writes these into any mod folder it checks (herdr-app check); not ours
+integrations/herdr-mod/jsconfig.json
+integrations/herdr-mod/*.d.ts

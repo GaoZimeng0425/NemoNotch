@@ -7,7 +7,7 @@
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { agents, theme, layout, home, readTextFile } from "herdr";
-import { diff, firstRun, card, closeBody, snapshot } from "./edges.js";
+import { diff, firstRun, card, closeBody, snapshot, serial } from "./edges.js";
 
 const OPEN_KEYS = "nemonotch.openKeys";
 const HEALTH_EVERY_MS = 30000;
@@ -35,6 +35,7 @@ export default class NemoNotch extends View {
     this.prev = null;
     this.reachable = false;
     this.openKeys = new Set(this.loadKeys());
+    this.lane = serial();
     cx.timer.every(HEALTH_EVERY_MS, (cx) => this.checkHealth(cx));
     this.checkHealth(cx);
   }
@@ -68,10 +69,11 @@ export default class NemoNotch extends View {
     });
   }
 
-  // One POST; on 2xx the open-key set follows. Failures are dropped (no retry,
-  // no queue): the next edge for that agent brings things back in line.
+  // One POST, queued on a single lane so show/close keep edge order; on 2xx the
+  // open-key set follows. Failures are dropped (no retry): the next edge for
+  // that agent brings things back in line.
   send(cx, body) {
-    cx.spawn(async () => {
+    cx.spawn(() => this.lane(async () => {
       try {
         const { base, token } = await endpoint();
         const r = await fetch(`${base}/v1/toast`, {
@@ -86,7 +88,7 @@ export default class NemoNotch extends View {
       } catch (_) {
         // NemoNotch not running: nothing to do.
       }
-    });
+    }));
   }
 
   track(cx) {

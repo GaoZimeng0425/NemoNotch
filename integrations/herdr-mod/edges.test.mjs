@@ -1,7 +1,7 @@
 // node --test: pure edge rules of the NemoNotch Herdr mod (no Herdr needed).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { diff, firstRun, card, closeBody, snapshot } from "./edges.js";
+import { diff, firstRun, card, closeBody, snapshot, serial } from "./edges.js";
 
 const agent = (address, status, extra = {}) => ({
   address, status, space_name: "NemoNotch", tab_name: "fix", app: "claude-code", title: "Refactor", ...extra,
@@ -59,4 +59,29 @@ test("null app drops its segment; title 120 / body 280 truncation by character",
 
 test("closeBody", () => {
   assert.deepEqual(closeBody("t7"), { schema: 1, app: "Herdr", key: "t7", action: "close" });
+});
+
+test("serial runs tasks in submit order even when an earlier one is slower", async () => {
+  const run = serial();
+  const order = [];
+  const slow = run(() => new Promise((resolve) => setTimeout(() => { order.push("show"); resolve(); }, 30)));
+  const fast = run(async () => { order.push("close"); });
+  await Promise.all([slow, fast]);
+  assert.deepEqual(order, ["show", "close"]);
+});
+
+test("serial keeps going after a task throws", async () => {
+  const run = serial();
+  const order = [];
+  run(async () => { throw new Error("NemoNotch down"); });
+  await run(async () => { order.push("next"); });
+  assert.deepEqual(order, ["next"]);
+});
+
+test("an address NemoNotch would reject drops herdrTerminal instead of losing the card", () => {
+  const body = card(agent("my box/t7", "done"));
+  assert.equal(body.herdrTerminal, undefined);
+  assert.equal(body.key, "my box/t7");
+  assert.equal(body.jumpBundleId, "dev.herdr.app");
+  assert.equal(card(agent("vps/t7", "done")).herdrTerminal, "vps/t7");
 });
