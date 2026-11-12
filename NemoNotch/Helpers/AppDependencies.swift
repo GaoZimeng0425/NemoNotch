@@ -124,7 +124,11 @@ struct AppDependencies {
             notificationToast.start()
         }
 
-        let externalCard = ExternalCardService(settings: settings, present: { completionFlash.showExternalToast($0) })
+        let externalCard = ExternalCardService(
+            settings: settings,
+            present: { completionFlash.showExternalToast($0) },
+            close: { completionFlash.closeExternalToast(key: $0) }
+        )
         aiMonitor.hookServer.onExternalToast = { externalCard.handle(body: $0) }
 
         // 事件提醒:蓝牙音频设备连接/断开走刘海就地展开胶囊(BluetoothService

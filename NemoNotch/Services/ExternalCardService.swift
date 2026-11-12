@@ -12,15 +12,22 @@ enum ExternalToastAcceptance: Equatable, Sendable {
 ///
 /// Responsibilities, in order: feature gate → decode + validate (pure,
 /// `ExternalToastPayload.parse`) → assemble a `CompletionItem` → hand it to
-/// the toast pipeline through `present`.
+/// the toast pipeline through `present` (or, for `action: "close"`, the
+/// card key to `close`).
 @MainActor
 final class ExternalCardService {
     private let settings: AppSettings
     private let present: (CompletionItem) -> Void
+    private let close: (String) -> Void
 
-    init(settings: AppSettings, present: @escaping (CompletionItem) -> Void) {
+    init(
+        settings: AppSettings,
+        present: @escaping (CompletionItem) -> Void,
+        close: @escaping (String) -> Void = { _ in }
+    ) {
         self.settings = settings
         self.present = present
+        self.close = close
         LogService.info("ExternalCardService init", category: "ExternalCard")
     }
 
@@ -33,6 +40,11 @@ final class ExternalCardService {
             return .ok
         }
         switch ExternalToastPayload.parse(body) {
+        case let .success(payload) where payload.action == .close:
+            let key = payload.cardKey()
+            close(key)
+            LogService.debug("External toast close: \(key)", category: "ExternalCard")
+            return .ok
         case let .success(payload):
             let item = Self.makeItem(payload: payload)
             present(item)
@@ -60,7 +72,23 @@ final class ExternalCardService {
         )
         // jumpURL rides as tabLink: AppActivator opens it first and only falls back to
         // activating jumpBundleId when the URL cannot be opened (same rule as AI/calendar cards).
-        item.jump = CompletionJump.make(hostPID: nil, hostBundleId: payload.jumpBundleId, tabLink: payload.jumpURL)
+        // herdrTerminal wins over jumpURL (the URL is dropped); jumpBundleId stays the fallback.
+        item.jump = CompletionJump.make(
+            hostPID: nil,
+            hostBundleId: payload.jumpBundleId,
+            tabLink: payload.herdrTerminal == nil ? payload.jumpURL : nil,
+            herdrTerminal: payload.herdrTerminal
+        )
+        // tone → ring color only: external cards never render kind.verb.
+        item.kind = payload.tone?.reminderKind
+        switch payload.expiry {
+        case .infinity:
+            item.sticky = true
+        case let .at(deadline):
+            item.fixedDeadline = deadline
+        case nil:
+            break
+        }
         return item
     }
 }

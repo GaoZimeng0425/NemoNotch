@@ -18,6 +18,8 @@ struct ExternalToastGuideTests {
         let text = ExternalToastGuide.text
         #expect(text.contains("jumpBundleId"))
         #expect(text.contains("jumpURL"))
+        #expect(text.contains("herdrTerminal"))
+        #expect(text.contains("expiresAt"))
         #expect(text.contains("验收清单"))
     }
 }

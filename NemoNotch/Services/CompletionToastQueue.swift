@@ -24,7 +24,8 @@ struct CompletionToast: Identifiable, Equatable {
 ///   fall back to the name.
 /// - A stack, not a conveyor: at most `capacity` cards show. A new arrival
 ///   beyond it parks the card that last arrived longest ago (earliest
-///   deadline) in `waiting` instead of dropping it; whenever a shown card is
+///   `shownAt`; a caller-fixed deadline says nothing about arrival) in `waiting` instead of dropping it; whenever a
+/// shown card is
 ///   closed, expires or is removed, the most recently parked card comes back
 ///   with a full timer. Parked cards never tick — the user has not seen them.
 ///   The pile keeps the newest `waitingLimit` cards.
@@ -45,8 +46,9 @@ struct CompletionToastQueue {
 
     mutating func add(_ items: [CompletionItem], now: Date, makeID: () -> UUID = UUID.init) {
         // A paused row stays paused; the new card's clock starts on resume.
-        let deadline = now.addingTimeInterval(duration)
+        let fresh = now.addingTimeInterval(duration)
         for item in items {
+            let deadline = item.fixedDeadline ?? fresh
             if let idx = toasts.firstIndex(where: { $0.item.toastKey == item.toastKey }) {
                 toasts[idx].item = CompletionFlashNames.merge(existing: [toasts[idx].item], new: [item])[0]
                 toasts[idx].deadline = deadline
@@ -62,7 +64,7 @@ struct CompletionToastQueue {
             }
         }
         while toasts.count > capacity,
-              let stalest = toasts.indices.min(by: { toasts[$0].deadline < toasts[$1].deadline }) {
+              let stalest = toasts.indices.min(by: { toasts[$0].shownAt < toasts[$1].shownAt }) {
             waiting.append(toasts.remove(at: stalest))
         }
         if waiting.count > waitingLimit {
@@ -104,13 +106,14 @@ struct CompletionToastQueue {
         isPaused = true
     }
 
-    /// Ends a pause; every card gets a full `duration` from `now`.
+    /// Ends a pause; every card gets a full `duration` from `now` — except a
+    /// card with a caller-fixed deadline, which keeps it.
     mutating func resume(now: Date) {
         guard isPaused else { return }
         isPaused = false
         let deadline = now.addingTimeInterval(duration)
         for idx in toasts.indices {
-            toasts[idx].deadline = deadline
+            toasts[idx].deadline = toasts[idx].item.fixedDeadline ?? deadline
         }
     }
 
@@ -154,7 +157,7 @@ struct CompletionToastQueue {
     /// row (it is older than what is showing) with a full timer.
     private mutating func refill(now: Date) {
         while toasts.count < capacity, var card = waiting.popLast() {
-            card.deadline = now.addingTimeInterval(duration)
+            card.deadline = card.item.fixedDeadline ?? now.addingTimeInterval(duration)
             toasts.insert(card, at: 0)
         }
     }

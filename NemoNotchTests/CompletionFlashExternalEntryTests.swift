@@ -35,4 +35,44 @@ struct CompletionFlashExternalEntryTests {
             #expect(service.overlayVisible == false)
         }
     }
+
+    private func external(_ key: String) -> CompletionItem {
+        var item = CompletionItem(name: key, source: .external(iconSymbol: nil))
+        item.key = "ext:Herdr::\(key)"
+        return item
+    }
+
+    @Test("close removes a shown external card")
+    func closeRemovesShownCard() {
+        withFlashDisabled { service in
+            service.showExternalToast(external("t1"))
+            service.showExternalToast(external("t2"))
+            service.closeExternalToast(key: "ext:Herdr::t1")
+            #expect(service.toasts.map(\.item.toastKey) == ["ext:Herdr::t2"])
+        }
+    }
+
+    @Test("close removes a card parked in the waiting pile, so it never comes back")
+    func closeRemovesWaitingCard() {
+        withFlashDisabled { service in
+            for key in ["t1", "t2", "t3", "t4", "t5"] {
+                service.showExternalToast(external(key))
+            }
+            #expect(!service.toasts.map(\.item.toastKey).contains("ext:Herdr::t1"))
+            service.closeExternalToast(key: "ext:Herdr::t1")
+            for toast in service.toasts {
+                service.dismissToast(id: toast.id)
+            }
+            #expect(service.toasts.isEmpty)
+        }
+    }
+
+    @Test("closing an unknown key changes nothing")
+    func closeUnknownKeyIsNoop() {
+        withFlashDisabled { service in
+            service.showExternalToast(external("t1"))
+            service.closeExternalToast(key: "ext:Herdr::nope")
+            #expect(service.toasts.map(\.item.toastKey) == ["ext:Herdr::t1"])
+        }
+    }
 }

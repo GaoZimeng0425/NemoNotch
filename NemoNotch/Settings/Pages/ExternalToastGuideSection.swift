@@ -36,18 +36,22 @@ enum ExternalToastGuide {
     | `schema` | Int | ✓ | 固定 `1`;其它值 → 400 |
     | `app` | String | ✓ | 应用显示名,1–48 字符 |
     | `key` | String? | | 见下「两种用法」;1–128 字符;**空串视为未提供**;`app` 与 `key` 都不得含 `::` |
-    | `title` | String | ✓ | 1–120 字符 |
+    | `title` | String | ✓ | 1–120 字符(`action:"close"` 时不需要) |
     | `body` | String? | | ≤280 字符 |
     | `icon` | String? | | 仅 `sf:<SF Symbol 名>`;未知符号名回落通用卡片图标,不报错 |
     | `jumpBundleId` | String? | | 点击卡片激活该 bundle id 的应用;缺省 = 点击只关卡;≤255 字符 |
     | `jumpURL` | String? | | 点击卡片打开该 URL(深链或网页),**优先于 `jumpBundleId`**(URL 打不开才回落激活应用);须为带 scheme 的绝对 URL 且 scheme ≠ `file:`,≤2048 字符;空串/纯空白视为未提供;URL 原样透传,需 percent-encode 请自行编码 |
+    | `tone` | String? | | 卡片边框颜色类别,只能是 `done`(绿,完成回来看)/ `decide`(琥珀,来做决定)/ `approve`(蓝,来点允许)/ `error`(红,来救火);缺省 = 彩虹边框;其它值 → 400。只改颜色,不改卡面文字 |
+    | `herdrTerminal` | String? | | Herdr 的 agent 地址(如 `t7`、`vps/t7`):点卡片让 Herdr 聚焦到该 agent;**优先于 `jumpURL`**(并存时忽略 URL),失败回落打开 Herdr。格式 `[机器名/]地址`,地址 1–32 位字母数字,不得以 `-` 开头,否则 → 400 |
+    | `action` | String? | | `show`(缺省)或 `close`。`close` 撤掉同 `app`+`key` 的卡(在屏上或排队中的都撤),**必须带 `key`**,不需要 `title`;卡不存在也返回 200 |
+    | `expiresAt` | Number 或 String | | 卡片到期时刻:Unix 时间戳(秒,可带小数),到点自动消失,悬停不顺延;或字符串 `"infinity"` = 永不自动消失,只能被 `close`/点击/× 撤下(**必须带 `key`**)。缺省 = 约 5 分钟。时间戳已过去或晚于 30 天后 → 400 |
 
     **两种用法**:
 
     - **不带 `key`**——一次性提醒卡:每次推送独立成卡,自动消失;
     - **带同一 `key`**——持续状态卡(如下载进度):每次推送**整体替换**同一张卡并重置存活计时。请求体永远是完整卡面:省略某字段 = 清空它,没有逐字段合并。
 
-    契约规则:未知字段忽略(前向兼容);卡片存活时长 v1 不可自定义(与内部卡一致,约 5 分钟,同 key 推送会续)。
+    契约规则:未知字段忽略(前向兼容);卡片存活时长缺省约 5 分钟(与内部卡一致,同 key 推送会续),需要别的时长用 `expiresAt`。
 
     ## 4. 响应与错误处理
 
@@ -68,6 +72,9 @@ enum ExternalToastGuide {
     4. 发 `{"schema":1}`(缺 `title`)→ 期望 `400`,reason 提及 title;
     5. 停掉 NemoNotch 再发 → 脚本不抛错、不阻塞、不重试风暴。
     6. 带 `jumpURL` 的合法推送(如 `"https://example.com/done"`)→ 期望 `200`;点卡片打开该 URL(深链优先,打不开回落 `jumpBundleId`)。
+    7. 带 `"tone":"approve"` 推送 → 卡片边框为蓝色;`"tone":"purple"` → 期望 `400`。
+    8. 带 `key` 与 `"expiresAt":"infinity"` 推一张卡,再发 `{"schema":1,"app":同上,"key":同上,"action":"close"}` → 两次都 `200`,卡片消失;不带 `key` 的 `infinity` 或 `close` → 期望 `400`。
+    9. `expiresAt` 填当前时间 + 30 秒 → 卡片约 30 秒后消失,鼠标悬停也不延长。
 
     ## 6. 最小示例(shell)
 

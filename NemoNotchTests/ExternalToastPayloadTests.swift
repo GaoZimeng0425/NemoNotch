@@ -216,10 +216,88 @@ struct ExternalToastPayloadTests {
         let all: [ExternalToastRejection] = [
             .malformedJSON, .badSchemaVersion, .appInvalid, .appTooLong, .keyTooLong,
             .separatorInAppOrKey, .titleInvalid, .titleTooLong, .bodyTooLong, .jumpBundleIdTooLong,
-            .jumpURLInvalid, .jumpURLTooLong,
+            .jumpURLInvalid, .jumpURLTooLong, .actionInvalid, .closeRequiresKey, .toneInvalid,
+            .herdrTerminalInvalid, .expiresAtInvalid, .expiresAtInPast, .infinityRequiresKey,
         ]
         for rejection in all {
             #expect(!rejection.localizedDescription.isEmpty)
         }
+    }
+
+    // MARK: - Herdr mod fields (tone / herdrTerminal / action / expiresAt)
+
+    private func parse(
+        _ body: String,
+        now: Date = Date(timeIntervalSince1970: 1000)
+    ) -> Result<ExternalToastPayload, ExternalToastRejection> {
+        ExternalToastPayload.parse(json(body), now: now)
+    }
+
+    private func payload(_ body: String) -> ExternalToastPayload? {
+        if case let .success(p) = parse(body) {
+            return p
+        }
+        return nil
+    }
+
+    @Test("tone parses and maps onto the four reminder tones")
+    func toneParses() {
+        #expect(payload(#"{"schema":1,"app":"A","title":"T","tone":"approve"}"#)?.tone == .approve)
+        #expect(ExternalToastTone.approve.reminderKind == .needsApproval)
+        #expect(ExternalToastTone.done.reminderKind == .turnDone)
+        #expect(ExternalToastTone.decide.reminderKind == .needsDecision)
+        #expect(ExternalToastTone.error.reminderKind == .agentError)
+    }
+
+    @Test("unknown tone is rejected")
+    func toneInvalidRejected() {
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","tone":"purple"}"#) == .failure(.toneInvalid))
+    }
+
+    @Test("herdrTerminal accepts local and machine-prefixed addresses verbatim")
+    func herdrTerminalAccepts() {
+        #expect(payload(#"{"schema":1,"app":"A","title":"T","herdrTerminal":"t9m"}"#)?.herdrTerminal == "t9m")
+        #expect(payload(#"{"schema":1,"app":"A","title":"T","herdrTerminal":"vps/t7"}"#)?.herdrTerminal == "vps/t7")
+    }
+
+    @Test("herdrTerminal rejects option-like, empty, spaced, nested and overlong values")
+    func herdrTerminalRejects() {
+        for bad in ["-x", "-vps/t7", "", "t 7", "a/b/c", String(repeating: "a", count: 33)] {
+            let body = #"{"schema":1,"app":"A","title":"T","herdrTerminal":"\#(bad)"}"#
+            #expect(parse(body) == .failure(.herdrTerminalInvalid), "\(bad)")
+        }
+    }
+
+    @Test("close needs app + key only; unknown action rejected")
+    func closeNeedsKeyOnly() {
+        let close = payload(#"{"schema":1,"app":"Herdr","key":"t7","action":"close"}"#)
+        #expect(close?.action == .close)
+        #expect(close?.key == "t7")
+        #expect(parse(#"{"schema":1,"app":"Herdr","action":"close"}"#) == .failure(.closeRequiresKey))
+        #expect(parse(#"{"schema":1,"app":"Herdr","key":"t7","action":"open"}"#) == .failure(.actionInvalid))
+    }
+
+    @Test("show (explicit or default) still requires a title")
+    func showStillNeedsTitle() {
+        #expect(parse(#"{"schema":1,"app":"A"}"#) == .failure(.titleInvalid))
+        #expect(parse(#"{"schema":1,"app":"A","action":"show"}"#) == .failure(.titleInvalid))
+        #expect(payload(#"{"schema":1,"app":"A","title":"T"}"#)?.action == .show)
+    }
+
+    @Test("expiresAt: future timestamp, keyed infinity; past, keyless infinity and wrong types rejected")
+    func expiresAtForms() {
+        #expect(payload(#"{"schema":1,"app":"A","title":"T","expiresAt":1060}"#)?.expiry
+            == .at(Date(timeIntervalSince1970: 1060)))
+        #expect(payload(#"{"schema":1,"app":"A","key":"k","title":"T","expiresAt":"infinity"}"#)?.expiry == .infinity)
+        #expect(payload(#"{"schema":1,"app":"A","title":"T"}"#)?.expiry == nil)
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":"infinity"}"#) == .failure(.infinityRequiresKey))
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":900}"#) == .failure(.expiresAtInPast))
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":"soon"}"#) == .failure(.expiresAtInvalid))
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":true}"#) == .failure(.expiresAtInvalid))
+        // > 30 days ahead (1e19 used to trap the expiry sleep; 1e15 made keyless cards permanent)
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":1e19}"#) == .failure(.expiresAtInvalid))
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":1e15}"#) == .failure(.expiresAtInvalid))
+        #expect(payload(#"{"schema":1,"app":"A","title":"T","expiresAt":2592999}"#)?.expiry
+            == .at(Date(timeIntervalSince1970: 2_592_999)))
     }
 }

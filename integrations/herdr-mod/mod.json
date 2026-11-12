@@ -1,0 +1,3 @@
+{ "place": "none", "title": "NemoNotch",
+  "overlay": { "kind": "window", "key": "nemonotch", "keep": true, "frame": "none",
+               "width": 110, "height": 20, "at": { "x": 66, "y": 52 } } }

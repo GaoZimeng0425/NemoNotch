@@ -18,11 +18,18 @@ struct CompletionJump: Equatable {
     let hostPID: Int32?
     let hostBundleId: String?
     let tabLink: String?
+    /// Herdr agent address (external `herdrTerminal`): a click focuses that
+    /// agent through Herdr's CLI before anything else.
+    var herdrTerminal: String?
 
     /// nil when there is nothing to jump to.
-    static func make(hostPID: Int32?, hostBundleId: String?, tabLink: String?) -> CompletionJump? {
-        guard hostPID != nil || hostBundleId != nil || tabLink != nil else { return nil }
-        return CompletionJump(hostPID: hostPID, hostBundleId: hostBundleId, tabLink: tabLink)
+    static func make(
+        hostPID: Int32?, hostBundleId: String?, tabLink: String?, herdrTerminal: String? = nil
+    ) -> CompletionJump? {
+        guard hostPID != nil || hostBundleId != nil || tabLink != nil || herdrTerminal != nil else { return nil }
+        return CompletionJump(
+            hostPID: hostPID, hostBundleId: hostBundleId, tabLink: tabLink, herdrTerminal: herdrTerminal
+        )
     }
 }
 
@@ -58,6 +65,9 @@ struct CompletionItem: Equatable {
     /// Attention cards never expire on their own: they leave with the wait
     /// they announced (answered / bridge timeout / answered in terminal).
     var sticky: Bool
+    /// An absolute expiry the caller fixed (external `expiresAt`): the card's
+    /// deadline is exactly this — never reset by arrival, refill or hover.
+    var fixedDeadline: Date?
 
     /// Convenience for callers that only have name + source (multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -76,6 +86,7 @@ struct CompletionItem: Equatable {
         external = nil
         kind = nil
         sticky = false
+        fixedDeadline = nil
     }
 
     init(
@@ -104,6 +115,7 @@ struct CompletionItem: Equatable {
         external = nil
         kind = nil
         sticky = false
+        fixedDeadline = nil
     }
 }
 

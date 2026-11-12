@@ -79,7 +79,9 @@ Request body:
   "body": "nemo-1.2.3.dmg · 84 MB",
   "icon": "sf:arrow.down.circle",
   "jumpBundleId": "com.me.mydownloader",
-  "jumpURL": "mydownloader://downloads/42"
+  "jumpURL": "mydownloader://downloads/42",
+  "tone": "done",
+  "expiresAt": 1794470400
 }
 ```
 
@@ -88,13 +90,17 @@ Request body:
 | `schema` | Int | ✓ | Contract version, `1` for now; anything else → `400` |
 | `app` | String | ✓ | Display name, 1–48 chars |
 | `key` | String? | | Present = keyed card (same key refreshes the same card, timer restarts); absent = one-shot card, every push is its own. 1–128 chars; an empty string is treated as absent. Neither `app` nor `key` may contain `::` |
-| `title` | String | ✓ | 1–120 chars |
+| `title` | String | ✓ | 1–120 chars (not needed with `action: "close"`) |
 | `body` | String? | | ≤ 280 chars |
 | `icon` | String? | | Only `sf:<SF Symbol name>` in v1; an unknown name falls back to the generic card icon, no error |
 | `jumpBundleId` | String? | | Clicking the card activates that app; absent = the click just closes the card. ≤ 255 chars |
 | `jumpURL` | String? | | Clicking the card opens this URL (deep link or web page) — it wins over `jumpBundleId`, which stays the fallback when the URL cannot be opened. Absolute URL with a scheme, never `file:`; ≤ 2048 chars; trimmed, and an empty or whitespace-only string is treated as absent; otherwise passed through verbatim (percent-encode it yourself) |
+| `tone` | String? | | Ring color class: `done` (green, come look) / `decide` (amber, come decide) / `approve` (blue, come allow) / `error` (red, come rescue); absent = rainbow ring; anything else → `400`. Color only — never changes the card's text |
+| `herdrTerminal` | String? | | A [Herdr](#herdr-mod) agent address (`t7`, `vps/t7`): clicking focuses that agent in Herdr. Wins over `jumpURL` (the URL is ignored); falls back to opening Herdr. `[machine/]address`, address 1–32 alphanumerics, must not start with `-` → else `400` |
+| `action` | String? | | `show` (default) or `close`. `close` removes the card with the same `app` + `key` (shown or queued), **requires `key`**, needs no `title`; an unknown card still answers `200` |
+| `expiresAt` | Number or String | | When the card leaves: Unix seconds (fractions allowed) — it disappears then, hovering doesn't extend it; or `"infinity"` — never on its own, only via `close` / click / × (**requires `key`**). Absent = about 5 minutes. A past timestamp, or one more than 30 days ahead → `400` |
 
-Contract rules: unknown fields are ignored (forward compatible); a keyed re-push is the **whole card face** — omitting `body` clears it, there is no per-field merge; per-card duration is deliberately not in v1 (cards live as long as the internal ones). Responses: `200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`.
+Contract rules: unknown fields are ignored (forward compatible); a keyed re-push is the **whole card face** — omitting `body` clears it, there is no per-field merge; cards live as long as the internal ones (about 5 minutes) unless `expiresAt` says otherwise. Responses: `200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`.
 
 ```bash
 PORT=$(cat ~/.NemoNotch/hook-port)   # file missing → 45831
@@ -103,6 +109,18 @@ curl -X POST "127.0.0.1:$PORT/v1/toast" \
   -H "X-NemoNotch-Token: $TOKEN" -H "Content-Type: application/json" \
   -d '{"schema":1,"app":"MyDownloader","key":"download-42","title":"Download finished","body":"84 MB","icon":"sf:arrow.down.circle"}'
 ```
+
+### Herdr mod
+
+Herdr users can get a NemoNotch card whenever an agent in Herdr finishes while you weren't looking (green, leaves after ~5 minutes) or waits on you (blue, stays until handled). Clicking a card focuses that agent in Herdr; looking at it or answering it in Herdr removes the card. In Herdr itself the only addition is a small `● NemoNotch` in the sidebar's Spaces row (the dot is lit while NemoNotch is reachable).
+
+```bash
+# Herdr must be open
+sh scripts/install-herdr-mod.sh              # install / refresh (safe to re-run)
+sh scripts/install-herdr-mod.sh --uninstall
+```
+
+The mod's source is `integrations/herdr-mod/`; it uses only the External Toast API above (`tone`, `herdrTerminal`, `action`, `expiresAt`). If you also run NemoNotch's own Claude Code hooks inside Herdr you'll get two cards per turn — uninstall the hooks you don't want.
 
 ## Tech Stack
 
