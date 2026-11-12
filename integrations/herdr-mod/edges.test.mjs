@@ -1,7 +1,7 @@
 // node --test: pure edge rules of the NemoNotch Herdr mod (no Herdr needed).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { diff, firstRun, card, closeBody, snapshot, serial } from "./edges.js";
+import { diff, firstRun, card, closeBody, snapshot, serial, bounded } from "./edges.js";
 
 const agent = (address, status, extra = {}) => ({
   address, status, space_name: "NemoNotch", tab_name: "fix", app: "claude-code", title: "Refactor", ...extra,
@@ -84,4 +84,19 @@ test("an address NemoNotch would reject drops herdrTerminal instead of losing th
   assert.equal(body.key, "my box/t7");
   assert.equal(body.jumpBundleId, "dev.herdr.app");
   assert.equal(card(agent("vps/t7", "done")).herdrTerminal, "vps/t7");
+  assert.equal(card(agent("-x/t7", "done")).herdrTerminal, undefined);
+});
+
+test("a hung push gives up after its wait, so the lane keeps moving", async () => {
+  const run = serial();
+  const order = [];
+  const hung = run(() => bounded(() => new Promise(() => {}), () => Promise.resolve()));
+  await assert.rejects(hung, /timed out/);
+  await run(async () => { order.push("close"); });
+  assert.deepEqual(order, ["close"]);
+});
+
+test("bounded returns the task's value when it finishes first", async () => {
+  const value = await bounded(async () => 7, () => new Promise(() => {}));
+  assert.equal(value, 7);
 });

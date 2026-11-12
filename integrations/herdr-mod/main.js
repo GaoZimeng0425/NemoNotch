@@ -7,10 +7,11 @@
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { agents, theme, layout, home, readTextFile } from "herdr";
-import { diff, firstRun, card, closeBody, snapshot, serial } from "./edges.js";
+import { diff, firstRun, card, closeBody, snapshot, serial, bounded } from "./edges.js";
 
 const OPEN_KEYS = "nemonotch.openKeys";
 const HEALTH_EVERY_MS = 30000;
+const PUSH_TIMEOUT_MS = 5000;
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -69,24 +70,25 @@ export default class NemoNotch extends View {
     });
   }
 
-  // One POST, queued on a single lane so show/close keep edge order; on 2xx the
-  // open-key set follows. Failures are dropped (no retry): the next edge for
-  // that agent brings things back in line.
+  // One POST, queued on a single lane so show/close keep edge order, each
+  // capped at PUSH_TIMEOUT_MS so a hung NemoNotch can't stall the lane; on 2xx
+  // the open-key set follows. Failures are dropped (no retry): the next edge
+  // for that agent brings things back in line.
   send(cx, body) {
-    cx.spawn(() => this.lane(async () => {
+    cx.spawn((cx) => this.lane(async () => {
       try {
         const { base, token } = await endpoint();
-        const r = await fetch(`${base}/v1/toast`, {
+        const r = await bounded(() => fetch(`${base}/v1/toast`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-NemoNotch-Token": token },
           body: JSON.stringify(body),
-        });
+        }), () => cx.sleep(PUSH_TIMEOUT_MS));
         if (!r.ok) return;
         if (body.action === "close") this.openKeys.delete(body.key);
         else this.openKeys.add(body.key);
         this.saveKeys();
       } catch (_) {
-        // NemoNotch not running: nothing to do.
+        // NemoNotch not running, or the push timed out: nothing to do.
       }
     }));
   }

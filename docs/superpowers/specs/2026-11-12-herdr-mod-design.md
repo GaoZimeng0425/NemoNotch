@@ -113,7 +113,7 @@
 - `body`: `<状态词> · <agent app> · <终端标题>`(状态词:跑完了 / 等你回应;`app` 为 null 时省略该段;截到 280)
 - `tone`、`herdrTerminal: <address>`、`jumpBundleId: "dev.herdr.app"`(旧版 NemoNotch 的降级点击目标)
 
-**推送**:每次推送现读 `hook-port`(缺省 45831)与 `hook-token`;`X-NemoNotch-Token` 头;失败(连不上/非 2xx)只记本地日志、不重试、不排队。
+**推送**:每次推送现读 `hook-port`(缺省 45831)与 `hook-token`;`X-NemoNotch-Token` 头;失败(连不上/非 2xx/超时)不重试;同一实例的推送单通道串行保序,每次推送 5 秒上限(防挂住堵死后续撤卡)。
 
 ### 安装脚本 `scripts/install-herdr-mod.sh [--uninstall]`
 

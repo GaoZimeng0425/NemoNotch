@@ -87,3 +87,16 @@ export function serial() {
     return run;
   };
 }
+
+/**
+ * Races `task()` against `wait()` (the caller's timer, e.g. cx.sleep): a push
+ * that hangs must not hold the serial lane — and every later close — forever.
+ */
+export function bounded(task, wait) {
+  return Promise.race([
+    task(),
+    wait().then(() => {
+      throw new Error("push timed out");
+    }),
+  ]);
+}
