@@ -98,7 +98,7 @@ Request body:
 | `tone` | String? | | Ring color class: `done` (green, come look) / `decide` (amber, come decide) / `approve` (blue, come allow) / `error` (red, come rescue); absent = rainbow ring; anything else → `400`. Color only — never changes the card's text |
 | `herdrTerminal` | String? | | A [Herdr](#herdr-mod) agent address (`t7`, `vps/t7`): clicking focuses that agent in Herdr. Wins over `jumpURL` (the URL is ignored); falls back to opening Herdr. `[machine/]address`, address 1–32 alphanumerics, must not start with `-` → else `400` |
 | `action` | String? | | `show` (default) or `close`. `close` removes the card with the same `app` + `key` (shown or queued), **requires `key`**, needs no `title`; an unknown card still answers `200` |
-| `expiresAt` | Number or String | | When the card leaves: Unix seconds (fractions allowed) — it disappears then, hovering doesn't extend it; or `"infinity"` — never on its own, only via `close` / click / × (**requires `key`**). Absent = about 5 minutes. A past timestamp → `400` |
+| `expiresAt` | Number or String | | When the card leaves: Unix seconds (fractions allowed) — it disappears then, hovering doesn't extend it; or `"infinity"` — never on its own, only via `close` / click / × (**requires `key`**). Absent = about 5 minutes. A past timestamp, or one more than 30 days ahead → `400` |
 
 Contract rules: unknown fields are ignored (forward compatible); a keyed re-push is the **whole card face** — omitting `body` clears it, there is no per-field merge; cards live as long as the internal ones (about 5 minutes) unless `expiresAt` says otherwise. Responses: `200 {"status":"ok"}` / `400 {"status":"error","reason":…}` / `401`.
 

@@ -270,6 +270,9 @@ extension ExternalToastPayload {
         return raw
     }
 
+    /// `expiresAt` may be at most 30 days ahead.
+    static let maxLifetime: TimeInterval = 30 * 86400
+
     private static func expiry(
         _ raw: RawExpiry?, hasKey: Bool, now: Date
     ) throws(ExternalToastRejection) -> ExternalToastExpiry? {
@@ -279,6 +282,9 @@ extension ExternalToastPayload {
         case let .seconds(seconds):
             let deadline = Date(timeIntervalSince1970: seconds)
             guard deadline > now else { throw .expiresAtInPast }
+            // Upper bound: a huge value overflows Duration in the expiry sleep
+            // (1e19 traps the app) and would make a keyless card effectively permanent.
+            guard deadline <= now.addingTimeInterval(maxLifetime) else { throw .expiresAtInvalid }
             return .at(deadline)
         case .text("infinity"):
             // Without a key nothing could ever close the card.

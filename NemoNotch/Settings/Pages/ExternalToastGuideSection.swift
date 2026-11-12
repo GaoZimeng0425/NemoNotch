@@ -44,7 +44,7 @@ enum ExternalToastGuide {
     | `tone` | String? | | 卡片边框颜色类别,只能是 `done`(绿,完成回来看)/ `decide`(琥珀,来做决定)/ `approve`(蓝,来点允许)/ `error`(红,来救火);缺省 = 彩虹边框;其它值 → 400。只改颜色,不改卡面文字 |
     | `herdrTerminal` | String? | | Herdr 的 agent 地址(如 `t7`、`vps/t7`):点卡片让 Herdr 聚焦到该 agent;**优先于 `jumpURL`**(并存时忽略 URL),失败回落打开 Herdr。格式 `[机器名/]地址`,地址 1–32 位字母数字,不得以 `-` 开头,否则 → 400 |
     | `action` | String? | | `show`(缺省)或 `close`。`close` 撤掉同 `app`+`key` 的卡(在屏上或排队中的都撤),**必须带 `key`**,不需要 `title`;卡不存在也返回 200 |
-    | `expiresAt` | Number 或 String | | 卡片到期时刻:Unix 时间戳(秒,可带小数),到点自动消失,悬停不顺延;或字符串 `"infinity"` = 永不自动消失,只能被 `close`/点击/× 撤下(**必须带 `key`**)。缺省 = 约 5 分钟。时间戳已过去 → 400 |
+    | `expiresAt` | Number 或 String | | 卡片到期时刻:Unix 时间戳(秒,可带小数),到点自动消失,悬停不顺延;或字符串 `"infinity"` = 永不自动消失,只能被 `close`/点击/× 撤下(**必须带 `key`**)。缺省 = 约 5 分钟。时间戳已过去或晚于 30 天后 → 400 |
 
     **两种用法**:
 

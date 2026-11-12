@@ -294,5 +294,10 @@ struct ExternalToastPayloadTests {
         #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":900}"#) == .failure(.expiresAtInPast))
         #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":"soon"}"#) == .failure(.expiresAtInvalid))
         #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":true}"#) == .failure(.expiresAtInvalid))
+        // > 30 days ahead (1e19 used to trap the expiry sleep; 1e15 made keyless cards permanent)
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":1e19}"#) == .failure(.expiresAtInvalid))
+        #expect(parse(#"{"schema":1,"app":"A","title":"T","expiresAt":1e15}"#) == .failure(.expiresAtInvalid))
+        #expect(payload(#"{"schema":1,"app":"A","title":"T","expiresAt":2592999}"#)?.expiry
+            == .at(Date(timeIntervalSince1970: 2_592_999)))
     }
 }
