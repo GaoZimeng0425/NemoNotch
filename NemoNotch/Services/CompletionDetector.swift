@@ -18,11 +18,18 @@ struct CompletionJump: Equatable {
     let hostPID: Int32?
     let hostBundleId: String?
     let tabLink: String?
+    /// Herdr agent address (external `herdrTerminal`): a click focuses that
+    /// agent through Herdr's CLI before anything else.
+    var herdrTerminal: String?
 
     /// nil when there is nothing to jump to.
-    static func make(hostPID: Int32?, hostBundleId: String?, tabLink: String?) -> CompletionJump? {
-        guard hostPID != nil || hostBundleId != nil || tabLink != nil else { return nil }
-        return CompletionJump(hostPID: hostPID, hostBundleId: hostBundleId, tabLink: tabLink)
+    static func make(
+        hostPID: Int32?, hostBundleId: String?, tabLink: String?, herdrTerminal: String? = nil
+    ) -> CompletionJump? {
+        guard hostPID != nil || hostBundleId != nil || tabLink != nil || herdrTerminal != nil else { return nil }
+        return CompletionJump(
+            hostPID: hostPID, hostBundleId: hostBundleId, tabLink: tabLink, herdrTerminal: herdrTerminal
+        )
     }
 }
 

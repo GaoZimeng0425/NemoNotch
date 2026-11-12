@@ -118,4 +118,61 @@ struct ExternalCardServiceTests {
 
         #expect(ExternalCardService.makeItem(payload: payload()).jump == nil)
     }
+
+    // MARK: - Herdr mod fields
+
+    @Test("close forwards the card key and presents nothing")
+    func closeForwardsCardKey() {
+        withSettings(true) { settings in
+            var presented: [CompletionItem] = []
+            var closed: [String] = []
+            let service = ExternalCardService(
+                settings: settings, present: { presented.append($0) }, close: { closed.append($0) }
+            )
+            let result = service.handle(body: json(#"{"schema":1,"app":"Herdr","key":"t7","action":"close"}"#))
+            #expect(result == .ok)
+            #expect(closed == ["ext:Herdr::t7"])
+            #expect(presented.isEmpty)
+        }
+    }
+
+    @Test("feature off: close is acknowledged and touches nothing")
+    func closeGatedOff() {
+        withSettings(false) { settings in
+            var closed: [String] = []
+            let service = ExternalCardService(settings: settings, present: { _ in }, close: { closed.append($0) })
+            let result = service.handle(body: json(#"{"schema":1,"app":"Herdr","key":"t7","action":"close"}"#))
+            #expect(result == .ok)
+            #expect(closed.isEmpty)
+        }
+    }
+
+    @Test("tone and expiry land on the card: approve+infinity is a sticky blue card, a timestamp fixes the deadline")
+    func makeItemMapsToneAndExpiry() {
+        var waiting = payload(key: "t7")
+        waiting.tone = .approve
+        waiting.expiry = .infinity
+        let blue = ExternalCardService.makeItem(payload: waiting)
+        #expect(blue.kind == .needsApproval)
+        #expect(blue.sticky == true)
+        #expect(blue.fixedDeadline == nil)
+
+        let deadline = Date(timeIntervalSince1970: 2_000_000_000)
+        var timed = payload(key: "t8")
+        timed.expiry = .at(deadline)
+        let card = ExternalCardService.makeItem(payload: timed)
+        #expect(card.fixedDeadline == deadline)
+        #expect(card.sticky == false)
+        #expect(card.kind == nil)
+    }
+
+    @Test("herdrTerminal wins over jumpURL; jumpBundleId stays the fallback")
+    func herdrTerminalWinsOverURL() {
+        var both = payload(key: "t7", jumpBundleId: "dev.herdr.app", jumpURL: "https://example.com")
+        both.herdrTerminal = "t7"
+        let jump = ExternalCardService.makeItem(payload: both).jump
+        #expect(jump?.herdrTerminal == "t7")
+        #expect(jump?.tabLink == nil)
+        #expect(jump?.hostBundleId == "dev.herdr.app")
+    }
 }

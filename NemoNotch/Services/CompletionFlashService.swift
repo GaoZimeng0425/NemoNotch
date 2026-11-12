@@ -282,6 +282,15 @@ final class CompletionFlashService {
         LogService.debug("External toast shown: \(item.toastKey)", category: "CompletionFlash")
     }
 
+    /// An external `action: "close"`: removes the card keyed `key` from the row
+    /// or the waiting pile (the next parked card refills a freed slot). No card
+    /// under `key` → nothing happens.
+    func closeExternalToast(key: String) {
+        guard toastQueue.replace(key: key, with: nil, now: Date()) else { return }
+        syncToasts()
+        LogService.debug("External toast closed: \(key)", category: "CompletionFlash")
+    }
+
     // MARK: - Toast row interaction
 
     /// The close button on one card.
