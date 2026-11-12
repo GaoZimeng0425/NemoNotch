@@ -358,4 +358,58 @@ struct CompletionToastQueueTests {
         #expect(q.toasts.last?.item.name == "A")
         #expect(q.toasts.last?.shownAt == t0.addingTimeInterval(50))
     }
+
+    // MARK: - Fixed deadline (external expiresAt)
+
+    private func fixed(_ name: String, at seconds: TimeInterval) -> CompletionItem {
+        var card = item(name)
+        card.fixedDeadline = t0.addingTimeInterval(seconds)
+        return card
+    }
+
+    @Test("a fixed deadline is the card's deadline and expires it exactly then")
+    func fixedDeadlineUsedOnAdd() {
+        var q = queue()
+        q.add([fixed("F", at: 60)], now: t0)
+        #expect(q.toasts[0].deadline == t0.addingTimeInterval(60))
+        #expect(q.expire(now: t0.addingTimeInterval(59)).isEmpty)
+        #expect(q.expire(now: t0.addingTimeInterval(61)).map(\.item.name) == ["F"])
+    }
+
+    @Test("leaving the hovered row restarts default cards only; fixed ones keep their deadline")
+    func resumeKeepsFixedDeadline() {
+        var q = queue()
+        q.add([fixed("F", at: 60), item("D")], now: t0)
+        q.pause()
+        q.resume(now: t0.addingTimeInterval(30))
+        #expect(q.toasts.first { $0.item.name == "F" }?.deadline == t0.addingTimeInterval(60))
+        #expect(q.toasts.first { $0.item.name == "D" }?.deadline == t0.addingTimeInterval(60))
+        q.pause()
+        q.resume(now: t0.addingTimeInterval(45))
+        #expect(q.toasts.first { $0.item.name == "F" }?.deadline == t0.addingTimeInterval(60))
+        #expect(q.toasts.first { $0.item.name == "D" }?.deadline == t0.addingTimeInterval(75))
+    }
+
+    @Test("a fixed card coming back from the waiting pile keeps its deadline")
+    func refillKeepsFixedDeadline() {
+        var q = CompletionToastQueue(duration: 30, capacity: 1, waitingLimit: 2)
+        q.add([fixed("F", at: 60)], now: t0)
+        q.add([item("D")], now: t0.addingTimeInterval(1))
+        #expect(q.toasts.map(\.item.name) == ["D"])
+        q.dismiss(id: q.toasts[0].id, now: t0.addingTimeInterval(10))
+        #expect(q.toasts.map(\.item.name) == ["F"])
+        #expect(q.toasts[0].deadline == t0.addingTimeInterval(60))
+    }
+
+    @Test("same key refreshed from sticky to default becomes expirable again")
+    func refreshReplacesStickiness() {
+        var q = queue()
+        var waiting = item("A")
+        waiting.sticky = true
+        q.add([waiting], now: t0)
+        #expect(q.expire(now: t0.addingTimeInterval(1000)).isEmpty)
+        q.add([item("A")], now: t0.addingTimeInterval(1000))
+        #expect(q.toasts[0].item.sticky == false)
+        #expect(q.expire(now: t0.addingTimeInterval(1031)).map(\.item.name) == ["A"])
+    }
 }

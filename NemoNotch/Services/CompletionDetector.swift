@@ -58,6 +58,9 @@ struct CompletionItem: Equatable {
     /// Attention cards never expire on their own: they leave with the wait
     /// they announced (answered / bridge timeout / answered in terminal).
     var sticky: Bool
+    /// An absolute expiry the caller fixed (external `expiresAt`): the card's
+    /// deadline is exactly this — never reset by arrival, refill or hover.
+    var fixedDeadline: Date?
 
     /// Convenience for callers that only have name + source (multi-item merges).
     init(name: String, source: CompletionSource) {
@@ -76,6 +79,7 @@ struct CompletionItem: Equatable {
         external = nil
         kind = nil
         sticky = false
+        fixedDeadline = nil
     }
 
     init(
@@ -104,6 +108,7 @@ struct CompletionItem: Equatable {
         external = nil
         kind = nil
         sticky = false
+        fixedDeadline = nil
     }
 }
 
