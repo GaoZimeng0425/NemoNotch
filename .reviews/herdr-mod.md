@@ -2,91 +2,74 @@
 
 Reviewer: claude-opus-5-5 独立评审子代理(未参与开发;judge ≠ author)
 Date: 2026-11-12
-Reviewed-Head: 8d1196b
-Verdict: CHANGES_NEEDED
-Scope:  29 files changed, 23980 insertions(+), 45 deletions(-)(首轮范围 c865221…030a2ac;评审中途 HEAD 前进到 8d1196b「expiresAt 上限 30 天」,该提交一并审过,结论绑定 8d1196b)
+Reviewed-Head: 0fc4778
+Verdict: APPROVED
+Scope: 增量复审 8d1196b..0fc4778(上轮 Reviewed-Head 8d1196b,Verdict CHANGES_NEEDED)。零代码漂移检查 `git diff 8d1196b..HEAD -- . ':!.reviews'` 非空,做了完整增量复审。
 
 ```
-AGENTS.md
-NemoNotch/Helpers/AppDependencies.swift
-NemoNotch/Models/ExternalToastPayload.swift
-NemoNotch/Notch/CompletionToastWindow.swift
-NemoNotch/Services/CompletionDetector.swift
-NemoNotch/Services/CompletionFlashService.swift
-NemoNotch/Services/CompletionToastQueue.swift
-NemoNotch/Services/ExternalCardService.swift
-NemoNotch/Services/HerdrJumper.swift
-NemoNotch/Settings/Pages/ExternalToastGuideSection.swift
-NemoNotchTests/CompletionFlashExternalEntryTests.swift
-NemoNotchTests/CompletionToastQueueTests.swift
-NemoNotchTests/ExternalCardServiceTests.swift
-NemoNotchTests/ExternalToastGuideTests.swift
-NemoNotchTests/ExternalToastPayloadTests.swift
-NemoNotchTests/HerdrJumperTests.swift
-README.md
-README_CN.md
-docs/external-toast-agent-guide.md
-docs/superpowers/plans/2026-11-12-herdr-mod.md
-docs/superpowers/specs/2026-11-12-herdr-mod-design.md
-integrations/herdr-mod/edges.js
-integrations/herdr-mod/edges.test.mjs
-integrations/herdr-mod/gpui-kit.d.ts
-integrations/herdr-mod/jsconfig.json
-integrations/herdr-mod/main.js
-integrations/herdr-mod/mod.json
-scripts/install-herdr-mod.sh
-scripts/test-herdr-mod.sh
+.gitignore                            |     4 +
+.reviews/herdr-mod.md                 |    92 +   (上轮记录,不在审查对象内)
+integrations/herdr-mod/edges.js       |    20 +-
+integrations/herdr-mod/edges.test.mjs |    27 +-
+integrations/herdr-mod/gpui-kit.d.ts  | 22652 -----
+integrations/herdr-mod/jsconfig.json  |    32 -
+integrations/herdr-mod/main.js        |    12 +-
 ```
 
-## 验证(评审员亲跑,worktree 内)
+没有 Swift 改动(由 `git diff --stat 8d1196b..HEAD` 确认)。
 
-- `sh scripts/lint.sh` → 退出码 0(030a2ac 与 8d1196b 各跑一次;只有 scripts/index-affected.swift 的存量 warning)
-- `sh scripts/doc-audit.sh` → 退出码 0(两个 head 各一次)
-- `sh scripts/check-arch.sh` → 退出码 0(两个 head 各一次)
-- `sh scripts/affected-tests.sh` → 退出码 0,索引闭包选出 30 个测试类,「通过 210 · 失败 0」(两个 head 各一次)
-- `sh scripts/test-herdr-mod.sh` → 退出码 0(node test,fail 0)
-- `sh scripts/plan-audit.sh` → **退出码 1**:plans/2026-11-12-herdr-mod.md:176 的「Step 4: 评审」未勾(见 P3-1)
-- `mutate.sh` 变异验证(红 = 守卫有牙):
-  - CompletionToastQueue 满员挤卡 `shownAt` → `deadline`:exit 0,红
-  - CompletionToastQueue.refill `fixedDeadline ?? now…` → `now…`:exit 0,红(31 过 1 败)。第一次跑是 exit 2(0 用例、xcodebuild 65,无可解析失败)。当时另一会话正在并发写 worktree,疑似这个原因;换完整匹配串重跑后见红
-  - ExternalToastPayload `guard raw.first != "-"` → `guard true`:exit 0,红
-  - ExternalCardService `item.sticky = true` → `false`:exit 0,红
-  - ExternalCardService `herdrTerminal == nil ? jumpURL : nil` → `jumpURL`:exit 0,红
-  - (8d1196b)`guard deadline <= now.addingTimeInterval(maxLifetime)` → `guard true`:exit 0,红(24 过 1 败)
-- 独立复现挑战者 P1(4 级,独立 swift 探针):`Task.sleep(for: .seconds(v))` 在 v=1e9/1e10/1e12/1e15 时 rc=0,v=1e19 时 rc=133(SIGTRAP)。这证明 030a2ac 上带令牌的 `POST /v1/toast {"expiresAt":1e19}` 能让 app 崩溃(到期 Task 在 CompletionFlashService.swift:443)。8d1196b 用 30 天上限把它挡在 API 边缘,修法与根因对应,文档四处同步改了(README×2、guide、设置内嵌)。
-- 只读核对:`herdr-app status` 显示 overlays=["nemonotch"],当前 agent 地址形如 `t96`,符合 herdrTerminal 正则;`~/.local/bin/herdr-app` 是指向 `/Applications/Herdr.app/Contents/MacOS/Herdr` 的符号链接(与 HerdrJumper 的注释一致);已安装的 mods/nemonotch 下 mod.json/main.js/edges.js 与仓内逐字节一致。
-- 没跑的(无法验证):`herdr-app check` 没对仓内目录跑,因为它会往目录里写 jsconfig/d.ts,违反「不改文件」。点卡后 Herdr 真聚焦、卡片环色、Spaces 行圆点这些运行中 app 的行为(5 级)没有复现,以下判断只基于代码与单测。
+## 验证(评审员亲跑,worktree 内,head 0fc4778)
+
+- `sh scripts/lint.sh` → 退出码 0(只有 scripts/index-affected.swift 的存量 warning)
+- `sh scripts/doc-audit.sh` → 退出码 0
+- `sh scripts/check-arch.sh` → 退出码 0(「架构围栏:全部通过」)
+- `sh scripts/test-herdr-mod.sh` → 退出码 0(node --test:tests 12 · pass 12 · fail 0;本轮新增的 3 个测试都在其中)
+- `sh scripts/plan-audit.sh` → **退出码 1**:plans/2026-11-12-herdr-mod.md:176「Step 4: 评审」仍未勾(上轮 P3-1,评审落盘后再勾,见下)
+- JS 变异验证:把 edges.js 和 edges.test.mjs 复制到 scratchpad 下 4 份副本,分别注入后跑 `node --test`,没动 worktree 文件。
+  - m1 `tail.then(task)` → `Promise.resolve().then(task)`(取消串行):exit 1,红(11 过 1 败)
+  - m2 `tail = run.catch(() => {})` → `tail = run`(失败堵死通道):exit 1,红
+  - m3 去掉 JUMPABLE 条件,总是带 herdrTerminal:exit 1,红
+  - m4 去掉 `&& !agent.address.startsWith("-")`:**exit 0,变异存活**(P3-B)
+- 保序前提核对(2 级,读宿主类型声明):`~/.config/herdr-app/gpui-kit.d.ts` 的 `spawn` 注释写「Calls `body(cx)` and adopts the promise it returns」,即 body 同步调用。所以 `send()` 里 `cx.spawn(() => this.lane(...))` 的入队发生在 send 的同步调用中。track() 按 show、close 的边沿顺序调用 send,入队顺序就等于边沿顺序。没有在运行中的 Herdr 里复现(5 级),以下判断只基于宿主声明和 node 单测。
+- 正则镜像核对:edges.js 的 `JUMPABLE` 与 ExternalToastPayload.swift:266 的 pattern 逐字一致,`-` 开头的判断也镜像了 Swift:267 的 `raw.first != "-"`。ICU 的 `$` 会接受末尾换行,JS 的 `$` 不接受,所以 JS 侧更严,结果只是少带跳转字段,不会多拿 400,方向安全。
+- `git ls-files integrations/herdr-mod` 只剩 edges.js、edges.test.mjs、main.js、mod.json。工作区里的 gpui-kit.d.ts 和 jsconfig.json 已经被 `.gitignore:45-46` 忽略(`git check-ignore -v` 确认)。
+- 没跑的:test.sh、affected-tests.sh、mutate.sh(派发方要求,作者在同一 worktree 跑全量),build.sh,任何 `herdr-app do`、`herdr-app check`、install 脚本。
 
 ## Findings
 
+### 上轮 Findings 处置
+
+- **P2 main.js `send` 的 show/close 乱序 → 已修复,关闭**。修法:edges.js 新增纯函数 `serial()`(单通道,前一个任务结束后才启动下一个,失败不堵通道),main.js 在 init 里建 `this.lane`,send 经通道发 POST。修复与根因对应:根因是多个独立 async 任务并发 fetch,修法把它们串成一条链,不是绕开症状。守卫:「serial runs tasks in submit order even when an earlier one is slower」先发慢任务、再发快任务,断言执行顺序为 ["show","close"],m1 变异见红;「keeps going after a task throws」m2 见红。说明:这是新增的纯函数,不是先对旧代码写的红测试,所以没有旧代码上的红→绿可重放。main.js 的接线本身没有单测(依赖 Herdr 运行时),保序依赖 spawn 同步调用 body 这一宿主契约,已核到 2 级(见上)。这满足用户「Herdr 里 agent 处理后卡必须自动撤掉」的要求:close 不会再先于 show 到达。
+- **P3-1 plan 第 176 行裸框 → 未处置(按设计,评审落盘后再勾)**。plan-audit 当前退出码 1,feat-done 会拦,合并前必须勾上。
+- **P3-2 Herdr 生成文件入库 → 已修复,关闭**。两个文件已删除,`.gitignore` 加了这个目录下的 `jsconfig.json` 和 `*.d.ts`,注释说明了原因;install 脚本本来就不拷贝它们。
+- **P3-3 不合规地址整卡被 400 → 已修复,关闭**。`card()` 只在地址符合 NemoNotch 校验时才带 `herdrTerminal`,否则只带 `jumpBundleId` 回落。新测试用 `"my box/t7"` 断言没有 herdrTerminal、key 和 jumpBundleId 保留,并用 `"vps/t7"` 做正例,m3 见红。
+- **P3-4 / P3-5 / P3-6**:不在本轮修复范围,维持原状,不阻塞(P3-6 test-herdr-mod.sh 没接进 feat-done/CI 仍然成立)。
+
 ### P1
-- 无(030a2ac 上的 expiresAt 1e19 崩溃已由 8d1196b 修复,我复现过并验证守卫有牙,见上)
+- 无
 
 ### P2
-- **integrations/herdr-mod/main.js:71-88(`send`)**:每次 POST 各开一个独立 `cx.spawn`,中间还 `await endpoint()`(读两个文件)再 `fetch`,同一 key 的 show 和 close 没有先后保证。一旦 close 先到、show 后到,蓝卡(`expiresAt:"infinity"`)就永远挂着,mod 的 openKeys 也记成「开着」。这正好违反用户「答完 / 看过即撤卡」的要求,只能靠用户手点 ×。该结论系推断(2–3 级,未复现):两次边沿通常相隔秒级,但 blocked 闪一下就恢复(自动放行)这类快速翻转的窗口是真实存在的。**修法**:实例上挂一条串行链,`this.chain = (this.chain ?? Promise.resolve()).then(() => post(body)).catch(() => {})`,保证同一实例的推送按边沿顺序发出;`endpoint()` 也可以在链内读。
+- 无
 
-### P3
-- **P3-1 docs/superpowers/plans/2026-11-12-herdr-mod.md:176**:「Step 4: 评审」裸框导致 plan-audit 退出码 1,feat-done 会拦。评审完成后勾上即可。
-- **P3-2 integrations/herdr-mod/gpui-kit.d.ts(22652 行)与 jsconfig.json**:这两个是 Herdr 自己生成的文件,安装脚本注释里也说「Herdr writes jsconfig.json / *.d.ts into the folder itself」,install-herdr-mod.sh 也不拷贝它们。入库后已经与宿主漂移:与 `~/.config/herdr-app/gpui-kit.d.ts` 比对,在第 22205 行开始不同。**修法**:删掉,加进 .gitignore;需要编辑器类型提示时由 `herdr-app check` 现场生成。
-- **P3-3 NemoNotch/Models/ExternalToastPayload.swift:265-271(herdrTerminal 正则)**:机器名只认 `[A-Za-z0-9._-]{1,64}`,`hc machine ls` 里如果有含空格或非 ASCII 的机器名,远端 agent 的**整张卡**会被 400,不只是跳转失效,而 mod 吞错不报。**修法**:要么在 edges.js 的 `card()` 里对不匹配的地址省略 `herdrTerminal`(只回落 jumpBundleId),要么在文档里明说这个限制。
-- **P3-4 NemoNotchTests/HerdrJumperTests.swift:7-27**:`arguments`/`executableURL` 两个测试接近「钉手写常量」;`plan` 测试是三元式的镜像,鉴别力很弱。argv 是外发契约,保留可以接受。真正值得测的「非零 / 超时回落 openApp」只覆盖到纯函数层,`run()` 的超时与 terminate 没有测试。不强制。
-- **P3-5 NemoNotch/Services/CompletionToastQueue.swift:66-67**:满员挤卡从按 `deadline` 改成按 `shownAt`,顺带改变了「从等待堆补回的卡」的命运。它的 shownAt 不重置,所以是行内最早的,下一张新卡一来它就首先被挤回堆里。这与「新到的挤最久未到达的」字面一致,AGENTS.md 也已登记,只提醒这是对存量卡的行为变化,不止影响外部卡。
-- **P3-6 scripts/test-herdr-mod.sh**:没接进 feat-done / CI,edges.js 的回归只能靠人记得手跑。可考虑由 feat-done 在 `integrations/herdr-mod/` 有改动时调用它。
+### P3(本轮新增)
+- **P3-A integrations/herdr-mod/main.js:76-91(`send` 的 fetch 没有超时)**:串行之后,一个挂住的 POST 会堵住后面所有的 show 和 close。原来并发发送时,挂住只影响那一张卡;现在会连带挡住所有撤卡,包括本需求要的「答完就撤」。场景:NemoNotch 进程还在、连接被接受,但应答卡住,比如主线程卡死。连接被拒和进程退出会立即报错,lane 能继续,不受影响。这是推断(2 级,没有复现;Herdr 的 fetch 有没有默认超时未知)。**修法**:如果宿主支持 `AbortSignal.timeout`,给 fetch 加一个约 5s 的超时;不支持就用 `Promise.race` 加 `cx.sleep(5000)` 给通道任务设上限。
+- **P3-B integrations/herdr-mod/edges.js:67(`!agent.address.startsWith("-")`)没有守卫**:m4 变异存活。JUMPABLE 的机器名段允许以 `-` 开头(比如 `-x/t7`),这个条件是唯一的防线,去掉后整张卡又会被 400。**修法**:在 edges.test.mjs 的 P3-3 测试里加一行 `assert.equal(card(agent("-x/t7","done")).herdrTerminal, undefined)`。
+- **P3-C docs/superpowers/specs/2026-11-12-herdr-mod-design.md:116**:还写着「不重试、不排队」,和现在的单通道串行矛盾(这是本分支随代码一起上线的 spec,不属于历史档)。**修法**:改成「不重试;同一实例的推送单通道串行保序」。
 
 ## 审查清单(评审者逐项过,不适用项标 N/A)
 
-- [x] **判别剃刀**:Payload/Queue/ExternalCardService/FlashService 的新测试都以具体输入断言字面输出;6 个变异全部见红(见上)。HerdrJumperTests 偏弱(P3-4)。
-- [x] **证据纪律**:8d1196b 的提交信息引用了挑战者 P1,我独立复现(rc=133)到 4 级。Herdr 端的真机行为停在作者自述(AGENTS.md「2026-11-12 实测」),我没法复现到 5 级,已披露。
-- [x] **Swift 6 并发**:HerdrJumper.focus 是 @MainActor,只把 Sendable 的 URL、[String]、String 交给 `Task.detached`,结果 hop 回 `MainActor.run`;`run` 是非隔离的静态函数,阻塞等待放在 detached 上下文里,没压主线程。编译与测试都过了。
-- [x] **最小改动**:改动都能追溯到需求;Queue 挤卡判据的改动有 AGENTS.md 登记与测试(P3-5)。
-- [ ] **错误路径**:HerdrJumper 的失败会记 warn 并回落 openApp,这部分合格。mod 端 send 吞掉一切错误,而且乱序会留下僵尸蓝卡(P2);400(P3-3)也被静默吞掉。
-- [x] **坑总目录对照**:外部 Toast 红线(只做字段校验、零语义翻译、不辉光、不受 completionFlashEnabled 门禁)保持;Process 不过 shell,地址在 API 边缘校验且拒绝 `-` 开头;「门禁在发射不在快照」未受影响;close 走既有 `replace(key:with:nil)`,覆盖屏上与等待堆。
+- [x] **判别剃刀**:新增 3 个测试都以具体输入断言字面输出(执行顺序数组、body 字段)。m1/m2/m3 见红,m4 存活(P3-B)。
+- [x] **证据纪律**:各项门禁 4 级亲跑,退出码见上。保序依赖的宿主契约到 2 级(d.ts 注释),Herdr 真机行为没到 5 级,已披露。
+- [N/A] **Swift 6 并发**:本轮没有 Swift 改动。
+- [x] **最小改动**:改动都能对应到上轮 P2、P3-2、P3-3,没有顺手改邻近代码。
+- [x] **错误路径**:失败任务不堵通道(有测试);不合规地址降级为不带跳转,不再整卡丢失。剩下的挂起风险见 P3-A。
+- [x] **坑总目录对照**:外部 Toast 红线不变,服务端校验没动,mod 只在客户端预先避开;herdrTerminal 的 `-` 开头防注入在服务端仍然生效,客户端镜像只为不丢卡。
 - [x] **教训候选**:见下。
-- [x] **文档同步**:README 双语、docs/external-toast-agent-guide.md、设置页内嵌指南、AGENTS.md 都已更新;8d1196b 的 30 天上限四处同步。旧口径「v1 不可自定义存活时长」全仓 grep 无残留(只剩 docs/superpowers 历史文档)。
-- [x] **工作流机制清场**:新增 scripts/install-herdr-mod.sh、scripts/test-herdr-mod.sh,doc-audit 的脚本路径断言通过;没有推翻旧工作流口径。
+- [x] **文档同步 / 旧口径清场**:grep 了 `no queue`、`不排队`、`jsconfig`、`gpui-kit.d.ts`。main.js 里的旧注释「no retry, no queue」已改掉;install 脚本的注释仍然正确;spec:116 还有残留(P3-C)。README 双语和 guide 对 herdrTerminal 400 的描述是服务端契约,不受影响。
+- [x] **工作流机制清场**:没有新增脚本或钩子,.gitignore 的改动只限 mod 目录。
 
 ## 教训候选
 
-- NemoNotch/Services/CompletionFlashService.swift:443:外部输入换算成 `Task.sleep(for: .seconds(x))` 的时长时,必须先给上限。Duration 本身不 trap,但 sleep 换算成纳秒时 1e19 会 SIGTRAP(探针实测 rc=133)。判据:任何「外来数字 → sleep / 定时器」的路径,在 API 边缘必须有上界校验;可以考虑做成 check-arch 的 B 档规则,拦 `Task.sleep(for: .seconds(` 的参数来自 payload 的新增行。
-- integrations/herdr-mod/main.js:71:「每个边沿一个独立 async 任务去 POST」天然不保序。对外推送「先开后关」这类有状态的消息必须串行化,否则会出现永不消失的卡。判据:同一 key 的 show/close 发送方必须是单队列。
-- 并发会话共用一个 worktree 时,评审员的 `mutate.sh` 会和作者或挑战者的编辑互相踩(恢复的是注入时的原字节)。判据:派第二席或作者在评审期间修改时,评审员不要跑变异,或者给各席位分开 worktree。
+- integrations/herdr-mod/main.js:75:把并发推送改成串行,修了乱序,但也让一次挂起会堵死整条通道,单点故障从一张卡扩大到所有卡。判据:引入单队列保序时,必须同时给队列里的每个任务设超时上限,否则保序就是用活性换来的。
+- integrations/herdr-mod/edges.js:67:客户端镜像服务端校验时,如果镜像分成「正则 + 额外条件」两部分,每个条件都要有反例测试;只测正则部分,额外条件变异就会存活(本轮 m4 实证)。
+- 上轮那条「并发会话共用一个 worktree 时评审员别跑 mutate.sh」本轮照做了:JS 变异改为复制到 scratchpad 跑,不碰 worktree,可以作为 JS 侧守卫验证的固定做法。
