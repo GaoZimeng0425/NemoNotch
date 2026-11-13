@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import IOKit.pwr_mgt
 
@@ -114,6 +115,17 @@ final class KeepAwakeService {
     /// `holdIdleSleepAssertion(_:)` 的说明。
     private var idleSleepAssertion: IOPMAssertionID = 0
 
+    /// A 开关(空闲不休眠)持有的 `PreventUserIdleSystemSleep` 断言(0 = 未持有)。
+    /// 与上面的第二层断言**分持**:第二层跟随系统真相(补篡改窗口),这份跟随
+    /// 用户意图(设置开关);命名也不同(`Idle Keep Awake`),pmset 输出可辨认。
+    private var idleKeepAwakeAssertion: IOPMAssertionID = 0
+
+    /// A 开关最近一次创建失败的原因;创建成功即清空。
+    private(set) var idleKeepAwakeError: String?
+
+    /// A 开关断言创建失败的日志已记过(持续失败只记第一次)。
+    private var idleKeepAwakeFailureLogged = false
+
     /// 断言创建失败的日志已记过(持续失败只记第一次,防轮询刷屏)。
     private var idleSleepAssertionFailureLogged = false
 
@@ -163,6 +175,9 @@ final class KeepAwakeService {
         if idleSleepAssertion != 0 {
             IOPMAssertionRelease(idleSleepAssertion)
         }
+        if idleKeepAwakeAssertion != 0 {
+            IOPMAssertionRelease(idleKeepAwakeAssertion)
+        }
         LogService.info("KeepAwakeService deinit", category: "KeepAwake")
     }
 
@@ -181,6 +196,7 @@ final class KeepAwakeService {
         lidMonitor.autoDisplayOff = settings?.keepAwakeLidDisplayOff ?? true
         registerPrefsChangeObserver()
         startStatePolling()
+        restoreIdleKeepAwakeFromSettings()
 
         Task {
             await refresh()
@@ -258,6 +274,11 @@ final class KeepAwakeService {
         if isEnabled, !wasEnabled {
             lidMonitor.turnDisplayOffIfNeeded()
         }
+
+        // A 开关对账自愈:断言真相对齐用户意图(设置)。断言被 powerd 重启等
+        // 原因弄丢时自动重建 —— 与 B 的「刻意不自动恢复」不同:重建无弹窗,
+        // 自愈零代价。
+        holdIdleKeepAwakeAssertion(settings?.keepAwakeIdleEnabled ?? false)
     }
 
     // MARK: - 开关
@@ -316,6 +337,112 @@ final class KeepAwakeService {
             // 关闭后若盖子已合着,延迟复核并补一脚 sleepnow。不 await —— 开关
             // 本身已经完成,不该为了这个收尾把 `isBusy` 多攥 2 秒。
             Task { await sleepNowIfLidClosedAfterDisabling(settleDelay: Self.lidSettleDelay) }
+        }
+    }
+
+    // MARK: - 空闲不休眠(A 开关)
+
+    /// 切换 A 开关。设置由调用方(AppSettings 绑定)写,这里只管断言真相;
+    /// 租约不需要任何权限,零弹窗。
+    func setIdleKeepAwake(_ on: Bool) {
+        holdIdleKeepAwakeAssertion(on)
+    }
+
+    /// 启动恢复:上次开着的话重建断言 —— 这就是 A 开关的「状态保留」。
+    /// 断言随进程退出由系统自动回收(无需还原代码),重建即恢复。
+    func restoreIdleKeepAwakeFromSettings() {
+        if settings?.keepAwakeIdleEnabled == true {
+            holdIdleKeepAwakeAssertion(true)
+        }
+    }
+
+    /// 幂等地持有/释放 A 开关断言。失败重试由 `refresh()` 的对账驱动(每 10s),
+    /// 日志只记状态转移 —— 与第二层 `holdIdleSleepAssertion(_:)` 同款纪律。
+    private func holdIdleKeepAwakeAssertion(_ on: Bool) {
+        // 测试宿主不持断言 —— 单测一跑几分钟,别把跑测试的机器摁着不让睡。
+        guard !UITestMode.isTestHost else { return }
+        if on, idleKeepAwakeAssertion == 0 {
+            var assertionID: IOPMAssertionID = 0
+            let result = IOPMAssertionCreateWithName(
+                "PreventUserIdleSystemSleep" as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                "NemoNotch Idle Keep Awake" as CFString,
+                &assertionID
+            )
+            if result == kIOReturnSuccess {
+                idleKeepAwakeAssertion = assertionID
+                if idleKeepAwakeError != nil {
+                    idleKeepAwakeError = nil
+                }
+                idleKeepAwakeFailureLogged = false
+                LogService.info("idle keep-awake assertion held", category: "KeepAwake")
+            } else {
+                let message = "IOPMAssertionCreateWithName 0x\(String(result, radix: 16))"
+                if idleKeepAwakeError != message {
+                    idleKeepAwakeError = message
+                }
+                if !idleKeepAwakeFailureLogged {
+                    idleKeepAwakeFailureLogged = true
+                    LogService.warn(
+                        "could not hold idle keep-awake assertion: \(message)",
+                        category: "KeepAwake"
+                    )
+                }
+            }
+        } else if !on, idleKeepAwakeAssertion != 0 {
+            IOPMAssertionRelease(idleKeepAwakeAssertion)
+            idleKeepAwakeAssertion = 0
+            LogService.info("idle keep-awake assertion released", category: "KeepAwake")
+        }
+    }
+
+    // MARK: - 「谁在阻止休眠」面板数据
+
+    /// 外部进程的防空闲睡断言汇总(已过滤系统噪音与自家 pid)。
+    private(set) var externalSummaries: [ExternalSleepAssertionSummary] = []
+
+    /// 归因 pid → 进程名(coreaudiod 挂给录音 app 那类形状)。
+    private(set) var externalOnBehalfNames: [Int32: String] = [:]
+
+    /// 断言枚举读失败的日志已记过(只在状态转移时打,防 10s 刷屏)。
+    private var externalReadFailureLogged = false
+
+    /// 枚举系统当前全部断言,解析为面板数据。µs 级公开 IOKit 调用,由设置页
+    /// 的 10s `.task` 循环驱动(离屏自动停)。读失败清空并 warn 一次。
+    func refreshExternalAssertions(now: Date = .init()) {
+        var byPID: Unmanaged<CFDictionary>?
+        guard IOPMCopyAssertionsByProcess(&byPID) == kIOReturnSuccess,
+              let raw = byPID?.takeRetainedValue() as? [AnyHashable: Any] else {
+            if !externalSummaries.isEmpty || !externalOnBehalfNames.isEmpty {
+                externalSummaries = []
+                externalOnBehalfNames = [:]
+            }
+            if !externalReadFailureLogged {
+                externalReadFailureLogged = true
+                LogService.warn("IOPMCopyAssertionsByProcess failed", category: "KeepAwake")
+            }
+            return
+        }
+        externalReadFailureLogged = false
+        let parsed = ExternalSleepAssertions.parse(
+            byPID: raw,
+            now: now,
+            ownPID: ProcessInfo.processInfo.processIdentifier
+        )
+        // 只在有变化时写回 —— @Observable 的写通知不区分值是否相同,10s 一轮
+        // 的无条件赋值会让面板跟着每轮重算(refresh() 同款纪律)。
+        let newSummaries = ExternalSleepAssertions.summarize(parsed)
+        if externalSummaries != newSummaries {
+            externalSummaries = newSummaries
+        }
+        let newNames = Dictionary(
+            uniqueKeysWithValues: ExternalSleepAssertions.uniqueOnBehalfPIDs(parsed)
+                .map { pid in
+                    (pid, NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)")
+                }
+        )
+        if externalOnBehalfNames != newNames {
+            externalOnBehalfNames = newNames
         }
     }
 

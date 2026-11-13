@@ -8,6 +8,15 @@ struct KeepAwakeSettingsView: View {
         @Bindable var settings = appSettings
         Form {
             Section("settings.keepawake.title") {
+                Toggle("settings.keepawake.idle.enable", isOn: $settings.keepAwakeIdleEnabled)
+                    .toggleStyle(.switch)
+                    .onChange(of: settings.keepAwakeIdleEnabled) { _, enabled in
+                        keepAwake.setIdleKeepAwake(enabled)
+                    }
+                Text("settings.keepawake.idle.detail")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("settings.keepawake.enable", isOn: Binding(
                     get: { keepAwake.isEnabled },
                     set: { on in Task { await keepAwake.setEnabled(on) } }
@@ -27,7 +36,19 @@ struct KeepAwakeSettingsView: View {
                             .textSelection(.enabled)
                     }
                 }
+                if let idleError = keepAwake.idleKeepAwakeError {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(verbatim: idleError)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
             }
+
+            assertionsPanelSection
 
             Section("settings.keepawake.optionsHeader") {
                 Toggle("settings.keepawake.lidDisplayOff", isOn: $settings.keepAwakeLidDisplayOff)
@@ -68,6 +89,80 @@ struct KeepAwakeSettingsView: View {
         }
         .formStyle(.grouped)
         .task { await keepAwake.refresh() }
+        // 面板数据 10s 一刷;`.task` 随视图离屏自动取消 —— 无 Timer 状态、无常驻轮询。
+        .task {
+            while !Task.isCancelled {
+                keepAwake.refreshExternalAssertions()
+                try? await Task.sleep(for: .seconds(10))
+            }
+        }
+    }
+
+    // MARK: - 「谁在阻止休眠」面板
+
+    /// 两层如实展示:空闲层 = 外部 app 的断言(枚举而来,带归属与剩余时间);
+    /// 合盖层 = `SleepDisabled` 全局开关状态(无归属者,只有开/关 + 是否我们开的)。
+    private var assertionsPanelSection: some View {
+        Section("settings.keepawake.panel.header") {
+            if keepAwake.externalSummaries.isEmpty {
+                Text("settings.keepawake.panel.empty")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(keepAwake.externalSummaries, id: \.pid) { summary in
+                    assertionRow(summary)
+                }
+            }
+            Divider()
+            HStack {
+                Text("settings.keepawake.panel.clamshell")
+                    .font(.caption)
+                Spacer()
+                clamshellStateText
+                    .font(.caption)
+                    .foregroundStyle(clamshellStateColor)
+            }
+        }
+    }
+
+    private func assertionRow(_ summary: ExternalSleepAssertionSummary) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(verbatim: summary.processName + (summary.count > 1 ? " ×\(summary.count)" : ""))
+                    .font(.caption.weight(.medium))
+                if let remaining = ExternalSleepAssertions.remainingMinutes(summary.timeoutRemaining) {
+                    Text("settings.keepawake.panel.remaining \(remaining)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            HStack(spacing: 4) {
+                // 系统相对时间格式自动刷新(完成闪光卡同款)—— 年龄是随时间走的
+                // 展示值,不能用 body 里的 Date.now(上游数据不变时会冻结,评审 P2)。
+                Text(.currentDate, format: .reference(to: summary.oldestStartedAt))
+                if let behalf = summary.onBehalfOfPID,
+                   let name = keepAwake.externalOnBehalfNames[behalf] {
+                    Text("settings.keepawake.panel.onBehalf \(name)")
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// 合盖层状态:开/关 + 归属。非我们开的用橙色提醒(来源不明,值得被看见)。
+    private var clamshellStateText: Text {
+        if keepAwake.isEnabled {
+            return keepAwake.isOwned
+                ? Text("settings.keepawake.panel.clamshell.owned")
+                : Text("settings.keepawake.panel.clamshell.external")
+        }
+        return Text("settings.keepawake.panel.clamshell.off")
+    }
+
+    private var clamshellStateColor: Color {
+        keepAwake.isEnabled && !keepAwake.isOwned ? .orange : .secondary
     }
 
     @ViewBuilder
