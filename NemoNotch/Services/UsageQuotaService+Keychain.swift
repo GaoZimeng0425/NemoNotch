@@ -48,13 +48,16 @@ extension UsageQuotaService {
     /// (never `kSecReturnData` — asking for the secret can itself surface the
     /// legacy prompt) so we can tell "exists but unauthorized" from "absent"
     /// without ever prompting.
-    func keychainProbe(service: String) -> KeychainProbe {
+    func keychainProbe(service: String, account: String? = nil) -> KeychainProbe {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnAttributes as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let account {
+            query[kSecAttrAccount as String] = account
+        }
         applyNoUI(to: &query)
         var result: AnyObject?
         switch SecItemCopyMatching(query as CFDictionary, &result) {
@@ -80,7 +83,10 @@ extension UsageQuotaService {
         LogService.info("Quota authorize requested: \(provider.rawValue)", category: "UsageQuotaService")
         // SecItemCopyMatching blocks while the dialog is up — run it off the main
         // actor so the UI doesn't freeze.
-        let granted = await Task.detached { Self.interactiveKeychainRead(service: service) != nil }.value
+        let account = provider == .zcode ? ZcodeCredentials.keyringAccount() : nil
+        let granted = await Task.detached {
+            Self.interactiveKeychainRead(service: service, account: account) != nil
+        }.value
         if granted {
             LogService.info("Quota authorize granted: \(provider.rawValue)", category: "UsageQuotaService")
             setKeychainGranted(true, provider)
@@ -142,13 +148,16 @@ extension UsageQuotaService {
 
     /// Interactive read — deliberately omits `applyNoUI`, so macOS shows the
     /// consent dialog when access hasn't been granted. Used only from `authorize`.
-    private nonisolated static func interactiveKeychainRead(service: String) -> Data? {
-        let query: [String: Any] = [
+    private nonisolated static func interactiveKeychainRead(service: String, account: String? = nil) -> Data? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let account {
+            query[kSecAttrAccount as String] = account
+        }
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
         return result as? Data

@@ -9,7 +9,18 @@ extension UsageQuotaService {
     func fetchZcodeQuotaIfPresent() async -> ProviderUsageQuota? {
         guard FileManager.default.fileExists(atPath: ZcodeCredentials.credentialsURL.path) else { return nil }
         hasZcodeCredential = true
-        guard let token = zcodeBearerToken() else {
+        let keyResult = zcodeKeyringKey()
+        let apiKeyIsV2 = ZcodeCredentials.apiKeyEntry(
+            in: ZcodeCredentials.credentialsDict() ?? [:]
+        )?.value.hasPrefix("enc:v2:") == true
+        if case .needsAuthorization = keyResult, apiKeyIsV2 {
+            // Item present, ACL not ours yet: the Authorize button (user
+            // action) is the only door to an interactive read — never prompt
+            // from this automatic timer.
+            logQuotaStateTransition("keyring key needs authorization")
+            return ProviderUsageQuota(provider: .zcode, status: .needsAuthorization, fetchedAt: Date())
+        }
+        guard let token = zcodeBearerToken(keyResult: keyResult) else {
             // The API key is v2-encrypted and the keyring key is missing/unreadable
             // (CLI not logged in on this keychain, or access denied). Silent by
             // design — this is an automatic timer, never a prompt. Return a
@@ -65,11 +76,12 @@ extension UsageQuotaService {
     /// Bearer token for the quota API: the coding-plan API key (enc:v2:os,
     /// key from the CLI's keyring entry) first, the legacy plaintext oauth
     /// access token as a fallback for pre-v2 CLI installs.
-    private func zcodeBearerToken() -> String? {
+    /// nil only when the state is surfaced separately by the caller.
+    private func zcodeBearerToken(keyResult: ZcodeKeyringKeyResult) -> String? {
         guard let dict = ZcodeCredentials.credentialsDict() else { return nil }
         if let entry = ZcodeCredentials.apiKeyEntry(in: dict) {
             if entry.value.hasPrefix("enc:v2:") {
-                guard let key = zcodeKeyringKey() else { return nil }
+                guard case let .key(key) = keyResult else { return nil }
                 return ZcodeCredentials.v2Decrypt(entry.value, key: key)
             }
             // Unexpected plaintext shape — use as-is.
@@ -81,17 +93,55 @@ extension UsageQuotaService {
     /// The CLI's credential-encryption key from the login keychain. Account is
     /// the SHA256 hex of the credentials file path (how the CLI addresses its
     /// own entry). Reads are non-interactive: an ACL denial comes back as nil.
-    private func zcodeKeyringKey() -> Data? {
+    /// Outcome of trying to obtain the CLI's credential-encryption key.
+    enum ZcodeKeyringKeyResult: Equatable {
+        case key(Data)
+        /// Item present but this app isn't in its ACL yet — render the
+        /// Authorize button (Codex's `.needsAuthorization` contract).
+        case needsAuthorization
+        /// Item absent — the CLI isn't logged in on this machine.
+        case unavailable
+    }
+
+    /// The CLI's credential-encryption key from the login keychain, following
+    /// Codex's grant pattern: a stored (cdhash-gated) grant unlocks the silent
+    /// data read; without it only an attributes probe runs — never a prompt.
+    /// Transient silent-read failures keep the grant (ACL trust can lapse
+    /// across sleep); only a genuinely vanished item forgets it.
+    private func zcodeKeyringKey() -> ZcodeKeyringKeyResult {
+        let service = keychainService(for: .zcode)
         let account = ZcodeCredentials.keyringAccount()
-        let (data, _) = keychainBlob(service: keychainService(for: .zcode), account: account)
-        guard let b64 = data.flatMap({ String(data: $0, encoding: .utf8) }) else { return nil }
-        // 43-char base64url → 32 bytes.
-        return Data(base64Encoded: b64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-            .padding(
-                toLength: 44,
-                withPad: "=",
-                startingAt: 0
-            ))
+        if keychainGranted(.zcode) {
+            let (data, status) = keychainBlob(service: service, account: account)
+            if let b64 = data.flatMap({ String(data: $0, encoding: .utf8) }),
+               let key = Self.decodeKeyringKey(b64) {
+                return .key(key)
+            }
+            if status == errSecItemNotFound {
+                setKeychainGranted(false, .zcode)
+            } else {
+                LogService.warn(
+                    "zcode keyring read failed transiently (OSStatus \(status)); keeping grant",
+                    category: "UsageQuotaService"
+                )
+            }
+        }
+        switch keychainProbe(service: service, account: account) {
+        case .authorized, .needsAuthorization:
+            return .needsAuthorization
+        case .notFound, .failure:
+            return .unavailable
+        }
+    }
+
+    /// 43-char base64url → 32 raw bytes (the CLI stores the key verbatim).
+    static func decodeKeyringKey(_ b64: String) -> Data? {
+        let padded = b64
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+            .padding(toLength: 44, withPad: "=", startingAt: 0)
+        guard let key = Data(base64Encoded: padded), key.count == 32 else { return nil }
+        return key
     }
 
     /// Logs quota failures only on state transition — the 60s/5min timers

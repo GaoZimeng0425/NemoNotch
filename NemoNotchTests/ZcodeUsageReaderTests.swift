@@ -308,3 +308,21 @@ struct ZcodeQuotaEnvelopeTests {
         #expect(quota.tiers[0].utilization == 1)
     }
 }
+
+@Suite("ZcodeKeyringKey decode")
+@MainActor
+struct ZcodeKeyringKeyDecodeTests {
+    @Test("43-char base64url decodes to 32 bytes; junk is rejected")
+    func decode() {
+        let key = Data((0 ..< 32).map { UInt8($0 & 0xFF) })
+        let b64url = key.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+        #expect(b64url.count == 43)
+        #expect(UsageQuotaService.decodeKeyringKey(b64url) == key)
+        #expect(UsageQuotaService.decodeKeyringKey("short") == nil)
+        // 43 'A's IS valid 32-byte base64 — junk must be non-alphabet or wrong length.
+        #expect(UsageQuotaService.decodeKeyringKey(String(repeating: "!", count: 43)) == nil)
+        #expect(UsageQuotaService.decodeKeyringKey(String(repeating: "A", count: 42)) == nil)
+    }
+}
