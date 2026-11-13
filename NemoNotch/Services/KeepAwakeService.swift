@@ -120,9 +120,6 @@ final class KeepAwakeService {
     /// 用户意图(设置开关);命名也不同(`Idle Keep Awake`),pmset 输出可辨认。
     private var idleKeepAwakeAssertion: IOPMAssertionID = 0
 
-    /// A 开关断言当前是否真实持有(断言真相,不是设置意图)。
-    private(set) var isIdleKeepAwakeActive = false
-
     /// A 开关最近一次创建失败的原因;创建成功即清空。
     private(set) var idleKeepAwakeError: String?
 
@@ -374,16 +371,20 @@ final class KeepAwakeService {
             )
             if result == kIOReturnSuccess {
                 idleKeepAwakeAssertion = assertionID
-                idleKeepAwakeError = nil
+                if idleKeepAwakeError != nil {
+                    idleKeepAwakeError = nil
+                }
                 idleKeepAwakeFailureLogged = false
-                isIdleKeepAwakeActive = true
                 LogService.info("idle keep-awake assertion held", category: "KeepAwake")
             } else {
-                idleKeepAwakeError = "IOPMAssertionCreateWithName 0x\(String(result, radix: 16))"
+                let message = "IOPMAssertionCreateWithName 0x\(String(result, radix: 16))"
+                if idleKeepAwakeError != message {
+                    idleKeepAwakeError = message
+                }
                 if !idleKeepAwakeFailureLogged {
                     idleKeepAwakeFailureLogged = true
                     LogService.warn(
-                        "could not hold idle keep-awake assertion: \(idleKeepAwakeError!)",
+                        "could not hold idle keep-awake assertion: \(message)",
                         category: "KeepAwake"
                     )
                 }
@@ -391,7 +392,6 @@ final class KeepAwakeService {
         } else if !on, idleKeepAwakeAssertion != 0 {
             IOPMAssertionRelease(idleKeepAwakeAssertion)
             idleKeepAwakeAssertion = 0
-            isIdleKeepAwakeActive = false
             LogService.info("idle keep-awake assertion released", category: "KeepAwake")
         }
     }
@@ -436,10 +436,10 @@ final class KeepAwakeService {
             externalSummaries = newSummaries
         }
         let newNames = Dictionary(
-            uniqueKeysWithValues: parsed.compactMap { entry -> (Int32, String)? in
-                guard let pid = entry.onBehalfOfPID else { return nil }
-                return (pid, NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)")
-            }
+            uniqueKeysWithValues: ExternalSleepAssertions.uniqueOnBehalfPIDs(parsed)
+                .map { pid in
+                    (pid, NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)")
+                }
         )
         if externalOnBehalfNames != newNames {
             externalOnBehalfNames = newNames

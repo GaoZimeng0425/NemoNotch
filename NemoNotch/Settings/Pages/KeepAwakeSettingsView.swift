@@ -126,8 +126,7 @@ struct KeepAwakeSettingsView: View {
     }
 
     private func assertionRow(_ summary: ExternalSleepAssertionSummary) -> some View {
-        let age = ExternalSleepAssertions.ageComponents(startedAt: summary.oldestStartedAt, now: Date.now)
-        return VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text(verbatim: summary.processName + (summary.count > 1 ? " ×\(summary.count)" : ""))
                     .font(.caption.weight(.medium))
@@ -139,7 +138,9 @@ struct KeepAwakeSettingsView: View {
                 Spacer()
             }
             HStack(spacing: 4) {
-                Text("settings.keepawake.panel.age \(age.hours) \(age.minutes)")
+                // 系统相对时间格式自动刷新(完成闪光卡同款)—— 年龄是随时间走的
+                // 展示值,不能用 body 里的 Date.now(上游数据不变时会冻结,评审 P2)。
+                Text(.currentDate, format: .reference(to: summary.oldestStartedAt))
                 if let behalf = summary.onBehalfOfPID,
                    let name = keepAwake.externalOnBehalfNames[behalf] {
                     Text("settings.keepawake.panel.onBehalf \(name)")

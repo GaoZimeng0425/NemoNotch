@@ -168,6 +168,46 @@ struct ExternalSleepAssertionsTests {
         #expect(out[0].onBehalfOfPID == 57602)
     }
 
+    @Test func uniqueOnBehalfPIDsDeduplicatesForDictionarySafety() {
+        // P1 回归:coreaudiod 替同一 app 的两个音频流各挂一条 → 两条断言共享
+        // 归因 pid。直接 Dictionary(uniqueKeysWithValues:) 会 trap(评审梯级 4
+        // 复现);去重列表必须让字典构造安全。
+        let list = [
+            ExternalSleepAssertion(
+                pid: 591,
+                processName: "coreaudiod",
+                name: "a",
+                trueType: "PreventUserIdleSystemSleep",
+                startedAt: now,
+                timeoutRemaining: nil,
+                onBehalfOfPID: 57602
+            ),
+            ExternalSleepAssertion(
+                pid: 591,
+                processName: "coreaudiod",
+                name: "b",
+                trueType: "PreventUserIdleSystemSleep",
+                startedAt: now,
+                timeoutRemaining: nil,
+                onBehalfOfPID: 57602
+            ),
+            ExternalSleepAssertion(
+                pid: 100,
+                processName: "X",
+                name: "c",
+                trueType: "PreventUserIdleSystemSleep",
+                startedAt: now,
+                timeoutRemaining: nil,
+                onBehalfOfPID: nil
+            ),
+        ]
+        let pids = ExternalSleepAssertions.uniqueOnBehalfPIDs(list)
+        #expect(pids == [57602])
+        let dict = Dictionary(uniqueKeysWithValues: pids.map { ($0, "octok") })
+        #expect(dict.count == 1)
+        #expect(ExternalSleepAssertions.uniqueOnBehalfPIDs([]) == [])
+    }
+
     @Test func malformedEntriesSkippedNotCrashed() {
         // 缺 AssertPID 的条目、非字典元素、空顶层数字典:跳过,不崩,不误报。
         let raw: [AnyHashable: Any] = [
@@ -240,21 +280,6 @@ struct ExternalSleepAssertionsTests {
     }
 
     // MARK: - 时间分量
-
-    @Test func ageComponentsMath() {
-        #expect(ExternalSleepAssertions.ageComponents(startedAt: now.addingTimeInterval(-11.5 * 3600), now: now) == (
-            hours: 11,
-            minutes: 30
-        ))
-        #expect(ExternalSleepAssertions.ageComponents(startedAt: now.addingTimeInterval(-59 * 60), now: now) == (
-            hours: 0,
-            minutes: 59
-        ))
-        #expect(ExternalSleepAssertions.ageComponents(startedAt: now.addingTimeInterval(30), now: now) == (
-            hours: 0,
-            minutes: 0
-        ))
-    }
 
     @Test func remainingMinutesMath() {
         #expect(ExternalSleepAssertions.remainingMinutes(122) == 2)

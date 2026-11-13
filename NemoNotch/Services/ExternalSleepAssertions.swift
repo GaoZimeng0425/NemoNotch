@@ -113,10 +113,16 @@ enum ExternalSleepAssertions {
             .sorted { $0.oldestStartedAt < $1.oldestStartedAt }
     }
 
-    /// 年龄分量(整小时 + 余分钟);未来时间钳 (0, 0)。
-    static func ageComponents(startedAt: Date, now: Date) -> (hours: Int, minutes: Int) {
-        let totalMinutes = max(0, Int(now.timeIntervalSince(startedAt) / 60))
-        return (hours: totalMinutes / 60, minutes: totalMinutes % 60)
+    /// 归因 pid 去重列表(保序)。多条断言可挂同一归因(如 coreaudiod 替同一
+    /// app 的两个音频流各挂一条)——拿未去重的 (pid, name) 对直接构造
+    /// `Dictionary(uniqueKeysWithValues:)` 会因重复 key trap(评审 P1)。
+    static func uniqueOnBehalfPIDs(_ assertions: [ExternalSleepAssertion]) -> [Int32] {
+        var seen = Set<Int32>()
+        var out: [Int32] = []
+        for pid in assertions.compactMap(\.onBehalfOfPID) where seen.insert(pid).inserted {
+            out.append(pid)
+        }
+        return out
     }
 
     /// 剩余分钟(向下取整);nil 透传,负数钳 0。

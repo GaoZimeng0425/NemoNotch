@@ -221,7 +221,7 @@ final class AppSettings {
     // MARK: - Keep awake (合盖不休眠)
 
     static let keepAwakeLidDisplayOffKey = "keepAwake.lidDisplayOff"
-    static let keepAwakeIdleEnabledKey = "keepawake.idleEnabled"
+    static let keepAwakeIdleEnabledKey = "keepAwake.idleEnabled"
     static let keepAwakeRestoreOnQuitKey = "keepAwake.restoreOnQuit"
 
     /// 合盖时自动熄屏。`disablesleep=1` 会让整条睡眠路径被禁,合盖屏幕不灭会

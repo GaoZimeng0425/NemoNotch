@@ -5462,22 +5462,6 @@
         }
       }
     },
-    "settings.keepawake.panel.age %lld %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld h %2$lld min"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已持续 %1$lld 小时 %2$lld 分"
-          }
-        }
-      }
-    },
     "settings.keepawake.panel.remaining %lld" : {
       "localizations" : {
         "en" : {
