@@ -80,6 +80,9 @@ final class ChatBubbleController: NSObject, NSWindowDelegate {
             defer: false
         )
         panel.level = .floating
+        // Programmatic order-in: no window-level order animation (thread-leak
+        // invariant, see AGENTS.md 坑总目录 — 2026-11-12/13 incident).
+        panel.animationBehavior = .none
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true

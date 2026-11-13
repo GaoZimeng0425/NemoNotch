@@ -285,6 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.isOpaque = true
         window.hasShadow = false
+        window.animationBehavior = .none // 程序化入屏覆盖窗不变量(AGENTS.md 坑总目录)
         window.level = .statusBar // 低于 glow / 面板(statusBar + 8),与 AI 状态栏同层
         window.ignoresMouseEvents = true
         window.collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
