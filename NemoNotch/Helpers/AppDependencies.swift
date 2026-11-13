@@ -84,7 +84,10 @@ struct AppDependencies {
         }
 
         let hermes = HermesService()
-        if !UITestMode.isActive {
+        // The user-intent toggle gates the launch path too: with the hook
+        // still on disk (manual reinstall / failed uninstall) `connect()`'s
+        // isInstalled guard would resurrect monitoring past the router gate.
+        if !UITestMode.isActive, settings.hermesEnabled {
             hermes.connect()
         }
         aiMonitor.hermesService = hermes
