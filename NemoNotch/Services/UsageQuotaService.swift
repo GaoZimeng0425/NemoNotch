@@ -41,6 +41,13 @@ final class UsageQuotaService: LifecycleAware {
     /// display when the quota API is unavailable (not logged in / fetch failed).
     var zcodeUsage: ZcodeUsageStats?
     let zcodeDatabaseURL = ZcodeUsageReader.defaultDatabaseURL
+    /// The claude-hud snapshot exists — Claude is in use on this machine.
+    /// Quota visibility follows data presence, never the monitoring toggle
+    /// (usage is a billing fact; monitoring is a preference).
+    var hasClaudeSnapshot: Bool {
+        FileManager.default.fileExists(atPath: claudeSnapshotURL.path)
+    }
+
     /// Whether zcode's credential file decrypts (drives the ZCode quota
     /// section's visibility, like `hasCodexCredential`).
     var hasZcodeCredential = false

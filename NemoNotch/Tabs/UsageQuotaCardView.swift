@@ -9,18 +9,21 @@ struct UsageQuotaCardView: View {
 
     /// Providers to show: Claude when enabled, Codex when a credential exists, Gemini when enabled and a credential
     /// exists.
+    /// Data presence drives visibility — the monitoring toggle does not:
+    /// usage quotas are a billing fact and stay visible with monitoring off
+    /// (Codex has always worked this way).
     private var visibleProviders: [QuotaProvider] {
         var result: [QuotaProvider] = []
-        if appSettings.claudeEnabled {
+        if service.hasClaudeSnapshot {
             result.append(.claude)
         }
         if service.hasCodexCredential {
             result.append(.codex)
         }
-        if appSettings.geminiEnabled, service.hasGeminiCredential {
+        if service.hasGeminiCredential {
             result.append(.gemini)
         }
-        if appSettings.zcodeEnabled, service.hasZcodeCredential {
+        if service.hasZcodeCredential {
             result.append(.zcode)
         }
         return result
@@ -32,7 +35,7 @@ struct UsageQuotaCardView: View {
             ForEach(visibleProviders, id: \.self) { provider in
                 providerSection(provider)
             }
-            if appSettings.zcodeEnabled, service.quotas[.zcode] == nil, let stats = service.zcodeUsage {
+            if service.quotas[.zcode] == nil, let stats = service.zcodeUsage {
                 zcodeSection(stats)
             }
         }
@@ -233,18 +236,21 @@ struct UsageQuotaCompactView: View {
 
     /// Providers to surface: Claude when enabled, Codex when a credential exists, Gemini when enabled and a credential
     /// exists.
+    /// Data presence drives visibility — the monitoring toggle does not:
+    /// usage quotas are a billing fact and stay visible with monitoring off
+    /// (Codex has always worked this way).
     private var visibleProviders: [QuotaProvider] {
         var result: [QuotaProvider] = []
-        if appSettings.claudeEnabled {
+        if service.hasClaudeSnapshot {
             result.append(.claude)
         }
         if service.hasCodexCredential {
             result.append(.codex)
         }
-        if appSettings.geminiEnabled, service.hasGeminiCredential {
+        if service.hasGeminiCredential {
             result.append(.gemini)
         }
-        if appSettings.zcodeEnabled, service.hasZcodeCredential {
+        if service.hasZcodeCredential {
             result.append(.zcode)
         }
         return result
@@ -271,7 +277,7 @@ struct UsageQuotaCompactView: View {
     }
 
     private var zcodeStats: ZcodeUsageStats? {
-        appSettings.zcodeEnabled ? service.zcodeUsage : nil
+        service.zcodeUsage
     }
 
     private var content: some View {
@@ -297,6 +303,8 @@ struct UsageQuotaCompactView: View {
                     }
                 }
             }
+            // Equal-height pair with the context card next door (see there).
+            .frame(maxHeight: .infinity, alignment: .top)
             .padding(8)
             .contentShape(Rectangle())
         }
