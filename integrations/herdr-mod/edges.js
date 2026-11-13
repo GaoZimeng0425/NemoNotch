@@ -47,6 +47,22 @@ export function firstRun(agents, openKeys) {
   return { close: openKeys.filter((key) => !ATTENTION.has(now[key])) };
 }
 
+// Herdr's agent kind (`claude-code`, …) -> NemoNotch's own brand mark
+// (`icon: "ai:<source>"`). Prefix match so a renamed variant still lands;
+// anything else gets a terminal symbol rather than the blank generic mark.
+const AI_MARKS = [
+  ["claude", "ai:claude"],
+  ["opencode", "ai:opencode"],
+  ["gemini", "ai:gemini"],
+  ["zcode", "ai:zcode"],
+];
+
+export function iconFor(app) {
+  const name = (app ?? "").toLowerCase();
+  const hit = AI_MARKS.find(([prefix]) => name.startsWith(prefix));
+  return hit ? hit[1] : "sf:terminal";
+}
+
 function clip(text, max) {
   return Array.from(text).slice(0, max).join("");
 }
@@ -62,6 +78,7 @@ export function card(agent) {
     title: clip(`${agent.space_name} / ${agent.tab_name}`, 120),
     body: clip(parts.join(" · "), 280),
     tone: blocked ? "approve" : "done",
+    icon: iconFor(agent.app),
     jumpBundleId: "dev.herdr.app",
   };
   if (JUMPABLE.test(agent.address) && !agent.address.startsWith("-")) body.herdrTerminal = agent.address;

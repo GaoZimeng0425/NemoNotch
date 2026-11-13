@@ -1,7 +1,7 @@
 // node --test: pure edge rules of the NemoNotch Herdr mod (no Herdr needed).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { diff, firstRun, card, closeBody, snapshot, serial, bounded } from "./edges.js";
+import { diff, firstRun, card, closeBody, snapshot, serial, bounded, iconFor } from "./edges.js";
 
 const agent = (address, status, extra = {}) => ({
   address, status, space_name: "NemoNotch", tab_name: "fix", app: "claude-code", title: "Refactor", ...extra,
@@ -38,8 +38,18 @@ test("snapshot maps address to status", () => {
 test("done card: green, default expiry, Herdr jump", () => {
   assert.deepEqual(card(agent("t7", "done")), {
     schema: 1, app: "Herdr", key: "t7", title: "NemoNotch / fix", body: "跑完了 · claude-code · Refactor",
-    tone: "done", herdrTerminal: "t7", jumpBundleId: "dev.herdr.app",
+    tone: "done", icon: "ai:claude", herdrTerminal: "t7", jumpBundleId: "dev.herdr.app",
   });
+});
+
+test("icon: agent kind maps to NemoNotch's brand mark, unknown/missing to a terminal symbol", () => {
+  assert.equal(iconFor("claude-code"), "ai:claude");
+  assert.equal(iconFor("opencode"), "ai:opencode");
+  assert.equal(iconFor("Gemini-CLI"), "ai:gemini");
+  assert.equal(iconFor("zcode"), "ai:zcode");
+  assert.equal(iconFor("codex"), "sf:terminal");
+  assert.equal(iconFor("zsh"), "sf:terminal");
+  assert.equal(iconFor(null), "sf:terminal");
 });
 
 test("blocked card: blue and never expires", () => {

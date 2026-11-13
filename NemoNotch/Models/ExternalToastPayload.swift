@@ -16,8 +16,8 @@ struct ExternalToastPayload: Equatable, Sendable {
     let key: String?
     let title: String
     let body: String?
-    /// Parsed from `icon`: the SF Symbol name when `icon` is a valid `"sf:<name>"`, else nil.
-    let iconSymbol: String?
+    /// Parsed from `icon` (`sf:` / `ai:` / `app:`); nil when absent or unrecognised.
+    let icon: ExternalToastIcon?
     let jumpBundleId: String?
     /// Optional click target: an absolute URL (deep link or web page) opened on click;
     /// wins over `jumpBundleId`, which stays the fallback when the URL cannot be opened.
@@ -31,6 +31,16 @@ struct ExternalToastPayload: Equatable, Sendable {
     var action: ExternalToastAction = .show
     /// When the card leaves on its own; nil = the queue's default timer.
     var expiry: ExternalToastExpiry?
+}
+
+/// The card's leading mark, parsed from the wire `icon` string.
+enum ExternalToastIcon: Equatable, Hashable, Sendable {
+    /// `sf:<name>` — an SF Symbol (unknown names fall back at render time).
+    case symbol(String)
+    /// `ai:<claude|gemini|opencode|zcode>` — NemoNotch's own brand mark for that CLI.
+    case ai(AISource)
+    /// `app:<bundle id>` — that installed app's icon (falls back when not installed).
+    case app(bundleID: String)
 }
 
 /// Optional ring color class — the four reminder tones, never a free color.
@@ -218,7 +228,7 @@ extension ExternalToastPayload {
         if action == .close {
             guard key != nil else { return .failure(.closeRequiresKey) }
             var closing = ExternalToastPayload(
-                schema: 1, app: app, key: key, title: "", body: nil, iconSymbol: nil,
+                schema: 1, app: app, key: key, title: "", body: nil, icon: nil,
                 jumpBundleId: nil, jumpURL: nil
             )
             closing.action = .close
@@ -240,7 +250,7 @@ extension ExternalToastPayload {
             key: key,
             title: title,
             body: raw.body,
-            iconSymbol: Self.symbolName(fromIcon: raw.icon),
+            icon: Self.icon(fromWire: raw.icon),
             jumpBundleId: raw.jumpBundleId,
             jumpURL: jumpURL
         )
@@ -295,11 +305,24 @@ extension ExternalToastPayload {
         }
     }
 
-    /// Only `"sf:<name>"` (non-empty name) is a valid icon; anything else degrades to nil.
-    private static func symbolName(fromIcon icon: String?) -> String? {
-        guard let icon, icon.hasPrefix("sf:") else { return nil }
-        let name = icon.dropFirst(3)
-        return name.isEmpty ? nil : String(name)
+    /// `sf:<name>`, `ai:<source>` or `app:<bundle id>` (non-empty value); anything
+    /// else degrades to nil — a bad icon never rejects the card.
+    static func icon(fromWire icon: String?) -> ExternalToastIcon? {
+        guard let icon, let colon = icon.firstIndex(of: ":") else { return nil }
+        let value = String(icon[icon.index(after: colon)...])
+        guard !value.isEmpty else { return nil }
+        switch icon[..<colon] {
+        case "sf":
+            return .symbol(value)
+        case "ai":
+            return AISource(rawValue: value).map(ExternalToastIcon.ai)
+        case "app":
+            let pattern = #"^[A-Za-z0-9.-]{1,255}$"#
+            guard value.range(of: pattern, options: .regularExpression) != nil else { return nil }
+            return .app(bundleID: value)
+        default:
+            return nil
+        }
     }
 
     /// Card identity for the toast queue: keyed pushes share `ext:<app>::<key>`

@@ -21,7 +21,7 @@ struct ExternalToastPayloadTests {
             key: "download-42",
             title: "下载完成",
             body: "nemo-1.2.3.dmg · 84 MB",
-            iconSymbol: "arrow.down.circle",
+            icon: .symbol("arrow.down.circle"),
             jumpBundleId: "com.me.mydownloader",
             jumpURL: nil
         )
@@ -33,7 +33,7 @@ struct ExternalToastPayloadTests {
         let result = ExternalToastPayload.parse(json(#"{"schema":1,"app":"Demo","title":"Hi"}"#))
         let expected = ExternalToastPayload(
             schema: 1, app: "Demo", key: nil, title: "Hi",
-            body: nil, iconSymbol: nil, jumpBundleId: nil, jumpURL: nil
+            body: nil, icon: nil, jumpBundleId: nil, jumpURL: nil
         )
         #expect(result == .success(expected))
     }
@@ -145,7 +145,40 @@ struct ExternalToastPayloadTests {
             Issue.record("expected success, got \(result)")
             return
         }
-        #expect(payload.iconSymbol == nil)
+        #expect(payload.icon == nil)
+    }
+
+    @Test("icon: sf:/ai:/app: parse to their case; unknown or malformed values degrade to nil")
+    func iconForms() {
+        #expect(ExternalToastPayload.icon(fromWire: "sf:cpu") == .symbol("cpu"))
+        #expect(ExternalToastPayload.icon(fromWire: "ai:claude") == .ai(.claude))
+        #expect(ExternalToastPayload.icon(fromWire: "ai:opencode") == .ai(.opencode))
+        #expect(ExternalToastPayload.icon(fromWire: "ai:gemini") == .ai(.gemini))
+        #expect(ExternalToastPayload.icon(fromWire: "ai:zcode") == .ai(.zcode))
+        #expect(ExternalToastPayload.icon(fromWire: "app:com.gaozimeng.pulse") == .app(bundleID: "com.gaozimeng.pulse"))
+        #expect(ExternalToastPayload.icon(fromWire: "ai:codex") == nil)
+        #expect(ExternalToastPayload.icon(fromWire: "ai:Claude") == nil)
+        #expect(ExternalToastPayload.icon(fromWire: "app:../../etc") == nil)
+        #expect(ExternalToastPayload.icon(fromWire: "app:") == nil)
+        #expect(ExternalToastPayload.icon(fromWire: "sf:") == nil)
+        #expect(ExternalToastPayload.icon(fromWire: "png:/tmp/a.png") == nil)
+        #expect(ExternalToastPayload.icon(fromWire: nil) == nil)
+    }
+
+    @Test("an ai: icon reaches the payload and a bad one never rejects the card")
+    func aiIconThroughParse() {
+        let ok = ExternalToastPayload.parse(json(#"{"schema":1,"app":"Herdr","title":"Hi","icon":"ai:claude"}"#))
+        guard case let .success(payload) = ok else {
+            Issue.record("expected success, got \(ok)")
+            return
+        }
+        #expect(payload.icon == .ai(.claude))
+        let bad = ExternalToastPayload.parse(json(#"{"schema":1,"app":"Herdr","title":"Hi","icon":"ai:nope"}"#))
+        guard case let .success(badPayload) = bad else {
+            Issue.record("expected success, got \(bad)")
+            return
+        }
+        #expect(badPayload.icon == nil)
     }
 
     @Test("malformed JSON is rejected as malformedJSON")
@@ -157,13 +190,13 @@ struct ExternalToastPayloadTests {
     func cardKeyIdentity() {
         let keyed = ExternalToastPayload(
             schema: 1, app: "MyApp", key: "dl-1", title: "t",
-            body: nil, iconSymbol: nil, jumpBundleId: nil, jumpURL: nil
+            body: nil, icon: nil, jumpBundleId: nil, jumpURL: nil
         )
         #expect(keyed.cardKey() == "ext:MyApp::dl-1")
 
         let keyless = ExternalToastPayload(
             schema: 1, app: "MyApp", key: nil, title: "t",
-            body: nil, iconSymbol: nil, jumpBundleId: nil, jumpURL: nil
+            body: nil, icon: nil, jumpBundleId: nil, jumpURL: nil
         )
         var calls = 0
         let makeUniqueID = { () -> String in
