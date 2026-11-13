@@ -38,7 +38,7 @@ enum ExternalToastGuide {
     | `key` | String? | | 见下「两种用法」;1–128 字符;**空串视为未提供**;`app` 与 `key` 都不得含 `::` |
     | `title` | String | ✓ | 1–120 字符(`action:"close"` 时不需要) |
     | `body` | String? | | ≤280 字符 |
-    | `icon` | String? | | 仅 `sf:<SF Symbol 名>`;未知符号名回落通用卡片图标,不报错 |
+    | `icon` | String? | | 三种写法:`sf:<SF Symbol 名>`(系统图标)/ `ai:claude`、`ai:opencode`、`ai:gemini`、`ai:zcode`(NemoNotch 自带的 AI 工具 logo)/ `app:<bundle id>`(该已装应用的图标);写法不认识、符号不存在、应用未安装都回落通用卡片图标,不报错。不支持图片文件 |
     | `jumpBundleId` | String? | | 点击卡片激活该 bundle id 的应用;缺省 = 点击只关卡;≤255 字符 |
     | `jumpURL` | String? | | 点击卡片打开该 URL(深链或网页),**优先于 `jumpBundleId`**(URL 打不开才回落激活应用);须为带 scheme 的绝对 URL 且 scheme ≠ `file:`,≤2048 字符;空串/纯空白视为未提供;URL 原样透传,需 percent-encode 请自行编码 |
     | `tone` | String? | | 卡片边框颜色类别,只能是 `done`(绿,完成回来看)/ `decide`(琥珀,来做决定)/ `approve`(蓝,来点允许)/ `error`(红,来救火);缺省 = 彩虹边框;其它值 → 400。只改颜色,不改卡面文字 |

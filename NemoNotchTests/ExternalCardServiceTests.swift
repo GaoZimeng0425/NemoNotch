@@ -25,13 +25,13 @@ struct ExternalCardServiceTests {
         key: String? = nil,
         title: String = "下载完成",
         body: String? = "84 MB",
-        iconSymbol: String? = "arrow.down.circle",
+        icon: ExternalToastIcon? = .symbol("arrow.down.circle"),
         jumpBundleId: String? = nil,
         jumpURL: String? = nil
     ) -> ExternalToastPayload {
         ExternalToastPayload(
             schema: 1, app: app, key: key, title: title,
-            body: body, iconSymbol: iconSymbol, jumpBundleId: jumpBundleId, jumpURL: jumpURL
+            body: body, icon: icon, jumpBundleId: jumpBundleId, jumpURL: jumpURL
         )
     }
 
@@ -49,7 +49,7 @@ struct ExternalCardServiceTests {
             #expect(item.name == "Demo")
             #expect(item.external?.title == "下载完成")
             #expect(item.external?.body == "84 MB")
-            #expect(item.source == .external(iconSymbol: "arrow.down.circle"))
+            #expect(item.source == .external(icon: .symbol("arrow.down.circle")))
         }
     }
 

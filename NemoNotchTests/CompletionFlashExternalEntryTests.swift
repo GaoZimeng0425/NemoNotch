@@ -26,7 +26,7 @@ struct CompletionFlashExternalEntryTests {
     @Test("external toasts enter the row even with completionFlashEnabled off, without the glow")
     func externalEntryIgnoresFlashGate() {
         withFlashDisabled { service in
-            var item = CompletionItem(name: "Demo", source: .external(iconSymbol: nil))
+            var item = CompletionItem(name: "Demo", source: .external(icon: nil))
             item.key = "ext:Demo::k1"
             service.showExternalToast(item)
 
@@ -37,7 +37,7 @@ struct CompletionFlashExternalEntryTests {
     }
 
     private func external(_ key: String) -> CompletionItem {
-        var item = CompletionItem(name: key, source: .external(iconSymbol: nil))
+        var item = CompletionItem(name: key, source: .external(icon: nil))
         item.key = "ext:Herdr::\(key)"
         return item
     }

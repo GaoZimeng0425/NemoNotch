@@ -62,7 +62,7 @@ final class ExternalCardService {
         payload: ExternalToastPayload,
         makeUniqueID: () -> String = { UUID().uuidString }
     ) -> CompletionItem {
-        var item = CompletionItem(name: payload.app, source: .external(iconSymbol: payload.iconSymbol))
+        var item = CompletionItem(name: payload.app, source: .external(icon: payload.icon))
         item.key = payload.cardKey(makeUniqueID: makeUniqueID)
         item.external = ExternalCardContent(
             app: payload.app,

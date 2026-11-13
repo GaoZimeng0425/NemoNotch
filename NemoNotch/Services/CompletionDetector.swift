@@ -7,9 +7,9 @@ enum CompletionSource: Equatable, Hashable {
     case agent // OpenClaw / Hermes multi-agent monitors
     case calendar // Calendar event due
     case notification(bundleID: String) // Notification Center message (Mail / Slack / WeChat …)
-    /// External app push (`POST /v1/toast`): the caller's SF Symbol name when
-    /// it sent a valid `sf:<name>` icon, else nil for the generic mark.
-    case external(iconSymbol: String?)
+    /// External app push (`POST /v1/toast`): the caller's parsed `icon`, nil for
+    /// the generic mark.
+    case external(icon: ExternalToastIcon?)
 }
 
 /// The session's host app as `AppActivator.activate` takes it: tab link →

@@ -244,16 +244,8 @@ struct CompletionToastView: View {
     private func sourceIcon(_ source: CompletionSource) -> some View {
         let s = NotchConstants.completionToastIconSize
         switch source {
-        case .ai(.claude):
-            ClaudeCrabIcon(size: s, color: Color(red: 0.85, green: 0.47, blue: 0.34))
-        case .ai(.gemini):
-            Image(systemName: "sparkles")
-                .font(.system(size: s * 0.9, weight: .semibold))
-                .foregroundStyle(Color(red: 0.42, green: 0.55, blue: 0.95))
-        case .ai(.opencode):
-            OpencodeLogoIcon(size: s, color: .white)
-        case .ai(.zcode):
-            ZcodeLogoIcon(size: s, color: Color(red: 0.11, green: 0.44, blue: 0.96))
+        case let .ai(ai):
+            aiIcon(ai, size: s)
         case .agent:
             Image(systemName: "cpu")
                 .font(.system(size: s * 0.9, weight: .semibold))
@@ -272,20 +264,61 @@ struct CompletionToastView: View {
                     .font(.system(size: s * 0.9, weight: .semibold))
                     .foregroundStyle(NotchTheme.accent)
             }
-        case let .external(iconSymbol):
-            // Probe existence: an `sf:` name that isn't a real SF Symbol
-            // renders blank, so it falls back to the generic card icon.
-            if let symbol = iconSymbol,
-               NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil {
+        case let .external(icon):
+            externalIcon(icon, size: s)
+        }
+    }
+
+    @ViewBuilder
+    private func aiIcon(_ ai: AISource, size s: CGFloat) -> some View {
+        switch ai {
+        case .claude:
+            ClaudeCrabIcon(size: s, color: Color(red: 0.85, green: 0.47, blue: 0.34))
+        case .gemini:
+            Image(systemName: "sparkles")
+                .font(.system(size: s * 0.9, weight: .semibold))
+                .foregroundStyle(Color(red: 0.42, green: 0.55, blue: 0.95))
+        case .opencode:
+            OpencodeLogoIcon(size: s, color: .white)
+        case .zcode:
+            ZcodeLogoIcon(size: s, color: Color(red: 0.11, green: 0.44, blue: 0.96))
+        }
+    }
+
+    /// External card mark: `ai:` reuses the AI brand marks, `app:` the installed
+    /// app's icon, `sf:` the symbol; anything that can't render (unknown symbol,
+    /// app not installed, no icon) falls back to the generic card mark.
+    @ViewBuilder
+    private func externalIcon(_ icon: ExternalToastIcon?, size s: CGFloat) -> some View {
+        switch icon {
+        case let .ai(ai):
+            aiIcon(ai, size: s)
+        case let .app(bundleID):
+            if let image = AppIconCache.icon(bundleID: bundleID) {
+                Image(nsImage: image)
+                    .resizable()
+                    .frame(width: s + 4, height: s + 4)
+            } else {
+                genericExternalIcon(size: s)
+            }
+        case let .symbol(symbol):
+            // Probe existence: a name that isn't a real SF Symbol renders blank.
+            if NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil {
                 Image(systemName: symbol)
                     .font(.system(size: s * 0.9, weight: .semibold))
                     .foregroundStyle(NotchTheme.accent)
             } else {
-                Image(systemName: "app.dashed")
-                    .font(.system(size: s * 0.9, weight: .semibold))
-                    .foregroundStyle(NotchTheme.accent)
+                genericExternalIcon(size: s)
             }
+        case nil:
+            genericExternalIcon(size: s)
         }
+    }
+
+    private func genericExternalIcon(size s: CGFloat) -> some View {
+        Image(systemName: "app.dashed")
+            .font(.system(size: s * 0.9, weight: .semibold))
+            .foregroundStyle(NotchTheme.accent)
     }
 }
 
