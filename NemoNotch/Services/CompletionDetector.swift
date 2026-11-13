@@ -216,6 +216,14 @@ struct CompletionDetector {
     private var prior: [String: PriorState] = [:]
 
     /// Returns the units that went active→idle since the last call, and the
+    /// Toggle-off: drop units from memory so their removal from the store
+    /// reads as "never existed", never as `sessionLost`.
+    mutating func forget(_ keys: Set<String>) {
+        for key in keys {
+            prior.removeValue(forKey: key)
+        }
+    }
+
     /// units that vanished while still active (`sessionLost`). A unit that
     /// was already idle and then disappears is dropped, not reported.
     mutating func step(_ candidates: [CompletionCandidate]) -> [CompletionItem] {

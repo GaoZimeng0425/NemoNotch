@@ -84,7 +84,10 @@ struct AppDependencies {
         }
 
         let hermes = HermesService()
-        if !UITestMode.isActive {
+        // The user-intent toggle gates the launch path too: with the hook
+        // still on disk (manual reinstall / failed uninstall) `connect()`'s
+        // isInstalled guard would resurrect monitoring past the router gate.
+        if !UITestMode.isActive, settings.hermesEnabled {
             hermes.connect()
         }
         aiMonitor.hermesService = hermes
@@ -117,6 +120,9 @@ struct AppDependencies {
             registry: registry,
             settings: settings
         )
+        // Toggle-off clears sessions silently: the service must drop them from
+        // the detector's memory before they leave the store.
+        aiMonitor.completionFlash = completionFlash
         // 通知中心 → toast:只读 usernoted 的私有库。UI 测试与单测宿主不读
         // (截图运行不该冒出真实消息,宿主也没有完全磁盘访问权限)。
         let notificationToast = NotificationToastService(settings: settings, flash: completionFlash)

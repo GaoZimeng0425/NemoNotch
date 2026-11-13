@@ -71,6 +71,7 @@ struct MenuRoot: View {
     var body: some View {
         if let deps = AppDependencyBox.shared.deps {
             MenuContent(appSettings: deps.settings)
+                .environment(deps.settings)
                 .environment(deps.media)
                 .environment(deps.aiMonitor)
                 .environment(deps.keepAwake)

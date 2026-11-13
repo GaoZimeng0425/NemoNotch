@@ -181,6 +181,14 @@ final class GeminiProvider: AIProvider {
 
     // MARK: - Startup Scan
 
+    /// Toggle-off for the discovery side: stop the transcript watchers so a
+    /// file change can't resurrect the removed sessions past the router gate.
+    func stopDiscovery() {
+        for session in store.sessions(for: .gemini) {
+            watcherManager.stopWatching(sessionId: session.id)
+        }
+    }
+
     func scanExistingSessions() {
         // 与 ClaudeProvider 相同:扫描 + 解析在后台线程,store/watcher 写入回
         // 主线程;应用前重查 contains,迟到的扫描不覆盖 hook 事件创建的会话。

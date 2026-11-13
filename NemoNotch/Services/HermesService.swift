@@ -56,7 +56,7 @@ final class HermesService: MultiAgentMonitor {
     }
 
     func connect() {
-        guard isInstalled else { return }
+        guard isInstalled, pollTimer == nil else { return }
         LogService.info("Starting Hermes monitoring (FSEvents + polling fallback)", category: "HermesService")
         startWatching()
         refreshSessions()

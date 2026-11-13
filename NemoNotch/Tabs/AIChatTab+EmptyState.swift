@@ -54,30 +54,22 @@ extension AIChatTab {
         VStack(spacing: 0) {
             providerStatusRow(source: .claude, name: "Claude Code", kind: claudeKind) {
                 appSettings.claudeEnabled = true
-                if !aiService.claudeProvider.isHookInstalled {
-                    aiService.claudeProvider.installHooks()
-                }
+                aiService.setMonitoring(enabled: true, for: .claude)
             }
             Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
             providerStatusRow(source: .gemini, name: "Gemini CLI", kind: geminiKind) {
                 appSettings.geminiEnabled = true
-                if !aiService.geminiProvider.isHookInstalled {
-                    aiService.geminiProvider.installHooks()
-                }
+                aiService.setMonitoring(enabled: true, for: .gemini)
             }
             Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
             providerStatusRow(source: .opencode, name: "opencode", kind: opencodeKind) {
                 appSettings.opencodeEnabled = true
-                if !aiService.opencodeProvider.isHookInstalled {
-                    aiService.opencodeProvider.installHooks()
-                }
+                aiService.setMonitoring(enabled: true, for: .opencode)
             }
             Divider().overlay(NotchTheme.textTertiary.opacity(0.15))
             providerStatusRow(source: .zcode, name: "zcode", kind: zcodeKind) {
                 appSettings.zcodeEnabled = true
-                if !aiService.zcodeProvider.isHookInstalled {
-                    aiService.zcodeProvider.installHooks()
-                }
+                aiService.setMonitoring(enabled: true, for: .zcode)
             }
         }
         .notchCard(radius: 10, fill: NotchTheme.surface)

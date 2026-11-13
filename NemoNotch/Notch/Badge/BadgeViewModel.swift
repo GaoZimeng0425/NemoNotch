@@ -40,14 +40,7 @@ final class BadgeViewModel {
         var items = BadgeItem.sessionItems(
             aiService.store.sortedSessions,
             edgeBarShown: appSettings.aiStatusFabEnabled
-        ) { source in
-            switch source {
-            case .claude: appSettings.claudeEnabled
-            case .gemini: appSettings.geminiEnabled
-            case .opencode: appSettings.opencodeEnabled
-            case .zcode: appSettings.zcodeEnabled
-            }
-        }
+        )
 
         for agent in agentRegistry.activeAgents {
             items.append(.agents(agentID: agent.id, state: agent.state, emoji: agent.emoji))

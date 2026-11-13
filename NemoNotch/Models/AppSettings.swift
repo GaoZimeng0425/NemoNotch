@@ -52,6 +52,28 @@ final class AppSettings {
     static let claudeEnabledKey = "claudeEnabled"
     static let geminiEnabledKey = "geminiEnabled"
     static let hermesEnabledKey = "hermesEnabled"
+
+    /// The per-source monitoring toggle, read/written by source. Hermes is
+    /// not an `AISource` — it stays on the plain `hermesEnabled` property.
+    subscript(source: AISource) -> Bool {
+        get {
+            switch source {
+            case .claude: return claudeEnabled
+            case .gemini: return geminiEnabled
+            case .opencode: return opencodeEnabled
+            case .zcode: return zcodeEnabled
+            }
+        }
+        set {
+            switch source {
+            case .claude: claudeEnabled = newValue
+            case .gemini: geminiEnabled = newValue
+            case .opencode: opencodeEnabled = newValue
+            case .zcode: zcodeEnabled = newValue
+            }
+        }
+    }
+
     static let opencodeEnabledKey = "opencodeEnabled"
     static let zcodeEnabledKey = "zcodeEnabled"
     static let completionFlashEnabledKey = "completionFlashEnabled"

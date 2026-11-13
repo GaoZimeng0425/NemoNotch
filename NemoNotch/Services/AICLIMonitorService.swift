@@ -13,6 +13,29 @@ final class AICLIMonitorService {
 
     var serverRunning = false
 
+    /// Per-source monitoring gate (the Settings toggle). Injectable so tests
+    /// can gate without touching the shared UserDefaults domain.
+    var sourceGate: (AISource) -> Bool = { AICLIMonitorService.monitoringEnabled(for: $0) }
+
+    /// The toggle is the single service-layer gate: disabled sources get no
+    /// events routed, no discovery polling, no hooks re-installed. Absent keys
+    /// default to on — a fresh install behaves like before the toggle existed.
+    static func monitoringEnabled(for source: AISource) -> Bool {
+        let key: String = switch source {
+        case .claude: AppSettings.claudeEnabledKey
+        case .gemini: AppSettings.geminiEnabledKey
+        case .opencode: AppSettings.opencodeEnabledKey
+        case .zcode: AppSettings.zcodeEnabledKey
+        }
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+
+    /// Hermes is not an `AIProvider` (its agents live outside the session
+    /// store) — its toggle reads the same UserDefaults shape.
+    var hermesGate: () -> Bool = {
+        UserDefaults.standard.object(forKey: AppSettings.hermesEnabledKey) as? Bool ?? true
+    }
+
     init() {
         let store = AISessionStore()
         let claude = ClaudeProvider(store: store)
@@ -64,26 +87,91 @@ final class AICLIMonitorService {
     /// The disk scans and Claude's session-record polling. Not in `init`:
     /// tests build bare instances, and only the app's one instance may scan
     /// transcripts and poll records forever. Only `AppDependencies.build()`
-    /// calls this.
+    /// calls this. Disabled sources discover nothing — the toggle gates the
+    /// whole pipeline, not just the badge.
     func startSessionDiscovery() {
-        claudeProvider.scanExistingSessions()
-        geminiProvider.scanExistingSessions()
+        if sourceGate(.claude) {
+            claudeProvider.scanExistingSessions()
+        }
+        if sourceGate(.gemini) {
+            geminiProvider.scanExistingSessions()
+        }
+    }
+
+    /// Toggle-flip entry point: the ONE call the Settings card makes. Off =
+    /// uninstall hooks, stop discovery/watchers, silently clear the source's
+    /// sessions (no `sessionLost` edge). On = install hooks, resume discovery.
+    /// `completionFlash` is wired by `AppDependencies.build()`.
+    weak var completionFlash: CompletionFlashService?
+
+    /// Hermes toggle — same contract as `setMonitoring`, but agents live in
+    /// the registry view, not the session store: forget them before they
+    /// leave, or their disappearance reads as `sessionLost`.
+    func setHermesMonitoring(enabled: Bool) {
+        guard let hermes = hermesService else { return }
+        if enabled {
+            hermes.installHooks()
+            hermes.connect()
+        } else {
+            completionFlash?.forgetAgentKeys(Set(hermes.agents.keys.map { "agent:" + $0 }))
+            hermes.disconnect()
+            hermes.uninstallHooks()
+            hermes.agents.removeAll()
+        }
+    }
+
+    func setMonitoring(enabled: Bool, for source: AISource) {
+        switch source {
+        case .claude:
+            if enabled {
+                claudeProvider.installHooks()
+                claudeProvider.scanExistingSessions()
+            } else {
+                claudeProvider.uninstallHooks()
+                claudeProvider.stopDiscovery()
+            }
+        case .gemini:
+            if enabled {
+                geminiProvider.installHooks()
+                geminiProvider.scanExistingSessions()
+            } else {
+                geminiProvider.uninstallHooks()
+                geminiProvider.stopDiscovery()
+            }
+        case .opencode:
+            if enabled {
+                opencodeProvider.installHooks()
+            } else {
+                opencodeProvider.uninstallHooks()
+            }
+        case .zcode:
+            if enabled {
+                zcodeProvider.installHooks()
+            } else {
+                zcodeProvider.uninstallHooks()
+            }
+        }
+        if !enabled {
+            completionFlash?.forgetSessions(for: source)
+        }
     }
 
     var activeSession: AISessionState? {
         store.activeSession
     }
 
+    func provider(for source: AISource) -> any AIProvider {
+        switch source {
+        case .claude: return claudeProvider
+        case .gemini: return geminiProvider
+        case .opencode: return opencodeProvider
+        case .zcode: return zcodeProvider
+        }
+    }
+
     var anyHookInstalled: Bool {
         claudeProvider.isHookInstalled || geminiProvider.isHookInstalled
             || opencodeProvider.isHookInstalled || zcodeProvider.isHookInstalled
-    }
-
-    func installHooks() {
-        claudeProvider.installHooks()
-        geminiProvider.installHooks()
-        opencodeProvider.installHooks()
-        zcodeProvider.installHooks()
     }
 
     func respondToPermission(sessionId: String, approved: Bool) {
@@ -140,30 +228,46 @@ final class AICLIMonitorService {
             }
         }
 
-        LogService.info("Routing event \(event.hookEventName) to \(source)", category: "AICLIMonitorService")
-
-        switch source {
-        case "hermes":
-            hermesService?.handleHookEvent(event)
-        case "gemini":
-            geminiProvider.handleEvent(event)
-        case "claude":
-            claudeProvider.handleEvent(event)
-        case "opencode":
-            opencodeProvider.handleEvent(event)
-        case "zcode":
-            zcodeProvider.handleEvent(event)
-        default:
-            // Final fallback: route by which provider owns the session.
-            if let existing = store.get(event.sessionId ?? "") {
-                switch existing.source {
-                case .gemini: geminiProvider.handleEvent(event)
-                case .claude: claudeProvider.handleEvent(event)
-                case .opencode: opencodeProvider.handleEvent(event)
-                case .zcode: zcodeProvider.handleEvent(event)
-                }
+        // Resolve the final target first, then gate: a disabled source must see
+        // no events at all — tagged, prefix-attributed, or the untagged Claude
+        // fallback. The old UI-only filter left these paths alive, so sessions
+        // kept coming back after "uninstall".
+        if source == "hermes" {
+            if hermesGate() {
+                LogService.info("Routing event \(event.hookEventName) to hermes", category: "AICLIMonitorService")
+                hermesService?.handleHookEvent(event)
             } else {
-                claudeProvider.handleEvent(event)
+                LogService.info(
+                    "Routing event \(event.hookEventName) to hermes — disabled, dropped",
+                    category: "AICLIMonitorService"
+                )
+                return
+            }
+        } else {
+            let target: AISource = switch source {
+            case "gemini": .gemini
+            case "claude": .claude
+            case "opencode": .opencode
+            case "zcode": .zcode
+            default:
+                // Final fallback: route by which provider owns the session,
+                // else Claude — the fallback inherits the claude gate.
+                store.get(event.sessionId ?? "")?.source ?? .claude
+            }
+            guard sourceGate(target) else {
+                LogService.info(
+                    "Routing event \(event.hookEventName) to \(source) — disabled, dropped",
+                    category: "AICLIMonitorService"
+                )
+                return
+            }
+            LogService.info("Routing event \(event.hookEventName) to \(source)", category: "AICLIMonitorService")
+
+            switch target {
+            case .claude: claudeProvider.handleEvent(event)
+            case .gemini: geminiProvider.handleEvent(event)
+            case .opencode: opencodeProvider.handleEvent(event)
+            case .zcode: zcodeProvider.handleEvent(event)
             }
         }
 
@@ -180,14 +284,22 @@ final class AICLIMonitorService {
 
     private func handleServerReady() {
         serverRunning = true
-        try? HookInstaller.install(.claude)
-        try? HookInstaller.install(.gemini)
+        // The heal pass installs hooks only for enabled sources — this used
+        // to resurrect an uninstalled claude/gemini hook on every launch.
+        // Status flags still reflect the on-disk truth either way.
+        if sourceGate(.claude) {
+            try? HookInstaller.install(.claude)
+        }
+        if sourceGate(.gemini) {
+            try? HookInstaller.install(.gemini)
+        }
         claudeProvider.isHookInstalled = HookInstaller.isInstalled(.claude)
         geminiProvider.isHookInstalled = HookInstaller.isInstalled(.gemini)
-        try? OpencodePluginInstaller.install()
+        if sourceGate(.opencode) {
+            try? OpencodePluginInstaller.install()
+        }
         opencodeProvider.isHookInstalled = OpencodePluginInstaller.isInstalled
-        let zcodeEnabled = UserDefaults.standard.object(forKey: AppSettings.zcodeEnabledKey) as? Bool ?? true
-        if zcodeEnabled, FileManager.default.fileExists(atPath: HookTarget.zcode.settingsPath) {
+        if sourceGate(.zcode), FileManager.default.fileExists(atPath: HookTarget.zcode.settingsPath) {
             try? HookInstaller.install(.zcode)
         }
         zcodeProvider.isHookInstalled = HookInstaller.isInstalled(.zcode)

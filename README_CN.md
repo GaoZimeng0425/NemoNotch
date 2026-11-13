@@ -28,7 +28,7 @@ macOS 刘海区域的交互式浮动面板，将 MacBook 的 Notch 变成一块�
 | 标签 | 功能 |
 |------|------|
 | **概览 (Overview)** | 一个标签页里三块速览信息 —— **媒体**：实时播放控制（播放/暂停/上下曲/拖动进度）、专辑封面、进度条 —— 通过 Perl 桥接系统媒体控制，支持任何上报 Now Playing 的播放器（Apple Music、Spotify、浏览器、Podcasts、网易云音乐……）；**日历**：15 天日期选择器、当日事件列表、日历颜色标识、可点击会议链接；**天气**：当前温度/体感温度、高低温、湿度风速、可滚动 7 日预报、昼夜天气图标（Open-Meteo 数据源，wttr.in 兜底） |
-| **AI Chat** | 统一 Claude Code、Gemini CLI、opencode 与 zcode 监控 — 会话列表、子代理追踪、模型显示；对话详情、权限审批与 Context 用量进度条仅限 Claude Code 与 Gemini CLI |
+| **AI Chat** | 统一 Claude Code、Gemini CLI、opencode 与 zcode 监控 — 会话列表、子代理追踪、模型显示；对话详情、权限审批与 Context 用量进度条仅限 Claude Code 与 Gemini CLI。每个 CLI 在设置里有独立开关：关 = 卸载其 hook、停止发现轮询、静默清空会话 — 不弹卡、不显示徽章、彻底安静 |
 | **智能体** | 多代理系统状态监控，支持 OpenClaw（WebSocket）和 Hermes-agent（HTTP API），实时代理工作状态追踪 |
 
 ### 核心特性
@@ -118,7 +118,7 @@ sh scripts/install-herdr-mod.sh              # 安装 / 更新（可重复运行
 sh scripts/install-herdr-mod.sh --uninstall
 ```
 
-mod 源码在 `integrations/herdr-mod/`，只用上面的外部 Toast API（`tone`、`herdrTerminal`、`action`、`expiresAt`）。如果在 Herdr 里同时装着 NemoNotch 自己的 Claude Code hook，每轮会收到两张卡——不想要的那份 hook 自行卸载。
+mod 源码在 `integrations/herdr-mod/`，只用上面的外部 Toast API（`tone`、`herdrTerminal`、`action`、`expiresAt`）。如果在 Herdr 里同时装着 NemoNotch 自己的 Claude Code hook，每轮会收到两张卡——在设置 → AI 与 Agent 里关掉 Claude Code 开关即可（自动卸载 hook 并静默清空会话）。
 
 ## 技术栈
 

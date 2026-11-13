@@ -245,6 +245,38 @@ struct CompletionDetectorTests {
         item.key = "ext:App::k1"
         #expect(item.toastKey == "ext:App::k1")
     }
+
+    @Test("forget drops units so a disabled source's removal is silent, not sessionLost")
+    func forgetPreventsSessionLost() {
+        // Prime: an active unit the detector remembers.
+        var d = CompletionDetector()
+        _ = d.step([c("ai:t1", "Proj", true)])
+
+        // Toggle-off path: forget BEFORE the unit leaves the snapshot.
+        d.forget(["ai:t1"])
+        let afterForget = d.step([])
+        #expect(afterForget.isEmpty)
+
+        // Control: without forget, the same vanishing reports sessionLost —
+        // proving the guard has teeth (mutate `d.forget` away to see red).
+        var control = CompletionDetector()
+        _ = control.step([c("ai:t2", "Proj", true)])
+        let vanished = control.step([])
+        #expect(vanished.count == 1)
+        #expect(vanished[0].kind == .sessionLost)
+    }
+
+    @Test("forget is narrow: other units still report normally")
+    func forgetIsNarrow() {
+        var d = CompletionDetector()
+        _ = d.step([c("ai:keep", "Keep", true), c("ai:drop", "Drop", true)])
+
+        d.forget(["ai:drop"])
+        let result = d.step([c("ai:keep", "Keep", false)])
+        #expect(result.count == 1)
+        #expect(result[0].key == "ai:keep")
+        #expect(result[0].kind == .turnDone)
+    }
 }
 
 @Suite("AttentionDetector")

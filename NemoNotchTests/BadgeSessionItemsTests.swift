@@ -29,23 +29,30 @@ struct BadgeSessionItemsTests {
 
     @Test("Approval and working sessions get badges — unless the edge bar is on")
     func badgesStepAsideForTheEdgeBar() {
-        let shown = BadgeItem.sessionItems(all, edgeBarShown: false) { _ in true }
+        let shown = BadgeItem.sessionItems(all, edgeBarShown: false)
         #expect(shown.map(\.id).sorted() == [
             "ai:appr:claude:waiting:Bash:true",
             "ai:compact:claude:working:nil:false",
             "ai:run:claude:working:nil:false",
         ])
-        #expect(BadgeItem.sessionItems(all, edgeBarShown: true) { _ in true }.isEmpty)
+        #expect(BadgeItem.sessionItems(all, edgeBarShown: true).isEmpty)
     }
 
-    @Test("A disabled provider's sessions get no badge, approvals included")
-    func disabledProviderSkipped() {
+    @Test("A source's sessions render whatever the store holds — the gate is upstream")
+    func allStoreSessionsRender() {
+        // The per-source UI filter is gone: disabled sources have no sessions
+        // in the store at all (service-layer gate), so any session present
+        // here must badge, gemini included.
         let mixed = [
             session("c", .processing),
             session("g", .processing, source: .gemini),
             approval("ga", source: .gemini),
         ]
-        let items = BadgeItem.sessionItems(mixed, edgeBarShown: false) { $0 != .gemini }
-        #expect(items.map(\.id) == ["ai:c:claude:working:nil:false"])
+        let items = BadgeItem.sessionItems(mixed, edgeBarShown: false)
+        #expect(items.map(\.id).sorted() == [
+            "ai:c:claude:working:nil:false",
+            "ai:g:gemini:working:nil:false",
+            "ai:ga:gemini:waiting:Bash:true",
+        ])
     }
 }

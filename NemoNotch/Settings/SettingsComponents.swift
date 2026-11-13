@@ -66,36 +66,41 @@ enum ProviderTint {
 
 // MARK: - Provider 卡片
 
-/// A hook-based provider card with install / reinstall / uninstall actions.
+/// A provider card driven by the monitoring toggle: on = hooks installed,
+/// discovery polling, events routed; off = fully silent (hook uninstalled,
+/// polling stopped, sessions cleared). The status line keeps the hook's
+/// on-disk truth for diagnosis — "on but not installed" heals on next launch.
 struct HookCard<Logo: View>: View {
     let name: String
     let tint: Color
+    /// The user's intent — the toggle value.
+    let isOn: Bool
+    /// On-disk fact, for the status line only.
     let isInstalled: Bool
     @ViewBuilder let logo: () -> Logo
-    let onInstall: () -> Void
-    let onUninstall: () -> Void
+    let onToggle: (Bool) -> Void
 
     var body: some View {
         ProviderCard(
             name: name,
             tint: tint,
-            isOn: isInstalled,
-            onLabel: "settings.status.installed",
-            offLabel: "settings.status.not_installed",
+            isOn: isOn,
+            onLabel: isInstalled
+                ? LocalizedStringKey("settings.status.installed")
+                : LocalizedStringKey("settings.status.auto_install"),
+            offLabel: "settings.status.monitoring_off",
             logo: logo,
             actions: {
-                VStack(alignment: .trailing, spacing: 6) {
-                    if isInstalled {
-                        Button("settings.reinstall", action: onInstall)
-                            .controlSize(.small)
-                        Button("settings.uninstall_hooks", role: .destructive, action: onUninstall)
-                            .controlSize(.small)
-                    } else {
-                        Button("settings.install_hooks", action: onInstall)
-                            .controlSize(.small)
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { isOn },
+                        set: { onToggle($0) }
+                    )
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
         )
     }
