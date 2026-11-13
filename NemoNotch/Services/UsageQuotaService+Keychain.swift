@@ -14,13 +14,16 @@ extension UsageQuotaService {
     /// the macOS "wants to use confidential information" dialog. Instead the
     /// lookup returns `errSecInteractionNotAllowed` (→ nil) and we fall back to
     /// the on-disk credential file.
-    func keychainBlob(service: String) -> (data: Data?, status: OSStatus) {
+    func keychainBlob(service: String, account: String? = nil) -> (data: Data?, status: OSStatus) {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let account {
+            query[kSecAttrAccount as String] = account
+        }
         applyNoUI(to: &query)
         // Belt-and-suspenders for the legacy login keychain: the per-query no-UI
         // flags above do NOT suppress its ACL confirmation dialog on a data read,
@@ -127,10 +130,13 @@ extension UsageQuotaService {
 
     func keychainService(for provider: QuotaProvider) -> String {
         switch provider {
+        case .zcode:
+            // The zcode CLI's own credential-encryption key (enc:v2:os format);
+            // account is the SHA256 hex of the credentials file path.
+            "ZCode Credential Encryption"
         case .claude: "" // Claude quota reads the claude-hud snapshot, never Keychain
         case .codex: codexKeychainService
         case .gemini: "" // Gemini uses file-based OAuth, not Keychain
-        case .zcode: "" // zcode credentials are locally encrypted, never Keychain
         }
     }
 

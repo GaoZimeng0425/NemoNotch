@@ -178,6 +178,61 @@ enum ZcodeCredentials {
         return decrypt(encrypted, secret: secret())
     }
 
+    // MARK: - enc:v2:os (zcode CLI's keyring-based format, 2026-11)
+
+    //
+    // `enc:v2:os:<fingerprint24hex>:<iv>.<tag>.<ciphertext>` — same three-part
+    // base64url body as v1, but the key is the raw 32 bytes stored in the
+    // login keychain (43-char base64url; NOT hashed — that's v1). The prefix
+    // fingerprint is SHA256(key).hex[:24] and lets us reject a mismatched key
+    // before touching AES. Reverse-engineered from the CLI bundle and verified
+    // end-to-end 2026-11-13.
+
+    static func v2Decrypt(_ value: String, key: Data) -> String? {
+        let prefix = "enc:v2:os:"
+        guard value.hasPrefix(prefix) else { return nil }
+        let fingerprint = SHA256.hash(data: key).map { String(format: "%02x", $0) }
+            .joined().prefix(24)
+        let rest = value.dropFirst(prefix.count)
+        guard rest.hasPrefix("\(fingerprint):") else { return nil }
+        let parts = rest.dropFirst(fingerprint.count + 1).split(separator: ".").map(String.init)
+        guard parts.count == 3,
+              let iv = base64URL(parts[0]), iv.count == 12,
+              let tag = base64URL(parts[1]), tag.count == 16,
+              let ciphertext = base64URL(parts[2])
+        else { return nil }
+        do {
+            let box = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: iv), ciphertext: ciphertext, tag: tag
+            )
+            return try String(data: AES.GCM.open(box, using: SymmetricKey(data: key)), encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    /// The coding-plan API key entry in the credentials store. One plan
+    /// account per install; the first match wins.
+    static func apiKeyEntry(in dict: [String: String]) -> (key: String, value: String)? {
+        guard let entry = dict.first(where: { $0.key.hasPrefix("account-provider:") && $0.key.hasSuffix(":api-key") })
+        else {
+            return nil
+        }
+        return (entry.key, entry.value)
+    }
+
+    /// The raw credentials store as a plain string dictionary.
+    static func credentialsDict(fileURL: URL = credentialsURL) -> [String: String]? {
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: String]
+    }
+
+    /// Keychain account the CLI uses for its encryption key: SHA256 hex of
+    /// the credentials file's absolute path.
+    static func keyringAccount(fileURL: URL = credentialsURL) -> String {
+        SHA256.hash(data: Data(fileURL.path.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     static func secret() -> String {
         if let fromEnv = ProcessInfo.processInfo.environment["ZCODE_CREDENTIAL_SECRET"], !fromEnv.isEmpty {
             return fromEnv
@@ -227,6 +282,19 @@ enum ZcodeQuotaParser {
         let number: Int?
         let percentage: Double?
         let nextResetTime: Double?
+    }
+
+    /// Envelope-level API rejection: HTTP 200 with `{"code":401,"msg":"…"}`.
+    /// Non-nil when the envelope decodes and code != 200 — the caller surfaces
+    /// it as a credential state (.expired), never as a parse failure.
+    static func apiError(data: Data) -> (code: Int, msg: String)? {
+        struct Envelope: Decodable { let code: Int
+            let msg: String?
+        }
+        guard let envelope = try? JSONDecoder().decode(Envelope.self, from: data),
+              envelope.code != 200
+        else { return nil }
+        return (envelope.code, envelope.msg ?? "")
     }
 
     static func parse(data: Data, fetchedAt: Date) -> ProviderUsageQuota? {
