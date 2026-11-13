@@ -1,3 +1,42 @@
+# Code Review(增量复审)— feature/zcode-quota-v2
+
+Reviewer: 独立评审子代理(zcode / GLM-5.3,未参与开发,judge ≠ author;首轮同席)
+Date: 2026-11-13
+Reviewed-Head: adc1b29
+Verdict: APPROVED
+Scope(增量 c1df4c3..adc1b29): adc1b29 单提交 — UsageQuotaService+Zcode.swift(三处 nil→状态对象 + 迁移日志)、AGENTS.md(引语清残留)、README.md/README_CN.md(v2 凭据链)、docs/guardrail-backlog.md(P2-2 认领条目)
+
+## 上轮 Findings 处置核验
+
+- **P2-1(必修)已修,修法正确** — UsageQuotaService+Zcode.swift:15-20/30-34/57-61:key 不可用 → `.expired` + "v2 key unavailable"(detail 卡走既有 `quota.status.login_required`「需要登录」,不再永久「读取中」;`refresh()` 的 `quotas = next` 不再清掉 .zcode,注释把 nil 会被丢的 why 写进了代码);HTTP 非 200 → `.parseError` + "HTTP <code>";网络错误 → `.parseError` + 错误描述。三条 return nil 路径全封。
+- **P3-1 已修**:HTTP 分支并入 `logQuotaStateTransition`;catch 分支同并入("network: …")——每 5 分钟刷同行的老毛病全分支封死。
+- **P3-2 已修**:引语改为「Codex/Gemini 保持现状…(zcode 已于 2026-11-13 跟随 v2,见上)」,自相矛盾消除。
+- **P3-3 已修**:README×2 补「coding-plan API key decrypted from the enc:v2:os store, key read silently from the login Keychain, never prompting」+「login required 状态而非消失」。
+- **P2-2 已认领**:guardrail-backlog 条目如实记载复现事实(51 例全绿、新 suite 日志零匹配)与修法(提取文件内全部顶层 suite 名)。
+
+## 增量观察(均不阻塞)
+
+1. key 不可用 → `.expired` 后,本地用量段(detail 卡挂载条件 `quotas[.zcode] == nil`)让位给「需要登录」状态——与 Codex `.expired` 行为一致,是上轮修法建议的直接结果;README 的「no credential reachable → falls back to local usage」对应凭据文件缺失场景,不矛盾。
+2. zcode 网络瞬断 → `.parseError` → EdgeBar 该 provider 段会掉一轮(Codex 网络错误走 `.valid`+errorMessage、`EdgeBarUsage.lines` 保留 previous)。**非回归**(改前 nil 同样掉段),状态选择对 EdgeBar 连贯性略逊,可留作日后打磨,默认不修。
+3. **plan 验收 2 文本建议加一行勘注**(回答派发方问题):验收 2 的「日志一行 API 401」在 key 不可用路径上仍不可达(该路径不发请求,日志为 "credential undecryptable (v2 key unavailable)")。plan 已标「已实现」,属历史文档,不强制回改;但一行勘误(注明 adc1b29 修正后的真实行为)可免后来者按图索骥踩空。P3,派发方裁量。
+
+## 门禁验证(评审亲跑,退出码为证)
+
+- `sh scripts/lint.sh` → 0
+- `sh scripts/doc-audit.sh` → 0
+- `sh scripts/check-arch.sh` → 0
+- `sh scripts/affected-tests.sh` → 0(51 例;同名 suite 约定仍漏新 suite——P2-2 backlog 已认领,不阻塞)
+- `sh scripts/test.sh`(全量)→ 0,**708 通过 · 0 失败**,与作者声明一致;新守卫在全量中真实执行(build/test.log:ZcodeCredentialsV2Tests 6 例、ZcodeQuotaEnvelopeTests 3 例);全量锚点 `build/test-head.txt` = adc1b29 已写入(feat-done 短路条件满足)。
+
+## Verdict 说明
+
+上轮唯一必修项 P2-1 修复正确且带 why 注释,P3 全部处置,P2-2 已认领;全部门禁与全量测试亲跑绿;两条铁律(Keychain 全程静默、刻意不做项)未被增量触碰(diff 限于状态对象与文档)。**APPROVED——我愿意为这个合并背书。**
+
+## 教训候选(增量)
+
+- 无新教训。上轮两条:affected-tests 盲区已落 guardrail-backlog;「计划验收按故障路径拆开写」建议收尾 reflect 时考虑记入 docs/experience-playbook.md(plan 勘注一条可一并处理)。
+
+---
 # Code Review — feature/zcode-quota-v2
 
 Reviewer: 独立评审子代理(zcode / GLM-5.3,未参与开发,judge ≠ author)
