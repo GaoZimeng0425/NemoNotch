@@ -44,11 +44,11 @@
   - `enum ExternalSleepAssertions`:`parse(byPID: [AnyHashable: Any], now: Date, ownPID: Int32) -> [ExternalSleepAssertion]`、`summarize([ExternalSleepAssertion]) -> [ExternalSleepAssertionSummary]`(按 pid 聚合,oldest 取最早 startedAt,remaining 取组内最小非 nil,按 oldestStartedAt 降序)、`ageComponents(startedAt:now:) -> (hours: Int, minutes: Int)`、`remainingMinutes(_ remaining: TimeInterval?) -> Int?`(向下取整)。
   - 常量:`noiseProcessNames: Set<String> = ["powerd", "WindowServer", "runningboardd", "bluetoothd"]`;`systemSleepFamilyTypes: Set<String> = ["PreventUserIdleSystemSleep", "PreventSystemSleep"]`。
 
-- [ ] **Step 1: 写失败测试** — fixture 用真实探针形状(顶层数组:`AnyHashable(NSNumber(pid))` → `[[String: Any]]`):ZCode 形状(TrueType 归族)、caffeinate 形状(Timeout 键,`TimeLeft=211`/`UpdateTime=now-89` → 剩 211-89+流逝容差≈122…按断言字面值构造:TimeLeft=100、UpdateTime=now-40 → 期望 60)、powerd/bluetoothd 噪音过滤、ownPID 两条(Keep Awake/Idle Keep Awake)过滤、`UserIsActive` 类型出族、缺 AssertPID 条目跳过不崩、空字典 → []、同 pid 两条聚合(count=2/oldest/最小 remaining)、过期钳 0、onBehalfOfPID 透传、`ageComponents`/`remainingMinutes` 数学(含 nil)。判别剃刀自检:解析函数对「到处缺字段」的输入若还能返回非空期望,测试无效。
-- [ ] **Step 2: 跑测试确认红** — `sh scripts/test.sh --only ExternalSleepAssertionsTests`(编译失败即红:类型不存在)。
-- [ ] **Step 3: 实现** — 解析规则全部按 Global Constraints 的字段集;`timeoutRemaining = TimeLeft - now.timeIntervalSince(UpdateTime)`,钳 ≥0,任一键缺失 → nil;`startedAt` 非 Date → 兜底 `now`(条目仍列出);`processName` 缺失 → `"pid \(pid)"`。
-- [ ] **Step 4: 跑测试确认绿 + 变异验证** — `sh scripts/test.sh --only ExternalSleepAssertionsTests` 绿;`sh scripts/mutate.sh NemoNotch/Services/ExternalSleepAssertions.swift 'PreventUserIdleSystemSleep' 'PreventSystemSleepX' --only ExternalSleepAssertionsTests` 须红(归族过滤有牙)。
-- [ ] **Step 5: Commit** — `feat(keepawake): 外部休眠断言纯解析层(解析/过滤/聚合)`
+- [x] **Step 1: 写失败测试** — fixture 用真实探针形状(顶层数组:`AnyHashable(NSNumber(pid))` → `[[String: Any]]`):ZCode 形状(TrueType 归族)、caffeinate 形状(Timeout 键,`TimeLeft=211`/`UpdateTime=now-89` → 剩 211-89+流逝容差≈122…按断言字面值构造:TimeLeft=100、UpdateTime=now-40 → 期望 60)、powerd/bluetoothd 噪音过滤、ownPID 两条(Keep Awake/Idle Keep Awake)过滤、`UserIsActive` 类型出族、缺 AssertPID 条目跳过不崩、空字典 → []、同 pid 两条聚合(count=2/oldest/最小 remaining)、过期钳 0、onBehalfOfPID 透传、`ageComponents`/`remainingMinutes` 数学(含 nil)。判别剃刀自检:解析函数对「到处缺字段」的输入若还能返回非空期望,测试无效。
+- [x] **Step 2: 跑测试确认红** — `sh scripts/test.sh --only ExternalSleepAssertionsTests`(编译失败即红:类型不存在)。
+- [x] **Step 3: 实现** — 解析规则全部按 Global Constraints 的字段集;`timeoutRemaining = TimeLeft - now.timeIntervalSince(UpdateTime)`,钳 ≥0,任一键缺失 → nil;`startedAt` 非 Date → 兜底 `now`(条目仍列出);`processName` 缺失 → `"pid \(pid)"`。
+- [x] **Step 4: 跑测试确认绿 + 变异验证** — `sh scripts/test.sh --only ExternalSleepAssertionsTests` 绿;`sh scripts/mutate.sh NemoNotch/Services/ExternalSleepAssertions.swift 'PreventUserIdleSystemSleep' 'PreventSystemSleepX' --only ExternalSleepAssertionsTests` 须红(归族过滤有牙)。
+- [x] **Step 5: Commit** — `feat(keepawake): 外部休眠断言纯解析层(解析/过滤/聚合)`
 
 ### Task 2: A 开关 — 设置键 + 断言生命周期 + 对账自愈
 
@@ -60,11 +60,11 @@
 - Consumes: `IOPMAssertionCreateWithName("PreventUserIdleSystemSleep", kIOPMAssertionLevelOn, "NemoNotch Idle Keep Awake", &id)`;`UITestMode.isTestHost` 门禁(:443 范式);`holdIdleSleepAssertion`(:441)的日志节流范式(`idleSleepAssertionFailureLogged`)。
 - Produces(Task 3 依赖):`private(set) var isIdleKeepAwakeActive: Bool`、`private(set) var idleKeepAwakeError: String?`、`func setIdleKeepAwake(_ on: Bool)`、`func restoreIdleKeepAwakeFromSettings()`;AppSettings 新增 `var keepAwakeIdleEnabled: Bool`(key `"keepawake.idleEnabled"`,默认 `false`)。
 
-- [ ] **Step 1: AppSettings 键** — 三段式照抄现有键模式,默认 false。
-- [ ] **Step 2: 服务侧** — `idleKeepAwakeAssertion: IOPMAssertionID`(0=未持)独立于 `idleSleepAssertion`;`setIdleKeepAwake` 门禁 UITestMode(不持真断言)后 create/release,失败写 `idleKeepAwakeError`(成功清空);`start()` 尾部调 `restoreIdleKeepAwakeFromSettings()`(设置开 → 建);`refresh()` 末尾自愈:设置开 && 断言 ID==0 && 无错误 → 重建(每次 refresh 重试可接受——无弹窗;日志只记状态转移);`isolated deinit` 释放两份断言。**不碰** `setEnabled`/`restoreForQuit`/`needsRestoreOnQuit` 及对账段任何行。
-- [ ] **Step 3: 门禁** — `sh scripts/test.sh` 全量绿 + `sh scripts/lint.sh` 绿(B 未动,既有 KeepAwakeTests 不得变红)。
-- [ ] **Step 4: 手测(梯级 5)** — `./build.sh` 部署后:设置开 A → 终端 `pmset -g assertions | grep "Idle Keep Awake"` 见条目;退出 app → 条目消失;重开 app(设置仍开)→ 条目自动回来;`defaults read com.nemo.BrightnessApp.NemoNotch keepawake.idleEnabled` 验持久化。四步各留一行结果进 commit message 或评审记录。
-- [ ] **Step 5: Commit** — `feat(keepawake): 空闲不休眠开关(租约版,状态跨启动保留)`
+- [x] **Step 1: AppSettings 键** — 三段式照抄现有键模式,默认 false。
+- [x] **Step 2: 服务侧** — `idleKeepAwakeAssertion: IOPMAssertionID`(0=未持)独立于 `idleSleepAssertion`;`setIdleKeepAwake` 门禁 UITestMode(不持真断言)后 create/release,失败写 `idleKeepAwakeError`(成功清空);`start()` 尾部调 `restoreIdleKeepAwakeFromSettings()`(设置开 → 建);`refresh()` 末尾自愈:设置开 && 断言 ID==0 && 无错误 → 重建(每次 refresh 重试可接受——无弹窗;日志只记状态转移);`isolated deinit` 释放两份断言。**不碰** `setEnabled`/`restoreForQuit`/`needsRestoreOnQuit` 及对账段任何行。
+- [x] **Step 3: 门禁** — `sh scripts/test.sh` 全量绿 + `sh scripts/lint.sh` 绿(B 未动,既有 KeepAwakeTests 不得变红)。
+- [x] **Step 4: 手测(梯级 5)** — `./build.sh` 部署后:设置开 A → 终端 `pmset -g assertions | grep "Idle Keep Awake"` 见条目;退出 app → 条目消失;重开 app(设置仍开)→ 条目自动回来;`defaults read com.nemo.BrightnessApp.NemoNotch keepawake.idleEnabled` 验持久化。四步各留一行结果进 commit message 或评审记录。
+- [x] **Step 5: Commit** — `feat(keepawake): 空闲不休眠开关(租约版,状态跨启动保留)`
 
 ### Task 3: 设置页 UI — A 开关行 + 两层面板 + 10s 刷新
 
@@ -77,11 +77,11 @@
 - Consumes: Task 1 全部类型;Task 2 的 `isIdleKeepAwakeActive`/`idleKeepAwakeError`/`setIdleKeepAwake`;既有 `isEnabled`/`isOwned`。
 - Produces: `private(set) var externalSummaries: [ExternalSleepAssertionSummary]`、`private(set) var externalOnBehalfNames: [Int32: String]`、`func refreshExternalAssertions(now: Date = .init)`(调 `IOPMCopyAssertionsByProcess`,`takeRetainedValue` 转 `[AnyHashable: Any]` → `ExternalSleepAssertions.parse(ownPID: ProcessInfo.processInfo.processIdentifier)`,归因名 `NSRunningApplication(processIdentifier:)?.localizedName ?? "pid \(n)"`)。
 
-- [ ] **Step 1: 服务读取方法** — 如上;读失败(API 返回非 success)清空 summaries 并 `.warn` 一条(记状态转移)。
-- [ ] **Step 2: UI** — 布局:第一 Section 顶部加 A toggle(get 绑 `settings.keepAwakeIdleEnabled`,set 写设置 + `Task { await keepAwake.setIdleKeepAwake($0) }`)+ caption detail;B 区(statusRow/lastError)原样。新 Section「谁在阻止休眠」置于选项区之前:空态文案;`ForEach(externalSummaries)` 行 = 进程名(count>1 加 `×N`)+ 归因名(有则 `(替 xxx)`)+ 年龄(`ageComponents` → 本地化字符串);有 remaining 追加 `剩 N 分钟`;分隔线后一行合盖层 = `isEnabled ? (isOwned ? 「开启(我们)」 : 「开启(未知来源)」) : 「关闭」`。刷新:`.task { while !Task.isCancelled { await keepAwake.refreshExternalAssertions(); try? await Task.sleep(for: .seconds(10)) } }`(离屏自动取消,无 Timer 状态)。
-- [ ] **Step 3: 本地化** — 新 key(en + zh-Hans):`settings.keepawake.idle.enable`/`.idle.detail`/`panel.header`/`panel.empty`/`panel.clamshell`/`panel.clamshell.owned`/`panel.clamshell.external`/`panel.clamshell.off`/`panel.remaining`;走 `scripts/xcstrings.py format`。
-- [ ] **Step 4: 门禁 + 手测** — `sh scripts/test.sh` + `sh scripts/lint.sh` + `sh scripts/doc-audit.sh` 绿;`./build.sh` 后设置页:面板应列出 ZCode(11h 级)等真实条目、不含 NemoNotch 自己;合盖层状态与 B 开关联动;离开设置页 10s 后日志无刷新记录(定时器停)。
-- [ ] **Step 5: Commit** — `feat(keepawake): 「谁在阻止休眠」两层面板 + 空闲开关 UI`
+- [x] **Step 1: 服务读取方法** — 如上;读失败(API 返回非 success)清空 summaries 并 `.warn` 一条(记状态转移)。
+- [x] **Step 2: UI** — 布局:第一 Section 顶部加 A toggle(get 绑 `settings.keepAwakeIdleEnabled`,set 写设置 + `Task { await keepAwake.setIdleKeepAwake($0) }`)+ caption detail;B 区(statusRow/lastError)原样。新 Section「谁在阻止休眠」置于选项区之前:空态文案;`ForEach(externalSummaries)` 行 = 进程名(count>1 加 `×N`)+ 归因名(有则 `(替 xxx)`)+ 年龄(`ageComponents` → 本地化字符串);有 remaining 追加 `剩 N 分钟`;分隔线后一行合盖层 = `isEnabled ? (isOwned ? 「开启(我们)」 : 「开启(未知来源)」) : 「关闭」`。刷新:`.task { while !Task.isCancelled { await keepAwake.refreshExternalAssertions(); try? await Task.sleep(for: .seconds(10)) } }`(离屏自动取消,无 Timer 状态)。
+- [x] **Step 3: 本地化** — 新 key(en + zh-Hans):`settings.keepawake.idle.enable`/`.idle.detail`/`panel.header`/`panel.empty`/`panel.clamshell`/`panel.clamshell.owned`/`panel.clamshell.external`/`panel.clamshell.off`/`panel.remaining`;走 `scripts/xcstrings.py format`。
+- [x] **Step 4: 门禁 + 手测** — `sh scripts/test.sh` + `sh scripts/lint.sh` + `sh scripts/doc-audit.sh` 绿;`./build.sh` 后设置页:面板应列出 ZCode(11h 级)等真实条目、不含 NemoNotch 自己;合盖层状态与 B 开关联动;离开设置页 10s 后日志无刷新记录(定时器停)。
+- [x] **Step 5: Commit** — `feat(keepawake): 「谁在阻止休眠」两层面板 + 空闲开关 UI`
 
 ### Task 4: 文档对账 + cookbook 条目
 
@@ -91,9 +91,9 @@
 - Modify: `../macos-playbook`(独立仓库,同一提交):`IOPMCopyAssertionsByProcess` 运行时字段集条目(含 TrueType 归族、Timeout 键、OnBehalfOfPID)
 - Modify: `docs/superpowers/specs/…` 不动;本 plan 完工后随 feat-done 挪 `archive/`(既有惯例)
 
-- [ ] **Step 1: 四处文档同一提交改齐** — 上述清单;AGENTS 只加不变量与坑。
-- [ ] **Step 2: 门禁** — `sh scripts/doc-audit.sh` 绿(引用路径存在性)+ `sh scripts/lint.sh`。
-- [ ] **Step 3: Commit** — `docs(keepawake): 双开关与断言面板的文档对账 + cookbook IOPMCopyAssertionsByProcess 字段集`
+- [x] **Step 1: 四处文档同一提交改齐** — 上述清单;AGENTS 只加不变量与坑。
+- [x] **Step 2: 门禁** — `sh scripts/doc-audit.sh` 绿(引用路径存在性)+ `sh scripts/lint.sh`。
+- [x] **Step 3: Commit** — `docs(keepawake): 双开关与断言面板的文档对账 + cookbook IOPMCopyAssertionsByProcess 字段集`
 
 ---
 
