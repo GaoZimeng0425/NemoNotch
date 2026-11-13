@@ -76,6 +76,25 @@ final class ClaudeProvider: AIProvider {
         recordTimer = timer
     }
 
+    /// Toggle-off counterpart: stop the 3s record poll. An in-flight scan's
+    /// late result is still applied — the record path itself never ends
+    /// sessions on negative evidence, so one stale apply is harmless.
+    func stopRecordPolling() {
+        recordTimer?.invalidate()
+        recordTimer = nil
+    }
+
+    /// Toggle-off for the whole discovery side: stop the record poll AND the
+    /// transcript watchers. A live watcher would resurrect the removed
+    /// sessions straight from disk — its callbacks bypass the router gate.
+    func stopDiscovery() {
+        stopRecordPolling()
+        for session in store.sessions(for: .claude) {
+            watcherManager.stopWatching(sessionId: session.id)
+            agentWatcherManager.stopAll(sessionId: session.id)
+        }
+    }
+
     private func pollRecords() {
         guard !recordScanInFlight else { return }
         recordScanInFlight = true

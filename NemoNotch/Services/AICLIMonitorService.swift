@@ -87,10 +87,57 @@ final class AICLIMonitorService {
     /// The disk scans and Claude's session-record polling. Not in `init`:
     /// tests build bare instances, and only the app's one instance may scan
     /// transcripts and poll records forever. Only `AppDependencies.build()`
-    /// calls this.
+    /// calls this. Disabled sources discover nothing — the toggle gates the
+    /// whole pipeline, not just the badge.
     func startSessionDiscovery() {
-        claudeProvider.scanExistingSessions()
-        geminiProvider.scanExistingSessions()
+        if sourceGate(.claude) {
+            claudeProvider.scanExistingSessions()
+        }
+        if sourceGate(.gemini) {
+            geminiProvider.scanExistingSessions()
+        }
+    }
+
+    /// Toggle-flip entry point: the ONE call the Settings card makes. Off =
+    /// uninstall hooks, stop discovery/watchers, silently clear the source's
+    /// sessions (no `sessionLost` edge). On = install hooks, resume discovery.
+    /// `completionFlash` is wired by `AppDependencies.build()`.
+    weak var completionFlash: CompletionFlashService?
+
+    func setMonitoring(enabled: Bool, for source: AISource) {
+        switch source {
+        case .claude:
+            if enabled {
+                claudeProvider.installHooks()
+                claudeProvider.scanExistingSessions()
+            } else {
+                claudeProvider.uninstallHooks()
+                claudeProvider.stopDiscovery()
+            }
+        case .gemini:
+            if enabled {
+                geminiProvider.installHooks()
+                geminiProvider.scanExistingSessions()
+            } else {
+                geminiProvider.uninstallHooks()
+                geminiProvider.stopDiscovery()
+            }
+        case .opencode:
+            if enabled {
+                opencodeProvider.installHooks()
+            } else {
+                opencodeProvider.uninstallHooks()
+            }
+        case .zcode:
+            if enabled {
+                zcodeProvider.installHooks()
+            } else {
+                zcodeProvider.uninstallHooks()
+            }
+        }
+        if !enabled {
+            completionFlash?.forgetSessions(for: source)
+        }
     }
 
     var activeSession: AISessionState? {
@@ -100,13 +147,6 @@ final class AICLIMonitorService {
     var anyHookInstalled: Bool {
         claudeProvider.isHookInstalled || geminiProvider.isHookInstalled
             || opencodeProvider.isHookInstalled || zcodeProvider.isHookInstalled
-    }
-
-    func installHooks() {
-        claudeProvider.installHooks()
-        geminiProvider.installHooks()
-        opencodeProvider.installHooks()
-        zcodeProvider.installHooks()
     }
 
     func respondToPermission(sessionId: String, approved: Bool) {
@@ -219,14 +259,22 @@ final class AICLIMonitorService {
 
     private func handleServerReady() {
         serverRunning = true
-        try? HookInstaller.install(.claude)
-        try? HookInstaller.install(.gemini)
+        // The heal pass installs hooks only for enabled sources — this used
+        // to resurrect an uninstalled claude/gemini hook on every launch.
+        // Status flags still reflect the on-disk truth either way.
+        if sourceGate(.claude) {
+            try? HookInstaller.install(.claude)
+        }
+        if sourceGate(.gemini) {
+            try? HookInstaller.install(.gemini)
+        }
         claudeProvider.isHookInstalled = HookInstaller.isInstalled(.claude)
         geminiProvider.isHookInstalled = HookInstaller.isInstalled(.gemini)
-        try? OpencodePluginInstaller.install()
+        if sourceGate(.opencode) {
+            try? OpencodePluginInstaller.install()
+        }
         opencodeProvider.isHookInstalled = OpencodePluginInstaller.isInstalled
-        let zcodeEnabled = UserDefaults.standard.object(forKey: AppSettings.zcodeEnabledKey) as? Bool ?? true
-        if zcodeEnabled, FileManager.default.fileExists(atPath: HookTarget.zcode.settingsPath) {
+        if sourceGate(.zcode), FileManager.default.fileExists(atPath: HookTarget.zcode.settingsPath) {
             try? HookInstaller.install(.zcode)
         }
         zcodeProvider.isHookInstalled = HookInstaller.isInstalled(.zcode)

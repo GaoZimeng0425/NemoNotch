@@ -37,6 +37,18 @@ final class AISessionStore {
         sortedSessions.filter { $0.source == source }
     }
 
+    /// Toggle-off companion: silent removal of a whole source's sessions.
+    /// Callers drop the units from the completion detector's memory FIRST —
+    /// an observer must not read this as "vanished while active".
+    func removeSessions(for source: AISource) {
+        let ids = sessions.values.filter { $0.source == source }.map(\.id)
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            sessions.removeValue(forKey: id)
+        }
+        rebuildSorted()
+    }
+
     /// Highest-priority session across all providers. Priority order:
     /// awaiting permission > working > waiting > idle > ended.
     /// Within the same priority, the most recently active wins.
