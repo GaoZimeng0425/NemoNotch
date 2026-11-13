@@ -44,6 +44,8 @@ final class UsageQuotaService: LifecycleAware {
     /// Whether zcode's credential file decrypts (drives the ZCode quota
     /// section's visibility, like `hasCodexCredential`).
     var hasZcodeCredential = false
+    /// Last logged zcode quota failure (transition-only logging).
+    var lastZcodeQuotaLogState: String?
     let zcodeQuotaURL = URL(string: "https://open.bigmodel.cn/api/monitor/usage/quota/limit")!
     /// Cloud Code project id, resolved once per process run.
     var geminiProjectID: String?
