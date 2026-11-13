@@ -13,6 +13,29 @@ final class AICLIMonitorService {
 
     var serverRunning = false
 
+    /// Per-source monitoring gate (the Settings toggle). Injectable so tests
+    /// can gate without touching the shared UserDefaults domain.
+    var sourceGate: (AISource) -> Bool = { AICLIMonitorService.monitoringEnabled(for: $0) }
+
+    /// The toggle is the single service-layer gate: disabled sources get no
+    /// events routed, no discovery polling, no hooks re-installed. Absent keys
+    /// default to on — a fresh install behaves like before the toggle existed.
+    static func monitoringEnabled(for source: AISource) -> Bool {
+        let key: String = switch source {
+        case .claude: AppSettings.claudeEnabledKey
+        case .gemini: AppSettings.geminiEnabledKey
+        case .opencode: AppSettings.opencodeEnabledKey
+        case .zcode: AppSettings.zcodeEnabledKey
+        }
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+
+    /// Hermes is not an `AIProvider` (its agents live outside the session
+    /// store) — its toggle reads the same UserDefaults shape.
+    var hermesGate: () -> Bool = {
+        UserDefaults.standard.object(forKey: AppSettings.hermesEnabledKey) as? Bool ?? true
+    }
+
     init() {
         let store = AISessionStore()
         let claude = ClaudeProvider(store: store)
@@ -140,30 +163,46 @@ final class AICLIMonitorService {
             }
         }
 
-        LogService.info("Routing event \(event.hookEventName) to \(source)", category: "AICLIMonitorService")
-
-        switch source {
-        case "hermes":
-            hermesService?.handleHookEvent(event)
-        case "gemini":
-            geminiProvider.handleEvent(event)
-        case "claude":
-            claudeProvider.handleEvent(event)
-        case "opencode":
-            opencodeProvider.handleEvent(event)
-        case "zcode":
-            zcodeProvider.handleEvent(event)
-        default:
-            // Final fallback: route by which provider owns the session.
-            if let existing = store.get(event.sessionId ?? "") {
-                switch existing.source {
-                case .gemini: geminiProvider.handleEvent(event)
-                case .claude: claudeProvider.handleEvent(event)
-                case .opencode: opencodeProvider.handleEvent(event)
-                case .zcode: zcodeProvider.handleEvent(event)
-                }
+        // Resolve the final target first, then gate: a disabled source must see
+        // no events at all — tagged, prefix-attributed, or the untagged Claude
+        // fallback. The old UI-only filter left these paths alive, so sessions
+        // kept coming back after "uninstall".
+        if source == "hermes" {
+            if hermesGate() {
+                LogService.info("Routing event \(event.hookEventName) to hermes", category: "AICLIMonitorService")
+                hermesService?.handleHookEvent(event)
             } else {
-                claudeProvider.handleEvent(event)
+                LogService.info(
+                    "Routing event \(event.hookEventName) to hermes — disabled, dropped",
+                    category: "AICLIMonitorService"
+                )
+                return
+            }
+        } else {
+            let target: AISource = switch source {
+            case "gemini": .gemini
+            case "claude": .claude
+            case "opencode": .opencode
+            case "zcode": .zcode
+            default:
+                // Final fallback: route by which provider owns the session,
+                // else Claude — the fallback inherits the claude gate.
+                store.get(event.sessionId ?? "")?.source ?? .claude
+            }
+            guard sourceGate(target) else {
+                LogService.info(
+                    "Routing event \(event.hookEventName) to \(source) — disabled, dropped",
+                    category: "AICLIMonitorService"
+                )
+                return
+            }
+            LogService.info("Routing event \(event.hookEventName) to \(source)", category: "AICLIMonitorService")
+
+            switch target {
+            case .claude: claudeProvider.handleEvent(event)
+            case .gemini: geminiProvider.handleEvent(event)
+            case .opencode: opencodeProvider.handleEvent(event)
+            case .zcode: zcodeProvider.handleEvent(event)
             }
         }
 
