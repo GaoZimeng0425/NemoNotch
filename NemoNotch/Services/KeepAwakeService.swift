@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import IOKit.pwr_mgt
 
@@ -392,6 +393,56 @@ final class KeepAwakeService {
             idleKeepAwakeAssertion = 0
             isIdleKeepAwakeActive = false
             LogService.info("idle keep-awake assertion released", category: "KeepAwake")
+        }
+    }
+
+    // MARK: - 「谁在阻止休眠」面板数据
+
+    /// 外部进程的防空闲睡断言汇总(已过滤系统噪音与自家 pid)。
+    private(set) var externalSummaries: [ExternalSleepAssertionSummary] = []
+
+    /// 归因 pid → 进程名(coreaudiod 挂给录音 app 那类形状)。
+    private(set) var externalOnBehalfNames: [Int32: String] = [:]
+
+    /// 断言枚举读失败的日志已记过(只在状态转移时打,防 10s 刷屏)。
+    private var externalReadFailureLogged = false
+
+    /// 枚举系统当前全部断言,解析为面板数据。µs 级公开 IOKit 调用,由设置页
+    /// 的 10s `.task` 循环驱动(离屏自动停)。读失败清空并 warn 一次。
+    func refreshExternalAssertions(now: Date = .init()) {
+        var byPID: Unmanaged<CFDictionary>?
+        guard IOPMCopyAssertionsByProcess(&byPID) == kIOReturnSuccess,
+              let raw = byPID?.takeRetainedValue() as? [AnyHashable: Any] else {
+            if !externalSummaries.isEmpty || !externalOnBehalfNames.isEmpty {
+                externalSummaries = []
+                externalOnBehalfNames = [:]
+            }
+            if !externalReadFailureLogged {
+                externalReadFailureLogged = true
+                LogService.warn("IOPMCopyAssertionsByProcess failed", category: "KeepAwake")
+            }
+            return
+        }
+        externalReadFailureLogged = false
+        let parsed = ExternalSleepAssertions.parse(
+            byPID: raw,
+            now: now,
+            ownPID: ProcessInfo.processInfo.processIdentifier
+        )
+        // 只在有变化时写回 —— @Observable 的写通知不区分值是否相同,10s 一轮
+        // 的无条件赋值会让面板跟着每轮重算(refresh() 同款纪律)。
+        let newSummaries = ExternalSleepAssertions.summarize(parsed)
+        if externalSummaries != newSummaries {
+            externalSummaries = newSummaries
+        }
+        let newNames = Dictionary(
+            uniqueKeysWithValues: parsed.compactMap { entry -> (Int32, String)? in
+                guard let pid = entry.onBehalfOfPID else { return nil }
+                return (pid, NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)")
+            }
+        )
+        if externalOnBehalfNames != newNames {
+            externalOnBehalfNames = newNames
         }
     }
 

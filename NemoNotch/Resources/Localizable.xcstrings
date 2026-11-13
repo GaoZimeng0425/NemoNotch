@@ -5397,6 +5397,182 @@
           }
         }
       }
+    },
+    "settings.keepawake.idle.enable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prevent idle sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "空闲不休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.idle.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zero-dialog assertion: the Mac will not idle-sleep while NemoNotch runs; released on quit, re-created at launch. Closing the lid still sleeps — use the toggle below for that."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "零弹窗挂一份防空闲断言:NemoNotch 运行期间系统不会因空闲入睡,退出即失效、下次启动自动恢复。合盖照睡(要合盖不睡用下面的开关)。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.header" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Who's preventing sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "谁在阻止休眠"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No other app is preventing sleep right now."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前没有其他 app 在阻止休眠。"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.age %lld %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld h %2$lld min"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已持续 %1$lld 小时 %2$lld 分"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.remaining %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld min left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剩 %1$lld 分钟"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.onBehalf %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "for %1$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "替 %1$@"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.clamshell" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clamshell sleep prevention"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合盖防睡"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.clamshell.owned" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On (NemoNotch)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启(我们)"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.clamshell.external" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On (unknown origin)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启(未知来源)"
+          }
+        }
+      }
+    },
+    "settings.keepawake.panel.clamshell.off" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
