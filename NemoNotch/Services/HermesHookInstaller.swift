@@ -87,7 +87,9 @@ enum HermesHookInstaller {
         \(marker)
         # port: \(port)
         URL_BASE="http://127.0.0.1:\(port)"
-        curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || { printf '{}\\n'; exit 0; }
+        # -m 1: a wedged server (TCP accepts, HTTP silent — 2026-11-12 incident)
+        # must not hang the CLI turn; --connect-timeout only bounds the connect.
+        curl -s -m 1 --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || { printf '{}\\n'; exit 0; }
 
         # Shared auth token: the server rejects /hook POSTs without it.
         TOKEN=$(cat "$HOME/.NemoNotch/hook-token" 2>/dev/null || echo "")

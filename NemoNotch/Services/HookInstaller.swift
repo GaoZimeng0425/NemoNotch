@@ -82,7 +82,7 @@ enum HookInstaller {
     private static let hookScriptDir = NSHomeDirectory() + "/.NemoNotch/hooks"
     private static let hookScriptPath = hookScriptDir + "/hook-sender.sh"
 
-    private static let scriptVersion = "# version: 16"
+    private static let scriptVersion = "# version: 17"
 
     /// The command string for `target`. Claude/Gemini run hooks through a shell
     /// so `~` expands; zcode's `type:"process"` runs `spawn(command, args)` with
