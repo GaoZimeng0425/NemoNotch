@@ -140,6 +140,8 @@ graph LR
 - 退出:`applicationShouldTerminate` 返 `.terminateLater` → 恢复 → reply,**永远放行退出**(阻塞更糟);恢复失败/用户取消弹 NSAlert 给出遗留状态并提供复制 `sudo pmset -a disablesleep 0`;标记保留待下次认领。
 - **LidMonitor**:`kIOPMMessageClamshellStateChange` 不导出给 Swift(C 宏),手算 `0xE0034100`(`err_system(0x38)|err_sub(13)|0x100`,已按头文件位布局核对)。当前盖态读同节点的 `AppleClamshellState` CFBoolean——**`ioreg -c IOPMrootDomain` 列不出该属性但 `IORegistryEntryCreateCFProperty` 读得到**,别用 CLI 下"不存在"的结论。外接屏时跳过(`CGDisplayIsBuiltin`)。`pmset displaysleepnow` 免 root。Darwin 通知收信用 `CFNotificationCenterAddObserver` 带 observer 指针当 context(不是 `notify_register_dispatch`——C 回调带不了非 Sendable self)。`deinit` 是 `isolated deinit`(Swift 6.2,IOKit 句柄是 MainActor 隔离的)。
 - 盖事件日志走**独立文件** `~/.NemoNotch/keep-awake.log`(主日志实际保留 <2 天,见日志节),同格式时间戳可对表,512KB 自截断。**Release 的 dynamicLogLevel=.info,盖事件/跳过原因一律 .info**(排"事件没到"vs"到了被滤"必须能区分);`pmset -g` 读留 .debug(高频轮询不许每 tick 都打)。
+- **A 开关(空闲不休眠)与第二层断言分持**:两份断言独立 ID、命名区分(`Idle Keep Awake` vs `Keep Awake`)——第二层跟随系统真相(补篡改窗口),A 跟随用户意图(设置键 `keepAwakeIdleEnabled`,默认关),语义不同绝不共用。A 的自愈在 `refresh()` 对账里(断言丢失即重建);重建无弹窗,与 B 的「刻意不自动恢复」不冲突——那条纪律的存在理由是"自动恢复=无人值守弹授权框",A 没有这个代价。
+- **「谁在阻止休眠」面板**:`IOPMCopyAssertionsByProcess`(公开 API)**运行时字段比头文件文档多**——`Process Name`/`AssertStartWhen`/`AssertTimeoutTimeLeft`+`AssertTimeoutUpdateTime`(**Date,不是秒**)/`AssertionOnBehalfOfPID` 头文件全没写,字段集以 `ExternalSleepAssertions.swift` 头注释的 2026-11-13 实测为准,别按头文件下"不存在"的结论;归族按 `AssertionTrueType`(`NoIdleSleepAssertion` 是旧名)。细粒度的 `IOPMAssertionCopyMatching` 是私有 API 且符号未从 IOKit 导出(`nm -gU` 零命中,dlsym 不通),别试。
 
 ## 坑总目录
 
