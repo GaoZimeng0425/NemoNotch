@@ -91,3 +91,14 @@
   MediaRemoteMini.bin.gz)时,「资产出自 vendored 源码」可机械确证:导出符号面 + ObjC 类/方法面
   + 关键函数反汇编三重 diff,绕开不可逐字节重放(随机 LC_UUID/install_name)的障碍。拟:记入
   docs/experience-playbook 评审手法节,以后换资产作为固定评审动作。
+- **模板内容变更未 bump 版本标记 = 修复静默不分发**(来源:flash-window-anim-none 首轮评审
+  P1,2026-11-13)。hook-sender 模板加了 `-m 1` 但 `scriptVersion` 留在 v16,`ensureScriptExists()`
+  的「版本+端口标记一致即 no-op」让所有已装脚本永远拿不到修复——修了等于没分发。判据:**改
+  HookInstaller/HermesHookInstaller 的脚本模板字面量 ⇒ 同一提交必须 bump `scriptVersion`**。
+  拟:抽 `makeScript(port:)` 纯函数 + 单测钉模板关键内容(防回退、防漏 bump 由测试对版本号断言
+  跟随内容);在那之前靠评审清单(review.sh 模板加一行「模板改动必查版本标记」)。
+- **程序化入屏窗口的 .none 不变量可 B 档门禁化**(来源:同上,flash 线程泄漏案)。教训本体已入
+  AGENTS.md 坑总目录(orderFront 的覆盖窗一律 `animationBehavior = .none`,2026-11-12/13 实案);
+  存量违例已清零。拟:check-arch B 档加「新增 `orderFrontRegardless()`/`makeKeyAndOrderFront()`
+  行须伴 `.none` 赋值佐证」——按四规矩先校准零误报再上线(跨文件事实,单模式会假阳,B 档只拦
+  新增行可避开存量)。
