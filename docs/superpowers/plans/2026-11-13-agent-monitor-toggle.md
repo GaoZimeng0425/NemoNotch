@@ -1,7 +1,7 @@
 # Plan: agent 监控改为 toggle(开=注册 hook+读取,关=卸载+停止)
 
 日期:2026-11-13
-状态:待用户批准
+状态:已批准,已实现
 
 ## 背景
 
@@ -104,3 +104,13 @@ UsageQuotaCardView)。服务层四处不看它:
   只有最终兜底受 claude 开关影响。
 - handleServerReady 改动不得破坏「真实 app 自愈改坏脚本」的既有行为
   (ownsSharedHookConfig 门禁保留)。
+
+## 任务勾选(实现完成)
+
+- [x] T1 路由拦截(routeEvent 按源 gate,含无主兜底;归属测试与开关解耦)
+- [x] T2 停转(stopDiscovery = 停轮询 + 停 watcher;startSessionDiscovery 分派)
+- [x] T3 自愈按开关(handleServerReady 装 konly for enabled;死代码聚合 installHooks 删除)
+- [x] T4 静默清源(CompletionDetector.forget + store.removeSessions;attention 刻意不豁免)
+- [x] T5 Hermes 联动(setHermesMonitoring:forget agents → disconnect → 卸钩 → 清 agents)
+- [x] T6 UI(HookCard→Toggle、BadgeItem 过滤层删、EmptyState、菜单栏、xcstrings、环境注入)
+- [x] T7 文档(AGENTS.md 不变量 + README×2)
