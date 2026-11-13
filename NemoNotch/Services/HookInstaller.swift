@@ -279,7 +279,10 @@ enum HookInstaller {
         # hook-sender.sh — forwards Claude Code / Gemini CLI / zcode hook events to NemoNotch over TCP loopback.
         # Bails instantly when the desktop server isn't running, so the CLI never blocks waiting for nc.
         URL_BASE="http://127.0.0.1:\(port)"
-        curl -s --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || exit 0
+        # --max-time 1: a wedged server (TCP accepts, HTTP never answers — 2026-11-12
+        # flash-window animation leak) must not hang the CLI turn indefinitely;
+        # --connect-timeout only bounds the connect phase, not the silent-server wait.
+        curl -s -m 1 --connect-timeout 0.3 "$URL_BASE/health" >/dev/null 2>&1 || exit 0
 
         # Shared auth token: the server rejects /hook POSTs without it (v16).
         TOKEN=$(cat "$HOME/.NemoNotch/hook-token" 2>/dev/null || echo "")

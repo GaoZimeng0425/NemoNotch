@@ -174,6 +174,13 @@ final class CompletionFlashWindowController {
 
     private func makeWindow(for screen: NSScreen) -> CompletionFlashWindow {
         let window = CompletionFlashWindow(rect: screen.frame)
+        // No window-level order-in animation: on macOS 27 it is an AppKit-internal
+        // _NSWindowTransformAnimation run BLOCKING on a background user-interactive
+        // queue; with no render surface (display asleep) it never completes, parking
+        // a thread per flash until the 64-thread dispatch pool fills and the hook
+        // server starves (2026-11-12/13 incident — see AGENTS.md 坑总目录).
+        // The glow itself is drawn by the content; nothing visible is lost.
+        window.animationBehavior = .none
         let host = NSHostingView(rootView: CompletionFlashView(service: service))
         host.frame = NSRect(origin: .zero, size: screen.frame.size)
         host.wantsLayer = true
