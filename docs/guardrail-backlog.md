@@ -102,3 +102,10 @@
   存量违例已清零。拟:check-arch B 档加「新增 `orderFrontRegardless()`/`makeKeyAndOrderFront()`
   行须伴 `.none` 赋值佐证」——按四规矩先校准零误报再上线(跨文件事实,单模式会假阳,B 档只拦
   新增行可避开存量)。
+
+## 2026-11-13 zcode-quota-v2 评审遗留:affected-tests 的「文件名即类名」约定漏跑同文件新 suite
+
+`scripts/affected-tests.sh:80` 映射测试文件时只用 basename 当 `--only` 类名;Swift Testing 一个
+*Tests.swift 里可以有多个顶层 @Suite。在既有文件里新增非同名 suite 时,门禁绿灯照常但新守卫
+零执行(zcode-quota-v2 评审实测:51 用例全绿,两个新 suite 在日志里零匹配,靠评审补跑兜住)。
+修法:映射时提取文件内全部顶层 suite 名(grep `^@Suite` / `^struct .*Tests\b`),不只是 basename。

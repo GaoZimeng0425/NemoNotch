@@ -12,9 +12,14 @@ extension UsageQuotaService {
         guard let token = zcodeBearerToken() else {
             // The API key is v2-encrypted and the keyring key is missing/unreadable
             // (CLI not logged in on this keychain, or access denied). Silent by
-            // design — this is an automatic timer, never a prompt.
+            // design — this is an automatic timer, never a prompt. Return a
+            // state object: nil would make refresh() drop the .zcode entry and
+            // the card would sit on "reading" forever.
             logQuotaStateTransition("credential undecryptable (v2 key unavailable)")
-            return nil
+            return ProviderUsageQuota(
+                provider: .zcode, status: .expired, fetchedAt: Date(),
+                errorMessage: "v2 key unavailable"
+            )
         }
         var request = URLRequest(url: zcodeQuotaURL)
         request.httpMethod = "GET"
@@ -23,8 +28,11 @@ extension UsageQuotaService {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                LogService.warn("zcode quota: HTTP \(http.statusCode)", category: "UsageQuotaService")
-                return nil
+                logQuotaStateTransition("HTTP \(http.statusCode)")
+                return ProviderUsageQuota(
+                    provider: .zcode, status: .parseError, fetchedAt: Date(),
+                    errorMessage: "HTTP \(http.statusCode)"
+                )
             }
             // The API answers HTTP 200 with an envelope code: 401 means the
             // token is stale (the legacy oauth key is no longer refreshed by
@@ -46,11 +54,11 @@ extension UsageQuotaService {
             )
             return parsed
         } catch {
-            LogService.warn(
-                "zcode quota fetch failed: \(error.localizedDescription)",
-                category: "UsageQuotaService"
+            logQuotaStateTransition("network: \(error.localizedDescription)")
+            return ProviderUsageQuota(
+                provider: .zcode, status: .parseError, fetchedAt: Date(),
+                errorMessage: error.localizedDescription
             )
-            return nil
         }
     }
 
