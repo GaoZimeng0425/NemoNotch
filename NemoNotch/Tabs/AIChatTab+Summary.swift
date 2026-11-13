@@ -26,6 +26,10 @@ extension AIChatTab {
                     }
                 }
             }
+            // Equal-height pair with the quota card next door: the HStack's
+            // height is set by whichever card has more rows; both stretch to
+            // it so their bottoms align regardless of content.
+            .frame(maxHeight: .infinity, alignment: .top)
             .padding(8)
             .contentShape(Rectangle())
         }
