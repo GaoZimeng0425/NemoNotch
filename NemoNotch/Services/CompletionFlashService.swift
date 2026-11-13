@@ -88,6 +88,12 @@ final class CompletionFlashService {
     /// never read a disabled source's disappearance as `sessionLost`. The
     /// attention detector is left alone on purpose — its natural retraction
     /// is what dismisses an already-shown approval card.
+    /// Toggle-off for multi-agent monitors: same silent-removal contract as
+    /// `forgetSessions`, keyed by agent.
+    func forgetAgentKeys(_ keys: Set<String>) {
+        detector.forget(keys)
+    }
+
     func forgetSessions(for source: AISource) {
         let keys = Set(store.sessions(for: source).map { "ai:" + $0.id })
         detector.forget(keys)

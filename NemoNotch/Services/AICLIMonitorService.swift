@@ -104,6 +104,22 @@ final class AICLIMonitorService {
     /// `completionFlash` is wired by `AppDependencies.build()`.
     weak var completionFlash: CompletionFlashService?
 
+    /// Hermes toggle — same contract as `setMonitoring`, but agents live in
+    /// the registry view, not the session store: forget them before they
+    /// leave, or their disappearance reads as `sessionLost`.
+    func setHermesMonitoring(enabled: Bool) {
+        guard let hermes = hermesService else { return }
+        if enabled {
+            hermes.installHooks()
+            hermes.connect()
+        } else {
+            completionFlash?.forgetAgentKeys(Set(hermes.agents.keys.map { "agent:" + $0 }))
+            hermes.disconnect()
+            hermes.uninstallHooks()
+            hermes.agents.removeAll()
+        }
+    }
+
     func setMonitoring(enabled: Bool, for source: AISource) {
         switch source {
         case .claude:
