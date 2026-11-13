@@ -160,6 +160,15 @@ final class AICLIMonitorService {
         store.activeSession
     }
 
+    func provider(for source: AISource) -> any AIProvider {
+        switch source {
+        case .claude: return claudeProvider
+        case .gemini: return geminiProvider
+        case .opencode: return opencodeProvider
+        case .zcode: return zcodeProvider
+        }
+    }
+
     var anyHookInstalled: Bool {
         claudeProvider.isHookInstalled || geminiProvider.isHookInstalled
             || opencodeProvider.isHookInstalled || zcodeProvider.isHookInstalled

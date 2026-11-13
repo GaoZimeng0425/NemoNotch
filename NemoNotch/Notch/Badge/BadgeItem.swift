@@ -55,14 +55,14 @@ enum BadgeItem: Identifiable, Equatable {
     /// only repeat them (and with no AI badge, the expanded glow follows only
     /// agents). On every screen alike, though the bar docks on one: one
     /// component, one behavior. Switch the bar off and they come back.
+    /// Disabled sources have no sessions in the store at all (the service-
+    /// layer gate clears them) — no per-source filtering here anymore.
     static func sessionItems(
         _ sessions: [AISessionState],
-        edgeBarShown: Bool,
-        isEnabled: (AISource) -> Bool
+        edgeBarShown: Bool
     ) -> [BadgeItem] {
         guard !edgeBarShown else { return [] }
         return sessions.compactMap { session in
-            guard isEnabled(session.source) else { return nil }
             if session.phase.isWaitingForApproval {
                 return .ai(
                     source: session.source,

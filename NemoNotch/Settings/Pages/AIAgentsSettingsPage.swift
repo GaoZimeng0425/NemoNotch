@@ -19,15 +19,12 @@ struct AIAgentsSettingsPage: View {
                 HookCard(
                     name: "Claude Code",
                     tint: ProviderTint.claude,
+                    isOn: appSettings.claudeEnabled,
                     isInstalled: aiService.claudeProvider.isHookInstalled,
                     logo: { ClaudeCrabIcon(size: 20, color: ProviderTint.claude) },
-                    onInstall: {
-                        appSettings.claudeEnabled = true
-                        aiService.claudeProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.claudeEnabled = false
-                        aiService.claudeProvider.uninstallHooks()
+                    onToggle: { on in
+                        appSettings.claudeEnabled = on
+                        aiService.setMonitoring(enabled: on, for: .claude)
                     }
                 )
 
@@ -35,19 +32,16 @@ struct AIAgentsSettingsPage: View {
                 HookCard(
                     name: "Gemini CLI",
                     tint: ProviderTint.gemini,
+                    isOn: appSettings.geminiEnabled,
                     isInstalled: aiService.geminiProvider.isHookInstalled,
                     logo: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(ProviderTint.gemini)
                     },
-                    onInstall: {
-                        appSettings.geminiEnabled = true
-                        aiService.geminiProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.geminiEnabled = false
-                        aiService.geminiProvider.uninstallHooks()
+                    onToggle: { on in
+                        appSettings.geminiEnabled = on
+                        aiService.setMonitoring(enabled: on, for: .gemini)
                     }
                 )
 
@@ -55,15 +49,12 @@ struct AIAgentsSettingsPage: View {
                 HookCard(
                     name: "opencode",
                     tint: ProviderTint.opencode,
+                    isOn: appSettings.opencodeEnabled,
                     isInstalled: aiService.opencodeProvider.isHookInstalled,
                     logo: { OpencodeLogoIcon(size: 19, color: ProviderTint.opencode) },
-                    onInstall: {
-                        appSettings.opencodeEnabled = true
-                        aiService.opencodeProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.opencodeEnabled = false
-                        aiService.opencodeProvider.uninstallHooks()
+                    onToggle: { on in
+                        appSettings.opencodeEnabled = on
+                        aiService.setMonitoring(enabled: on, for: .opencode)
                     }
                 )
 
@@ -71,15 +62,12 @@ struct AIAgentsSettingsPage: View {
                 HookCard(
                     name: "zcode",
                     tint: ProviderTint.zcode,
+                    isOn: appSettings.zcodeEnabled,
                     isInstalled: aiService.zcodeProvider.isHookInstalled,
                     logo: { ZcodeLogoIcon(size: 19, color: ProviderTint.zcode) },
-                    onInstall: {
-                        appSettings.zcodeEnabled = true
-                        aiService.zcodeProvider.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.zcodeEnabled = false
-                        aiService.zcodeProvider.uninstallHooks()
+                    onToggle: { on in
+                        appSettings.zcodeEnabled = on
+                        aiService.setMonitoring(enabled: on, for: .zcode)
                     }
                 )
 
@@ -87,6 +75,7 @@ struct AIAgentsSettingsPage: View {
                 HookCard(
                     name: "Hermes Agent",
                     tint: ProviderTint.hermes,
+                    isOn: appSettings.hermesEnabled,
                     isInstalled: hermesService.isHookInstalled,
                     logo: {
                         Image("HermesIcon")
@@ -96,13 +85,9 @@ struct AIAgentsSettingsPage: View {
                             .frame(width: 22, height: 22)
                             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     },
-                    onInstall: {
-                        appSettings.hermesEnabled = true
-                        hermesService.installHooks()
-                    },
-                    onUninstall: {
-                        appSettings.hermesEnabled = false
-                        hermesService.uninstallHooks()
+                    onToggle: { on in
+                        appSettings.hermesEnabled = on
+                        aiService.setHermesMonitoring(enabled: on)
                     }
                 )
 

@@ -1127,70 +1127,6 @@
         }
       }
     },
-    "menu.install_claude_hooks" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install Claude Code Hooks..."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装 Claude Code Hooks..."
-          }
-        }
-      }
-    },
-    "menu.install_gemini_hooks" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install Gemini CLI Hooks..."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装 Gemini CLI Hooks..."
-          }
-        }
-      }
-    },
-    "menu.install_opencode_hooks" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install opencode hooks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装 opencode 钩子"
-          }
-        }
-      }
-    },
-    "menu.install_zcode_hooks" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install zcode hooks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装 zcode 钩子"
-          }
-        }
-      }
-    },
     "menu.keep_awake" : {
       "localizations" : {
         "en" : {
@@ -2721,22 +2657,6 @@
         }
       }
     },
-    "settings.install_hooks" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install Hooks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装 Hooks"
-          }
-        }
-      }
-    },
     "settings.keepawake.about.persistent" : {
       "localizations" : {
         "en" : {
@@ -3251,22 +3171,6 @@
         }
       }
     },
-    "settings.reinstall" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reinstall"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重新安装"
-          }
-        }
-      }
-    },
     "settings.select_monitored_app" : {
       "localizations" : {
         "en" : {
@@ -3315,22 +3219,6 @@
         }
       }
     },
-    "settings.status.not_installed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not installed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未安装"
-          }
-        }
-      }
-    },
     "settings.tab.ai_agents" : {
       "localizations" : {
         "en" : {
@@ -3375,22 +3263,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "NemoNotch 偏好设置"
-          }
-        }
-      }
-    },
-    "settings.uninstall_hooks" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uninstall Hooks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "卸载 Hooks"
           }
         }
       }
@@ -5474,6 +5346,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "出事了"
+          }
+        }
+      }
+    },
+    "settings.status.auto_install" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On — hook installs on next launch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开启 — 下次启动自动装回"
+          }
+        }
+      }
+    },
+    "settings.status.monitoring_off" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monitoring off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "监控已关闭"
+          }
+        }
+      }
+    },
+    "menu.enable_monitoring %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable %@ Monitoring"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启 %@ 监控"
           }
         }
       }

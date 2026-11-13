@@ -1,38 +1,36 @@
 import SwiftUI
 
+/// Menu-bar quick actions per CLI: offer "enable monitoring" when the toggle
+/// is off, or a heal install when monitoring is on but the hook is missing.
+/// Bare `installHooks()` is gone — installing while disabled would recreate
+/// the "uninstalled but resurrects" contradiction.
 struct HooksSection: View {
+    @Environment(AppSettings.self) private var appSettings
     @Environment(AICLIMonitorService.self) private var aiService
 
     var body: some View {
-        if !aiService.claudeProvider.isHookInstalled {
-            Button("menu.install_claude_hooks") {
-                aiService.claudeProvider.installHooks()
+        ForEach(missing, id: \.0) { name, source in
+            Button("menu.enable_monitoring \(name)") {
+                appSettings[source] = true
+                aiService.setMonitoring(enabled: true, for: source)
             }
         }
-        if !aiService.geminiProvider.isHookInstalled {
-            Button("menu.install_gemini_hooks") {
-                aiService.geminiProvider.installHooks()
-            }
-        }
-        if !aiService.opencodeProvider.isHookInstalled {
-            Button("menu.install_opencode_hooks") {
-                aiService.opencodeProvider.installHooks()
-            }
-        }
-        if !aiService.zcodeProvider.isHookInstalled {
-            Button("menu.install_zcode_hooks") {
-                aiService.zcodeProvider.installHooks()
-            }
-        }
-        if showsAnyHook {
+        if !missing.isEmpty {
             Divider()
         }
     }
 
-    private var showsAnyHook: Bool {
-        !aiService.claudeProvider.isHookInstalled
-            || !aiService.geminiProvider.isHookInstalled
-            || !aiService.opencodeProvider.isHookInstalled
-            || !aiService.zcodeProvider.isHookInstalled
+    private var missing: [(String, AISource)] {
+        var result: [(String, AISource)] = []
+        let all: [(name: String, source: AISource)] = [
+            ("Claude Code", .claude), ("Gemini CLI", .gemini),
+            ("opencode", .opencode), ("zcode", .zcode),
+        ]
+        for (name, source) in all {
+            if !appSettings[source] || !aiService.provider(for: source).isHookInstalled {
+                result.append((name, source))
+            }
+        }
+        return result
     }
 }

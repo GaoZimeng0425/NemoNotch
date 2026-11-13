@@ -35,8 +35,8 @@ enum SettingsSearchIndex {
         .aiAgents: (
             keys: [
                 "settings.nav.ai", "settings.ai_status_fab.enabled", "settings.lockscreen_ai.enabled",
-                "settings.status.installed", "settings.status.not_installed", "settings.install_hooks",
-                "settings.reinstall", "settings.uninstall_hooks", "settings.openclaw.connected %@",
+                "settings.status.installed", "settings.status.auto_install",
+                "settings.status.monitoring_off", "settings.openclaw.connected %@",
                 "settings.openclaw.connect", "settings.openclaw.disconnect", "settings.openclaw.remove_device",
                 "settings.hooks_description", "settings.server_running",
             ],
