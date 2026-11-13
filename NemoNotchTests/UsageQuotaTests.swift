@@ -349,3 +349,32 @@ struct UsageQuotaTests {
         #expect(GeminiOAuthClientLocator.parse(from: "const FOO = 'bar';") == nil)
     }
 }
+
+@Suite("Quota visibility (data presence, not monitoring toggle)")
+struct QuotaVisibilityTests {
+    @Test("provider list follows data presence only")
+    func dataPresenceDrivesVisibility() {
+        // The regression this pins: a disabled monitoring toggle used to drop
+        // the section even though the data (snapshot/credential) was there.
+        #expect(UsageQuotaCardView.visibleProviders(
+            hasClaudeSnapshot: true, hasCodexCredential: false,
+            hasGeminiCredential: false, hasZcodeCredential: false
+        ) == [.claude])
+        #expect(UsageQuotaCardView.visibleProviders(
+            hasClaudeSnapshot: true, hasCodexCredential: true,
+            hasGeminiCredential: true, hasZcodeCredential: true
+        ) == [.claude, .codex, .gemini, .zcode])
+        #expect(UsageQuotaCardView.visibleProviders(
+            hasClaudeSnapshot: false, hasCodexCredential: false,
+            hasGeminiCredential: true, hasZcodeCredential: false
+        ) == [.gemini])
+    }
+
+    @Test("nothing present shows nothing")
+    func emptyWhenNoData() {
+        #expect(UsageQuotaCardView.visibleProviders(
+            hasClaudeSnapshot: false, hasCodexCredential: false,
+            hasGeminiCredential: false, hasZcodeCredential: false
+        ).isEmpty)
+    }
+}

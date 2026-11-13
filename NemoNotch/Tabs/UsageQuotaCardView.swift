@@ -5,28 +5,39 @@ import SwiftUI
 /// via `.activates`.
 struct UsageQuotaCardView: View {
     @Environment(UsageQuotaService.self) private var service
-    @Environment(AppSettings.self) private var appSettings
 
-    /// Providers to show: Claude when enabled, Codex when a credential exists, Gemini when enabled and a credential
-    /// exists.
     /// Data presence drives visibility — the monitoring toggle does not:
     /// usage quotas are a billing fact and stay visible with monitoring off
     /// (Codex has always worked this way).
-    private var visibleProviders: [QuotaProvider] {
+    static func visibleProviders(
+        hasClaudeSnapshot: Bool,
+        hasCodexCredential: Bool,
+        hasGeminiCredential: Bool,
+        hasZcodeCredential: Bool
+    ) -> [QuotaProvider] {
         var result: [QuotaProvider] = []
-        if service.hasClaudeSnapshot {
+        if hasClaudeSnapshot {
             result.append(.claude)
         }
-        if service.hasCodexCredential {
+        if hasCodexCredential {
             result.append(.codex)
         }
-        if service.hasGeminiCredential {
+        if hasGeminiCredential {
             result.append(.gemini)
         }
-        if service.hasZcodeCredential {
+        if hasZcodeCredential {
             result.append(.zcode)
         }
         return result
+    }
+
+    private var visibleProviders: [QuotaProvider] {
+        Self.visibleProviders(
+            hasClaudeSnapshot: service.hasClaudeSnapshot,
+            hasCodexCredential: service.hasCodexCredential,
+            hasGeminiCredential: service.hasGeminiCredential,
+            hasZcodeCredential: service.hasZcodeCredential
+        )
     }
 
     var body: some View {
@@ -239,21 +250,35 @@ struct UsageQuotaCompactView: View {
     /// Data presence drives visibility — the monitoring toggle does not:
     /// usage quotas are a billing fact and stay visible with monitoring off
     /// (Codex has always worked this way).
-    private var visibleProviders: [QuotaProvider] {
+    static func visibleProviders(
+        hasClaudeSnapshot: Bool,
+        hasCodexCredential: Bool,
+        hasGeminiCredential: Bool,
+        hasZcodeCredential: Bool
+    ) -> [QuotaProvider] {
         var result: [QuotaProvider] = []
-        if service.hasClaudeSnapshot {
+        if hasClaudeSnapshot {
             result.append(.claude)
         }
-        if service.hasCodexCredential {
+        if hasCodexCredential {
             result.append(.codex)
         }
-        if service.hasGeminiCredential {
+        if hasGeminiCredential {
             result.append(.gemini)
         }
-        if service.hasZcodeCredential {
+        if hasZcodeCredential {
             result.append(.zcode)
         }
         return result
+    }
+
+    private var visibleProviders: [QuotaProvider] {
+        Self.visibleProviders(
+            hasClaudeSnapshot: service.hasClaudeSnapshot,
+            hasCodexCredential: service.hasCodexCredential,
+            hasGeminiCredential: service.hasGeminiCredential,
+            hasZcodeCredential: service.hasZcodeCredential
+        )
     }
 
     /// At most two meters. One provider → its primary + secondary tier. Two or

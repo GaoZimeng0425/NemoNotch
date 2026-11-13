@@ -329,7 +329,11 @@ struct AIChatTab: View {
                 contextSummaryCard
                 UsageQuotaCompactView()
             }
-            .fixedSize(horizontal: true, vertical: false)
+            // .fixedSize() (both axes): the cards inside stretch to the tallest sibling
+            // (equal-height pair), but the header itself reports its ideal height —
+            // with only vertical: false the pair's maxHeight-elasticity leaked up
+            // and the VStack split the panel 50/50 between header and list.
+            .fixedSize()
             .layoutPriority(1)
         }
         .padding(.horizontal, 4)
