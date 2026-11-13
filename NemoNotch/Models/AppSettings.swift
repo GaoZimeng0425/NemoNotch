@@ -221,6 +221,7 @@ final class AppSettings {
     // MARK: - Keep awake (合盖不休眠)
 
     static let keepAwakeLidDisplayOffKey = "keepAwake.lidDisplayOff"
+    static let keepAwakeIdleEnabledKey = "keepawake.idleEnabled"
     static let keepAwakeRestoreOnQuitKey = "keepAwake.restoreOnQuit"
 
     /// 合盖时自动熄屏。`disablesleep=1` 会让整条睡眠路径被禁,合盖屏幕不灭会
@@ -235,6 +236,13 @@ final class AppSettings {
     /// 默认开。关掉的代价是要自己记得关 —— 换来的是退出时不再弹授权框。
     var keepAwakeRestoreOnQuit: Bool {
         didSet { UserDefaults.standard.set(keepAwakeRestoreOnQuit, forKey: Self.keepAwakeRestoreOnQuitKey) }
+    }
+
+    /// 空闲不休眠(租约版 A 开关):挂一份 `PreventUserIdleSystemSleep` 断言,
+    /// 零弹窗;断言随进程退出自动失效,启动时按此设置重建 —— 状态即「记住」。
+    /// 只挡开盖空闲睡,合盖照睡(那是 B 开关的事)。默认关。
+    var keepAwakeIdleEnabled: Bool {
+        didSet { UserDefaults.standard.set(keepAwakeIdleEnabled, forKey: Self.keepAwakeIdleEnabledKey) }
     }
 
     var currentLocale: Locale {
@@ -320,5 +328,7 @@ final class AppSettings {
             .object(forKey: Self.keepAwakeLidDisplayOffKey) as? Bool ?? true
         keepAwakeRestoreOnQuit = UserDefaults.standard
             .object(forKey: Self.keepAwakeRestoreOnQuitKey) as? Bool ?? true
+        keepAwakeIdleEnabled = UserDefaults.standard
+            .object(forKey: Self.keepAwakeIdleEnabledKey) as? Bool ?? false
     }
 }
