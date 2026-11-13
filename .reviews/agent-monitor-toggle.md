@@ -78,3 +78,38 @@ docs/superpowers/plans/2026-11-13-agent-monitor-toggle.md
 ## 结论
 
 CHANGES_NEEDED:修 P2 一行(AppDependencies.swift:88 加 `settings.hermesEnabled` 条件)，其余 P3 记录在案可另行处理。修后请更新 Reviewed-Head 增量复审。实现主体(routeEvent 统一 gate、静默清源顺序契约、自愈按源、UI toggle 化、文档同步、测试鉴别力)质量扎实，证据链完整；除 hermes 启动缺口与竞态窗口外，我未发现其他破「关闭不弹卡」红线的路径。
+
+---
+
+# Code Review — feature/agent-monitor-toggle(增量复审段，附于首轮记录之后)
+
+Reviewer: zcode 独立评审会话(GLM-5.3 judge 会话，未参与开发)
+Date: 2026-11-13
+Reviewed-Head: b8d4316
+Verdict: APPROVED
+Scope(增量): a893c91..b8d4316 — 2 files changed(AppDependencies.swift +3/-1, HermesService.swift +1/-1),1 个修复提交(06f9224 为 .reviews 落盘，按排除项不计)
+
+## 零代码漂移检查
+
+`git diff a893c91..HEAD -- . ':!.reviews'` 仅含两个声明修复文件(AppDependencies.swift、HermesService.swift),无其他任何改动。✓
+
+## 上轮 Findings 处置核对
+
+- **[P2] hermes 启动路径漏闸 → 已修，正确**。`NemoNotch/Helpers/AppDependencies.swift:87-90`:`if !UITestMode.isActive, settings.hermesEnabled { hermes.connect() }`,与上轮给定修法一致；why 注释点明「磁盘事实(isInstalled)会在手动重装/卸载失败时复活监控」的正确理由(呼应上轮教训候选「isInstalled 与用户意图是两个开关」)。`settings.hermesEnabled` 缺省 true(AppSettings init),全新用户行为不变；settings 在 build() 首行定义(AppDependencies.swift:68),时序可用。
+- **[P3] connect 不幂等 → 已修，正确**。`NemoNotch/Services/HermesService.swift:59`:`guard isInstalled, pollTimer == nil else { return }`。on/off/on 循环不受影响——`disconnect()`(HermesService.swift:73-82)已置 `pollTimer = nil`,重新 connect 可通过守卫；重复 connect 现在是干净 no-op(不重装 FSEvents、不重复 refreshSessions)。
+- **[P3] in-flight 回写僵尸窗口 / [P3] 挂起审批不撤 / [P3] forgetSessions 集成测试 → 按仓库「P3 默认不修」口径记录在案**，零代码漂移确认未顺手改动。✓
+
+## 门禁亲跑(引用真实退出码)
+
+| 脚本 | 退出码 | 结果 |
+|---|---|---|
+| `sh scripts/lint.sh` | 0 | 通过 |
+| `sh scripts/doc-audit.sh` | 0 | 通过 |
+| `sh scripts/check-arch.sh` | 0 | 通过 |
+| `sh scripts/affected-tests.sh`(当前 HEAD 重跑) | 0 | 263 通过 / 0 失败(索引闭包 40 类，含 HermesReparseGateTests) |
+
+关于派发方声明的全量 test.sh exit 0:build/test.log(18:33:57)早于修复提交(18:34:08)11 秒——时序上属「跑完测试即提交」的正常顺序，日志中 697 条 passed、唯一含 "failed" 字样的行是用例名 `failedToolThenSilenceStillDemotes`(passed);为消除工件对应关系疑虑，我针对当前 HEAD 亲跑 affected-tests(exit 0,263/0),修复后的代码已由我直接验证。
+
+## 结论
+
+APPROVED。上轮唯一阻塞项(P2)修复正确且无漂移，P3 处置符合仓库口径，门禁与测试我亲跑全绿。我愿意为这个合并背书。
