@@ -111,7 +111,7 @@ curl -X POST "127.0.0.1:$PORT/v1/toast" \
 
 ### Herdr mod
 
-在 Herdr 里跑 agent 时：agent 在你没看着的时候跑完，弹一张绿卡（约 5 分钟后消失）；卡住等你，弹一张蓝卡（一直挂到你处理）。点卡片，Herdr 聚焦到那个 agent；你在 Herdr 里看过或答完，卡片自动撤掉。Herdr 里唯一的变化是侧栏 Spaces 那一行多一个 `● NemoNotch`（圆点亮 = 连得上 NemoNotch）。
+在 Herdr 里跑 agent 时：agent 在你没看着的时候跑完，弹一张绿卡（约 5 分钟后消失）；卡住等你，弹一张蓝卡（一直挂到你处理）。卡片标题是 agent 所在的项目 + worktree（不在 worktree 里则是分支），如 `NemoNotch · fix-login`，左侧是对应 AI 工具的 logo。点卡片，Herdr 聚焦到那个 agent；你在 Herdr 里看过或答完，卡片自动撤掉。Herdr 里唯一的变化是侧栏 Spaces 那一行多一个 `● NemoNotch`（圆点亮 = 连得上 NemoNotch）。
 
 ```bash
 # 先打开 Herdr

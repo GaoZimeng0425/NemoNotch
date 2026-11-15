@@ -1,7 +1,7 @@
 // node --test: pure edge rules of the NemoNotch Herdr mod (no Herdr needed).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { diff, firstRun, card, closeBody, snapshot, serial, bounded, iconFor } from "./edges.js";
+import { diff, firstRun, card, closeBody, snapshot, serial, bounded, iconFor, placeLabel } from "./edges.js";
 
 const agent = (address, status, extra = {}) => ({
   address, status, space_name: "NemoNotch", tab_name: "fix", app: "claude-code", title: "Refactor", ...extra,
@@ -109,4 +109,28 @@ test("a hung push gives up after its wait, so the lane keeps moving", async () =
 test("bounded returns the task's value when it finishes first", async () => {
   const value = await bounded(async () => 7, () => new Promise(() => {}));
   assert.equal(value, 7);
+});
+
+test("placeLabel: project · worktree inside a worktree checkout, else project · branch", () => {
+  assert.equal(placeLabel("/Users/me/code/NemoNotch/.worktree/herdr-card", "feature/herdr-card", "S"), "NemoNotch · herdr-card");
+  assert.equal(placeLabel("/Users/me/octok-client/.worktrees/audio-test/src", "x", "S"), "octok-client · audio-test");
+  assert.equal(placeLabel("/Users/me/repo/.claude/worktrees/fix-1", null, "S"), "repo · fix-1");
+  assert.equal(placeLabel("/Users/me/code/NemoNotch", "develop", "S"), "NemoNotch · develop");
+  assert.equal(placeLabel("/Users/me/notes/", null, "S"), "notes");
+});
+
+test("placeLabel: no folder falls back to the space name, then Herdr; fits the app contract", () => {
+  assert.equal(placeLabel(null, "main", "My Space"), "My Space");
+  assert.equal(placeLabel(undefined, null, ""), "Herdr");
+  const long = placeLabel("/x/" + "p".repeat(40), "b".repeat(40), "S");
+  assert.equal(Array.from(long).length, 48);
+  assert.ok(!placeLabel("/x/a::b", "c::d", "S").includes("::"));
+  assert.equal(placeLabel("/x/a:::b", null, "S"), "a:b");
+  assert.equal(placeLabel("/x/a::::b", null, "S"), "a:b");
+});
+
+test("card and close carry the same app header", () => {
+  const body = card(agent("t7", "done"), "NemoNotch · fix");
+  assert.equal(body.app, "NemoNotch · fix");
+  assert.deepEqual(closeBody("t7", "NemoNotch · fix"), { schema: 1, app: "NemoNotch · fix", key: "t7", action: "close" });
 });
