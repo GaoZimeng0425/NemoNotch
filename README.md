@@ -113,7 +113,7 @@ curl -X POST "127.0.0.1:$PORT/v1/toast" \
 
 ### Herdr mod
 
-Herdr users can get a NemoNotch card whenever an agent in Herdr finishes while you weren't looking (green, leaves after ~5 minutes) or waits on you (blue, stays until handled). Clicking a card focuses that agent in Herdr; looking at it or answering it in Herdr removes the card. In Herdr itself the only addition is a small `● NemoNotch` in the sidebar's Spaces row (the dot is lit while NemoNotch is reachable).
+Herdr users can get a NemoNotch card whenever an agent in Herdr finishes while you weren't looking (green, leaves after ~5 minutes) or waits on you (blue, stays until handled). The card's header names the project and worktree (or branch) the agent runs in, e.g. `NemoNotch · fix-login`, with the matching AI tool logo. Clicking a card focuses that agent in Herdr; looking at it or answering it in Herdr removes the card. In Herdr itself the only addition is a small `● NemoNotch` in the sidebar's Spaces row (the dot is lit while NemoNotch is reachable).
 
 ```bash
 # Herdr must be open

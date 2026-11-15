@@ -63,17 +63,43 @@ export function iconFor(app) {
   return hit ? hit[1] : "sf:terminal";
 }
 
+// Worktree checkouts: <repo>/.worktree/<name>, <repo>/.worktrees/<name>,
+// <repo>/.claude/worktrees/<name>.
+const WORKTREE = /^(.*?)\/(?:\.worktrees?|\.claude\/worktrees)\/([^/]+)/;
+const basename = (path) => path.replace(/\/+$/, "").split("/").pop() ?? "";
+
+/**
+ * The card header: "<project> · <worktree>" — the worktree folder name when
+ * the pane sits in one, else its git branch; just the project without either.
+ * No folder known → Herdr's space name. Fits the contract's `app` (1–48 chars,
+ * no "::").
+ */
+export function placeLabel(cwd, branch, fallback) {
+  let label = fallback || "Herdr";
+  if (cwd) {
+    const hit = WORKTREE.exec(cwd);
+    const project = basename(hit ? hit[1] : cwd);
+    const second = hit ? hit[2] : branch;
+    if (project) label = second ? `${project} · ${second}` : project;
+  }
+  return clip(label.replaceAll("::", ":"), 48);
+}
+
 function clip(text, max) {
   return Array.from(text).slice(0, max).join("");
 }
 
-/** The /v1/toast body for an agent that just entered done/blocked. */
-export function card(agent) {
+/**
+ * The /v1/toast body for an agent that just entered done/blocked. `app` is
+ * the header (`placeLabel`) and part of the card's identity: close it with
+ * the same `app`.
+ */
+export function card(agent, app = "Herdr") {
   const blocked = agent.status === "blocked";
   const parts = [WORD[agent.status], agent.app, agent.title].filter((p) => p);
   const body = {
     schema: 1,
-    app: "Herdr",
+    app,
     key: agent.address,
     title: clip(`${agent.space_name} / ${agent.tab_name}`, 120),
     body: clip(parts.join(" · "), 280),
@@ -86,8 +112,8 @@ export function card(agent) {
   return body;
 }
 
-export function closeBody(address) {
-  return { schema: 1, app: "Herdr", key: address, action: "close" };
+export function closeBody(address, app = "Herdr") {
+  return { schema: 1, app, key: address, action: "close" };
 }
 
 /**

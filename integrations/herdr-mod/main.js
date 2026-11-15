@@ -6,8 +6,8 @@
 // scripts/install-herdr-mod.sh. Edge rules live in ./edges.js (node-tested).
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { agents, theme, layout, home, readTextFile } from "herdr";
-import { diff, firstRun, card, closeBody, snapshot, serial, bounded } from "./edges.js";
+import { agents, panes, theme, layout, home, readTextFile } from "herdr";
+import { diff, firstRun, card, closeBody, snapshot, serial, bounded, placeLabel } from "./edges.js";
 
 const OPEN_KEYS = "nemonotch.openKeys";
 const HEALTH_EVERY_MS = 30000;
@@ -35,7 +35,12 @@ export default class NemoNotch extends View {
   init(_props, cx) {
     this.prev = null;
     this.reachable = false;
-    this.openKeys = new Set(this.loadKeys());
+    // address -> the `app` (header) its open card was sent with: part of the
+    // card's identity in NemoNotch, so a close must repeat it.
+    this.openKeys = this.loadKeys();
+    // address -> the header of the latest show queued: closes queued right
+    // behind it (before its POST settles) still name the right card.
+    this.headers = new Map(this.openKeys);
     this.lane = serial();
     cx.timer.every(HEALTH_EVERY_MS, (cx) => this.checkHealth(cx));
     this.checkHealth(cx);
@@ -43,15 +48,17 @@ export default class NemoNotch extends View {
 
   loadKeys() {
     try {
-      const keys = JSON.parse(localStorage.getItem(OPEN_KEYS) ?? "[]");
-      return Array.isArray(keys) ? keys : [];
+      const saved = JSON.parse(localStorage.getItem(OPEN_KEYS) ?? "{}");
+      // Older versions saved a plain address list, all sent as "Herdr".
+      if (Array.isArray(saved)) return new Map(saved.map((key) => [key, "Herdr"]));
+      return new Map(Object.entries(saved ?? {}).filter(([, app]) => typeof app === "string"));
     } catch (_) {
-      return [];
+      return new Map();
     }
   }
 
   saveKeys() {
-    localStorage.setItem(OPEN_KEYS, JSON.stringify([...this.openKeys]));
+    localStorage.setItem(OPEN_KEYS, JSON.stringify(Object.fromEntries(this.openKeys)));
   }
 
   checkHealth(cx) {
@@ -84,8 +91,11 @@ export default class NemoNotch extends View {
           body: JSON.stringify(body),
         }), () => cx.sleep(PUSH_TIMEOUT_MS));
         if (!r.ok) return;
-        if (body.action === "close") this.openKeys.delete(body.key);
-        else this.openKeys.add(body.key);
+        if (body.action === "close") {
+          if (this.openKeys.get(body.key) === body.app) this.openKeys.delete(body.key);
+        } else {
+          this.openKeys.set(body.key, body.app);
+        }
         this.saveKeys();
       } catch (_) {
         // NemoNotch not running, or the push timed out: nothing to do.
@@ -93,14 +103,33 @@ export default class NemoNotch extends View {
     }));
   }
 
+  close(cx, key) {
+    this.send(cx, closeBody(key, this.headers.get(key) ?? "Herdr"));
+    this.headers.delete(key);
+  }
+
+  // Header for an agent's card: its pane's project + worktree (or branch).
+  label(agent) {
+    const pane = panes().find((p) => p.pane === agent.pane);
+    return placeLabel(pane?.cwd, pane?.branch, agent.space_name);
+  }
+
   track(cx) {
     const list = agents();
     if (this.prev === null) {
-      for (const key of firstRun(list, [...this.openKeys]).close) this.send(cx, closeBody(key));
+      for (const key of firstRun(list, [...this.openKeys.keys()]).close) this.close(cx, key);
     } else {
       const { show, close } = diff(this.prev, list);
-      for (const agent of show) this.send(cx, card(agent));
-      for (const key of close) this.send(cx, closeBody(key));
+      for (const agent of show) {
+        const app = this.label(agent);
+        // Moved folders since its last card: that card has another identity.
+        if (this.headers.has(agent.address) && this.headers.get(agent.address) !== app) {
+          this.close(cx, agent.address);
+        }
+        this.headers.set(agent.address, app);
+        this.send(cx, card(agent, app));
+      }
+      for (const key of close) this.close(cx, key);
     }
     this.prev = snapshot(list);
   }

@@ -200,6 +200,7 @@ graph LR
 - **宿主只能是常驻浮窗**:`place:"none"` 不被引用就不启动;`main` 布局只读(改结构须克隆,用户否决);`mod.json` 的 `place` 停靠在本机**不生效**(运行中放入与重启后都没有,`seen.json` 无记录)。现用 `overlay:{kind:"window",key,keep:true,frame:"none",at:{x:66,y:52}}` + 一次 `do mod.open`,Herdr 记进 `windows.json` 的 `kept.main` 并每次启动重开;坐标是相对窗口左上的**绝对定位**,只有 Spaces 标题行位置恒定(Agents 行随窗高/折叠移动)。切到别的布局时不在。
 - **卸载顺序:先 `mod.open`(它是开关=关闭)再删文件夹**;反序会留下 `status.errors: "no mod folder"` 且按 id `overlay.close` 关不掉。安装只在 `status.overlays` 不含它时才 `mod.open`(否则把已开的关掉)。`scripts/install-herdr-mod.sh` 已固化这两条。
 - **`done` 只表示「你没看着时跑完」**:正盯着的 pane 跑完直接 working→idle,不产生卡——是设计,不是漏报。done→idle 就是「看过了」信号(撤卡)。
+- **卡片标题 = 项目 · worktree(无则分支)**(2026-11-15,`placeLabel`,取自 `panes()` 里该 agent 所在 pane 的 cwd/branch,无 cwd 回落 space 名):它就是外部 toast 的 `app`,**而 `app` 是卡身份 `ext:<app>::<key>` 的一部分**——撤卡必须带同一 `app`。mod 在**排队 show 的那一刻**同步记下标题(`headers`),close 用它(POST 未落地前就排进来的 close 才不会错发成 "Herdr");持久化 `openKeys` 存 地址→标题(旧版的地址数组按 "Herdr" 迁移);同一 agent 换了目录再出卡,先撤旧标题那张。
 - 边沿纯函数在 `edges.js`(无 herdr 导入),`sh scripts/test-herdr-mod.sh` 用 node 内置 test runner 跑;`herdr-app check <目录>` 是 mod 的加载门禁。
 
 ### 日志
