@@ -107,6 +107,8 @@
 
 **残留卡清理**(`infinity` 的配套):mod 在 `localStorage` 记下自己推出且未撤的 key 集合;每次启动(首次 render 种基线时)对集合里「当前不处于 done/blocked 的地址」(含已消失的 agent)逐个推 `close` 并移出集合。这样 Herdr 关闭期间被处理/结束的 agent,其蓝卡在下次打开 Herdr 时被清掉;Herdr 一直不开则蓝卡一直挂着(用户可手动 ×)。localStorage 跨 Herdr 重启是否保留需实现时实测,不保留则改用 `writeTextFile` 存到 `appHome()` 下的私有文件。
 
+> 2026-11-15 起:`app` = `placeLabel` 标题(项目 · worktree,无则分支),是卡身份的一部分;openKeys 改为 地址→标题,见 AGENTS.md Herdr mod 节。
+
 **卡面**(show):
 - `app: "Herdr"`,`key: <address>`
 - `title`: `<space_name> / <tab_name>`(截到 120)

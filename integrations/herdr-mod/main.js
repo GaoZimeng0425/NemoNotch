@@ -123,8 +123,11 @@ export default class NemoNotch extends View {
       for (const agent of show) {
         const app = this.label(agent);
         // Moved folders since its last card: that card has another identity.
-        if (this.headers.has(agent.address) && this.headers.get(agent.address) !== app) {
-          this.close(cx, agent.address);
+        // Fall back to the delivered header too: a close that was queued but
+        // refused already dropped `headers`, yet that card may still be up.
+        const before = this.headers.get(agent.address) ?? this.openKeys.get(agent.address);
+        if (before !== undefined && before !== app) {
+          this.send(cx, closeBody(agent.address, before));
         }
         this.headers.set(agent.address, app);
         this.send(cx, card(agent, app));

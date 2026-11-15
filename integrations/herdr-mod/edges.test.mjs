@@ -125,6 +125,8 @@ test("placeLabel: no folder falls back to the space name, then Herdr; fits the a
   const long = placeLabel("/x/" + "p".repeat(40), "b".repeat(40), "S");
   assert.equal(Array.from(long).length, 48);
   assert.ok(!placeLabel("/x/a::b", "c::d", "S").includes("::"));
+  assert.equal(placeLabel("/x/a:::b", null, "S"), "a:b");
+  assert.equal(placeLabel("/x/a::::b", null, "S"), "a:b");
 });
 
 test("card and close carry the same app header", () => {

@@ -82,7 +82,7 @@ export function placeLabel(cwd, branch, fallback) {
     const second = hit ? hit[2] : branch;
     if (project) label = second ? `${project} · ${second}` : project;
   }
-  return clip(label.replaceAll("::", ":"), 48);
+  return clip(label.replace(/:{2,}/g, ":"), 48);
 }
 
 function clip(text, max) {
