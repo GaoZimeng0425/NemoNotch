@@ -37,7 +37,7 @@ test("snapshot maps address to status", () => {
 
 test("done card: green, default expiry, Herdr jump", () => {
   assert.deepEqual(card(agent("t7", "done")), {
-    schema: 1, app: "Herdr", key: "t7", title: "NemoNotch / fix", body: "跑完了 · claude-code · Refactor",
+    schema: 1, app: "Herdr", key: "t7", title: "跑完了 · claude-code · Refactor", body: "NemoNotch / fix",
     tone: "done", icon: "ai:claude", herdrTerminal: "t7", jumpBundleId: "dev.herdr.app",
   });
 });
@@ -56,15 +56,15 @@ test("blocked card: blue and never expires", () => {
   const body = card(agent("vps/t7", "blocked"));
   assert.equal(body.tone, "approve");
   assert.equal(body.expiresAt, "infinity");
-  assert.equal(body.body, "等你回应 · claude-code · Refactor");
+  assert.equal(body.title, "等你回应 · claude-code · Refactor");
 });
 
 test("null app drops its segment; title 120 / body 280 truncation by character", () => {
   const long = "字".repeat(300);
   const body = card(agent("t1", "done", { app: null, title: long, space_name: long }));
   assert.equal(Array.from(body.title).length, 120);
+  assert.ok(body.title.startsWith("跑完了 · 字"));
   assert.equal(Array.from(body.body).length, 280);
-  assert.ok(body.body.startsWith("跑完了 · 字"));
 });
 
 test("closeBody", () => {

@@ -101,8 +101,9 @@ export function card(agent, app = "Herdr") {
     schema: 1,
     app,
     key: agent.address,
-    title: clip(`${agent.space_name} / ${agent.tab_name}`, 120),
-    body: clip(parts.join(" · "), 280),
+    // What happened leads; where in Herdr's layout is the least important line.
+    title: clip(parts.join(" · "), 120),
+    body: clip(`${agent.space_name} / ${agent.tab_name}`, 280),
     tone: blocked ? "approve" : "done",
     icon: iconFor(agent.app),
     jumpBundleId: "dev.herdr.app",

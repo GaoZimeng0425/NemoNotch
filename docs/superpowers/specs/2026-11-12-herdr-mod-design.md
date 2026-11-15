@@ -111,8 +111,9 @@
 
 **卡面**(show):
 - `app: "Herdr"`,`key: <address>`
-- `title`: `<space_name> / <tab_name>`(截到 120)
-- `body`: `<状态词> · <agent app> · <终端标题>`(状态词:跑完了 / 等你回应;`app` 为 null 时省略该段;截到 280)
+- `title`: `<状态词> · <agent app> · <终端标题>`(状态词:跑完了 / 等你回应;`app` 为 null 时省略该段;截到 120)
+- `body`: `<space_name> / <tab_name>`(截到 280)
+- (2026-11-15 用户拍板:title/body 对调,状态行在前,space/tab 最不重要放末行)
 - `tone`、`herdrTerminal: <address>`、`jumpBundleId: "dev.herdr.app"`(旧版 NemoNotch 的降级点击目标)
 
 **推送**:每次推送现读 `hook-port`(缺省 45831)与 `hook-token`;`X-NemoNotch-Token` 头;失败(连不上/非 2xx/超时)不重试;同一实例的推送单通道串行保序,每次推送 5 秒上限(防挂住堵死后续撤卡)。
