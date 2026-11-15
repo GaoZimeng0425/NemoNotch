@@ -136,7 +136,7 @@ final class OpenClawService {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             // Find first emoji character (Unicode scalar with emoji property)
             for scalar in cleaned.unicodeScalars {
-                if scalar.properties.isEmoji && !scalar.properties.isEmojiPresentation {
+                if scalar.properties.isEmoji, !scalar.properties.isEmojiPresentation {
                     continue // skip emoji modifiers
                 }
                 if scalar.properties.isEmojiPresentation || scalar.properties.isEmoji {
